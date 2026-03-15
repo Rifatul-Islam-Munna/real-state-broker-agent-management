@@ -1,13 +1,14 @@
 /* eslint-disable @next/next/no-img-element */
 
+
+import { AppIcon } from "@/components/ui/app-icon"
+
 export function SidebarSection() {
   return (
     <aside className="w-64 bg-primary text-white flex flex-col fixed inset-y-0 left-0 z-50">
       <div className="p-6 flex items-center gap-3">
         <div className="bg-accent rounded-lg p-2 flex items-center justify-center">
-          <span className="material-symbols-outlined text-white">
-            {"corporate_fare"}
-          </span>
+          <AppIcon className="text-white" name="corporate_fare" />
         </div>
         <div>
           <h1 className="text-lg font-bold leading-none">
@@ -23,9 +24,7 @@ export function SidebarSection() {
           className="flex items-center gap-3 px-3 py-2 rounded-xl bg-white/10 text-white group"
           href="#"
         >
-          <span className="material-symbols-outlined text-xl">
-            {"dashboard"}
-          </span>
+          <AppIcon className="text-xl" name="dashboard" />
           <span className="text-sm font-medium">
             {"Dashboard"}
           </span>
@@ -34,9 +33,7 @@ export function SidebarSection() {
           className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-white/5 text-white/80 hover:text-white transition-colors"
           href="#"
         >
-          <span className="material-symbols-outlined text-xl">
-            {"home_work"}
-          </span>
+          <AppIcon className="text-xl" name="home_work" />
           <span className="text-sm font-medium">
             {"Properties"}
           </span>
@@ -45,9 +42,7 @@ export function SidebarSection() {
           className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-white/5 text-white/80 hover:text-white transition-colors"
           href="#"
         >
-          <span className="material-symbols-outlined text-xl">
-            {"group"}
-          </span>
+          <AppIcon className="text-xl" name="group" />
           <span className="text-sm font-medium">
             {"Leads"}
           </span>
@@ -56,9 +51,7 @@ export function SidebarSection() {
           className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-white/5 text-white/80 hover:text-white transition-colors"
           href="#"
         >
-          <span className="material-symbols-outlined text-xl">
-            {"person"}
-          </span>
+          <AppIcon className="text-xl" name="person" />
           <span className="text-sm font-medium">
             {"Clients"}
           </span>
@@ -67,9 +60,7 @@ export function SidebarSection() {
           className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-white/5 text-white/80 hover:text-white transition-colors"
           href="#"
         >
-          <span className="material-symbols-outlined text-xl">
-            {"handshake"}
-          </span>
+          <AppIcon className="text-xl" name="handshake" />
           <span className="text-sm font-medium">
             {"Deals"}
           </span>
@@ -78,9 +69,7 @@ export function SidebarSection() {
           className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-white/5 text-white/80 hover:text-white transition-colors"
           href="#"
         >
-          <span className="material-symbols-outlined text-xl">
-            {"badge"}
-          </span>
+          <AppIcon className="text-xl" name="badge" />
           <span className="text-sm font-medium">
             {"Agents"}
           </span>
@@ -89,9 +78,7 @@ export function SidebarSection() {
           className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-white/5 text-white/80 hover:text-white transition-colors"
           href="#"
         >
-          <span className="material-symbols-outlined text-xl">
-            {"calendar_month"}
-          </span>
+          <AppIcon className="text-xl" name="calendar_month" />
           <span className="text-sm font-medium">
             {"Calendar"}
           </span>
@@ -100,9 +87,7 @@ export function SidebarSection() {
           className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-white/5 text-white/80 hover:text-white transition-colors"
           href="#"
         >
-          <span className="material-symbols-outlined text-xl">
-            {"campaign"}
-          </span>
+          <AppIcon className="text-xl" name="campaign" />
           <span className="text-sm font-medium">
             {"Marketing"}
           </span>
@@ -111,9 +96,7 @@ export function SidebarSection() {
           className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-white/5 text-white/80 hover:text-white transition-colors"
           href="#"
         >
-          <span className="material-symbols-outlined text-xl">
-            {"bar_chart"}
-          </span>
+          <AppIcon className="text-xl" name="bar_chart" />
           <span className="text-sm font-medium">
             {"Reports"}
           </span>
@@ -123,9 +106,7 @@ export function SidebarSection() {
             className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-white/5 text-white/80 hover:text-white transition-colors"
             href="#"
           >
-            <span className="material-symbols-outlined text-xl">
-              {"settings"}
-            </span>
+            <AppIcon className="text-xl" name="settings" />
             <span className="text-sm font-medium">
               {"Settings"}
             </span>

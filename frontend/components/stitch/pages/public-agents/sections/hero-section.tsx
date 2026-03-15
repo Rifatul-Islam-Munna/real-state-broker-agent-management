@@ -1,6 +1,7 @@
 import Link from "next/link"
 
 import { publicAgentsStats } from "@/static-data/pages/public-agents/data"
+import { AppIcon } from "@/components/ui/app-icon"
 
 export function AgentsHeroSection() {
   return (
@@ -46,9 +47,7 @@ export function AgentsHeroSection() {
                     {stat.value}
                   </p>
                 </div>
-                <span className="material-symbols-outlined text-4xl text-accent">
-                  {stat.icon}
-                </span>
+                <AppIcon className="text-4xl text-accent" name={stat.icon} />
               </div>
             </div>
           ))}

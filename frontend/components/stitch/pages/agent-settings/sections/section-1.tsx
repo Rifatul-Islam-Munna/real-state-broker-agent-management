@@ -1,4 +1,5 @@
 import { agentSettingsOverviewCards } from "@/static-data/pages/agent-settings/content"
+import { AppIcon } from "@/components/ui/app-icon"
 
 export function Section1Section() {
   return (
@@ -27,9 +28,7 @@ export function Section1Section() {
               <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-400">
                 {card.label}
               </p>
-              <span className="material-symbols-outlined text-primary">
-                {card.icon}
-              </span>
+              <AppIcon className="text-primary" name={card.icon} />
             </div>
             <p className="mt-4 text-3xl font-black text-slate-900 dark:text-white">
               {card.value}

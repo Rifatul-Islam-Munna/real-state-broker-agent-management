@@ -5,6 +5,7 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar"
+import { AppIcon } from "@/components/ui/app-icon"
 
 export default function AdminLayout({
   children,
@@ -18,9 +19,7 @@ export default function AdminLayout({
         <div className="border-b border-primary/10 bg-white px-4 py-3 dark:bg-slate-900 md:hidden">
           <div className="flex items-center justify-between gap-4">
             <Link href="/admin/dashboard" className="flex items-center gap-2 text-primary">
-              <span className="material-symbols-outlined text-3xl">
-                {"domain"}
-              </span>
+              <AppIcon className="text-3xl" name="domain" />
               <span className="text-lg font-800 tracking-tighter uppercase">
                 {"EstateBlue"}
               </span>

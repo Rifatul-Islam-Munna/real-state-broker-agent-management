@@ -1,12 +1,13 @@
+
+import { AppIcon } from "@/components/ui/app-icon"
+
 export function MainContentSection() {
   return (
     <main className="flex-1 overflow-y-auto bg-background-light dark:bg-background-dark">
       <header className="h-16 border-b border-primary/10 flex items-center justify-between px-8 bg-white dark:bg-background-dark/50">
         <div className="flex items-center gap-4 flex-1">
           <div className="relative w-96">
-            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-secondary">
-              {"search"}
-            </span>
+            <AppIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-secondary" name="search" />
             <input
               className="w-full pl-10 pr-4 py-2 bg-background-light dark:bg-slate-800 border-none rounded-lg text-sm focus:ring-2 focus:ring-primary/20"
               placeholder="Search files, folders or templates..."
@@ -16,9 +17,7 @@ export function MainContentSection() {
         </div>
         <div className="flex items-center gap-4">
           <button className="p-2 text-secondary hover:bg-background-light rounded-full relative">
-            <span className="material-symbols-outlined">
-              {"notifications"}
-            </span>
+            <AppIcon name="notifications" />
             <span className="absolute top-2 right-2 w-2 h-2 bg-accent rounded-full">
 
             </span>
@@ -50,15 +49,11 @@ export function MainContentSection() {
           </div>
           <div className="flex gap-3">
             <button className="flex items-center gap-2 bg-white border-2 border-primary text-primary px-5 py-2.5 rounded-xl font-bold text-sm hover:bg-primary/5 transition-colors">
-              <span className="material-symbols-outlined text-lg">
-                {"library_books"}
-              </span>
+              <AppIcon className="text-lg" name="library_books" />
               {" Template Library "}
             </button>
             <button className="flex items-center gap-2 bg-primary text-white px-5 py-2.5 rounded-xl font-bold text-sm hover:bg-primary/90 transition-colors">
-              <span className="material-symbols-outlined text-lg">
-                {"upload_file"}
-              </span>
+              <AppIcon className="text-lg" name="upload_file" />
               {" Upload Document "}
             </button>
           </div>
@@ -67,9 +62,7 @@ export function MainContentSection() {
           <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-primary/10 hover:border-primary transition-all cursor-pointer group">
             <div className="flex justify-between items-start mb-4">
               <div className="p-3 bg-primary/10 rounded-xl group-hover:bg-primary group-hover:text-white transition-colors">
-                <span className="material-symbols-outlined text-3xl">
-                  {"folder_shared"}
-                </span>
+                <AppIcon className="text-3xl" name="folder_shared" />
               </div>
               <span className="text-xs font-bold text-secondary bg-background-light px-2 py-1 rounded">
                 {"Admin Only"}
@@ -96,9 +89,7 @@ export function MainContentSection() {
           <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-primary/10 hover:border-primary transition-all cursor-pointer group">
             <div className="flex justify-between items-start mb-4">
               <div className="p-3 bg-primary/10 rounded-xl group-hover:bg-primary group-hover:text-white transition-colors">
-                <span className="material-symbols-outlined text-3xl">
-                  {"architecture"}
-                </span>
+                <AppIcon className="text-3xl" name="architecture" />
               </div>
               <span className="text-xs font-bold text-secondary bg-background-light px-2 py-1 rounded">
                 {"Agent Access"}
@@ -112,18 +103,14 @@ export function MainContentSection() {
             </p>
             <div className="flex -space-x-2">
               <div className="w-6 h-6 rounded-full border-2 border-white bg-slate-400 text-[8px] flex items-center justify-center text-white">
-                <span className="material-symbols-outlined text-xs">
-                  {"person"}
-                </span>
+                <AppIcon className="text-xs" name="person" />
               </div>
             </div>
           </div>
           <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-primary/10 hover:border-primary transition-all cursor-pointer group">
             <div className="flex justify-between items-start mb-4">
               <div className="p-3 bg-primary/10 rounded-xl group-hover:bg-primary group-hover:text-white transition-colors">
-                <span className="material-symbols-outlined text-3xl">
-                  {"history_edu"}
-                </span>
+                <AppIcon className="text-3xl" name="history_edu" />
               </div>
               <span className="text-xs font-bold text-secondary bg-background-light px-2 py-1 rounded">
                 {"Public"}
@@ -146,9 +133,7 @@ export function MainContentSection() {
           <div className="lg:col-span-2 bg-white dark:bg-slate-800 rounded-xl border border-primary/10 overflow-hidden">
             <div className="p-6 border-b border-primary/5 flex justify-between items-center">
               <h3 className="font-bold text-lg flex items-center gap-2">
-                <span className="material-symbols-outlined text-accent">
-                  {"draw"}
-                </span>
+                <AppIcon className="text-accent" name="draw" />
                 {" E-Signature Status Tracker "}
               </h3>
               <button className="text-primary text-sm font-bold hover:underline">
@@ -177,9 +162,7 @@ export function MainContentSection() {
                   <tr>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
-                        <span className="material-symbols-outlined text-primary">
-                          {"picture_as_pdf"}
-                        </span>
+                        <AppIcon className="text-primary" name="picture_as_pdf" />
                         <span className="text-sm font-medium">
                           {"Rental_Agreement_V4.pdf"}
                         </span>
@@ -200,9 +183,7 @@ export function MainContentSection() {
                   <tr>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
-                        <span className="material-symbols-outlined text-primary">
-                          {"picture_as_pdf"}
-                        </span>
+                        <AppIcon className="text-primary" name="picture_as_pdf" />
                         <span className="text-sm font-medium">
                           {"Sales_Commission_Form.pdf"}
                         </span>
@@ -223,9 +204,7 @@ export function MainContentSection() {
                   <tr>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
-                        <span className="material-symbols-outlined text-primary">
-                          {"picture_as_pdf"}
-                        </span>
+                        <AppIcon className="text-primary" name="picture_as_pdf" />
                         <span className="text-sm font-medium">
                           {"Listing_Exclusivity.pdf"}
                         </span>
@@ -249,9 +228,7 @@ export function MainContentSection() {
           </div>
           <div className="bg-primary/5 dark:bg-slate-800 border-2 border-dashed border-primary/30 rounded-xl p-8 flex flex-col items-center justify-center text-center">
             <div className="w-16 h-16 bg-white dark:bg-slate-700 rounded-full flex items-center justify-center mb-4">
-              <span className="material-symbols-outlined text-3xl text-primary">
-                {"cloud_upload"}
-              </span>
+              <AppIcon className="text-3xl text-primary" name="cloud_upload" />
             </div>
             <h4 className="font-bold text-lg mb-2">
               {"Upload Files"}
@@ -274,9 +251,7 @@ export function MainContentSection() {
             </h3>
             <div className="flex gap-2">
               <button className="p-2 border border-primary/10 rounded-lg text-secondary">
-                <span className="material-symbols-outlined">
-                  {"filter_list"}
-                </span>
+                <AppIcon name="filter_list" />
               </button>
             </div>
           </div>
@@ -304,9 +279,7 @@ export function MainContentSection() {
               <tr className="hover:bg-primary/5 transition-colors group">
                 <td className="px-6 py-4">
                   <div className="flex items-center gap-3">
-                    <span className="material-symbols-outlined text-primary">
-                      {"article"}
-                    </span>
+                    <AppIcon className="text-primary" name="article" />
                     <div>
                       <p className="text-sm font-bold">
                         {"Residential_Lease_Template.docx"}
@@ -336,33 +309,25 @@ export function MainContentSection() {
                       className="p-2 text-secondary hover:text-primary transition-colors"
                       title="Download"
                     >
-                      <span className="material-symbols-outlined text-lg">
-                        {"download"}
-                      </span>
+                      <AppIcon className="text-lg" name="download" />
                     </button>
                     <button
                       className="p-2 text-secondary hover:text-primary transition-colors"
                       title="Edit"
                     >
-                      <span className="material-symbols-outlined text-lg">
-                        {"edit"}
-                      </span>
+                      <AppIcon className="text-lg" name="edit" />
                     </button>
                     <button
                       className="p-2 text-secondary hover:text-primary transition-colors"
                       title="Share"
                     >
-                      <span className="material-symbols-outlined text-lg">
-                        {"share"}
-                      </span>
+                      <AppIcon className="text-lg" name="share" />
                     </button>
                     <button
                       className="p-2 text-secondary hover:text-accent transition-colors"
                       title="Sign"
                     >
-                      <span className="material-symbols-outlined text-lg">
-                        {"signature"}
-                      </span>
+                      <AppIcon className="text-lg" name="signature" />
                     </button>
                   </div>
                 </td>
@@ -370,9 +335,7 @@ export function MainContentSection() {
               <tr className="hover:bg-primary/5 transition-colors group">
                 <td className="px-6 py-4">
                   <div className="flex items-center gap-3">
-                    <span className="material-symbols-outlined text-primary">
-                      {"description"}
-                    </span>
+                    <AppIcon className="text-primary" name="description" />
                     <div>
                       <p className="text-sm font-bold">
                         {"Floorplan_Unit_405_B.pdf"}
@@ -402,33 +365,25 @@ export function MainContentSection() {
                       className="p-2 text-secondary hover:text-primary transition-colors"
                       title="Download"
                     >
-                      <span className="material-symbols-outlined text-lg">
-                        {"download"}
-                      </span>
+                      <AppIcon className="text-lg" name="download" />
                     </button>
                     <button
                       className="p-2 text-secondary hover:text-primary transition-colors"
                       title="Edit"
                     >
-                      <span className="material-symbols-outlined text-lg">
-                        {"edit"}
-                      </span>
+                      <AppIcon className="text-lg" name="edit" />
                     </button>
                     <button
                       className="p-2 text-secondary hover:text-primary transition-colors"
                       title="Share"
                     >
-                      <span className="material-symbols-outlined text-lg">
-                        {"share"}
-                      </span>
+                      <AppIcon className="text-lg" name="share" />
                     </button>
                     <button
                       className="p-2 text-secondary hover:text-accent transition-colors"
                       title="Sign"
                     >
-                      <span className="material-symbols-outlined text-lg">
-                        {"signature"}
-                      </span>
+                      <AppIcon className="text-lg" name="signature" />
                     </button>
                   </div>
                 </td>
@@ -436,9 +391,7 @@ export function MainContentSection() {
               <tr className="hover:bg-primary/5 transition-colors group">
                 <td className="px-6 py-4">
                   <div className="flex items-center gap-3">
-                    <span className="material-symbols-outlined text-primary">
-                      {"article"}
-                    </span>
+                    <AppIcon className="text-primary" name="article" />
                     <div>
                       <p className="text-sm font-bold">
                         {"Confidentiality_Agreement_Global.pdf"}
@@ -468,33 +421,25 @@ export function MainContentSection() {
                       className="p-2 text-secondary hover:text-primary transition-colors"
                       title="Download"
                     >
-                      <span className="material-symbols-outlined text-lg">
-                        {"download"}
-                      </span>
+                      <AppIcon className="text-lg" name="download" />
                     </button>
                     <button
                       className="p-2 text-secondary hover:text-primary transition-colors"
                       title="Edit"
                     >
-                      <span className="material-symbols-outlined text-lg">
-                        {"edit"}
-                      </span>
+                      <AppIcon className="text-lg" name="edit" />
                     </button>
                     <button
                       className="p-2 text-secondary hover:text-primary transition-colors"
                       title="Share"
                     >
-                      <span className="material-symbols-outlined text-lg">
-                        {"share"}
-                      </span>
+                      <AppIcon className="text-lg" name="share" />
                     </button>
                     <button
                       className="p-2 text-secondary hover:text-accent transition-colors"
                       title="Sign"
                     >
-                      <span className="material-symbols-outlined text-lg">
-                        {"signature"}
-                      </span>
+                      <AppIcon className="text-lg" name="signature" />
                     </button>
                   </div>
                 </td>
@@ -516,9 +461,7 @@ export function MainContentSection() {
                 {"3"}
               </button>
               <button className="w-8 h-8 rounded border border-primary/10 flex items-center justify-center text-secondary hover:bg-white transition-colors">
-                <span className="material-symbols-outlined text-sm">
-                  {"chevron_right"}
-                </span>
+                <AppIcon className="text-sm" name="chevron_right" />
               </button>
             </div>
           </div>

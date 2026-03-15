@@ -3,6 +3,7 @@
 import Link from "next/link"
 
 import { publicAgents } from "@/static-data/pages/public-agents/data"
+import { AppIcon } from "@/components/ui/app-icon"
 
 export function AgentsGridSection() {
   return (
@@ -46,15 +47,11 @@ export function AgentsGridSection() {
                 </div>
                 <div className="grid gap-2 text-sm text-slate-600">
                   <p className="flex items-center gap-2">
-                    <span className="material-symbols-outlined text-base text-primary">
-                      {"verified"}
-                    </span>
+                    <AppIcon className="text-base text-primary" name="verified" />
                     {agent.specialty}
                   </p>
                   <p className="flex items-center gap-2">
-                    <span className="material-symbols-outlined text-base text-primary">
-                      {"location_on"}
-                    </span>
+                    <AppIcon className="text-base text-primary" name="location_on" />
                     {agent.location}
                   </p>
                 </div>
@@ -65,9 +62,7 @@ export function AgentsGridSection() {
                   className="inline-flex items-center gap-2 border-b-2 border-primary pb-1 text-xs font-black uppercase tracking-[0.22em] text-primary"
                   href="/contact-us"
                 >
-                  <span className="material-symbols-outlined text-sm">
-                    {"mail"}
-                  </span>
+                  <AppIcon className="text-sm" name="mail" />
                   {"Contact Agent"}
                 </Link>
               </div>

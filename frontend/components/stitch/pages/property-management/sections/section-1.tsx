@@ -3,6 +3,7 @@ import {
   type PropertyManagementListing,
   propertyManagementListings,
 } from "@/static-data/pages/property-management/listings"
+import { AppIcon } from "@/components/ui/app-icon"
 
 export type PropertyManagementFilter = "all" | "open" | "closed" | "long-open"
 
@@ -116,9 +117,7 @@ export function Section1Section({
           </div>
           <div className="flex flex-col gap-3 sm:flex-row">
             <label className="relative block min-w-[260px]">
-              <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
-                {"search"}
-              </span>
+              <AppIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" name="search" />
               <input
                 className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-4 text-sm outline-none transition-colors focus:border-primary dark:border-slate-700 dark:bg-slate-800"
                 placeholder="Search listings, cities, or agents"
@@ -130,9 +129,7 @@ export function Section1Section({
               onClick={onAddPropertyClick}
               type="button"
             >
-              <span className="material-symbols-outlined text-lg">
-                {"add"}
-              </span>
+              <AppIcon className="text-lg" name="add" />
               {"Add Property"}
             </button>
           </div>
@@ -156,9 +153,7 @@ export function Section1Section({
                   </p>
                 </div>
                 <div className="flex size-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-                  <span className="material-symbols-outlined text-2xl">
-                    {card.icon}
-                  </span>
+                  <AppIcon className="text-2xl" name={card.icon} />
                 </div>
               </div>
               <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">
@@ -183,9 +178,7 @@ export function Section1Section({
                   onClick={() => onFilterChange(filter.id)}
                   type="button"
                 >
-                  <span className="material-symbols-outlined text-base">
-                    {filter.icon}
-                  </span>
+                  <AppIcon className="text-base" name={filter.icon} />
                   {filter.label}
                 </button>
               ))}
@@ -321,14 +314,10 @@ export function Section1Section({
                     <td className="px-6 py-4">
                       <div className="flex justify-end gap-2">
                         <button className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-primary dark:hover:bg-slate-800" type="button">
-                          <span className="material-symbols-outlined">
-                            {"edit"}
-                          </span>
+                          <AppIcon name="edit" />
                         </button>
                         <button className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-primary dark:hover:bg-slate-800" type="button">
-                          <span className="material-symbols-outlined">
-                            {"visibility"}
-                          </span>
+                          <AppIcon name="visibility" />
                         </button>
                       </div>
                     </td>

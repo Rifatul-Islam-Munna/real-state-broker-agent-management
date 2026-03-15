@@ -1,5 +1,8 @@
 /* eslint-disable @next/next/no-img-element */
 
+
+import { AppIcon } from "@/components/ui/app-icon"
+
 export function WhyChooseUsSection() {
   return (
     <section className="py-20 px-4 bg-white border-b border-slate-100">
@@ -17,9 +20,7 @@ export function WhyChooseUsSection() {
             </p>
             <div className="grid grid-cols-2 gap-6">
               <div className="flex gap-4">
-                <span className="material-symbols-outlined text-accent text-3xl">
-                  {"verified"}
-                </span>
+                <AppIcon className="text-accent text-3xl" name="verified" />
                 <div>
                   <h4 className="font-bold text-primary">
                     {"Certified Agents"}
@@ -30,9 +31,7 @@ export function WhyChooseUsSection() {
                 </div>
               </div>
               <div className="flex gap-4">
-                <span className="material-symbols-outlined text-accent text-3xl">
-                  {"trending_up"}
-                </span>
+                <AppIcon className="text-accent text-3xl" name="trending_up" />
                 <div>
                   <h4 className="font-bold text-primary">
                     {"Market Insights"}

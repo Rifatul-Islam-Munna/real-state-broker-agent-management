@@ -1,5 +1,8 @@
 /* eslint-disable @next/next/no-img-element */
 
+
+import { AppIcon } from "@/components/ui/app-icon"
+
 export function Section1Section() {
   return (
     <header className="border-b border-primary/10 bg-white px-4 py-4 dark:bg-background-dark md:px-6">
@@ -7,9 +10,7 @@ export function Section1Section() {
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:gap-8">
           <div className="flex items-center gap-3 text-primary">
             <div className="flex size-10 items-center justify-center border border-primary/20 bg-primary/10">
-              <span className="material-symbols-outlined">
-                {"group"}
-              </span>
+              <AppIcon name="group" />
             </div>
             <div>
               <h2 className="text-lg font-bold leading-tight tracking-tight text-slate-900 dark:text-white">
@@ -23,9 +24,7 @@ export function Section1Section() {
           <label className="flex h-11 min-w-0 flex-1 xl:min-w-80">
             <div className="flex w-full flex-1 items-center border border-slate-200 bg-slate-100 dark:border-white/10 dark:bg-white/5">
               <div className="flex items-center justify-center pl-3 text-slate-500">
-                <span className="material-symbols-outlined text-sm">
-                  {"search"}
-                </span>
+                <AppIcon className="text-sm" name="search" />
               </div>
               <input
                 className="form-input w-full border-none bg-transparent text-sm placeholder:text-slate-500 focus:ring-0"
@@ -37,20 +36,14 @@ export function Section1Section() {
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <button className="flex h-11 items-center justify-center gap-2 border border-primary bg-primary px-4 text-sm font-bold text-white">
-            <span className="material-symbols-outlined">
-              {"person_add"}
-            </span>
+            <AppIcon name="person_add" />
             {"Add Lead"}
           </button>
           <button className="flex h-11 items-center justify-center border border-slate-200 bg-slate-100 px-3 text-slate-600 transition-colors hover:bg-primary/10 hover:text-primary dark:border-white/10 dark:bg-white/5 dark:text-slate-400">
-            <span className="material-symbols-outlined">
-              {"notifications"}
-            </span>
+            <AppIcon name="notifications" />
           </button>
           <button className="flex h-11 items-center justify-center border border-slate-200 bg-slate-100 px-3 text-slate-600 transition-colors hover:bg-primary/10 hover:text-primary dark:border-white/10 dark:bg-white/5 dark:text-slate-400">
-            <span className="material-symbols-outlined">
-              {"settings"}
-            </span>
+            <AppIcon name="settings" />
           </button>
           <div className="flex h-11 w-11 items-center justify-center overflow-hidden border border-primary/30 bg-primary/20">
             <img

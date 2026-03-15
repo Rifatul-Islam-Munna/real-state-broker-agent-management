@@ -4,7 +4,7 @@ import { FooterSection } from "./sections/footer"
 
 export function MarketInsightsBlogPage() {
   return (
-    <div className="bg-background-light dark:bg-background-dark text-text-main dark:text-slate-100 font-display">
+    <div className="bg-background-light dark:bg-background-dark text-text-main dark:text-slate-100 font-sans">
       <TopNavigationSection />
       <Section2Section />
       <FooterSection />

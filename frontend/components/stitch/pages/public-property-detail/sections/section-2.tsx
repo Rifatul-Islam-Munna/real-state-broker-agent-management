@@ -1,5 +1,8 @@
 /* eslint-disable @next/next/no-img-element */
 
+
+import { AppIcon } from "@/components/ui/app-icon"
+
 export function Section2Section() {
   return (
     <main className="max-w-7xl mx-auto px-4 md:px-20 py-8">
@@ -81,9 +84,7 @@ export function Section2Section() {
                 {"1242 Oakwood Terrace"}
               </h2>
               <p className="text-secondary font-medium flex items-center gap-1 uppercase tracking-wide">
-                <span className="material-symbols-outlined text-sm">
-                  {"location_on"}
-                </span>
+                <AppIcon className="text-sm" name="location_on" />
                 {" Palo Alto, CA 94301 "}
               </p>
             </div>
@@ -98,9 +99,7 @@ export function Section2Section() {
           </div>
           <div className="grid grid-cols-3 gap-4 border-2 border-primary/10 p-6 mb-8 bg-white">
             <div className="text-center">
-              <span className="material-symbols-outlined text-secondary block mb-1">
-                {"bed"}
-              </span>
+              <AppIcon className="text-secondary block mb-1" name="bed" />
               <span className="text-xl font-800">
                 {"5"}
               </span>
@@ -109,9 +108,7 @@ export function Section2Section() {
               </p>
             </div>
             <div className="text-center border-x-2 border-primary/10">
-              <span className="material-symbols-outlined text-secondary block mb-1">
-                {"bathtub"}
-              </span>
+              <AppIcon className="text-secondary block mb-1" name="bathtub" />
               <span className="text-xl font-800">
                 {"4.5"}
               </span>
@@ -120,9 +117,7 @@ export function Section2Section() {
               </p>
             </div>
             <div className="text-center">
-              <span className="material-symbols-outlined text-secondary block mb-1">
-                {"square_foot"}
-              </span>
+              <AppIcon className="text-secondary block mb-1" name="square_foot" />
               <span className="text-xl font-800">
                 {"3,850"}
               </span>
@@ -148,49 +143,37 @@ export function Section2Section() {
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-3 gap-x-6">
               <div className="flex items-center gap-3 py-2 border-b border-primary/5">
-                <span className="material-symbols-outlined text-primary">
-                  {"check_circle"}
-                </span>
+                <AppIcon className="text-primary" name="check_circle" />
                 <span className="font-medium">
                   {"Smart Home System"}
                 </span>
               </div>
               <div className="flex items-center gap-3 py-2 border-b border-primary/5">
-                <span className="material-symbols-outlined text-primary">
-                  {"check_circle"}
-                </span>
+                <AppIcon className="text-primary" name="check_circle" />
                 <span className="font-medium">
                   {"Heated Saltwater Pool"}
                 </span>
               </div>
               <div className="flex items-center gap-3 py-2 border-b border-primary/5">
-                <span className="material-symbols-outlined text-primary">
-                  {"check_circle"}
-                </span>
+                <AppIcon className="text-primary" name="check_circle" />
                 <span className="font-medium">
                   {"EV Charging Station"}
                 </span>
               </div>
               <div className="flex items-center gap-3 py-2 border-b border-primary/5">
-                <span className="material-symbols-outlined text-primary">
-                  {"check_circle"}
-                </span>
+                <AppIcon className="text-primary" name="check_circle" />
                 <span className="font-medium">
                   {"Custom Wine Cellar"}
                 </span>
               </div>
               <div className="flex items-center gap-3 py-2 border-b border-primary/5">
-                <span className="material-symbols-outlined text-primary">
-                  {"check_circle"}
-                </span>
+                <AppIcon className="text-primary" name="check_circle" />
                 <span className="font-medium">
                   {"Indoor/Outdoor Living"}
                 </span>
               </div>
               <div className="flex items-center gap-3 py-2 border-b border-primary/5">
-                <span className="material-symbols-outlined text-primary">
-                  {"check_circle"}
-                </span>
+                <AppIcon className="text-primary" name="check_circle" />
                 <span className="font-medium">
                   {"Solar Panel System"}
                 </span>
@@ -338,21 +321,11 @@ export function Section2Section() {
                     {"Premier Listing Agent"}
                   </p>
                   <div className="flex text-accent mt-1">
-                    <span className="material-symbols-outlined text-sm">
-                      {"star"}
-                    </span>
-                    <span className="material-symbols-outlined text-sm">
-                      {"star"}
-                    </span>
-                    <span className="material-symbols-outlined text-sm">
-                      {"star"}
-                    </span>
-                    <span className="material-symbols-outlined text-sm">
-                      {"star"}
-                    </span>
-                    <span className="material-symbols-outlined text-sm">
-                      {"star"}
-                    </span>
+                    <AppIcon className="text-sm" name="star" />
+                    <AppIcon className="text-sm" name="star" />
+                    <AppIcon className="text-sm" name="star" />
+                    <AppIcon className="text-sm" name="star" />
+                    <AppIcon className="text-sm" name="star" />
                   </div>
                 </div>
               </div>
@@ -361,15 +334,11 @@ export function Section2Section() {
               </p>
               <div className="space-y-4">
                 <button className="w-full bg-primary text-white font-bold py-4 uppercase tracking-widest text-xs flex items-center justify-center gap-2">
-                  <span className="material-symbols-outlined text-sm">
-                    {"mail"}
-                  </span>
+                  <AppIcon className="text-sm" name="mail" />
                   {" Contact Agent "}
                 </button>
                 <button className="w-full border-2 border-primary text-primary font-bold py-4 uppercase tracking-widest text-xs flex items-center justify-center gap-2">
-                  <span className="material-symbols-outlined text-sm">
-                    {"calendar_month"}
-                  </span>
+                  <AppIcon className="text-sm" name="calendar_month" />
                   {" Schedule viewing "}
                 </button>
               </div>
@@ -399,9 +368,7 @@ export function Section2Section() {
                   {"Area Trend"}
                 </span>
                 <span className="text-green-600 font-bold flex items-center">
-                  <span className="material-symbols-outlined text-sm">
-                    {"trending_up"}
-                  </span>
+                  <AppIcon className="text-sm" name="trending_up" />
                   {" +4.2% "}
                 </span>
               </div>
@@ -435,21 +402,15 @@ export function Section2Section() {
               </p>
               <div className="flex gap-4 text-xs font-bold border-t border-primary/5 pt-4">
                 <span className="flex items-center gap-1">
-                  <span className="material-symbols-outlined text-sm text-secondary">
-                    {"bed"}
-                  </span>
+                  <AppIcon className="text-sm text-secondary" name="bed" />
                   {" 4"}
                 </span>
                 <span className="flex items-center gap-1">
-                  <span className="material-symbols-outlined text-sm text-secondary">
-                    {"bathtub"}
-                  </span>
+                  <AppIcon className="text-sm text-secondary" name="bathtub" />
                   {" 3.5"}
                 </span>
                 <span className="flex items-center gap-1">
-                  <span className="material-symbols-outlined text-sm text-secondary">
-                    {"square_foot"}
-                  </span>
+                  <AppIcon className="text-sm text-secondary" name="square_foot" />
                   {" 3,200"}
                 </span>
               </div>
@@ -473,21 +434,15 @@ export function Section2Section() {
               </p>
               <div className="flex gap-4 text-xs font-bold border-t border-primary/5 pt-4">
                 <span className="flex items-center gap-1">
-                  <span className="material-symbols-outlined text-sm text-secondary">
-                    {"bed"}
-                  </span>
+                  <AppIcon className="text-sm text-secondary" name="bed" />
                   {" 5"}
                 </span>
                 <span className="flex items-center gap-1">
-                  <span className="material-symbols-outlined text-sm text-secondary">
-                    {"bathtub"}
-                  </span>
+                  <AppIcon className="text-sm text-secondary" name="bathtub" />
                   {" 5"}
                 </span>
                 <span className="flex items-center gap-1">
-                  <span className="material-symbols-outlined text-sm text-secondary">
-                    {"square_foot"}
-                  </span>
+                  <AppIcon className="text-sm text-secondary" name="square_foot" />
                   {" 4,100"}
                 </span>
               </div>
@@ -514,21 +469,15 @@ export function Section2Section() {
               </p>
               <div className="flex gap-4 text-xs font-bold border-t border-primary/5 pt-4">
                 <span className="flex items-center gap-1">
-                  <span className="material-symbols-outlined text-sm text-secondary">
-                    {"bed"}
-                  </span>
+                  <AppIcon className="text-sm text-secondary" name="bed" />
                   {" 4"}
                 </span>
                 <span className="flex items-center gap-1">
-                  <span className="material-symbols-outlined text-sm text-secondary">
-                    {"bathtub"}
-                  </span>
+                  <AppIcon className="text-sm text-secondary" name="bathtub" />
                   {" 4"}
                 </span>
                 <span className="flex items-center gap-1">
-                  <span className="material-symbols-outlined text-sm text-secondary">
-                    {"square_foot"}
-                  </span>
+                  <AppIcon className="text-sm text-secondary" name="square_foot" />
                   {" 3,450"}
                 </span>
               </div>

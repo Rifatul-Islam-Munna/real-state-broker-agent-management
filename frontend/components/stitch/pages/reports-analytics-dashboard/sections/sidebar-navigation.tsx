@@ -1,11 +1,12 @@
+
+import { AppIcon } from "@/components/ui/app-icon"
+
 export function SidebarNavigationSection() {
   return (
     <aside className="w-64 bg-primary text-white flex flex-col border-r border-primary">
       <div className="p-6 flex items-center gap-3">
         <div className="size-10 bg-accent rounded-full flex items-center justify-center">
-          <span className="material-symbols-outlined text-white">
-            {"domain"}
-          </span>
+          <AppIcon className="text-white" name="domain" />
         </div>
         <div>
           <h1 className="text-lg font-bold leading-none">
@@ -21,9 +22,7 @@ export function SidebarNavigationSection() {
           className="flex items-center gap-3 px-3 py-3 text-secondary hover:bg-secondary/10 transition-colors"
           href="#"
         >
-          <span className="material-symbols-outlined">
-            {"dashboard"}
-          </span>
+          <AppIcon name="dashboard" />
           <span className="text-sm font-medium">
             {"Dashboard"}
           </span>
@@ -32,9 +31,7 @@ export function SidebarNavigationSection() {
           className="flex items-center gap-3 px-3 py-3 text-secondary hover:bg-secondary/10 transition-colors"
           href="#"
         >
-          <span className="material-symbols-outlined">
-            {"house"}
-          </span>
+          <AppIcon name="house" />
           <span className="text-sm font-medium">
             {"Listings"}
           </span>
@@ -43,9 +40,7 @@ export function SidebarNavigationSection() {
           className="flex items-center gap-3 px-3 py-3 text-secondary hover:bg-secondary/10 transition-colors"
           href="#"
         >
-          <span className="material-symbols-outlined">
-            {"person"}
-          </span>
+          <AppIcon name="person" />
           <span className="text-sm font-medium">
             {"Agents"}
           </span>
@@ -54,9 +49,7 @@ export function SidebarNavigationSection() {
           className="flex items-center gap-3 px-3 py-3 text-white bg-secondary/20 border-l-4 border-accent"
           href="#"
         >
-          <span className="material-symbols-outlined">
-            {"analytics"}
-          </span>
+          <AppIcon name="analytics" />
           <span className="text-sm font-medium">
             {"Reports"}
           </span>
@@ -65,9 +58,7 @@ export function SidebarNavigationSection() {
           className="flex items-center gap-3 px-3 py-3 text-secondary hover:bg-secondary/10 transition-colors"
           href="#"
         >
-          <span className="material-symbols-outlined">
-            {"settings"}
-          </span>
+          <AppIcon name="settings" />
           <span className="text-sm font-medium">
             {"Settings"}
           </span>

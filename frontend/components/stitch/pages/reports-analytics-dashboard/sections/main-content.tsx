@@ -3,6 +3,7 @@
 import { useState } from "react"
 
 import { cn } from "@/lib/utils"
+import { AppIcon } from "@/components/ui/app-icon"
 
 type PerformanceMode = "views" | "inquiries"
 
@@ -106,28 +107,20 @@ export function MainContentSection() {
 
           </div>
           <div className="flex items-center gap-2 border border-border-color px-3 py-1.5 cursor-pointer hover:bg-slate-50">
-            <span className="material-symbols-outlined text-sm">
-              {"calendar_today"}
-            </span>
+            <AppIcon className="text-sm" name="calendar_today" />
             <span className="text-sm font-medium">
               {"Last 30 Days"}
             </span>
-            <span className="material-symbols-outlined text-sm">
-              {"expand_more"}
-            </span>
+            <AppIcon className="text-sm" name="expand_more" />
           </div>
         </div>
         <div className="flex items-center gap-3">
           <button className="bg-accent text-white px-4 py-2 text-sm font-bold flex items-center gap-2">
-            <span className="material-symbols-outlined text-sm">
-              {"picture_as_pdf"}
-            </span>
+            <AppIcon className="text-sm" name="picture_as_pdf" />
             {" Export PDF Report "}
           </button>
           <button className="bg-accent text-white px-4 py-2 text-sm font-bold flex items-center gap-2">
-            <span className="material-symbols-outlined text-sm">
-              {"table_view"}
-            </span>
+            <AppIcon className="text-sm" name="table_view" />
             {" Export Excel Data "}
           </button>
         </div>
@@ -143,9 +136,7 @@ export function MainContentSection() {
                 {"$4,250,000"}
               </h3>
               <span className="text-green-600 text-sm font-bold flex items-center">
-                <span className="material-symbols-outlined text-sm">
-                  {"arrow_upward"}
-                </span>
+                <AppIcon className="text-sm" name="arrow_upward" />
                 {" 12.5% "}
               </span>
             </div>
@@ -159,9 +150,7 @@ export function MainContentSection() {
                 {"48"}
               </h3>
               <span className="text-green-600 text-sm font-bold flex items-center">
-                <span className="material-symbols-outlined text-sm">
-                  {"arrow_upward"}
-                </span>
+                <AppIcon className="text-sm" name="arrow_upward" />
                 {" 8.2% "}
               </span>
             </div>
@@ -175,9 +164,7 @@ export function MainContentSection() {
                 {"$88,541"}
               </h3>
               <span className="text-red-500 text-sm font-bold flex items-center">
-                <span className="material-symbols-outlined text-sm">
-                  {"arrow_downward"}
-                </span>
+                <AppIcon className="text-sm" name="arrow_downward" />
                 {" 2.1% "}
               </span>
             </div>
@@ -191,9 +178,7 @@ export function MainContentSection() {
                 {"12.4%"}
               </h3>
               <span className="text-green-600 text-sm font-bold flex items-center">
-                <span className="material-symbols-outlined text-sm">
-                  {"arrow_upward"}
-                </span>
+                <AppIcon className="text-sm" name="arrow_upward" />
                 {" 1.5% "}
               </span>
             </div>
@@ -552,15 +537,11 @@ export function MainContentSection() {
                   </p>
                   <div className="flex items-center gap-4">
                     <span className="text-xs font-bold flex items-center gap-1">
-                      <span className="material-symbols-outlined text-sm">
-                        {property.primaryMetricIcon}
-                      </span>
+                      <AppIcon className="text-sm" name={property.primaryMetricIcon} />
                       {` ${property.primaryMetricLabel} `}
                     </span>
                     <span className="text-xs font-bold flex items-center gap-1">
-                      <span className="material-symbols-outlined text-sm">
-                        {property.secondaryMetricIcon}
-                      </span>
+                      <AppIcon className="text-sm" name={property.secondaryMetricIcon} />
                       {` ${property.secondaryMetricLabel} `}
                     </span>
                   </div>

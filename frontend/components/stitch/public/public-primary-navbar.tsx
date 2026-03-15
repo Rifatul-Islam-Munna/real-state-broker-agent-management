@@ -3,6 +3,7 @@ import Link from "next/link"
 import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { publicContactUsPageMeta } from "@/static-data/pages/public-contact-us/meta"
 import { sellerListYourPropertyPageMeta } from "@/static-data/pages/seller-list-your-property/meta"
+import { AppIcon } from "@/components/ui/app-icon"
 
 const navItems = [
   {
@@ -29,9 +30,7 @@ export function PublicPrimaryNavbar() {
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-4">
         <div className="flex items-center gap-8">
           <Link href="/" className="flex items-center gap-2 text-primary">
-            <span className="material-symbols-outlined text-3xl">
-              {"domain"}
-            </span>
+            <AppIcon className="text-3xl" name="domain" />
             <h1 className="text-xl font-800 tracking-tighter uppercase">
               {"EstateBlue"}
             </h1>
@@ -68,9 +67,7 @@ export function PublicPrimaryNavbar() {
               aria-label="Open navigation"
               className="inline-flex size-11 items-center justify-center rounded-xl border-2 border-primary text-primary"
             >
-              <span className="material-symbols-outlined text-2xl">
-                {"menu"}
-              </span>
+              <AppIcon className="text-2xl" name="menu" />
             </SheetTrigger>
             <SheetContent
               className="w-[min(22rem,88vw)] border-l border-primary/10 bg-white p-0"
@@ -81,9 +78,7 @@ export function PublicPrimaryNavbar() {
                   {"Navigation"}
                 </SheetTitle>
                 <Link href="/" className="flex items-center gap-2 text-primary">
-                  <span className="material-symbols-outlined text-3xl">
-                    {"domain"}
-                  </span>
+                  <AppIcon className="text-3xl" name="domain" />
                   <span className="text-xl font-800 tracking-tighter uppercase">
                     {"EstateBlue"}
                   </span>

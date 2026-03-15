@@ -4,6 +4,7 @@ import { useState } from "react"
 
 import { publicContactMethods } from "@/static-data/pages/public-contact-us/data"
 import { useAdminFlowStore } from "@/stores/admin-flow-store"
+import { AppIcon } from "@/components/ui/app-icon"
 
 const inquiryTypes = [
   "Buying",
@@ -114,9 +115,7 @@ export function ContactMainSection() {
               className="border border-slate-200 bg-white p-6"
             >
               <div className="flex items-center gap-3">
-                <span className="material-symbols-outlined text-3xl text-accent">
-                  {method.icon}
-                </span>
+                <AppIcon className="text-3xl text-accent" name={method.icon} />
                 <div>
                   <p className="text-xs font-bold uppercase tracking-[0.22em] text-slate-500">
                     {method.title}

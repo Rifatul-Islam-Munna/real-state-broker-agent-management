@@ -2,6 +2,23 @@
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
 import { cn } from "@/lib/utils"
+import { Playfair_Display, Raleway } from "next/font/google"
+
+// Elegant serif — great for property titles & luxury headings
+const playfair = Playfair_Display({
+  subsets: ["latin"],
+  weight: ["400", "600", "700"],
+  variable: "--font-playfair",
+  display: "swap",
+})
+
+// Sleek sans-serif — perfect for body text, nav, and CTAs
+const raleway = Raleway({
+  subsets: ["latin"],
+  weight: ["300", "400", "500", "600"],
+  variable: "--font-raleway",
+  display: "swap",
+})
 
 export default function RootLayout({
   children,
@@ -9,17 +26,18 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning className={cn("antialiased", "font-sans")}>
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
-        <link
-          rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@300;400;500;600;700;800;900&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
-        />
-      </head>
+    <html
+      lang="en"
+      suppressHydrationWarning
+      className={cn(
+        "antialiased",
+        playfair.variable,
+        raleway.variable,
+        "font-sans" // Tailwind's font-sans will be overridden below
+      )}
+    >
       <body>
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider defaultTheme="light">{children}</ThemeProvider>
       </body>
     </html>
   )

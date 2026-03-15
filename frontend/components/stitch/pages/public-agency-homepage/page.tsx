@@ -11,7 +11,7 @@ import { FooterSection } from "./sections/footer"
 
 export function PublicAgencyHomepagePage() {
   return (
-    <div className="bg-background-light dark:bg-background-dark text-[#1A2332] dark:text-slate-100 font-display transition-colors duration-300">
+    <div className="bg-background-light dark:bg-background-dark text-[#1A2332] dark:text-slate-100 font-sans transition-colors duration-300">
       <TopNavigationBarSection />
       <HeroSection />
       <WhyChooseUsSection />

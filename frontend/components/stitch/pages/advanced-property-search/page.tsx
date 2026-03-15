@@ -3,7 +3,7 @@ import { MainContentAreaSplitViewSection } from "./sections/main-content-area-sp
 
 export function AdvancedPropertySearchPage() {
   return (
-    <div className="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 font-display min-h-screen flex flex-col">
+    <div className="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 font-sans min-h-screen flex flex-col">
       <TopNavigationSection />
       <MainContentAreaSplitViewSection />
     </div>

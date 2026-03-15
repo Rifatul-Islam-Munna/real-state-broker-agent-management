@@ -1,12 +1,13 @@
+
+import { AppIcon } from "@/components/ui/app-icon"
+
 export function ServicesSection() {
   return (
     <section className="py-24 bg-primary text-white">
       <div className="max-w-7xl mx-auto px-4">
         <div className="grid md:grid-cols-3 gap-12 text-center">
           <div className="p-8 border border-white/10 hover:border-accent transition-colors">
-            <span className="material-symbols-outlined text-5xl text-accent mb-6">
-              {"assessment"}
-            </span>
+            <AppIcon className="text-5xl text-accent mb-6" name="assessment" />
             <h3 className="text-2xl font-bold mb-4 uppercase tracking-tighter">
               {"Property Valuation"}
             </h3>
@@ -21,9 +22,7 @@ export function ServicesSection() {
             </a>
           </div>
           <div className="p-8 border border-white/10 hover:border-accent transition-colors">
-            <span className="material-symbols-outlined text-5xl text-accent mb-6">
-              {"handshake"}
-            </span>
+            <AppIcon className="text-5xl text-accent mb-6" name="handshake" />
             <h3 className="text-2xl font-bold mb-4 uppercase tracking-tighter">
               {"Consulting"}
             </h3>
@@ -38,9 +37,7 @@ export function ServicesSection() {
             </a>
           </div>
           <div className="p-8 border border-white/10 hover:border-accent transition-colors">
-            <span className="material-symbols-outlined text-5xl text-accent mb-6">
-              {"corporate_fare"}
-            </span>
+            <AppIcon className="text-5xl text-accent mb-6" name="corporate_fare" />
             <h3 className="text-2xl font-bold mb-4 uppercase tracking-tighter">
               {"Asset Management"}
             </h3>

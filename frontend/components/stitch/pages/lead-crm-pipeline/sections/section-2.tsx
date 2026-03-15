@@ -25,6 +25,7 @@ import {
   type OutreachType,
   useAdminFlowStore,
 } from "@/stores/admin-flow-store"
+import { AppIcon } from "@/components/ui/app-icon"
 
 type LeadView = "board" | "list"
 type LeadDialogState =
@@ -365,7 +366,7 @@ function LeadKanbanCard({
           className="drag-handle cursor-grab border border-slate-200 px-2 py-1 text-slate-400 active:cursor-grabbing dark:border-white/10"
           type="button"
         >
-          <span className="material-symbols-outlined text-sm">{"drag_indicator"}</span>
+          <AppIcon className="text-sm" name="drag_indicator" />
         </button>
       </div>
       <button className="block w-full px-4 py-4 text-left" onClick={() => onOpen(lead.id)} type="button">
@@ -550,7 +551,7 @@ export function Section2Section() {
             <article key={stat.label} className="border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-slate-900">
               <div className="flex items-center justify-between">
                 <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-400">{stat.label}</p>
-                <span className="material-symbols-outlined text-primary">{stat.icon}</span>
+                <AppIcon className="text-primary" name={stat.icon} />
               </div>
               <p className="mt-3 text-3xl font-black text-slate-900 dark:text-white">{stat.value}</p>
               <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">{stat.detail}</p>

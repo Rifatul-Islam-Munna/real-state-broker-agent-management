@@ -1,4 +1,5 @@
 import Link from "next/link"
+import { AppIcon } from "@/components/ui/app-icon"
 
 export function FooterSection() {
   return (
@@ -7,9 +8,7 @@ export function FooterSection() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 mb-12">
           <div className="space-y-6">
             <div className="flex items-center gap-2 text-white">
-              <span className="material-symbols-outlined text-3xl">
-                {"domain"}
-              </span>
+              <AppIcon className="text-3xl" name="domain" />
               <h2 className="text-xl font-bold tracking-tight">
                 {"EstateBlue"}
               </h2>
@@ -22,17 +21,13 @@ export function FooterSection() {
                 className="w-8 h-8 rounded-full border border-white/20 flex items-center justify-center hover:bg-white/10 transition-colors"
                 href="#"
               >
-                <span className="material-symbols-outlined text-sm">
-                  {"public"}
-                </span>
+                <AppIcon className="text-sm" name="public" />
               </a>
               <a
                 className="w-8 h-8 rounded-full border border-white/20 flex items-center justify-center hover:bg-white/10 transition-colors"
                 href="#"
               >
-                <span className="material-symbols-outlined text-sm">
-                  {"alternate_email"}
-                </span>
+                <AppIcon className="text-sm" name="alternate_email" />
               </a>
             </div>
           </div>
@@ -120,9 +115,7 @@ export function FooterSection() {
             </h4>
             <ul className="space-y-4 text-sm text-white/70">
               <li className="flex items-start gap-3">
-                <span className="material-symbols-outlined text-accent text-sm">
-                  {"location_on"}
-                </span>
+                <AppIcon className="text-accent text-sm" name="location_on" />
                 <span>
                   {"123 Realty Plaza, Suite 400"}
                   <br />
@@ -130,9 +123,7 @@ export function FooterSection() {
                 </span>
               </li>
               <li className="flex items-center gap-3">
-                <span className="material-symbols-outlined text-accent text-sm">
-                  {"phone"}
-                </span>
+                <AppIcon className="text-accent text-sm" name="phone" />
                 <span>
                   {"(555) 123-4567"}
                 </span>

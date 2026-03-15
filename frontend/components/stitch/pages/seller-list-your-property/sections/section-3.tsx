@@ -1,12 +1,13 @@
+
+import { AppIcon } from "@/components/ui/app-icon"
+
 export function Section3Section() {
   return (
     <footer className="bg-primary text-white py-16 px-6 md:px-16 mt-20">
       <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-12">
         <div className="col-span-2">
           <div className="flex items-center gap-3 text-accent mb-6">
-            <span className="material-symbols-outlined text-4xl">
-              {"domain"}
-            </span>
+            <AppIcon className="text-4xl" name="domain" />
             <h2 className="text-3xl font-black uppercase tracking-tighter">
               {"Elite Agency"}
             </h2>
@@ -60,15 +61,11 @@ export function Section3Section() {
           </h4>
           <ul className="space-y-4 text-sm font-bold uppercase">
             <li className="flex items-center gap-2">
-              <span className="material-symbols-outlined text-accent">
-                {"call"}
-              </span>
+              <AppIcon className="text-accent" name="call" />
               {" 800-ELITE-RE "}
             </li>
             <li className="flex items-center gap-2">
-              <span className="material-symbols-outlined text-accent">
-                {"mail"}
-              </span>
+              <AppIcon className="text-accent" name="mail" />
               {" listings@eliteagency.com "}
             </li>
           </ul>

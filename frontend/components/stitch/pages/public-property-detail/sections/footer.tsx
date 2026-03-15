@@ -1,4 +1,5 @@
 import Link from "next/link"
+import { AppIcon } from "@/components/ui/app-icon"
 
 export function FooterSection() {
   return (
@@ -6,9 +7,7 @@ export function FooterSection() {
       <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-12">
         <div className="col-span-1 md:col-span-2">
           <div className="flex items-center gap-2 text-primary mb-6">
-            <span className="material-symbols-outlined text-3xl">
-              {"domain"}
-            </span>
+            <AppIcon className="text-3xl" name="domain" />
             <h1 className="text-xl font-800 tracking-tighter uppercase text-white">
               {"EstateBlue"}
             </h1>

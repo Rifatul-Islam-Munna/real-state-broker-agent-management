@@ -7,6 +7,7 @@ import { useState } from "react"
 
 import { cn } from "@/lib/utils"
 import { sellerListYourPropertyPageMeta } from "@/static-data/pages/seller-list-your-property/meta"
+import { AppIcon } from "@/components/ui/app-icon"
 
 type SearchMode = "buy" | "rent" | "sell"
 
@@ -89,9 +90,7 @@ export function HeroSection() {
           </div>
           <div className="flex flex-col md:flex-row gap-2 p-4">
             <div className="flex-1 flex items-center border border-slate-200 px-4 py-3">
-              <span className="material-symbols-outlined text-slate-400 mr-2">
-                {"location_on"}
-              </span>
+              <AppIcon className="text-slate-400 mr-2" name="location_on" />
               <input
                 className="w-full border-none focus:ring-0 text-sm"
                 placeholder={currentMode.inputPlaceholder}
@@ -99,9 +98,7 @@ export function HeroSection() {
               />
             </div>
             <div className="flex-1 flex items-center border border-slate-200 px-4 py-3">
-              <span className="material-symbols-outlined text-slate-400 mr-2">
-                {"home"}
-              </span>
+              <AppIcon className="text-slate-400 mr-2" name="home" />
               <select className="w-full border-none focus:ring-0 text-sm appearance-none bg-transparent">
                 <option>
                   {currentMode.selectLabel}

@@ -3,6 +3,7 @@
 import Link from "next/link"
 
 import { publicPropertyDetailPageMeta } from "@/static-data/pages/public-property-detail/meta"
+import { AppIcon } from "@/components/ui/app-icon"
 
 const featuredListings = [
   {
@@ -57,14 +58,10 @@ export function FeaturedListingsSection() {
           </div>
           <div className="flex gap-2">
             <button className="p-3 border border-slate-300 hover:bg-primary hover:text-white transition-colors">
-              <span className="material-symbols-outlined">
-                {"arrow_back"}
-              </span>
+              <AppIcon name="arrow_back" />
             </button>
             <button className="p-3 border border-slate-300 hover:bg-primary hover:text-white transition-colors">
-              <span className="material-symbols-outlined">
-                {"arrow_forward"}
-              </span>
+              <AppIcon name="arrow_forward" />
             </button>
           </div>
         </div>
@@ -94,17 +91,13 @@ export function FeaturedListingsSection() {
                     {listing.title}
                   </h3>
                   <p className="text-slate-500 text-sm flex items-center gap-1 mb-6">
-                    <span className="material-symbols-outlined text-sm">
-                      {"location_on"}
-                    </span>
+                    <AppIcon className="text-sm" name="location_on" />
                     {` ${listing.location} `}
                   </p>
                   <div className="flex justify-between py-4 border-t border-slate-100">
                     {listing.specs.map((spec, index) => (
                       <div key={spec} className="flex items-center gap-2">
-                        <span className="material-symbols-outlined text-slate-400">
-                          {specIcons[index] ?? "square_foot"}
-                        </span>
+                        <AppIcon className="text-slate-400" name={specIcons[index] ?? "square_foot"} />
                         <span className="text-xs font-bold text-slate-700">
                           {spec}
                         </span>

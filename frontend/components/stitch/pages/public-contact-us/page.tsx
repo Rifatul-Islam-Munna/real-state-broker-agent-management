@@ -7,7 +7,7 @@ import { ContactMainSection } from "./sections/main-section"
 
 export function PublicContactUsPage() {
   return (
-    <div className="bg-background-light font-display text-slate-900 dark:bg-background-dark dark:text-slate-100">
+    <div className="bg-background-light font-sans text-slate-900 dark:bg-background-dark dark:text-slate-100">
       <PublicPrimaryNavbar />
       <ContactHeroSection />
       <ContactMainSection />

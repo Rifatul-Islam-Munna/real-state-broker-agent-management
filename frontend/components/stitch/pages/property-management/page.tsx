@@ -31,7 +31,7 @@ export function PropertyManagementPage() {
   })
 
   return (
-    <div className="font-display bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 min-h-screen">
+    <div className="font-sans bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 min-h-screen">
       <Section1Section
         activeFilter={activeFilter}
         listings={filteredListings}

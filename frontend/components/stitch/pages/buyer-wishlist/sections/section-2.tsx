@@ -1,5 +1,8 @@
 /* eslint-disable @next/next/no-img-element */
 
+
+import { AppIcon } from "@/components/ui/app-icon"
+
 export function Section2Section() {
   return (
     <main className="max-w-7xl mx-auto px-4 py-8 w-full">
@@ -46,9 +49,7 @@ export function Section2Section() {
                     {"$1,240,000"}
                   </h3>
                   <span className="text-slate-400 text-xs font-bold flex items-center gap-1">
-                    <span className="material-symbols-outlined text-sm">
-                      {"location_on"}
-                    </span>
+                    <AppIcon className="text-sm" name="location_on" />
                     {" SEATTLE, WA "}
                   </span>
                 </div>
@@ -57,25 +58,19 @@ export function Section2Section() {
                 </p>
                 <div className="flex gap-4 border-t border-slate-100 dark:border-slate-800 pt-4 mb-4">
                   <div className="flex items-center gap-1">
-                    <span className="material-symbols-outlined text-sm text-slate-400">
-                      {"bed"}
-                    </span>
+                    <AppIcon className="text-sm text-slate-400" name="bed" />
                     <span className="text-xs font-bold">
                       {"3 BD"}
                     </span>
                   </div>
                   <div className="flex items-center gap-1">
-                    <span className="material-symbols-outlined text-sm text-slate-400">
-                      {"bathtub"}
-                    </span>
+                    <AppIcon className="text-sm text-slate-400" name="bathtub" />
                     <span className="text-xs font-bold">
                       {"2.5 BA"}
                     </span>
                   </div>
                   <div className="flex items-center gap-1">
-                    <span className="material-symbols-outlined text-sm text-slate-400">
-                      {"square_foot"}
-                    </span>
+                    <AppIcon className="text-sm text-slate-400" name="square_foot" />
                     <span className="text-xs font-bold">
                       {"2,100 SF"}
                     </span>
@@ -84,15 +79,11 @@ export function Section2Section() {
               </div>
               <div className="grid grid-cols-2 border-t-2 border-slate-200 dark:border-slate-800">
                 <button className="py-3 border-r-2 border-slate-200 dark:border-slate-800 text-[10px] font-bold uppercase tracking-widest hover:bg-red-50 dark:hover:bg-red-950 transition-colors flex items-center justify-center gap-2">
-                  <span className="material-symbols-outlined text-sm">
-                    {"delete"}
-                  </span>
+                  <AppIcon className="text-sm" name="delete" />
                   {" Remove "}
                 </button>
                 <button className="py-3 bg-primary text-white text-[10px] font-bold uppercase tracking-widest hover:opacity-90 transition-opacity flex items-center justify-center gap-2">
-                  <span className="material-symbols-outlined text-sm">
-                    {"mail"}
-                  </span>
+                  <AppIcon className="text-sm" name="mail" />
                   {" Contact Agent "}
                 </button>
               </div>
@@ -119,9 +110,7 @@ export function Section2Section() {
                     {"$875,000"}
                   </h3>
                   <span className="text-slate-400 text-xs font-bold flex items-center gap-1">
-                    <span className="material-symbols-outlined text-sm">
-                      {"location_on"}
-                    </span>
+                    <AppIcon className="text-sm" name="location_on" />
                     {" AUSTIN, TX "}
                   </span>
                 </div>
@@ -130,25 +119,19 @@ export function Section2Section() {
                 </p>
                 <div className="flex gap-4 border-t border-slate-100 dark:border-slate-800 pt-4 mb-4">
                   <div className="flex items-center gap-1">
-                    <span className="material-symbols-outlined text-sm text-slate-400">
-                      {"bed"}
-                    </span>
+                    <AppIcon className="text-sm text-slate-400" name="bed" />
                     <span className="text-xs font-bold">
                       {"4 BD"}
                     </span>
                   </div>
                   <div className="flex items-center gap-1">
-                    <span className="material-symbols-outlined text-sm text-slate-400">
-                      {"bathtub"}
-                    </span>
+                    <AppIcon className="text-sm text-slate-400" name="bathtub" />
                     <span className="text-xs font-bold">
                       {"3 BA"}
                     </span>
                   </div>
                   <div className="flex items-center gap-1">
-                    <span className="material-symbols-outlined text-sm text-slate-400">
-                      {"square_foot"}
-                    </span>
+                    <AppIcon className="text-sm text-slate-400" name="square_foot" />
                     <span className="text-xs font-bold">
                       {"3,250 SF"}
                     </span>
@@ -157,15 +140,11 @@ export function Section2Section() {
               </div>
               <div className="grid grid-cols-2 border-t-2 border-slate-200 dark:border-slate-800">
                 <button className="py-3 border-r-2 border-slate-200 dark:border-slate-800 text-[10px] font-bold uppercase tracking-widest hover:bg-red-50 dark:hover:bg-red-950 transition-colors flex items-center justify-center gap-2">
-                  <span className="material-symbols-outlined text-sm">
-                    {"delete"}
-                  </span>
+                  <AppIcon className="text-sm" name="delete" />
                   {" Remove "}
                 </button>
                 <button className="py-3 bg-primary text-white text-[10px] font-bold uppercase tracking-widest hover:opacity-90 transition-opacity flex items-center justify-center gap-2">
-                  <span className="material-symbols-outlined text-sm">
-                    {"mail"}
-                  </span>
+                  <AppIcon className="text-sm" name="mail" />
                   {" Contact Agent "}
                 </button>
               </div>
@@ -187,9 +166,7 @@ export function Section2Section() {
                     {"$520,000"}
                   </h3>
                   <span className="text-slate-400 text-xs font-bold flex items-center gap-1">
-                    <span className="material-symbols-outlined text-sm">
-                      {"location_on"}
-                    </span>
+                    <AppIcon className="text-sm" name="location_on" />
                     {" DENVER, CO "}
                   </span>
                 </div>
@@ -198,25 +175,19 @@ export function Section2Section() {
                 </p>
                 <div className="flex gap-4 border-t border-slate-100 dark:border-slate-800 pt-4 mb-4">
                   <div className="flex items-center gap-1">
-                    <span className="material-symbols-outlined text-sm text-slate-400">
-                      {"bed"}
-                    </span>
+                    <AppIcon className="text-sm text-slate-400" name="bed" />
                     <span className="text-xs font-bold">
                       {"2 BD"}
                     </span>
                   </div>
                   <div className="flex items-center gap-1">
-                    <span className="material-symbols-outlined text-sm text-slate-400">
-                      {"bathtub"}
-                    </span>
+                    <AppIcon className="text-sm text-slate-400" name="bathtub" />
                     <span className="text-xs font-bold">
                       {"2 BA"}
                     </span>
                   </div>
                   <div className="flex items-center gap-1">
-                    <span className="material-symbols-outlined text-sm text-slate-400">
-                      {"square_foot"}
-                    </span>
+                    <AppIcon className="text-sm text-slate-400" name="square_foot" />
                     <span className="text-xs font-bold">
                       {"1,400 SF"}
                     </span>
@@ -225,24 +196,18 @@ export function Section2Section() {
               </div>
               <div className="grid grid-cols-2 border-t-2 border-slate-200 dark:border-slate-800">
                 <button className="py-3 border-r-2 border-slate-200 dark:border-slate-800 text-[10px] font-bold uppercase tracking-widest hover:bg-red-50 dark:hover:bg-red-950 transition-colors flex items-center justify-center gap-2">
-                  <span className="material-symbols-outlined text-sm">
-                    {"delete"}
-                  </span>
+                  <AppIcon className="text-sm" name="delete" />
                   {" Remove "}
                 </button>
                 <button className="py-3 bg-primary text-white text-[10px] font-bold uppercase tracking-widest hover:opacity-90 transition-opacity flex items-center justify-center gap-2">
-                  <span className="material-symbols-outlined text-sm">
-                    {"mail"}
-                  </span>
+                  <AppIcon className="text-sm" name="mail" />
                   {" Contact Agent "}
                 </button>
               </div>
             </div>
             <div className="border-2 border-dashed border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 flex flex-col items-center justify-center text-center p-8 group cursor-pointer">
               <div className="w-16 h-16 border-2 border-slate-300 dark:border-slate-700 rounded-full flex items-center justify-center mb-4 group-hover:border-primary group-hover:text-primary transition-colors">
-                <span className="material-symbols-outlined text-3xl">
-                  {"add"}
-                </span>
+                <AppIcon className="text-3xl" name="add" />
               </div>
               <h4 className="font-bold text-slate-700 dark:text-slate-300 uppercase text-xs tracking-widest">
                 {"Add Property"}
@@ -256,9 +221,7 @@ export function Section2Section() {
         <aside className="flex flex-col gap-8">
           <div className="bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 p-6">
             <div className="flex items-center gap-2 mb-6 pb-2 border-b border-slate-100 dark:border-slate-800">
-              <span className="material-symbols-outlined text-accent">
-                {"trending_down"}
-              </span>
+              <AppIcon className="text-accent" name="trending_down" />
               <h2 className="font-bold text-sm uppercase tracking-widest">
                 {"Price Alerts"}
               </h2>
@@ -317,9 +280,7 @@ export function Section2Section() {
           </div>
           <div className="bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 p-6">
             <div className="flex items-center gap-2 mb-6 pb-2 border-b border-slate-100 dark:border-slate-800">
-              <span className="material-symbols-outlined text-primary">
-                {"auto_awesome"}
-              </span>
+              <AppIcon className="text-primary" name="auto_awesome" />
               <h2 className="font-bold text-sm uppercase tracking-widest">
                 {"New Matches"}
               </h2>

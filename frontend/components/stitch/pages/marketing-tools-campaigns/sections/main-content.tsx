@@ -1,3 +1,6 @@
+
+import { AppIcon } from "@/components/ui/app-icon"
+
 export function MainContentSection() {
   return (
     <main className="flex-1 p-8">
@@ -12,15 +15,11 @@ export function MainContentSection() {
         </div>
         <div className="flex gap-3">
           <button className="bg-white border border-slate-200 text-slate-700 px-4 py-2 rounded-lg font-medium flex items-center gap-2 hover:bg-slate-50 transition-colors">
-            <span className="material-symbols-outlined text-sm">
-              {"download"}
-            </span>
+            <AppIcon className="text-sm" name="download" />
             {" Export Report "}
           </button>
           <button className="bg-accent text-white px-6 py-2 rounded-lg font-bold flex items-center gap-2 hover:opacity-90 transition-colors">
-            <span className="material-symbols-outlined">
-              {"add"}
-            </span>
+            <AppIcon name="add" />
             {" Create Campaign "}
           </button>
         </div>
@@ -31,18 +30,14 @@ export function MainContentSection() {
             <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
               {"Email Open Rate"}
             </p>
-            <span className="material-symbols-outlined text-primary">
-              {"mail"}
-            </span>
+            <AppIcon className="text-primary" name="mail" />
           </div>
           <div className="flex items-baseline gap-2">
             <p className="text-3xl font-bold">
               {"24.5%"}
             </p>
             <p className="text-xs font-bold text-green-600 flex items-center">
-              <span className="material-symbols-outlined text-xs">
-                {"arrow_upward"}
-              </span>
+              <AppIcon className="text-xs" name="arrow_upward" />
               {" 2.1%"}
             </p>
           </div>
@@ -60,18 +55,14 @@ export function MainContentSection() {
             <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
               {"SMS CTR"}
             </p>
-            <span className="material-symbols-outlined text-secondary">
-              {"sms"}
-            </span>
+            <AppIcon className="text-secondary" name="sms" />
           </div>
           <div className="flex items-baseline gap-2">
             <p className="text-3xl font-bold">
               {"12.8%"}
             </p>
             <p className="text-xs font-bold text-green-600 flex items-center">
-              <span className="material-symbols-outlined text-xs">
-                {"arrow_upward"}
-              </span>
+              <AppIcon className="text-xs" name="arrow_upward" />
               {" 0.5%"}
             </p>
           </div>
@@ -89,18 +80,14 @@ export function MainContentSection() {
             <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
               {"Conversions"}
             </p>
-            <span className="material-symbols-outlined text-accent">
-              {"leaderboard"}
-            </span>
+            <AppIcon className="text-accent" name="leaderboard" />
           </div>
           <div className="flex items-baseline gap-2">
             <p className="text-3xl font-bold">
               {"86"}
             </p>
             <p className="text-xs font-bold text-green-600 flex items-center">
-              <span className="material-symbols-outlined text-xs">
-                {"arrow_upward"}
-              </span>
+              <AppIcon className="text-xs" name="arrow_upward" />
               {" 12%"}
             </p>
           </div>
@@ -118,9 +105,7 @@ export function MainContentSection() {
             <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
               {"Social Reach"}
             </p>
-            <span className="material-symbols-outlined text-slate-400">
-              {"share"}
-            </span>
+            <AppIcon className="text-slate-400" name="share" />
           </div>
           <div className="flex items-baseline gap-2">
             <p className="text-3xl font-bold">
@@ -273,18 +258,14 @@ export function MainContentSection() {
                 {"SMS Quick Status"}
               </h3>
               <button className="text-primary text-sm font-semibold flex items-center gap-1">
-                <span className="material-symbols-outlined text-sm">
-                  {"send"}
-                </span>
+                <AppIcon className="text-sm" name="send" />
                 {" New SMS "}
               </button>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="p-4 rounded-lg bg-background-light dark:bg-slate-900 border border-slate-100 dark:border-slate-700">
                 <div className="flex items-center gap-3 mb-2">
-                  <span className="material-symbols-outlined text-secondary">
-                    {"textsms"}
-                  </span>
+                  <AppIcon className="text-secondary" name="textsms" />
                   <p className="text-sm font-bold">
                     {"Price Drop Alert"}
                   </p>
@@ -303,9 +284,7 @@ export function MainContentSection() {
               </div>
               <div className="p-4 rounded-lg bg-background-light dark:bg-slate-900 border border-slate-100 dark:border-slate-700">
                 <div className="flex items-center gap-3 mb-2">
-                  <span className="material-symbols-outlined text-secondary">
-                    {"textsms"}
-                  </span>
+                  <AppIcon className="text-secondary" name="textsms" />
                   <p className="text-sm font-bold">
                     {"Showing Reminder"}
                   </p>
@@ -328,9 +307,7 @@ export function MainContentSection() {
         <div className="space-y-8">
           <section className="bg-primary text-white rounded-xl p-6">
             <div className="flex items-center gap-2 mb-4">
-              <span className="material-symbols-outlined">
-                {"rocket_launch"}
-              </span>
+              <AppIcon name="rocket_launch" />
               <h3 className="text-lg font-bold">
                 {"Homepage Boost"}
               </h3>
@@ -355,9 +332,7 @@ export function MainContentSection() {
                     {"5th Ave, NY"}
                   </p>
                 </div>
-                <span className="material-symbols-outlined text-green-400 text-sm">
-                  {"check_circle"}
-                </span>
+                <AppIcon className="text-green-400 text-sm" name="check_circle" />
               </div>
               <div className="flex items-center gap-3 p-3 bg-white/10 rounded-lg">
                 <div
@@ -375,9 +350,7 @@ export function MainContentSection() {
                     {"Malibu, CA"}
                   </p>
                 </div>
-                <span className="material-symbols-outlined text-white/40 text-sm cursor-pointer">
-                  {"toggle_off"}
-                </span>
+                <AppIcon className="text-white/40 text-sm cursor-pointer" name="toggle_off" />
               </div>
             </div>
             <button className="w-full mt-6 py-2 bg-white text-primary font-bold rounded-lg text-sm hover:bg-white/90 transition-colors">
@@ -391,9 +364,7 @@ export function MainContentSection() {
             <div className="space-y-3">
               <div className="flex items-center justify-between p-3 border border-slate-100 dark:border-slate-700 rounded-lg hover:border-primary transition-colors cursor-pointer group">
                 <div className="flex items-center gap-3">
-                  <span className="material-symbols-outlined text-slate-400 group-hover:text-primary">
-                    {"description"}
-                  </span>
+                  <AppIcon className="text-slate-400 group-hover:text-primary" name="description" />
                   <div>
                     <p className="text-sm font-medium">
                       {"Welcome Client"}
@@ -403,15 +374,11 @@ export function MainContentSection() {
                     </p>
                   </div>
                 </div>
-                <span className="material-symbols-outlined text-slate-300">
-                  {"chevron_right"}
-                </span>
+                <AppIcon className="text-slate-300" name="chevron_right" />
               </div>
               <div className="flex items-center justify-between p-3 border border-slate-100 dark:border-slate-700 rounded-lg hover:border-primary transition-colors cursor-pointer group">
                 <div className="flex items-center gap-3">
-                  <span className="material-symbols-outlined text-slate-400 group-hover:text-primary">
-                    {"description"}
-                  </span>
+                  <AppIcon className="text-slate-400 group-hover:text-primary" name="description" />
                   <div>
                     <p className="text-sm font-medium">
                       {"New Property Alert"}
@@ -421,15 +388,11 @@ export function MainContentSection() {
                     </p>
                   </div>
                 </div>
-                <span className="material-symbols-outlined text-slate-300">
-                  {"chevron_right"}
-                </span>
+                <AppIcon className="text-slate-300" name="chevron_right" />
               </div>
               <div className="flex items-center justify-between p-3 border border-slate-100 dark:border-slate-700 rounded-lg hover:border-primary transition-colors cursor-pointer group">
                 <div className="flex items-center gap-3">
-                  <span className="material-symbols-outlined text-slate-400 group-hover:text-primary">
-                    {"description"}
-                  </span>
+                  <AppIcon className="text-slate-400 group-hover:text-primary" name="description" />
                   <div>
                     <p className="text-sm font-medium">
                       {"Tour Confirmation"}
@@ -439,9 +402,7 @@ export function MainContentSection() {
                     </p>
                   </div>
                 </div>
-                <span className="material-symbols-outlined text-slate-300">
-                  {"chevron_right"}
-                </span>
+                <AppIcon className="text-slate-300" name="chevron_right" />
               </div>
             </div>
             <button className="w-full mt-4 text-xs font-bold text-slate-500 hover:text-primary uppercase tracking-wider">
@@ -454,24 +415,16 @@ export function MainContentSection() {
             </h3>
             <div className="grid grid-cols-4 gap-4 mb-4">
               <button className="size-10 bg-blue-600 rounded flex items-center justify-center text-white hover:opacity-90">
-                <span className="material-symbols-outlined">
-                  {"social_leaderboard"}
-                </span>
+                <AppIcon name="social_leaderboard" />
               </button>
               <button className="size-10 bg-sky-400 rounded flex items-center justify-center text-white hover:opacity-90">
-                <span className="material-symbols-outlined">
-                  {"share"}
-                </span>
+                <AppIcon name="share" />
               </button>
               <button className="size-10 bg-pink-600 rounded flex items-center justify-center text-white hover:opacity-90">
-                <span className="material-symbols-outlined">
-                  {"photo_camera"}
-                </span>
+                <AppIcon name="photo_camera" />
               </button>
               <button className="size-10 bg-blue-800 rounded flex items-center justify-center text-white hover:opacity-90">
-                <span className="material-symbols-outlined">
-                  {"work"}
-                </span>
+                <AppIcon name="work" />
               </button>
             </div>
             <div className="p-3 bg-accent/10 border border-accent/20 rounded-lg">

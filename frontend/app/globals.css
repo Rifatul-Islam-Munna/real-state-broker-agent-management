@@ -1,7 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@source "../static-data/pages/**/*.html";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -17,6 +16,8 @@
   --neutral-base: oklch(0.255 0.031 260.428);
   --secondary-light: oklch(0.82 0.05 234.162);
   --text-main: oklch(0.255 0.031 260.428);
+  --app-font-display: "Playfair Display", Georgia, serif;
+  --app-font-sans: "Raleway", "Helvetica Neue", Arial, sans-serif;
 
   /* Card */
   --card: oklch(0.971 0.006 84.589); /* Creamy Ivory */
@@ -114,7 +115,8 @@
 }
 
 @theme inline {
-  --font-sans: var(--font-sans);
+  --font-sans: var(--app-font-sans);
+  --font-display: var(--app-font-display);
   --color-background-light: var(--background-light);
   --color-background-dark: var(--background-dark);
   --color-surface-light: var(--surface-light);
@@ -164,7 +166,7 @@
 }
 
 @utility font-display {
-  font-family: var(--font-sans);
+  font-family: var(--font-display);
 }
 
 @utility no-shadow {
@@ -208,36 +210,20 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-sans;
   }
   html {
     @apply font-sans;
   }
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-display);
+  }
   img {
     display: block;
   }
-  .material-symbols-outlined {
-    font-family: "Material Symbols Outlined";
-    font-style: normal;
-    font-weight: 400;
-    line-height: 1;
-    letter-spacing: normal;
-    text-transform: none;
-    display: inline-block;
-    white-space: nowrap;
-    word-wrap: normal;
-    direction: ltr;
-    -webkit-font-smoothing: antialiased;
-    font-variation-settings:
-      "FILL" 0,
-      "wght" 400,
-      "GRAD" 0,
-      "opsz" 24;
-  }
 }
-
-
-
-
-
-

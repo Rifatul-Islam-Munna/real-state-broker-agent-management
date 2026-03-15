@@ -8,7 +8,7 @@ import { AgentsSpecialtiesSection } from "./sections/specialties-section"
 
 export function PublicAgentsPage() {
   return (
-    <div className="bg-background-light font-display text-slate-900 dark:bg-background-dark dark:text-slate-100">
+    <div className="bg-background-light font-sans text-slate-900 dark:bg-background-dark dark:text-slate-100">
       <PublicPrimaryNavbar />
       <AgentsHeroSection />
       <AgentsGridSection />

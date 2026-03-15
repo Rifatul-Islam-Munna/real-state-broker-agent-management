@@ -10,6 +10,7 @@ import {
   agentSettingsPreferences,
   agentSettingsProfile,
 } from "@/static-data/pages/agent-settings/content"
+import { AppIcon } from "@/components/ui/app-icon"
 
 type PreferenceId = (typeof agentSettingsPreferences)[number]["id"]
 
@@ -179,9 +180,7 @@ export function Section2Section() {
                   className="flex items-start justify-between gap-4 px-5 py-4"
                 >
                   <div className="flex items-start gap-3">
-                    <span className="material-symbols-outlined text-primary">
-                      {preference.icon}
-                    </span>
+                    <AppIcon className="text-primary" name={preference.icon} />
                     <div>
                       <h3 className="text-sm font-bold text-slate-900 dark:text-white">
                         {preference.label}

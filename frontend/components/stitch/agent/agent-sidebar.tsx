@@ -11,6 +11,7 @@ import {
   SidebarHeader,
 } from "@/components/ui/sidebar"
 import { agentNavigation } from "@/static-data/navigation/agent-navigation"
+import { AppIcon } from "@/components/ui/app-icon"
 
 export function AgentSidebar() {
   const pathname = usePathname()
@@ -21,9 +22,7 @@ export function AgentSidebar() {
         <div>
           <Link href="/agent/dashboard" className="flex items-center gap-3">
             <div className="flex size-12 items-center justify-center rounded-2xl bg-white text-primary">
-              <span className="material-symbols-outlined text-3xl">
-                {"domain"}
-              </span>
+              <AppIcon className="text-3xl" name="domain" />
             </div>
             <div>
               <h1 className="text-lg font-black tracking-tight">
@@ -36,15 +35,11 @@ export function AgentSidebar() {
           </Link>
           <div className="mt-4 flex flex-wrap gap-2">
             <div className="inline-flex items-center gap-1 rounded-full bg-white/10 px-3 py-1 text-[11px] font-bold uppercase tracking-wide">
-              <span className="material-symbols-outlined text-sm">
-                {"verified"}
-              </span>
+              <AppIcon className="text-sm" name="verified" />
               {"Active Agent"}
             </div>
             <div className="inline-flex items-center gap-1 rounded-full bg-accent/20 px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-white">
-              <span className="material-symbols-outlined text-sm">
-                {"trending_up"}
-              </span>
+              <AppIcon className="text-sm" name="trending_up" />
               {"5 Active Queues"}
             </div>
           </div>
@@ -69,9 +64,7 @@ export function AgentSidebar() {
                         : "text-white/80 hover:bg-white/10 hover:text-white",
                     )}
                   >
-                    <span className="material-symbols-outlined text-xl">
-                      {item.icon}
-                    </span>
+                    <AppIcon className="text-xl" name={item.icon} />
                     <span>{item.label}</span>
                   </Link>
                 </li>
@@ -87,15 +80,11 @@ export function AgentSidebar() {
             {"Daily Focus"}
           </p>
           <div className="mt-3 flex items-center gap-2 text-sm font-semibold">
-            <span className="material-symbols-outlined text-accent">
-              {"group"}
-            </span>
+            <AppIcon className="text-accent" name="group" />
             {"Lead follow-up is on track"}
           </div>
           <p className="mt-2 flex items-center gap-2 text-xs text-white/75">
-            <span className="material-symbols-outlined text-sm">
-              {"mail"}
-            </span>
+            <AppIcon className="text-sm" name="mail" />
             {"Mail, deals, and listings stay inside this focused agent view."}
           </p>
         </div>

@@ -1,12 +1,13 @@
+
+import { AppIcon } from "@/components/ui/app-icon"
+
 export function Section1Section() {
   return (
     <div className="flex items-center justify-center p-4 md:p-8 min-h-screen">
       <div className="w-full max-w-4xl bg-white dark:bg-slate-900 border-2 border-primary/10 rounded-xl overflow-hidden flex flex-col md:flex-row">
         <div className="flex-1 p-6 md:p-10 border-b md:border-b-0 md:border-r-2 border-primary/10">
           <div className="flex items-center gap-2 mb-8 text-primary">
-            <span className="material-symbols-outlined text-3xl">
-              {"calendar_month"}
-            </span>
+            <AppIcon className="text-3xl" name="calendar_month" />
             <h1 className="text-2xl font-bold tracking-tight">
               {"Schedule a Viewing"}
             </h1>
@@ -36,17 +37,13 @@ export function Section1Section() {
                 </h3>
                 <div className="flex gap-2">
                   <button className="p-1 hover:bg-primary/10 rounded border border-primary/20 text-primary">
-                    <span className="material-symbols-outlined text-sm">
-                      {"chevron_left"}
-                    </span>
+                    <AppIcon className="text-sm" name="chevron_left" />
                   </button>
                   <span className="text-sm font-semibold px-2">
                     {"October 2023"}
                   </span>
                   <button className="p-1 hover:bg-primary/10 rounded border border-primary/20 text-primary">
-                    <span className="material-symbols-outlined text-sm">
-                      {"chevron_right"}
-                    </span>
+                    <AppIcon className="text-sm" name="chevron_right" />
                   </button>
                 </div>
               </div>
@@ -149,9 +146,7 @@ export function Section1Section() {
                 {"Full Name"}
               </label>
               <div className="relative">
-                <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-primary/40">
-                  {"person"}
-                </span>
+                <AppIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-primary/40" name="person" />
                 <input
                   className="w-full pl-10 pr-4 py-3 bg-white dark:bg-slate-900 border-2 border-primary/10 rounded-lg focus:border-primary outline-none transition-all"
                   placeholder="John Doe"
@@ -164,9 +159,7 @@ export function Section1Section() {
                 {"Email Address"}
               </label>
               <div className="relative">
-                <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-primary/40">
-                  {"mail"}
-                </span>
+                <AppIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-primary/40" name="mail" />
                 <input
                   className="w-full pl-10 pr-4 py-3 bg-white dark:bg-slate-900 border-2 border-primary/10 rounded-lg focus:border-primary outline-none transition-all"
                   placeholder="john@example.com"
@@ -179,9 +172,7 @@ export function Section1Section() {
                 {"Phone Number"}
               </label>
               <div className="relative">
-                <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-primary/40">
-                  {"call"}
-                </span>
+                <AppIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-primary/40" name="call" />
                 <input
                   className="w-full pl-10 pr-4 py-3 bg-white dark:bg-slate-900 border-2 border-primary/10 rounded-lg focus:border-primary outline-none transition-all"
                   placeholder="+1 (555) 000-0000"
@@ -209,9 +200,7 @@ export function Section1Section() {
                 <span>
                   {"Confirm Schedule"}
                 </span>
-                <span className="material-symbols-outlined">
-                  {"arrow_forward"}
-                </span>
+                <AppIcon name="arrow_forward" />
               </button>
               <p className="text-[11px] text-center mt-4 text-slate-400 leading-tight">
                 {" By clicking confirm, you agree to our Terms of Service and Privacy Policy. A confirmation email will be sent to your address. "}

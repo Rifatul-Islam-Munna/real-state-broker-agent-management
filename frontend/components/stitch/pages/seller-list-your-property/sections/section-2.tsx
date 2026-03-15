@@ -1,5 +1,8 @@
 /* eslint-disable @next/next/no-img-element */
 
+
+import { AppIcon } from "@/components/ui/app-icon"
+
 export function Section2Section() {
   return (
     <main className="max-w-4xl mx-auto px-6 py-12">
@@ -26,9 +29,7 @@ export function Section2Section() {
         </div>
       </div>
       <div className="mb-10 bg-accent/10 border-2 border-accent p-6 flex gap-4 items-start">
-        <span className="material-symbols-outlined text-accent text-3xl">
-          {"info"}
-        </span>
+        <AppIcon className="text-accent text-3xl" name="info" />
         <div>
           <p className="font-bold text-slate-900 uppercase text-sm mb-1">
             {"Notice to Sellers"}
@@ -152,9 +153,7 @@ export function Section2Section() {
               {"Property Images"}
             </label>
             <div className="border-2 border-dashed border-primary bg-primary/5 p-12 text-center flex flex-col items-center justify-center cursor-pointer hover:bg-primary/10 transition-colors">
-              <span className="material-symbols-outlined text-5xl text-primary mb-4">
-                {"add_a_photo"}
-              </span>
+              <AppIcon className="text-5xl text-primary mb-4" name="add_a_photo" />
               <p className="font-bold text-primary uppercase text-sm">
                 {"Drag & Drop Images or Click to Upload"}
               </p>
@@ -173,9 +172,7 @@ export function Section2Section() {
               </div>
               <div className="aspect-square bg-slate-100 border-2 border-slate-200 flex items-center justify-center relative">
                 <div className="absolute inset-0 bg-slate-900/40 flex items-center justify-center">
-                  <span className="material-symbols-outlined text-white">
-                    {"sync"}
-                  </span>
+                  <AppIcon className="text-white" name="sync" />
                 </div>
                 <img
                   alt="Modern luxury kitchen interior"
@@ -185,9 +182,7 @@ export function Section2Section() {
                 />
               </div>
               <div className="aspect-square border-2 border-dashed border-slate-300 flex items-center justify-center">
-                <span className="material-symbols-outlined text-slate-300">
-                  {"add"}
-                </span>
+                <AppIcon className="text-slate-300" name="add" />
               </div>
             </div>
           </div>

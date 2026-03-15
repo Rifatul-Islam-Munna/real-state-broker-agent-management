@@ -11,6 +11,7 @@ import {
   SidebarHeader,
 } from "@/components/ui/sidebar"
 import { adminNavigation } from "@/static-data/navigation/admin-navigation"
+import { AppIcon } from "@/components/ui/app-icon"
 
 export function AdminSidebar() {
   const pathname = usePathname()
@@ -24,9 +25,7 @@ export function AdminSidebar() {
             className="flex items-center gap-3"
           >
             <div className="flex size-12 items-center justify-center rounded-2xl bg-white text-primary">
-              <span className="material-symbols-outlined text-3xl">
-                {"domain"}
-              </span>
+              <AppIcon className="text-3xl" name="domain" />
             </div>
             <div>
               <h1 className="text-lg font-black tracking-tight">
@@ -39,15 +38,11 @@ export function AdminSidebar() {
           </Link>
           <div className="mt-4 flex flex-wrap gap-2">
             <div className="inline-flex items-center gap-1 rounded-full bg-white/10 px-3 py-1 text-[11px] font-bold uppercase tracking-wide">
-              <span className="material-symbols-outlined text-sm">
-                {"verified"}
-              </span>
+              <AppIcon className="text-sm" name="verified" />
               {"Verified Agency"}
             </div>
             <div className="inline-flex items-center gap-1 rounded-full bg-accent/20 px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-white">
-              <span className="material-symbols-outlined text-sm">
-                {"trending_up"}
-              </span>
+              <AppIcon className="text-sm" name="trending_up" />
               {"Growth +12%"}
             </div>
           </div>
@@ -74,9 +69,7 @@ export function AdminSidebar() {
                         : "text-white/80 hover:bg-white/10 hover:text-white",
                     )}
                   >
-                    <span className="material-symbols-outlined text-xl">
-                      {item.icon}
-                    </span>
+                    <AppIcon className="text-xl" name={item.icon} />
                     <span>{item.label}</span>
                   </Link>
                 </li>
@@ -92,15 +85,11 @@ export function AdminSidebar() {
             {"Agency Health"}
           </p>
           <div className="mt-3 flex items-center gap-2 text-sm font-semibold">
-            <span className="material-symbols-outlined text-accent">
-              {"verified"}
-            </span>
+            <AppIcon className="text-accent" name="verified" />
             {"All systems synced"}
           </div>
           <p className="mt-2 flex items-center gap-2 text-xs text-white/75">
-            <span className="material-symbols-outlined text-sm">
-              {"trending_up"}
-            </span>
+            <AppIcon className="text-sm" name="trending_up" />
             {"Listings and lead activity are trending up this week."}
           </p>
         </div>

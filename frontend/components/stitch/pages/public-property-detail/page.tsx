@@ -4,7 +4,7 @@ import { FooterSection } from "./sections/footer"
 
 export function PublicPropertyDetailPage() {
   return (
-    <div className="bg-background-light text-[#1A2332] font-display">
+    <div className="bg-background-light text-[#1A2332] font-sans">
       <TopNavigationSection />
       <Section2Section />
       <FooterSection />

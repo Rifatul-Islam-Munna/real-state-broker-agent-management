@@ -8,6 +8,7 @@ import { useState } from "react"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { cn } from "@/lib/utils"
 import { publicPropertyDetailPageMeta } from "@/static-data/pages/public-property-detail/meta"
+import { AppIcon } from "@/components/ui/app-icon"
 
 type PropertyCard = {
   status: string
@@ -329,9 +330,7 @@ function PropertyCardItem({
         )}
         type="button"
       >
-        <span className="material-symbols-outlined text-lg">
-          {property.favorited ? "favorite" : "favorite_border"}
-        </span>
+        <AppIcon className="text-lg" name={property.favorited ? "favorite" : "favorite_border"} />
       </button>
       <Link href={publicPropertyDetailPageMeta.routePath} className={cn("block h-full", isListView && "sm:flex sm:w-full")}>
         <div
@@ -372,9 +371,7 @@ function PropertyCardItem({
               ) : null}
             </div>
             <div className={cn("mb-3 flex items-center gap-1 text-sm text-slate-500 dark:text-slate-400", !isListView && "truncate")}>
-              <span className="material-symbols-outlined text-sm">
-                {"location_on"}
-              </span>
+              <AppIcon className="text-sm" name="location_on" />
               {property.location}
             </div>
           </div>
@@ -386,9 +383,7 @@ function PropertyCardItem({
           >
             {property.specs.map((spec, index) => (
               <div key={spec} className="flex items-center gap-1">
-                <span className="material-symbols-outlined text-base text-slate-400">
-                  {propertyCardIcons[index] ?? "square_foot"}
-                </span>
+                <AppIcon className="text-base text-slate-400" name={propertyCardIcons[index] ?? "square_foot"} />
                 {spec}
               </div>
             ))}
@@ -423,9 +418,7 @@ export function MainContentAreaSplitViewSection() {
               <div className="flex flex-wrap items-center gap-2">
                 <Sheet open={isFilterSheetOpen} onOpenChange={setIsFilterSheetOpen}>
                   <SheetTrigger className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 md:hidden">
-                    <span className="material-symbols-outlined text-lg">
-                      {"tune"}
-                    </span>
+                    <AppIcon className="text-lg" name="tune" />
                     {"Filters"}
                   </SheetTrigger>
                   <SheetContent
@@ -456,9 +449,7 @@ export function MainContentAreaSplitViewSection() {
                     onClick={() => setViewMode("grid")}
                     type="button"
                   >
-                    <span className="material-symbols-outlined text-xl">
-                      {"grid_view"}
-                    </span>
+                    <AppIcon className="text-xl" name="grid_view" />
                   </button>
                   <button
                     aria-label="List view"
@@ -472,9 +463,7 @@ export function MainContentAreaSplitViewSection() {
                     onClick={() => setViewMode("list")}
                     type="button"
                   >
-                    <span className="material-symbols-outlined text-xl">
-                      {"view_list"}
-                    </span>
+                    <AppIcon className="text-xl" name="view_list" />
                   </button>
                 </div>
               </div>

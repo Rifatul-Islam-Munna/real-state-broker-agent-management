@@ -1,4 +1,5 @@
 import Link from "next/link"
+import { AppIcon } from "@/components/ui/app-icon"
 
 export function AgentsCtaSection() {
   return (
@@ -16,9 +17,7 @@ export function AgentsCtaSection() {
           className="inline-flex items-center justify-center gap-2 bg-primary px-6 py-3 text-sm font-bold text-white"
           href="/contact-us"
         >
-          <span className="material-symbols-outlined text-lg">
-            {"arrow_forward"}
-          </span>
+          <AppIcon className="text-lg" name="arrow_forward" />
           {"Start Conversation"}
         </Link>
       </div>

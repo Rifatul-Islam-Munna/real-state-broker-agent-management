@@ -1,3 +1,6 @@
+
+import { AppIcon } from "@/components/ui/app-icon"
+
 export function MainContentAreaSection() {
   return (
     <main className="flex-1 flex flex-col h-screen overflow-y-auto">
@@ -7,9 +10,7 @@ export function MainContentAreaSection() {
         </h2>
         <div className="flex items-center gap-6">
           <div className="relative">
-            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-secondary text-sm">
-              {"search"}
-            </span>
+            <AppIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-secondary text-sm" name="search" />
             <input
               className="pl-10 pr-4 py-2 bg-background-light dark:bg-slate-800 border border-primary/10 text-sm focus:ring-0 focus:border-primary w-64"
               placeholder="Search agents or teams..."
@@ -18,9 +19,7 @@ export function MainContentAreaSection() {
           </div>
           <div className="flex items-center gap-3 border-l border-primary/10 pl-6">
             <button className="text-secondary hover:text-primary transition-colors">
-              <span className="material-symbols-outlined">
-                {"notifications"}
-              </span>
+              <AppIcon name="notifications" />
             </button>
             <div className="w-8 h-8 bg-primary flex items-center justify-center text-white text-xs font-bold">
               {"AD"}
@@ -386,9 +385,7 @@ export function MainContentAreaSection() {
                   </td>
                   <td className="px-6 py-4 text-right">
                     <button className="text-secondary hover:text-primary">
-                      <span className="material-symbols-outlined text-sm">
-                        {"edit"}
-                      </span>
+                      <AppIcon className="text-sm" name="edit" />
                     </button>
                   </td>
                 </tr>
@@ -439,9 +436,7 @@ export function MainContentAreaSection() {
                   </td>
                   <td className="px-6 py-4 text-right">
                     <button className="text-secondary hover:text-primary">
-                      <span className="material-symbols-outlined text-sm">
-                        {"edit"}
-                      </span>
+                      <AppIcon className="text-sm" name="edit" />
                     </button>
                   </td>
                 </tr>
@@ -492,9 +487,7 @@ export function MainContentAreaSection() {
                   </td>
                   <td className="px-6 py-4 text-right">
                     <button className="text-secondary hover:text-primary">
-                      <span className="material-symbols-outlined text-sm">
-                        {"edit"}
-                      </span>
+                      <AppIcon className="text-sm" name="edit" />
                     </button>
                   </td>
                 </tr>
@@ -545,9 +538,7 @@ export function MainContentAreaSection() {
                   </td>
                   <td className="px-6 py-4 text-right">
                     <button className="text-secondary hover:text-primary">
-                      <span className="material-symbols-outlined text-sm">
-                        {"edit"}
-                      </span>
+                      <AppIcon className="text-sm" name="edit" />
                     </button>
                   </td>
                 </tr>
@@ -568,9 +559,7 @@ export function MainContentAreaSection() {
                   {"3"}
                 </button>
                 <button className="w-8 h-8 flex items-center justify-center border border-primary/10 bg-white text-secondary text-xs font-bold hover:bg-primary/5">
-                  <span className="material-symbols-outlined text-sm">
-                    {"chevron_right"}
-                  </span>
+                  <AppIcon className="text-sm" name="chevron_right" />
                 </button>
               </div>
             </div>

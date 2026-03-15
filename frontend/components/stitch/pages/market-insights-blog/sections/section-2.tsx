@@ -1,5 +1,8 @@
 /* eslint-disable @next/next/no-img-element */
 
+
+import { AppIcon } from "@/components/ui/app-icon"
+
 export function Section2Section() {
   return (
     <main>
@@ -36,9 +39,7 @@ export function Section2Section() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col lg:flex-row gap-6 items-center justify-between">
             <div className="w-full lg:max-w-md relative">
-              <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-primary/50">
-                {"search"}
-              </span>
+              <AppIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-primary/50" name="search" />
               <input
                 className="w-full pl-12 pr-4 py-3 bg-background-light dark:bg-slate-800 border border-primary/10 focus:ring-1 focus:ring-primary focus:border-primary outline-none text-sm transition-all"
                 placeholder="Search articles, neighborhoods, or trends..."
@@ -101,9 +102,7 @@ export function Section2Section() {
                   </p>
                   <button className="inline-flex items-center gap-2 text-primary font-bold uppercase tracking-widest text-sm border-b-2 border-primary pb-1 group-hover:text-accent group-hover:border-accent transition-all">
                     {" Read Full Article "}
-                    <span className="material-symbols-outlined text-sm">
-                      {"arrow_forward"}
-                    </span>
+                    <AppIcon className="text-sm" name="arrow_forward" />
                   </button>
                 </div>
               </article>
@@ -208,9 +207,7 @@ export function Section2Section() {
           <aside className="lg:col-span-4 space-y-12">
             <div className="bg-white dark:bg-slate-900 border border-primary/10 p-8">
               <h3 className="text-sm font-black uppercase tracking-widest text-primary mb-6 flex items-center gap-2">
-                <span className="material-symbols-outlined text-accent">
-                  {"trending_up"}
-                </span>
+                <AppIcon className="text-accent" name="trending_up" />
                 {" Trending Topics "}
               </h3>
               <div className="space-y-6">
@@ -285,9 +282,7 @@ export function Section2Section() {
                   {" No spam. Unsubscribe at any time. "}
                 </p>
               </div>
-              <span className="material-symbols-outlined absolute -bottom-10 -right-10 text-[120px] text-white/5 rotate-12 select-none">
-                {"mail"}
-              </span>
+              <AppIcon className="absolute -bottom-10 -right-10 text-[120px] text-white/5 rotate-12 select-none" name="mail" />
             </div>
             <div className="bg-secondary/10 border border-secondary/20 p-8">
               <h3 className="text-sm font-black uppercase tracking-widest text-primary mb-4">
@@ -303,9 +298,7 @@ export function Section2Section() {
                 <span>
                   {"View New Listings"}
                 </span>
-                <span className="material-symbols-outlined group-hover:translate-x-1 transition-transform">
-                  {"arrow_forward"}
-                </span>
+                <AppIcon className="group-hover:translate-x-1 transition-transform" name="arrow_forward" />
               </a>
             </div>
           </aside>

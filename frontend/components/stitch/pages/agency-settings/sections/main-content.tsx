@@ -1,3 +1,6 @@
+
+import { AppIcon } from "@/components/ui/app-icon"
+
 export function MainContentSection() {
   return (
     <main className="flex-1 overflow-y-auto">
@@ -7,9 +10,7 @@ export function MainContentSection() {
         </h2>
         <div className="flex items-center gap-4">
           <button className="text-primary/60 hover:text-primary transition-colors">
-            <span className="material-symbols-outlined">
-              {"notifications"}
-            </span>
+            <AppIcon name="notifications" />
           </button>
           <button className="bg-primary text-white px-4 py-1.5 rounded text-sm font-semibold no-shadow hover:bg-primary/90">
             {"Save Changes"}
@@ -19,9 +20,7 @@ export function MainContentSection() {
       <div className="p-8 max-w-6xl mx-auto space-y-12 pb-24">
         <section>
           <div className="flex items-center gap-2 mb-6 border-b border-primary/10 pb-2">
-            <span className="material-symbols-outlined text-accent">
-              {"business"}
-            </span>
+            <AppIcon className="text-accent" name="business" />
             <h3 className="text-xl font-bold uppercase tracking-tight text-neutral-base">
               {"Agency Profile"}
             </h3>
@@ -65,9 +64,7 @@ export function MainContentSection() {
                   {"Agency Logo"}
                 </label>
                 <div className="border-2 border-dashed border-secondary/30 p-6 flex flex-col items-center justify-center bg-white">
-                  <span className="material-symbols-outlined text-4xl text-secondary/40">
-                    {"upload_file"}
-                  </span>
+                  <AppIcon className="text-4xl text-secondary/40" name="upload_file" />
                   <p className="text-xs text-secondary mt-2">
                     {"Drag and drop or click to upload"}
                   </p>
@@ -87,9 +84,7 @@ export function MainContentSection() {
                       defaultValue="123 Main St, New York, NY"
                     />
                     <button className="p-2 text-red-500 hover:bg-red-50">
-                      <span className="material-symbols-outlined">
-                        {"delete"}
-                      </span>
+                      <AppIcon name="delete" />
                     </button>
                   </div>
                   <div className="flex gap-2">
@@ -99,9 +94,7 @@ export function MainContentSection() {
                       type="text"
                     />
                     <button className="bg-secondary text-white px-3 py-1 rounded-sm no-shadow">
-                      <span className="material-symbols-outlined text-sm">
-                        {"add"}
-                      </span>
+                      <AppIcon className="text-sm" name="add" />
                     </button>
                   </div>
                 </div>
@@ -121,9 +114,7 @@ export function MainContentSection() {
         </section>
         <section>
           <div className="flex items-center gap-2 mb-6 border-b border-primary/10 pb-2">
-            <span className="material-symbols-outlined text-accent">
-              {"mail"}
-            </span>
+            <AppIcon className="text-accent" name="mail" />
             <h3 className="text-xl font-bold uppercase tracking-tight text-neutral-base">
               {"Communication Templates"}
             </h3>
@@ -192,9 +183,7 @@ export function MainContentSection() {
         </section>
         <section>
           <div className="flex items-center gap-2 mb-6 border-b border-primary/10 pb-2">
-            <span className="material-symbols-outlined text-accent">
-              {"hub"}
-            </span>
+            <AppIcon className="text-accent" name="hub" />
             <h3 className="text-xl font-bold uppercase tracking-tight text-neutral-base">
               {"Integrations"}
             </h3>
@@ -202,9 +191,7 @@ export function MainContentSection() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <div className="bg-white border-2 border-secondary/10 p-5 flex flex-col items-center text-center">
               <div className="size-12 bg-primary/5 rounded flex items-center justify-center mb-3">
-                <span className="material-symbols-outlined text-primary text-3xl">
-                  {"database"}
-                </span>
+                <AppIcon className="text-primary text-3xl" name="database" />
               </div>
               <h4 className="font-bold text-sm">
                 {"MLS Direct Connect"}
@@ -218,9 +205,7 @@ export function MainContentSection() {
             </div>
             <div className="bg-white border-2 border-secondary/10 p-5 flex flex-col items-center text-center">
               <div className="size-12 bg-accent/5 rounded flex items-center justify-center mb-3">
-                <span className="material-symbols-outlined text-accent text-3xl">
-                  {"sync"}
-                </span>
+                <AppIcon className="text-accent text-3xl" name="sync" />
               </div>
               <h4 className="font-bold text-sm">
                 {"Zillow Premier Sync"}
@@ -234,9 +219,7 @@ export function MainContentSection() {
             </div>
             <div className="bg-white border-2 border-secondary/10 p-5 flex flex-col items-center text-center">
               <div className="size-12 bg-slate-100 rounded flex items-center justify-center mb-3">
-                <span className="material-symbols-outlined text-slate-500 text-3xl">
-                  {"mail"}
-                </span>
+                <AppIcon className="text-slate-500 text-3xl" name="mail" />
               </div>
               <h4 className="font-bold text-sm">
                 {"SendGrid"}
@@ -250,9 +233,7 @@ export function MainContentSection() {
             </div>
             <div className="bg-white border-2 border-secondary/10 p-5 flex flex-col items-center text-center">
               <div className="size-12 bg-red-50 rounded flex items-center justify-center mb-3">
-                <span className="material-symbols-outlined text-red-600 text-3xl">
-                  {"sms"}
-                </span>
+                <AppIcon className="text-red-600 text-3xl" name="sms" />
               </div>
               <h4 className="font-bold text-sm">
                 {"Twilio"}
@@ -266,9 +247,7 @@ export function MainContentSection() {
             </div>
             <div className="bg-white border-2 border-secondary/10 p-5 flex flex-col items-center text-center">
               <div className="size-12 bg-blue-50 rounded flex items-center justify-center mb-3">
-                <span className="material-symbols-outlined text-blue-700 text-3xl">
-                  {"payments"}
-                </span>
+                <AppIcon className="text-blue-700 text-3xl" name="payments" />
               </div>
               <h4 className="font-bold text-sm">
                 {"Stripe Payments"}
@@ -285,17 +264,13 @@ export function MainContentSection() {
         <section>
           <div className="flex items-center justify-between mb-6 border-b border-primary/10 pb-2">
             <div className="flex items-center gap-2">
-              <span className="material-symbols-outlined text-accent">
-                {"group"}
-              </span>
+              <AppIcon className="text-accent" name="group" />
               <h3 className="text-xl font-bold uppercase tracking-tight text-neutral-base">
                 {"User Management"}
               </h3>
             </div>
             <button className="bg-accent text-white px-4 py-1.5 text-xs font-bold uppercase tracking-widest no-shadow hover:bg-accent/90 flex items-center gap-1">
-              <span className="material-symbols-outlined text-sm">
-                {"person_add"}
-              </span>
+              <AppIcon className="text-sm" name="person_add" />
               {" Add User "}
             </button>
           </div>
@@ -350,14 +325,10 @@ export function MainContentSection() {
                   </td>
                   <td className="px-6 py-4 text-right">
                     <button className="text-primary/40 hover:text-primary p-1">
-                      <span className="material-symbols-outlined text-lg">
-                        {"edit"}
-                      </span>
+                      <AppIcon className="text-lg" name="edit" />
                     </button>
                     <button className="text-primary/40 hover:text-red-500 p-1">
-                      <span className="material-symbols-outlined text-lg">
-                        {"delete"}
-                      </span>
+                      <AppIcon className="text-lg" name="delete" />
                     </button>
                   </td>
                 </tr>
@@ -390,14 +361,10 @@ export function MainContentSection() {
                   </td>
                   <td className="px-6 py-4 text-right">
                     <button className="text-primary/40 hover:text-primary p-1">
-                      <span className="material-symbols-outlined text-lg">
-                        {"edit"}
-                      </span>
+                      <AppIcon className="text-lg" name="edit" />
                     </button>
                     <button className="text-primary/40 hover:text-red-500 p-1">
-                      <span className="material-symbols-outlined text-lg">
-                        {"delete"}
-                      </span>
+                      <AppIcon className="text-lg" name="delete" />
                     </button>
                   </td>
                 </tr>
@@ -430,14 +397,10 @@ export function MainContentSection() {
                   </td>
                   <td className="px-6 py-4 text-right">
                     <button className="text-primary/40 hover:text-primary p-1">
-                      <span className="material-symbols-outlined text-lg">
-                        {"edit"}
-                      </span>
+                      <AppIcon className="text-lg" name="edit" />
                     </button>
                     <button className="text-primary/40 hover:text-red-500 p-1">
-                      <span className="material-symbols-outlined text-lg">
-                        {"delete"}
-                      </span>
+                      <AppIcon className="text-lg" name="delete" />
                     </button>
                   </td>
                 </tr>

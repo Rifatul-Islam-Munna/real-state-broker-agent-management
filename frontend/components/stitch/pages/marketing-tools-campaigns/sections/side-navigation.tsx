@@ -1,11 +1,12 @@
+
+import { AppIcon } from "@/components/ui/app-icon"
+
 export function SideNavigationSection() {
   return (
     <aside className="w-64 bg-primary text-white flex flex-col fixed h-full z-10">
       <div className="p-6 flex items-center gap-3">
         <div className="size-10 bg-white/20 rounded-lg flex items-center justify-center">
-          <span className="material-symbols-outlined text-white">
-            {"apartment"}
-          </span>
+          <AppIcon className="text-white" name="apartment" />
         </div>
         <div>
           <h1 className="text-lg font-bold leading-none">
@@ -21,9 +22,7 @@ export function SideNavigationSection() {
           className="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-white/10 transition-colors"
           href="#"
         >
-          <span className="material-symbols-outlined">
-            {"dashboard"}
-          </span>
+          <AppIcon name="dashboard" />
           <span className="text-sm font-medium">
             {"Dashboard"}
           </span>
@@ -32,9 +31,7 @@ export function SideNavigationSection() {
           className="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-white/10 transition-colors"
           href="#"
         >
-          <span className="material-symbols-outlined">
-            {"house"}
-          </span>
+          <AppIcon name="house" />
           <span className="text-sm font-medium">
             {"Listings"}
           </span>
@@ -43,9 +40,7 @@ export function SideNavigationSection() {
           className="flex items-center gap-3 px-4 py-3 rounded-lg bg-white/20"
           href="#"
         >
-          <span className="material-symbols-outlined">
-            {"campaign"}
-          </span>
+          <AppIcon name="campaign" />
           <span className="text-sm font-medium">
             {"Marketing"}
           </span>
@@ -54,9 +49,7 @@ export function SideNavigationSection() {
           className="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-white/10 transition-colors"
           href="#"
         >
-          <span className="material-symbols-outlined">
-            {"group"}
-          </span>
+          <AppIcon name="group" />
           <span className="text-sm font-medium">
             {"CRM"}
           </span>
@@ -65,9 +58,7 @@ export function SideNavigationSection() {
           className="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-white/10 transition-colors"
           href="#"
         >
-          <span className="material-symbols-outlined">
-            {"calendar_month"}
-          </span>
+          <AppIcon name="calendar_month" />
           <span className="text-sm font-medium">
             {"Calendar"}
           </span>
@@ -79,9 +70,7 @@ export function SideNavigationSection() {
           className="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-white/10 transition-colors"
           href="#"
         >
-          <span className="material-symbols-outlined">
-            {"auto_stories"}
-          </span>
+          <AppIcon name="auto_stories" />
           <span className="text-sm font-medium">
             {"Template Library"}
           </span>
@@ -92,9 +81,7 @@ export function SideNavigationSection() {
           className="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-white/10 transition-colors"
           href="#"
         >
-          <span className="material-symbols-outlined">
-            {"settings"}
-          </span>
+          <AppIcon name="settings" />
           <span className="text-sm font-medium">
             {"Settings"}
           </span>

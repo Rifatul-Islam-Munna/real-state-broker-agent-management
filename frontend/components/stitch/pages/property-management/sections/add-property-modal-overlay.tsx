@@ -1,3 +1,6 @@
+
+import { AppIcon } from "@/components/ui/app-icon"
+
 type AddPropertyModalOverlaySectionProps = {
   onClose: () => void
 }
@@ -22,18 +25,14 @@ export function AddPropertyModalOverlaySection({
             onClick={onClose}
             type="button"
           >
-            <span className="material-symbols-outlined text-3xl">
-              {"close"}
-            </span>
+            <AppIcon className="text-3xl" name="close" />
           </button>
         </div>
         <div className="flex-1 overflow-y-auto p-8">
           <form className="space-y-10">
             <section>
               <h4 className="text-lg font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-2">
-                <span className="material-symbols-outlined text-primary">
-                  {"info"}
-                </span>
+                <AppIcon className="text-primary" name="info" />
                 {" Basic Information "}
               </h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -74,9 +73,7 @@ export function AddPropertyModalOverlaySection({
                     {"Street Address"}
                   </label>
                   <div className="relative">
-                    <span className="material-symbols-outlined absolute left-4 top-2.5 text-slate-400">
-                      {"location_on"}
-                    </span>
+                    <AppIcon className="absolute left-4 top-2.5 text-slate-400" name="location_on" />
                     <input
                       className="form-input w-full pl-12 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:ring-primary"
                       placeholder="Start typing address for autocomplete..."
@@ -88,9 +85,7 @@ export function AddPropertyModalOverlaySection({
             </section>
             <section>
               <h4 className="text-lg font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-2">
-                <span className="material-symbols-outlined text-primary">
-                  {"straighten"}
-                </span>
+                <AppIcon className="text-primary" name="straighten" />
                 {" Specifications & Layout "}
               </h4>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
@@ -138,9 +133,7 @@ export function AddPropertyModalOverlaySection({
             </section>
             <section>
               <h4 className="text-lg font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-2">
-                <span className="material-symbols-outlined text-primary">
-                  {"description"}
-                </span>
+                <AppIcon className="text-primary" name="description" />
                 {" Property Description "}
               </h4>
               <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 overflow-hidden">
@@ -149,33 +142,25 @@ export function AddPropertyModalOverlaySection({
                     className="p-1 hover:bg-slate-100 rounded"
                     type="button"
                   >
-                    <span className="material-symbols-outlined">
-                      {"format_bold"}
-                    </span>
+                    <AppIcon name="format_bold" />
                   </button>
                   <button
                     className="p-1 hover:bg-slate-100 rounded"
                     type="button"
                   >
-                    <span className="material-symbols-outlined">
-                      {"format_italic"}
-                    </span>
+                    <AppIcon name="format_italic" />
                   </button>
                   <button
                     className="p-1 hover:bg-slate-100 rounded"
                     type="button"
                   >
-                    <span className="material-symbols-outlined">
-                      {"format_list_bulleted"}
-                    </span>
+                    <AppIcon name="format_list_bulleted" />
                   </button>
                   <button
                     className="p-1 hover:bg-slate-100 rounded"
                     type="button"
                   >
-                    <span className="material-symbols-outlined">
-                      {"link"}
-                    </span>
+                    <AppIcon name="link" />
                   </button>
                 </div>
                 <textarea
@@ -188,9 +173,7 @@ export function AddPropertyModalOverlaySection({
             </section>
             <section>
               <h4 className="text-lg font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-2">
-                <span className="material-symbols-outlined text-primary">
-                  {"checklist"}
-                </span>
+                <AppIcon className="text-primary" name="checklist" />
                 {" Amenities "}
               </h4>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -252,16 +235,12 @@ export function AddPropertyModalOverlaySection({
             </section>
             <section>
               <h4 className="text-lg font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-2">
-                <span className="material-symbols-outlined text-primary">
-                  {"upload_file"}
-                </span>
+                <AppIcon className="text-primary" name="upload_file" />
                 {" Media & Documents "}
               </h4>
               <div className="border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-2xl p-10 flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-800/50 hover:border-primary transition-colors cursor-pointer group">
                 <div className="size-16 rounded-full bg-primary/10 flex items-center justify-center text-primary mb-4 group-hover:scale-110 transition-transform">
-                  <span className="material-symbols-outlined text-4xl">
-                    {"cloud_upload"}
-                  </span>
+                  <AppIcon className="text-4xl" name="cloud_upload" />
                 </div>
                 <p className="text-slate-900 dark:text-white font-bold text-lg text-center">
                   {"Click to upload or drag and drop"}
@@ -273,9 +252,7 @@ export function AddPropertyModalOverlaySection({
             </section>
             <section>
               <h4 className="text-lg font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-2">
-                <span className="material-symbols-outlined text-primary">
-                  {"search_check"}
-                </span>
+                <AppIcon className="text-primary" name="search_check" />
                 {" SEO & Marketing "}
               </h4>
               <div className="space-y-6">

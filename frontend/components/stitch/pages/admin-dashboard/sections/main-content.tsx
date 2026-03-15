@@ -1,14 +1,15 @@
 /* eslint-disable @next/next/no-img-element */
 
+
+import { AppIcon } from "@/components/ui/app-icon"
+
 export function MainContentSection() {
   return (
     <main className="flex-1 min-h-screen">
       <header className="h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-8 sticky top-0 z-40">
         <div className="flex items-center gap-4 w-96">
           <div className="relative w-full">
-            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
-              {"search"}
-            </span>
+            <AppIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" name="search" />
             <input
               className="w-full pl-10 pr-4 py-2 bg-slate-100 dark:bg-slate-800 border-none rounded-lg text-sm focus:ring-2 focus:ring-primary"
               placeholder="Search leads, deals, or properties..."
@@ -18,17 +19,13 @@ export function MainContentSection() {
         </div>
         <div className="flex items-center gap-4">
           <button className="w-10 h-10 flex items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 relative">
-            <span className="material-symbols-outlined text-slate-600 dark:text-slate-400">
-              {"notifications"}
-            </span>
+            <AppIcon className="text-slate-600 dark:text-slate-400" name="notifications" />
             <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-accent rounded-full border-2 border-white">
 
             </span>
           </button>
           <button className="w-10 h-10 flex items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800">
-            <span className="material-symbols-outlined text-slate-600 dark:text-slate-400">
-              {"help_outline"}
-            </span>
+            <AppIcon className="text-slate-600 dark:text-slate-400" name="help_outline" />
           </button>
           <div className="h-6 w-[1px] bg-slate-200 dark:bg-slate-800 mx-2">
 
@@ -66,9 +63,7 @@ export function MainContentSection() {
                   {"+12% from last month"}
                 </p>
               </div>
-              <span className="material-symbols-outlined text-primary/20 text-4xl">
-                {"home"}
-              </span>
+              <AppIcon className="text-primary/20 text-4xl" name="home" />
             </div>
           </div>
           <div className="bg-white dark:bg-slate-900 p-6 border-l-4 border-secondary rounded-lg">
@@ -115,9 +110,7 @@ export function MainContentSection() {
                   {"8 closing this month"}
                 </p>
               </div>
-              <span className="material-symbols-outlined text-accent/20 text-4xl">
-                {"contract"}
-              </span>
+              <AppIcon className="text-accent/20 text-4xl" name="contract" />
             </div>
           </div>
           <div className="bg-white dark:bg-slate-900 p-6 border-l-4 border-slate-400 rounded-lg">
@@ -133,9 +126,7 @@ export function MainContentSection() {
                   {"94% of target"}
                 </p>
               </div>
-              <span className="material-symbols-outlined text-slate-400/20 text-4xl">
-                {"payments"}
-              </span>
+              <AppIcon className="text-slate-400/20 text-4xl" name="payments" />
             </div>
           </div>
         </div>
@@ -291,9 +282,7 @@ export function MainContentSection() {
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="flex items-start gap-4 p-4 bg-orange-50 dark:bg-orange-900/10 border border-orange-100 dark:border-orange-900/20 rounded-lg">
-                  <span className="material-symbols-outlined text-accent">
-                    {"warning"}
-                  </span>
+                  <AppIcon className="text-accent" name="warning" />
                   <div>
                     <p className="text-sm font-bold text-slate-900 dark:text-white">
                       {"4 Pending Contracts"}
@@ -307,9 +296,7 @@ export function MainContentSection() {
                   </div>
                 </div>
                 <div className="flex items-start gap-4 p-4 bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/20 rounded-lg">
-                  <span className="material-symbols-outlined text-red-500">
-                    {"event_busy"}
-                  </span>
+                  <AppIcon className="text-red-500" name="event_busy" />
                   <div>
                     <p className="text-sm font-bold text-slate-900 dark:text-white">
                       {"2 Expiring Listings"}
@@ -352,9 +339,7 @@ export function MainContentSection() {
                     {"10:30 AM - 11:30 AM"}
                   </p>
                   <div className="flex items-center gap-1 mt-2">
-                    <span className="material-symbols-outlined text-[14px] text-slate-400">
-                      {"person"}
-                    </span>
+                    <AppIcon className="text-[14px] text-slate-400" name="person" />
                     <p className="text-[10px] text-slate-500 dark:text-slate-400">
                       {"Mr. & Mrs. Henderson"}
                     </p>
@@ -378,9 +363,7 @@ export function MainContentSection() {
                     {"02:00 PM - 03:00 PM"}
                   </p>
                   <div className="flex items-center gap-1 mt-2">
-                    <span className="material-symbols-outlined text-[14px] text-slate-400">
-                      {"person"}
-                    </span>
+                    <AppIcon className="text-[14px] text-slate-400" name="person" />
                     <p className="text-[10px] text-slate-500 dark:text-slate-400">
                       {"James Miller"}
                     </p>
@@ -422,9 +405,7 @@ export function MainContentSection() {
                     {"09:00 AM - 10:00 AM"}
                   </p>
                   <div className="flex items-center gap-1 mt-2">
-                    <span className="material-symbols-outlined text-[14px] text-slate-400">
-                      {"person"}
-                    </span>
+                    <AppIcon className="text-[14px] text-slate-400" name="person" />
                     <p className="text-[10px] text-slate-500 dark:text-slate-400">
                       {"Tech Startups Inc."}
                     </p>

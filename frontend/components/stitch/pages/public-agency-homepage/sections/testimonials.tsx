@@ -1,12 +1,13 @@
 /* eslint-disable @next/next/no-img-element */
 
+
+import { AppIcon } from "@/components/ui/app-icon"
+
 export function TestimonialsSection() {
   return (
     <section className="py-20 bg-white border-y border-slate-100">
       <div className="max-w-4xl mx-auto px-4 text-center">
-        <span className="material-symbols-outlined text-accent text-6xl mb-6">
-          {"format_quote"}
-        </span>
+        <AppIcon className="text-accent text-6xl mb-6" name="format_quote" />
         <p className="text-2xl md:text-3xl font-medium text-slate-700 italic leading-relaxed mb-10">
           {" \"Working with EliteEstates was a seamless experience. Their attention to detail and knowledge of the market enabled us to find our dream home in less than three weeks. Truly professional.\" "}
         </p>

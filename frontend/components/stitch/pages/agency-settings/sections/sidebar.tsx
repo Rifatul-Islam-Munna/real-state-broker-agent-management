@@ -1,11 +1,12 @@
+
+import { AppIcon } from "@/components/ui/app-icon"
+
 export function SidebarSection() {
   return (
     <aside className="w-64 bg-primary text-white flex flex-col border-r border-primary/20">
       <div className="p-6 flex items-center gap-3">
         <div className="size-10 bg-white rounded-full flex items-center justify-center text-primary">
-          <span className="material-symbols-outlined font-bold">
-            {"corporate_fare"}
-          </span>
+          <AppIcon className="font-bold" name="corporate_fare" />
         </div>
         <div>
           <h1 className="text-sm font-bold uppercase tracking-wider">
@@ -21,9 +22,7 @@ export function SidebarSection() {
           className="flex items-center gap-3 px-3 py-2.5 rounded hover:bg-white/10 transition-colors"
           href="#"
         >
-          <span className="material-symbols-outlined text-xl">
-            {"dashboard"}
-          </span>
+          <AppIcon className="text-xl" name="dashboard" />
           <span className="text-sm font-medium">
             {"Dashboard"}
           </span>
@@ -32,9 +31,7 @@ export function SidebarSection() {
           className="flex items-center gap-3 px-3 py-2.5 rounded hover:bg-white/10 transition-colors"
           href="#"
         >
-          <span className="material-symbols-outlined text-xl">
-            {"domain"}
-          </span>
+          <AppIcon className="text-xl" name="domain" />
           <span className="text-sm font-medium">
             {"Properties"}
           </span>
@@ -43,9 +40,7 @@ export function SidebarSection() {
           className="flex items-center gap-3 px-3 py-2.5 rounded hover:bg-white/10 transition-colors"
           href="#"
         >
-          <span className="material-symbols-outlined text-xl">
-            {"person_search"}
-          </span>
+          <AppIcon className="text-xl" name="person_search" />
           <span className="text-sm font-medium">
             {"Leads"}
           </span>
@@ -54,9 +49,7 @@ export function SidebarSection() {
           className="flex items-center gap-3 px-3 py-2.5 rounded hover:bg-white/10 transition-colors"
           href="#"
         >
-          <span className="material-symbols-outlined text-xl">
-            {"description"}
-          </span>
+          <AppIcon className="text-xl" name="description" />
           <span className="text-sm font-medium">
             {"Documents"}
           </span>
@@ -65,9 +58,7 @@ export function SidebarSection() {
           className="flex items-center gap-3 px-3 py-2.5 rounded hover:bg-white/10 transition-colors"
           href="#"
         >
-          <span className="material-symbols-outlined text-xl">
-            {"campaign"}
-          </span>
+          <AppIcon className="text-xl" name="campaign" />
           <span className="text-sm font-medium">
             {"Marketing"}
           </span>
@@ -76,9 +67,7 @@ export function SidebarSection() {
           className="flex items-center gap-3 px-3 py-2.5 rounded hover:bg-white/10 transition-colors"
           href="#"
         >
-          <span className="material-symbols-outlined text-xl">
-            {"bar_chart"}
-          </span>
+          <AppIcon className="text-xl" name="bar_chart" />
           <span className="text-sm font-medium">
             {"Reports"}
           </span>
@@ -87,9 +76,7 @@ export function SidebarSection() {
           className="flex items-center gap-3 px-3 py-2.5 rounded bg-white/20"
           href="#"
         >
-          <span className="material-symbols-outlined text-xl">
-            {"settings"}
-          </span>
+          <AppIcon className="text-xl" name="settings" />
           <span className="text-sm font-medium">
             {"Settings"}
           </span>
