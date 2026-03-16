@@ -1,15 +1,20 @@
 using Microsoft.EntityFrameworkCore;
-
-
-public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
+using Entities;
+using Data;
+namespace Data
 {
-    public DbSet<User> Users => Set<User>();
-    // add new DbSet here when new entity added
-
-    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
     {
-        // ✅ This ONE line auto-discovers ALL configuration files forever
-        // No need to touch this ever again
-        modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
+        public DbSet<User> Users => Set<User>();
+        public DbSet<Property> Properties => Set<Property>();
+        public DbSet<NeighborhoodInsight> NeighborhoodInsights => Set<NeighborhoodInsight>();
+        // add new DbSet here when new entity added
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            // ✅ This ONE line auto-discovers ALL configuration files forever
+            // No need to touch this ever again
+            modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
+        }
     }
 }

@@ -1,5 +1,5 @@
 using FastEndpoints;
-using FastEndpoints.Swagger;        // ✅ missing
+using FastEndpoints.Swagger;
 using FastEndpoints.Security;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
@@ -8,6 +8,9 @@ using Scalar.AspNetCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using Data;
+using System.Text.Json.Serialization;
+
 
 DotEnv.Load();
 
@@ -71,10 +74,14 @@ builder.Services.SwaggerDocument(o =>
 // ─── Scrutor Auto-register Services ──────────────────────
 builder.Services.Scan(scan => scan
     .FromAssemblyOf<Program>()
-    .AddClasses(c => c.Where(t => t.Name.EndsWith("Service")))
+    .AddClasses(c => c.Where(t =>
+        t.Name.EndsWith("Service") ||                          // ✅ class name ends with Service
+        (t.Namespace != null && t.Namespace.EndsWith("Service")) // ✅ namespace ends with Service
+    ))
     .AsSelf()
     .WithScopedLifetime()
 );
+
 builder.Services.Configure<Microsoft.AspNetCore.Http.Json.JsonOptions>(o =>
     o.SerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter())
 );
@@ -98,6 +105,7 @@ app.UseFastEndpoints(c =>
 {
     c.Endpoints.RoutePrefix = "api";
     c.Errors.UseProblemDetails();
+    c.Serializer.Options.ReferenceHandler = ReferenceHandler.IgnoreCycles;
 });
 
 app.UseOpenApi(c => c.Path = "/openapi/{documentName}.json");
