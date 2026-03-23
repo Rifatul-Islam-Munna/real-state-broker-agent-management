@@ -21,6 +21,31 @@ namespace Models
 }
 namespace Services
 {
+    public record AgentSummary(
+    int Id,
+    string FullName,
+    string? Phone,
+    string? Email,
+    string? AvatarUrl,
+    string? AgencyName,
+    bool IsVerifiedAgent
+);
+    public record PropertyResponse(
+        int Id,
+        string Title,
+        string Slug,
+        string Location,
+        string ExactLocation,
+        string BedRoom,
+        string BathRoom,
+        string Width,
+        string Description,
+        List<string> KeyAmenities,
+        List<NeighborhoodInsight> NeighborhoodInsights,
+        AgentSummary? Agent   // ✅ only selected fields
+    );
+
+
     public class PropertyService
     {
         private readonly AppDbContext _db;
@@ -67,17 +92,43 @@ namespace Services
                 .FirstOrDefaultAsync(p => p.Slug == slug); // ✅ fixed — was p.Id == id
         }
 
-        public async Task<PaginatedResult<Property>> GetAllPropertiesAsync(int page = 1, int pageSize = 10)
+        public async Task<PaginatedResult<PropertyResponse>> GetAllPropertiesAsync(int page = 1, int pageSize = 10)
         {
             var totalCount = await _db.Properties.CountAsync();
 
             var items = await _db.Properties
                 .Include(p => p.NeighborhoodInsights)
+                .Include(p => p.Agent)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
-                .ToListAsync();
+              .Select(p => new PropertyResponse(
+            p.Id,
+            p.Title,
+            p.Slug,
+            p.Location,
+            p.ExactLocation,
+            p.BedRoom,
+            p.BathRoom,
+            p.Width,
+            p.Description,
+            p.KeyAmenities,
+            p.NeighborhoodInsights.ToList(),
 
-            return new PaginatedResult<Property>
+            // ✅ Only pick what you need from Agent
+            p.Agent == null ? null : new AgentSummary(
+                p.Agent.Id,
+                p.Agent.FullName,
+                p.Agent.Phone,
+                p.Agent.Email,
+                p.Agent.AvatarUrl,
+                p.Agent.AgencyName,
+                p.Agent.IsVerifiedAgent
+
+            )
+        ))
+        .ToListAsync();
+
+            return new PaginatedResult<PropertyResponse>
             {
                 Items = items,
                 TotalCount = totalCount,

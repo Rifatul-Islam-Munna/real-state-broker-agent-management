@@ -16,8 +16,9 @@
   --neutral-base: oklch(0.255 0.031 260.428);
   --secondary-light: oklch(0.82 0.05 234.162);
   --text-main: oklch(0.255 0.031 260.428);
-  --app-font-display: "Playfair Display", Georgia, serif;
-  --app-font-sans: "Raleway", "Helvetica Neue", Arial, sans-serif;
+
+  --app-font-display: var(--font-cinzel);
+  --app-font-sans: var(--font-nunito);
 
   /* Card */
   --card: oklch(0.971 0.006 84.589); /* Creamy Ivory */
@@ -210,7 +211,7 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground font-sans;
+    @apply bg-background font-sans text-foreground;
   }
   html {
     @apply font-sans;

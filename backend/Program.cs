@@ -10,6 +10,9 @@ using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using Data;
 using System.Text.Json.Serialization;
+using YourApp.Features.Upload;
+using Minio;
+using Microsoft.Extensions.Options;
 
 
 DotEnv.Load();
@@ -29,6 +32,21 @@ builder.Services.AddDbContext<AppDbContext>(opts =>
         .UseSnakeCaseNamingConvention()
         .EnableSensitiveDataLogging(builder.Environment.IsDevelopment())
 );
+
+builder.Services.Configure<MinIOSettings>(
+    builder.Configuration.GetSection(MinIOSettings.SectionName)
+);
+builder.Services.AddSingleton<IMinioClient>(sp =>
+{
+    var cfg = sp.GetRequiredService<IOptions<MinIOSettings>>().Value;
+
+    return new MinioClient()
+        .WithEndpoint(cfg.Endpoint)
+        .WithCredentials(cfg.AccessKey, cfg.SecretKey)
+        .WithSSL(cfg.WithSSL)
+        .Build();
+});
+
 
 // ─── FastEndpoints ────────────────────────────────────────
 builder.Services.AddFastEndpoints();
@@ -75,8 +93,9 @@ builder.Services.SwaggerDocument(o =>
 builder.Services.Scan(scan => scan
     .FromAssemblyOf<Program>()
     .AddClasses(c => c.Where(t =>
-        t.Name.EndsWith("Service") ||                          // ✅ class name ends with Service
-        (t.Namespace != null && t.Namespace.EndsWith("Service")) // ✅ namespace ends with Service
+        (t.Name.EndsWith("Service") ||
+        (t.Namespace != null && t.Namespace.EndsWith("Service")))
+        && t != typeof(FileUploadService) // ✅ exclude it from Scrutor
     ))
     .AsSelf()
     .WithScopedLifetime()
@@ -85,6 +104,8 @@ builder.Services.Scan(scan => scan
 builder.Services.Configure<Microsoft.AspNetCore.Http.Json.JsonOptions>(o =>
     o.SerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter())
 );
+// ✅ ADD THIS — Register FileUploadService manually after IMinioClient
+builder.Services.AddSingleton<IFileUploadService, FileUploadService>();
 
 var app = builder.Build();
 
@@ -92,11 +113,18 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
     if (app.Environment.IsDevelopment())
-        await db.Database.EnsureCreatedAsync();
+    {
+        await db.Database.EnsureDeletedAsync();  // ✅ drops all tables
+        await db.Database.EnsureCreatedAsync();  // ✅ recreates from current entities
+    }
     else
-        await db.Database.MigrateAsync();
+    {
+        await db.Database.MigrateAsync();        // ✅ safe migrations in prod
+    }
 }
+
 
 app.UseAuthentication();
 app.UseAuthorization();

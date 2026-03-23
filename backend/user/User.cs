@@ -1,5 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.Json.Serialization;
+using Entities;
 using Microsoft.EntityFrameworkCore;
 
 [Table("users")]
@@ -70,8 +72,11 @@ public class User
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? LastLoginAt { get; set; }
-    public DateTime? DeletedAt { get; set; }          // Soft delete
+    public DateTime? DeletedAt { get; set; }
 
+    // Soft delete
+    [JsonIgnore]
+    public List<Property> Properties { get; set; } = [];
     // ─── Navigation (Relations) ───────────────────────────
     // public List<Property> Properties { get; set; } = [];   // Agent's listings
     // public List<Booking> Bookings { get; set; } = [];       // Client's bookings

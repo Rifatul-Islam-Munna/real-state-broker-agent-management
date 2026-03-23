@@ -62,6 +62,14 @@ namespace Entities
             slug = Regex.Replace(slug, @"-+", "-");
             return slug;
         }
+
+        [Column("agent_id")]
+        public int? AgentId { get; set; }           // ✅ nullable — empty on creation
+
+        [ForeignKey("AgentId")]
+        [JsonIgnore]
+        public User? Agent { get; set; }
+
     }
 
     [Table("neighborhood_insight")]
