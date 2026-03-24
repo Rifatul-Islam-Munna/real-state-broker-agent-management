@@ -1,7 +1,9 @@
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
+import QueryClint from "@/lib/QueryClint"
 import { cn } from "@/lib/utils"
 import { Cinzel, Nunito_Sans } from "next/font/google"
+import { Toaster } from "@/components/ui/sonner"
 
 const cinzel = Cinzel({
   subsets: ["latin"],
@@ -28,7 +30,10 @@ export default function RootLayout({
     >
       <body className="font-sans">
         {" "}
-        <ThemeProvider defaultTheme="light">{children}</ThemeProvider>
+        <QueryClint>
+          <ThemeProvider defaultTheme="light">{children}</ThemeProvider>
+        </QueryClint>
+        <Toaster />
       </body>
     </html>
   )
