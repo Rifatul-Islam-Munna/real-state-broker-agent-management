@@ -1,9 +1,18 @@
 /* eslint-disable @next/next/no-img-element */
 
-
 import { AppIcon } from "@/components/ui/app-icon"
 
-export function Section1Section() {
+type Section1SectionProps = {
+  onAddLeadClick: () => void
+  onSearchChange: (value: string) => void
+  searchTerm: string
+}
+
+export function Section1Section({
+  onAddLeadClick,
+  onSearchChange,
+  searchTerm,
+}: Section1SectionProps) {
   return (
     <header className="border-b border-primary/10 bg-white px-4 py-4 dark:bg-background-dark md:px-6">
       <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
@@ -28,14 +37,19 @@ export function Section1Section() {
               </div>
               <input
                 className="form-input w-full border-none bg-transparent text-sm placeholder:text-slate-500 focus:ring-0"
-                defaultValue=""
+                onChange={(event) => onSearchChange(event.target.value)}
                 placeholder="Search leads, properties, or assigned agents..."
+                value={searchTerm}
               />
             </div>
           </label>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <button className="flex h-11 items-center justify-center gap-2 border border-primary bg-primary px-4 text-sm font-bold text-white">
+          <button
+            className="flex h-11 items-center justify-center gap-2 border border-primary bg-primary px-4 text-sm font-bold text-white"
+            onClick={onAddLeadClick}
+            type="button"
+          >
             <AppIcon name="person_add" />
             {"Add Lead"}
           </button>

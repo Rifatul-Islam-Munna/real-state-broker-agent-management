@@ -9,7 +9,7 @@ using Data;
 public class UserService(AppDbContext db, IConfiguration config)
 {
     private readonly string _jwtSecret = config["Jwt:Secret"]!;
-    private readonly int _accessTokenMinutes = 15;
+    private readonly int _accessTokenMinutes = 60 * 24;
     private readonly int _refreshTokenDays = 7;
 
     // ─── Register ─────────────────────────────────────────
@@ -74,6 +74,83 @@ public class UserService(AppDbContext db, IConfiguration config)
         if (user is null) return null;
 
         return MapToUserResponse(user);
+    }
+
+    public async Task<List<AgentUserOptionResponse>> GetActiveAgentsAsync()
+    {
+        return await db.Users
+            .Where(user => user.Role == UserRole.Agent && user.IsActive && user.DeletedAt == null)
+            .OrderBy(user => user.FirstName)
+            .ThenBy(user => user.LastName)
+            .Select(user => new AgentUserOptionResponse
+            {
+                Id = user.Id,
+                FullName = (((user.FirstName ?? string.Empty) + " " + (user.LastName ?? string.Empty)).Trim()),
+                Email = user.Email,
+                Phone = user.Phone,
+                AvatarUrl = user.AvatarUrl,
+                AgencyName = user.AgencyName,
+                LicenseNumber = user.LicenseNumber,
+                CommissionRate = user.CommissionRate,
+                Role = "Agent",
+                IsActive = user.IsActive,
+                IsVerifiedAgent = user.IsVerifiedAgent,
+                Bio = user.Bio,
+                CreatedAt = user.CreatedAt,
+                PropertyCount = user.Properties.Count()
+            })
+            .ToListAsync();
+    }
+
+    public async Task<(bool Success, string Message, AgentUserOptionResponse? Data)> CreateAgentAsync(CreateAgentRequest req)
+    {
+        var firstName = (req.FirstName ?? string.Empty).Trim();
+        var lastName = (req.LastName ?? string.Empty).Trim();
+        var email = (req.Email ?? string.Empty).Trim().ToLowerInvariant();
+        var phone = (req.Phone ?? string.Empty).Trim();
+        var password = req.Password ?? string.Empty;
+
+        if (firstName.Length == 0)
+            return (false, "First name is required", null);
+
+        if (lastName.Length == 0)
+            return (false, "Last name is required", null);
+
+        if (email.Length == 0)
+            return (false, "Email is required", null);
+
+        if (password.Length < 6)
+            return (false, "Password must be at least 6 characters", null);
+
+        if (await db.Users.AnyAsync(u => u.Email == email))
+            return (false, "Email already exists", null);
+
+        if (phone.Length > 0 && await db.Users.AnyAsync(u => u.Phone == phone))
+            return (false, "Phone already exists", null);
+
+        var user = new User
+        {
+            FirstName = firstName,
+            LastName = lastName,
+            Email = email,
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword(password),
+            Phone = phone.Length > 0 ? phone : null,
+            AvatarUrl = NullIfEmpty(req.AvatarUrl),
+            AgencyName = NullIfEmpty(req.AgencyName),
+            LicenseNumber = NullIfEmpty(req.LicenseNumber),
+            Bio = NullIfEmpty(req.Bio),
+            CommissionRate = req.CommissionRate,
+            Role = UserRole.Agent,
+            IsVerifiedAgent = req.IsVerifiedAgent,
+            IsActive = req.IsActive,
+            IsEmailVerified = false,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+
+        return (true, "Agent created successfully", MapToAgentUserOption(user));
     }
 
     // ─── Token Generation ─────────────────────────────────
@@ -142,4 +219,28 @@ public class UserService(AppDbContext db, IConfiguration config)
         IsEmailVerified = user.IsEmailVerified,
         CreatedAt = user.CreatedAt
     };
+
+    private static AgentUserOptionResponse MapToAgentUserOption(User user) => new()
+    {
+        Id = user.Id,
+        FullName = user.FullName,
+        Email = user.Email,
+        Phone = user.Phone,
+        AvatarUrl = user.AvatarUrl,
+        AgencyName = user.AgencyName,
+        LicenseNumber = user.LicenseNumber,
+        CommissionRate = user.CommissionRate,
+        Role = user.Role.ToString(),
+        IsActive = user.IsActive,
+        IsVerifiedAgent = user.IsVerifiedAgent,
+        Bio = user.Bio,
+        CreatedAt = user.CreatedAt,
+        PropertyCount = user.Properties.Count
+    };
+
+    private static string? NullIfEmpty(string? value)
+    {
+        var trimmed = (value ?? string.Empty).Trim();
+        return trimmed.Length > 0 ? trimmed : null;
+    }
 }

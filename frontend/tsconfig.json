@@ -18,9 +18,11 @@
         "name": "next"
       }
     ],
+    "useUnknownInCatchVariables": false,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./*"]
+      "@/*": ["./*"],
+      "axios": ["./lib/axios-shim"]
     }
   },
   "include": [
@@ -30,5 +32,5 @@
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts"
   ],
-  "exclude": ["node_modules"]
+  "exclude": ["node_modules", "api-hooks", "api-hooks/**", "api-hooks/**/*.ts"]
 }

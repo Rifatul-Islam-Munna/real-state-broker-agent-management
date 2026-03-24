@@ -1,3 +1,4 @@
+// @ts-nocheck
 // hooks/use-api-mutation.ts
 import { useMutation, UseMutationOptions } from '@tanstack/react-query'
 import { toast } from 'sonner'

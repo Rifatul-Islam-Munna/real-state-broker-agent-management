@@ -1,0 +1,4 @@
+.artifacts
+.artifacts/*
+.dotnet-home/*
+.dotnet-home

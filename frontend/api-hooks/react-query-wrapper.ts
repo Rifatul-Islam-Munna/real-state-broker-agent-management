@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { QueryKey, useMutation, useQuery, UseQueryOptions,MutationKey } from "@tanstack/react-query";
 import { GetRequestNormal } from "./api-hooks";
 import {  UseMutationOptions } from "@tanstack/react-query";

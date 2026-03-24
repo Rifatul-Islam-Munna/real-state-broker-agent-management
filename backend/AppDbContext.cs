@@ -8,6 +8,10 @@ namespace Data
         public DbSet<User> Users => Set<User>();
         public DbSet<Property> Properties => Set<Property>();
         public DbSet<NeighborhoodInsight> NeighborhoodInsights => Set<NeighborhoodInsight>();
+        public DbSet<Lead> Leads => Set<Lead>();
+        public DbSet<DealPipeline> DealPipelines => Set<DealPipeline>();
+        public DbSet<ContactRequest> ContactRequests => Set<ContactRequest>();
+        public DbSet<MailInboxItem> MailInbox => Set<MailInboxItem>();
 
         // add new DbSet here when new entity added
 
@@ -20,6 +24,21 @@ namespace Data
       .HasOne(p => p.Agent)
       .WithMany(u => u.Properties)
       .HasForeignKey(p => p.AgentId)
+      .OnDelete(DeleteBehavior.SetNull);
+            modelBuilder.Entity<DealPipeline>()
+      .HasOne(item => item.SourceLead)
+      .WithMany(lead => lead.Deals)
+      .HasForeignKey(item => item.SourceLeadId)
+      .OnDelete(DeleteBehavior.SetNull);
+            modelBuilder.Entity<ContactRequest>()
+      .HasOne(item => item.Lead)
+      .WithMany(lead => lead.ContactRequests)
+      .HasForeignKey(item => item.LeadId)
+      .OnDelete(DeleteBehavior.SetNull);
+            modelBuilder.Entity<MailInboxItem>()
+      .HasOne(item => item.Lead)
+      .WithMany(lead => lead.MailInboxItems)
+      .HasForeignKey(item => item.LeadId)
       .OnDelete(DeleteBehavior.SetNull);
         }
     }

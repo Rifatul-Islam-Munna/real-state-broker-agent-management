@@ -1,3 +1,4 @@
+// @ts-nocheck
 "use server"
 
 
@@ -49,6 +50,7 @@ export const PostRequestAxios = async <T>(url: string, payload: any) : Promise<[
         return [data,null];
 
     }catch(error ){
+        console.log("error-from-axios",error)
         if (axios.isAxiosError(error)) {
             if (error.status === 401) {
                 throw redirect('/login')

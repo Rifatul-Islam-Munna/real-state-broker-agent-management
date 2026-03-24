@@ -1,8 +1,8 @@
-import { MainContentSection } from "./sections/main-content"
+import { MainContentSection } from "./sections"
 
 export function AdminDashboardPage() {
   return (
-    <div className="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 font-sans">
+    <div className="bg-slate-100 dark:bg-background-dark">
       <MainContentSection />
     </div>
   )

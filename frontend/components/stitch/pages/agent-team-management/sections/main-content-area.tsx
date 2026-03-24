@@ -1,622 +1,344 @@
+"use client"
 
+import { useMemo, useState } from "react"
+
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import { AppIcon } from "@/components/ui/app-icon"
+import {
+  type AgentUserOption,
+  useAgentUsers,
+  useCreateAgentUser,
+} from "@/hooks/use-real-estate-api"
+
+type SortKey = "created" | "listings" | "name"
+type FormValues = {
+  firstName: string
+  lastName: string
+  email: string
+  password: string
+  phone: string
+  agencyName: string
+  licenseNumber: string
+  commissionRate: string
+  avatarUrl: string
+  bio: string
+  isVerifiedAgent: boolean
+  isActive: boolean
+}
+
+const initialValues: FormValues = {
+  firstName: "",
+  lastName: "",
+  email: "",
+  password: "",
+  phone: "",
+  agencyName: "",
+  licenseNumber: "",
+  commissionRate: "",
+  avatarUrl: "",
+  bio: "",
+  isVerifiedAgent: false,
+  isActive: true,
+}
+
+function displayText(value?: string | null, fallback = "Not set") {
+  const text = value?.trim() ?? ""
+  return text.length > 0 ? text : fallback
+}
+
+function initials(agent: AgentUserOption) {
+  const parts = (agent.fullName ?? "").trim().split(/\s+/).filter(Boolean)
+  return `${parts[0]?.[0] ?? "A"}${parts[1]?.[0] ?? ""}`.toUpperCase()
+}
+
+function formatCreatedAt(value?: string) {
+  if (!value) return "Unknown"
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? "Unknown" : date.toLocaleDateString()
+}
+
+function parseCommissionRate(value: string) {
+  const numericValue = Number.parseFloat(value.trim())
+  return Number.isFinite(numericValue) ? numericValue : null
+}
+
+function validate(values: FormValues) {
+  const errors: Partial<Record<keyof FormValues, string>> = {}
+
+  if (!values.firstName.trim()) errors.firstName = "First name is required."
+  if (!values.lastName.trim()) errors.lastName = "Last name is required."
+  if (!values.email.trim()) errors.email = "Email is required."
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email.trim())) {
+    errors.email = "Enter a valid email address."
+  }
+  if (values.password.trim().length < 6) {
+    errors.password = "Password must be at least 6 characters."
+  }
+  if (values.commissionRate.trim() && parseCommissionRate(values.commissionRate) === null) {
+    errors.commissionRate = "Enter a valid commission rate."
+  }
+
+  return errors
+}
+
+function FieldError({ error }: { error?: string }) {
+  return error ? <p className="text-xs font-semibold text-rose-600">{error}</p> : null
+}
+
+function CreateAgentDialog({
+  isSubmitting,
+  onOpenChange,
+  onSubmit,
+  open,
+}: {
+  isSubmitting: boolean
+  onOpenChange: (open: boolean) => void
+  onSubmit: (values: FormValues) => Promise<string | null>
+  open: boolean
+}) {
+  const [values, setValues] = useState<FormValues>(initialValues)
+  const [errors, setErrors] = useState<Partial<Record<keyof FormValues, string>>>({})
+  const [submitError, setSubmitError] = useState<string | null>(null)
+
+  function setField<K extends keyof FormValues>(key: K, value: FormValues[K]) {
+    setValues((current) => ({ ...current, [key]: value }))
+    setErrors((current) => ({ ...current, [key]: undefined }))
+    setSubmitError(null)
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (nextOpen) {
+          setValues(initialValues)
+          setErrors({})
+          setSubmitError(null)
+        }
+        onOpenChange(nextOpen)
+      }}
+    >
+      <DialogContent className="max-w-5xl rounded-none border border-primary/10 bg-white p-0 shadow-none dark:border-white/10 dark:bg-slate-900">
+        <div className="border-b border-primary/10 px-6 py-5">
+          <DialogTitle className="text-lg font-bold uppercase tracking-tight text-primary">{"Create Agent"}</DialogTitle>
+          <DialogDescription className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+            {"Add a new agent directly from the team page."}
+          </DialogDescription>
+        </div>
+        <div className="grid gap-4 px-6 py-5 md:grid-cols-2">
+          <div><Input className="rounded-none border-primary/10" onChange={(event) => setField("firstName", event.target.value)} placeholder="First name" value={values.firstName} /><FieldError error={errors.firstName} /></div>
+          <div><Input className="rounded-none border-primary/10" onChange={(event) => setField("lastName", event.target.value)} placeholder="Last name" value={values.lastName} /><FieldError error={errors.lastName} /></div>
+          <div><Input className="rounded-none border-primary/10" onChange={(event) => setField("email", event.target.value)} placeholder="Email" type="email" value={values.email} /><FieldError error={errors.email} /></div>
+          <div><Input className="rounded-none border-primary/10" onChange={(event) => setField("password", event.target.value)} placeholder="Temporary password" type="password" value={values.password} /><FieldError error={errors.password} /></div>
+          <div><Input className="rounded-none border-primary/10" onChange={(event) => setField("phone", event.target.value)} placeholder="Phone" value={values.phone} /></div>
+          <div><Input className="rounded-none border-primary/10" onChange={(event) => setField("agencyName", event.target.value)} placeholder="Team / agency name" value={values.agencyName} /></div>
+          <div><Input className="rounded-none border-primary/10" onChange={(event) => setField("licenseNumber", event.target.value)} placeholder="License number" value={values.licenseNumber} /></div>
+          <div><Input className="rounded-none border-primary/10" onChange={(event) => setField("commissionRate", event.target.value)} placeholder="Commission rate" value={values.commissionRate} /><FieldError error={errors.commissionRate} /></div>
+          <div className="md:col-span-2"><Input className="rounded-none border-primary/10" onChange={(event) => setField("avatarUrl", event.target.value)} placeholder="Avatar URL" value={values.avatarUrl} /></div>
+          <div className="md:col-span-2"><Textarea className="min-h-24 rounded-none border-primary/10" onChange={(event) => setField("bio", event.target.value)} placeholder="Short bio" value={values.bio} /></div>
+          <label className="flex items-center gap-3 text-sm font-semibold text-slate-600 dark:text-slate-300">
+            <input checked={values.isVerifiedAgent} className="form-checkbox rounded border-primary/20 text-primary focus:ring-primary" onChange={(event) => setField("isVerifiedAgent", event.target.checked)} type="checkbox" />
+            {"Verified agent"}
+          </label>
+          <label className="flex items-center gap-3 text-sm font-semibold text-slate-600 dark:text-slate-300">
+            <input checked={values.isActive} className="form-checkbox rounded border-primary/20 text-primary focus:ring-primary" onChange={(event) => setField("isActive", event.target.checked)} type="checkbox" />
+            {"Active account"}
+          </label>
+          {submitError ? <p className="text-sm font-semibold text-rose-600 md:col-span-2">{submitError}</p> : null}
+        </div>
+        <div className="flex justify-end gap-3 border-t border-primary/10 px-6 py-4">
+          <button className="border border-primary/10 px-4 py-2 text-xs font-bold uppercase tracking-wide text-primary" onClick={() => onOpenChange(false)} type="button">{"Close"}</button>
+          <button
+            className="border border-primary bg-primary px-4 py-2 text-xs font-bold uppercase tracking-wide text-white disabled:cursor-not-allowed disabled:opacity-70"
+            disabled={isSubmitting}
+            onClick={async () => {
+              const nextErrors = validate(values)
+
+              if (Object.keys(nextErrors).length > 0) {
+                setErrors(nextErrors)
+                return
+              }
+
+              const error = await onSubmit(values)
+              if (error) {
+                setSubmitError(error)
+                return
+              }
+
+              onOpenChange(false)
+            }}
+            type="button"
+          >
+            {isSubmitting ? "Creating..." : "Create Agent"}
+          </button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
 
 export function MainContentAreaSection() {
+  const [searchTerm, setSearchTerm] = useState("")
+  const [verificationFilter, setVerificationFilter] = useState<"all" | "verified" | "unverified">("all")
+  const [sortBy, setSortBy] = useState<SortKey>("created")
+  const [dialogOpen, setDialogOpen] = useState(false)
+
+  const agentUsersQuery = useAgentUsers()
+  const createAgentMutation = useCreateAgentUser()
+  const isInitialLoading = !agentUsersQuery.data && (agentUsersQuery.isLoading || agentUsersQuery.isFetching)
+  const agents = agentUsersQuery.data ?? []
+
+  const filteredAgents = useMemo(() => {
+    const normalizedSearch = searchTerm.trim().toLowerCase()
+
+    return [...agents]
+      .filter((agent) => {
+        const matchesSearch =
+          normalizedSearch.length === 0 ||
+          (agent.fullName ?? "").toLowerCase().includes(normalizedSearch) ||
+          (agent.email ?? "").toLowerCase().includes(normalizedSearch) ||
+          (agent.phone ?? "").toLowerCase().includes(normalizedSearch) ||
+          (agent.agencyName ?? "").toLowerCase().includes(normalizedSearch)
+
+        if (!matchesSearch) return false
+        if (verificationFilter === "verified") return agent.isVerifiedAgent
+        if (verificationFilter === "unverified") return !agent.isVerifiedAgent
+        return true
+      })
+      .sort((left, right) => {
+        if (sortBy === "name") return (left.fullName ?? "").localeCompare(right.fullName ?? "")
+        if (sortBy === "listings") return (right.propertyCount ?? 0) - (left.propertyCount ?? 0)
+        return new Date(right.createdAt ?? 0).getTime() - new Date(left.createdAt ?? 0).getTime()
+      })
+  }, [agents, searchTerm, sortBy, verificationFilter])
+
+  const teamGroups = useMemo(() => {
+    const groups = new Map<string, AgentUserOption[]>()
+    agents.forEach((agent) => {
+      const key = displayText(agent.agencyName, "Independent Agents")
+      groups.set(key, [...(groups.get(key) ?? []), agent])
+    })
+    return Array.from(groups.entries())
+      .map(([name, members]) => ({ name, members, listingCount: members.reduce((sum, item) => sum + (item.propertyCount ?? 0), 0) }))
+      .sort((left, right) => right.members.length - left.members.length)
+  }, [agents])
+
+  async function handleCreateAgent(values: FormValues) {
+    const response = await createAgentMutation.mutateAsync({
+      agencyName: values.agencyName.trim() || null,
+      avatarUrl: values.avatarUrl.trim() || null,
+      bio: values.bio.trim() || null,
+      commissionRate: parseCommissionRate(values.commissionRate),
+      email: values.email.trim(),
+      firstName: values.firstName.trim(),
+      isActive: values.isActive,
+      isVerifiedAgent: values.isVerifiedAgent,
+      lastName: values.lastName.trim(),
+      licenseNumber: values.licenseNumber.trim() || null,
+      password: values.password,
+      phone: values.phone.trim() || null,
+    })
+
+    if (response.error?.statusCode === 404) {
+      return "POST /api/users/agents is not available on the running backend. Restart the backend to load the new agent endpoint."
+    }
+
+    return response.error?.message ?? null
+  }
+
   return (
-    <main className="flex-1 flex flex-col h-screen overflow-y-auto">
-      <header className="h-16 border-b border-primary/10 bg-white dark:bg-slate-900 flex items-center justify-between px-8 sticky top-0 z-10">
-        <h2 className="text-lg font-bold text-primary uppercase tracking-tight">
-          {"Agent & Team Management"}
-        </h2>
-        <div className="flex items-center gap-6">
+    <main className="flex min-h-screen flex-1 flex-col overflow-y-auto">
+      <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-primary/10 bg-white px-8 dark:bg-slate-900">
+        <h2 className="text-lg font-bold uppercase tracking-tight text-primary">{"Agent & Team Management"}</h2>
+        <div className="flex items-center gap-4">
           <div className="relative">
-            <AppIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-secondary text-sm" name="search" />
-            <input
-              className="pl-10 pr-4 py-2 bg-background-light dark:bg-slate-800 border border-primary/10 text-sm focus:ring-0 focus:border-primary w-64"
-              placeholder="Search agents or teams..."
-              type="text"
-            />
+            <AppIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-secondary" name="search" />
+            <input className="w-64 border border-primary/10 bg-background-light py-2 pl-10 pr-4 text-sm focus:border-primary focus:ring-0 dark:bg-slate-800" onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search agents or teams..." type="text" value={searchTerm} />
           </div>
-          <div className="flex items-center gap-3 border-l border-primary/10 pl-6">
-            <button className="text-secondary hover:text-primary transition-colors">
-              <AppIcon name="notifications" />
-            </button>
-            <div className="w-8 h-8 bg-primary flex items-center justify-center text-white text-xs font-bold">
-              {"AD"}
-            </div>
-          </div>
+          <button className="border border-accent bg-accent px-4 py-2 text-xs font-bold uppercase tracking-wide text-white" onClick={() => setDialogOpen(true)} type="button">{"Add New Agent"}</button>
         </div>
       </header>
-      <div className="p-8 space-y-8">
-        <section className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <div className="bg-white dark:bg-slate-900 border border-primary/10 p-6">
-            <p className="text-xs font-bold text-secondary uppercase mb-2">
-              {"Total Agents"}
-            </p>
-            <div className="flex items-end gap-2">
-              <span className="text-3xl font-bold text-primary">
-                {"48"}
-              </span>
-              <span className="text-xs text-green-600 font-bold mb-1">
-                {"+4 this month"}
-              </span>
-            </div>
+
+      <div className="space-y-8 p-8">
+        <section className="grid grid-cols-1 gap-6 md:grid-cols-4">
+          <div className="border border-primary/10 bg-white p-6 dark:bg-slate-900"><p className="mb-2 text-xs font-bold uppercase text-secondary">{"Total Agents"}</p><span className="text-3xl font-bold text-primary">{agents.length}</span></div>
+          <div className="border border-primary/10 bg-white p-6 dark:bg-slate-900"><p className="mb-2 text-xs font-bold uppercase text-secondary">{"Active Teams"}</p><span className="text-3xl font-bold text-primary">{teamGroups.length}</span></div>
+          <div className="border border-primary/10 bg-white p-6 dark:bg-slate-900"><p className="mb-2 text-xs font-bold uppercase text-secondary">{"Total Listings"}</p><span className="text-3xl font-bold text-primary">{agents.reduce((sum, item) => sum + (item.propertyCount ?? 0), 0)}</span></div>
+          <div className="border border-primary/10 bg-white p-6 dark:bg-slate-900"><p className="mb-2 text-xs font-bold uppercase text-secondary">{"Verified Agents"}</p><span className="text-3xl font-bold text-primary">{agents.filter((item) => item.isVerifiedAgent).length}</span></div>
+        </section>
+
+        <section>
+          <div className="mb-4 flex items-center justify-between">
+            <h3 className="border-l-4 border-accent pl-3 text-sm font-bold uppercase tracking-widest text-primary">{"Team Structure"}</h3>
+            <button className="border border-primary px-4 py-2 text-xs font-bold text-primary hover:bg-primary/5" onClick={() => setDialogOpen(true)} type="button">{"Create New Agent"}</button>
           </div>
-          <div className="bg-white dark:bg-slate-900 border border-primary/10 p-6">
-            <p className="text-xs font-bold text-secondary uppercase mb-2">
-              {"Active Teams"}
-            </p>
-            <div className="flex items-end gap-2">
-              <span className="text-3xl font-bold text-primary">
-                {"06"}
-              </span>
-              <span className="text-xs text-slate-400 font-bold mb-1">
-                {"Steady"}
-              </span>
-            </div>
-          </div>
-          <div className="bg-white dark:bg-slate-900 border border-primary/10 p-6">
-            <p className="text-xs font-bold text-secondary uppercase mb-2">
-              {"Total Listings"}
-            </p>
-            <div className="flex items-end gap-2">
-              <span className="text-3xl font-bold text-primary">
-                {"1,240"}
-              </span>
-              <span className="text-xs text-green-600 font-bold mb-1">
-                {"↑ 12%"}
-              </span>
-            </div>
-          </div>
-          <div className="bg-white dark:bg-slate-900 border border-primary/10 p-6">
-            <p className="text-xs font-bold text-secondary uppercase mb-2">
-              {"YTD Revenue"}
-            </p>
-            <div className="flex items-end gap-2">
-              <span className="text-3xl font-bold text-primary">
-                {"$4.2M"}
-              </span>
-              <span className="text-xs text-green-600 font-bold mb-1">
-                {"↑ 8.5%"}
-              </span>
-            </div>
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+            {teamGroups.length > 0 ? teamGroups.slice(0, 6).map((group) => (
+              <div key={group.name} className="border border-primary/10 bg-white dark:bg-slate-900">
+                <div className="border-b border-primary/5 bg-primary/5 p-5">
+                  <h4 className="font-bold text-primary">{group.name}</h4>
+                  <p className="mt-1 text-xs text-secondary">{`${group.members.length} agents • ${group.listingCount} listings`}</p>
+                </div>
+                <div className="p-5">
+                  <div className="flex -space-x-2">
+                    {group.members.slice(0, 4).map((agent) => (
+                      <div key={agent.id} className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-primary/10 text-[10px] font-bold text-primary dark:border-slate-900">{initials(agent)}</div>
+                    ))}
+                    {group.members.length > 4 ? <div className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-primary/20 text-[10px] font-bold text-primary dark:border-slate-900">{`+${group.members.length - 4}`}</div> : null}
+                  </div>
+                </div>
+              </div>
+            )) : <div className="border border-primary/10 bg-white p-6 text-sm font-semibold text-slate-500 dark:bg-slate-900 dark:text-slate-400 md:col-span-3">{"No team data is available yet."}</div>}
           </div>
         </section>
+
         <section>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-bold text-primary uppercase tracking-widest border-l-4 border-accent pl-3">
-              {"Team Structure"}
-            </h3>
-            <button className="text-xs font-bold text-primary border border-primary px-4 py-2 hover:bg-primary/5 transition-colors">
-              {" CREATE NEW TEAM "}
-            </button>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="bg-white dark:bg-slate-900 border border-primary/10">
-              <div className="p-5 border-b border-primary/5 bg-primary/5">
-                <h4 className="font-bold text-primary">
-                  {"Alpha Elite Residential"}
-                </h4>
-                <p className="text-xs text-secondary mt-1">
-                  {"Specialization: High-End Residential"}
-                </p>
-              </div>
-              <div className="p-5 space-y-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-slate-500">
-                    {"TEAM LEADER"}
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <div
-                      className="w-6 h-6 bg-slate-200 rounded-full"
-                      data-alt="Headshot of Sarah Jenkins"
-                      style={{ backgroundImage: "url('https://lh3.googleusercontent.com/aida-public/AB6AXuAJ6BZEy_n3lnwH4ImDpBzjWrwnz2vOGpeP1RxPL3PA8ZbZarUxSs9I0aisKFcY-R74kfRFjEVITCTLLT9_n1X5xnSxJ0fpl-onWdI3qDz515wf7aHCTsyo0EfZkFN2DvcoRr4Xw8KAHi9At7LSeqMtXIT3rhMWkxzyyJtBBWG7iowWX2nc2nsd9k4gR0tiTMt5vnaJvrFOqraTvm23ZdW1ABXt28Y_nl8XRcuyJN6FcHMdnXVqGZbhoV1BGTrgFGomX6qZw7C3FLQ')", backgroundSize: "cover" }}
-                    >
-
-                    </div>
-                    <span className="text-xs font-bold">
-                      {"Sarah Jenkins"}
-                    </span>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-slate-500">
-                    {"MEMBERS"}
-                  </span>
-                  <span className="text-xs font-bold">
-                    {"12 Active"}
-                  </span>
-                </div>
-                <div className="pt-2">
-                  <div className="flex -space-x-2">
-                    <div className="w-7 h-7 border-2 border-white dark:border-slate-900 bg-slate-300 rounded-full overflow-hidden">
-                      <div
-                        className="w-full h-full"
-                        data-alt="Team member portrait"
-                        style={{ backgroundImage: "url('https://lh3.googleusercontent.com/aida-public/AB6AXuDV0qBjfGceK8VGeMZ6A3sy-csWesfzQiud-4zGaxhMJpJlZo3kR5AL64lu97gdH9js0MGZPi_UiJotZfrP48kdbIWs8nv1d90lIB_1GaB5FvjogoFjGQIBeejkowZN6D_Uwr4HYZLmSPtyJ4Yzp4IGla1DsZB61iX_lYPP19_AeqcQDaPS-KZ83XKrMMzMUMWTN3t5nmH9pg-rduCiQlz-6JOrGnG3AV__60JFtDfhh56ZuvIIvi7aiiMNkCgaoyhO0reL27aua6g')", backgroundSize: "cover" }}
-                      >
-
-                      </div>
-                    </div>
-                    <div className="w-7 h-7 border-2 border-white dark:border-slate-900 bg-slate-300 rounded-full overflow-hidden">
-                      <div
-                        className="w-full h-full"
-                        data-alt="Team member portrait"
-                        style={{ backgroundImage: "url('https://lh3.googleusercontent.com/aida-public/AB6AXuBFnjzlnuezDbs2DYgprohGGMs5YO1M-mTd-hEMNcBygDWMcv962h28fKFuK6lRAaeJnnh2OQQS7sj61zi358WNp9DrXvU5x01TF_ABaDp8GW_pzdhSef0CQhY7gZPVW4ulfIAm55vH0XyPVYZkZPKCTBWS1ZTQ7gJeBNgRJhzsItt8bhhGyM4rJskBlYFO6Kxc5Ju0SUEKaGLsfgp0bBaXOmDAL-wrMGmHg-hO6kytIEViG4_FV8LROiSp0J8MbBQ3IyrVwfbyZQ8')", backgroundSize: "cover" }}
-                      >
-
-                      </div>
-                    </div>
-                    <div className="w-7 h-7 border-2 border-white dark:border-slate-900 bg-slate-300 rounded-full overflow-hidden">
-                      <div
-                        className="w-full h-full"
-                        data-alt="Team member portrait"
-                        style={{ backgroundImage: "url('https://lh3.googleusercontent.com/aida-public/AB6AXuC4sFTdeBlg0zmto4rm7i12oYwYRVaz4kDgyxIRIa5TxJLkoQPUNNSTMyEVoIeUwLocp7LkxWxMuV-9M6sbKDQe6QG6WwT7UuBf4LY8xMI_EEjn_i-tDoQwvYSouhcrDbPzsuza__5mVUYwtsWwmF9SoUWuMoZ0uWwFhiilvIsbacTaPTJcL-MtAzDt-LJZhXZYsLfuYptuGXd-s7y23p_HsDh5UdzyjB-hc0ZwtNWUaLHLsVtM-Vzl7trZYw5sOI4ON2XTpuvYcmY')", backgroundSize: "cover" }}
-                      >
-
-                      </div>
-                    </div>
-                    <div className="w-7 h-7 border-2 border-white dark:border-slate-900 bg-primary/20 flex items-center justify-center rounded-full text-[10px] font-bold text-primary">
-                      {"+9"}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="bg-white dark:bg-slate-900 border border-primary/10">
-              <div className="p-5 border-b border-primary/5 bg-primary/5">
-                <h4 className="font-bold text-primary">
-                  {"Metro Commercial Group"}
-                </h4>
-                <p className="text-xs text-secondary mt-1">
-                  {"Specialization: Office & Industrial"}
-                </p>
-              </div>
-              <div className="p-5 space-y-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-slate-500">
-                    {"TEAM LEADER"}
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <div
-                      className="w-6 h-6 bg-slate-200 rounded-full"
-                      data-alt="Headshot of Michael Ross"
-                      style={{ backgroundImage: "url('https://lh3.googleusercontent.com/aida-public/AB6AXuBbzsEM7mDpmUatdEjLRnmafoSwPbMYSNmm7QY4QTGRPBtVcYOVRSPe7jjuyrm621fYpvi38Hw5X9aF_4bCjWJMSPwkzfvdOn6u-qyd-Ri18SGTLfVZwTdaEqjEI5i7-FI0sasj95Tl6JbiuHBDm6xXfAxcuAvP8sW9mDIkf-T8MYf__sE98YVH9b0IJc2q3EjZfG-KihQ6s5RrjAGJ_nBGehLxU8wnbN7ucCpIej2iKXc5N191r_JzbPpgcbYeWWukiuOU3TNF3SQ')", backgroundSize: "cover" }}
-                    >
-
-                    </div>
-                    <span className="text-xs font-bold">
-                      {"Michael Ross"}
-                    </span>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-slate-500">
-                    {"MEMBERS"}
-                  </span>
-                  <span className="text-xs font-bold">
-                    {"5 Active"}
-                  </span>
-                </div>
-                <div className="pt-2">
-                  <div className="flex -space-x-2">
-                    <div className="w-7 h-7 border-2 border-white dark:border-slate-900 bg-slate-300 rounded-full overflow-hidden">
-                      <div
-                        className="w-full h-full"
-                        data-alt="Team member portrait"
-                        style={{ backgroundImage: "url('https://lh3.googleusercontent.com/aida-public/AB6AXuCGZljGVLYYMB5HI0T0Ict8zRZnoZAAMw14hjeQy_mk0-92WEMSbN1ux7v9VX86RzlHHC3ux241Ckk5nTm0hKLu5YWKfsAkZ694qCLm-Jum1ncx3-9pBRkEQWyV3BN6Qj3zF4ddAlLNhbdJglQFGxDKybORWaZF8_8I7ZnruWGhL5T8KjV2_CzaBomYfm-sYSlqE7ZTMNyuhWNF_VzxVGVch9rjj2_kE4_idLma_iGLyslJNF6wLBjS8nX3oK2SyblEWrnbSjtrqqY')", backgroundSize: "cover" }}
-                      >
-
-                      </div>
-                    </div>
-                    <div className="w-7 h-7 border-2 border-white dark:border-slate-900 bg-slate-300 rounded-full overflow-hidden">
-                      <div
-                        className="w-full h-full"
-                        data-alt="Team member portrait"
-                        style={{ backgroundImage: "url('https://lh3.googleusercontent.com/aida-public/AB6AXuBE0pZpz4XNC2zNNZ_wv10P05g7USj2rq3dDekfGkQRs5XObWkxUPwMDi_wQZbouUB44LMeAMt8RIjZXWmCyCY5986KY4ogrSCd__rSc3ul29zgtfNGpIVTqmQQreBn8A00QrsrmxzTvCxjHmNRh-Xc4lbJSxoCLhFQTzorxOrgqNhX4P6nsBQqjq3U1TF7AbggWq78T27PI8d08nKE3mR1nVauNfSvfrQdQbPlFutZGbW9JKwnYs9YjrbTVcRpGVhdr8E0yRadfxI')", backgroundSize: "cover" }}
-                      >
-
-                      </div>
-                    </div>
-                    <div className="w-7 h-7 border-2 border-white dark:border-slate-900 bg-primary/20 flex items-center justify-center rounded-full text-[10px] font-bold text-primary">
-                      {"+3"}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="bg-white dark:bg-slate-900 border border-primary/10">
-              <div className="p-5 border-b border-primary/5 bg-primary/5">
-                <h4 className="font-bold text-primary">
-                  {"Luxury Coastal Team"}
-                </h4>
-                <p className="text-xs text-secondary mt-1">
-                  {"Specialization: Waterfront Properties"}
-                </p>
-              </div>
-              <div className="p-5 space-y-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-slate-500">
-                    {"TEAM LEADER"}
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <div
-                      className="w-6 h-6 bg-slate-200 rounded-full"
-                      data-alt="Headshot of Rachel Zane"
-                      style={{ backgroundImage: "url('https://lh3.googleusercontent.com/aida-public/AB6AXuAXZYBWlZbBnU5T0aXCUlIk0d4bEplaZaq0SwDmpJxe5vzScqRdD7HQR-2HRJNKUf3c155DrheEsNU4zGfmjTDvUWGfOTIDYMzLWNwN2FPkXZQl2x9RiIUQBP4Yp5Ch8kPvPpATrZ9Iptk3BEF6LK5zKxlZSJAMGxb3V-GleUK2SkcltDNy7gjrPk-6F8_TgLK-e6nvn57I4AyOKMR23LThGXz4zJhx56NaSMbeKaVFCojwFnhGkBn85L6-VmvvIBW295k69QLyrzY')", backgroundSize: "cover" }}
-                    >
-
-                    </div>
-                    <span className="text-xs font-bold">
-                      {"Rachel Zane"}
-                    </span>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-slate-500">
-                    {"MEMBERS"}
-                  </span>
-                  <span className="text-xs font-bold">
-                    {"8 Active"}
-                  </span>
-                </div>
-                <div className="pt-2">
-                  <div className="flex -space-x-2">
-                    <div className="w-7 h-7 border-2 border-white dark:border-slate-900 bg-slate-300 rounded-full overflow-hidden">
-                      <div
-                        className="w-full h-full"
-                        data-alt="Team member portrait"
-                        style={{ backgroundImage: "url('https://lh3.googleusercontent.com/aida-public/AB6AXuCGNxuHIEYFBA0pWTlo-yJ61xfni8um9QCSuub55NQiCeY313A_EoARi0DooGriQNeCYEk_uq9XCmeNSqX0bIZHR6KLhUL5DwyYOSAXWc8aHCeX3VDjqiXST1w1tjkiPRv8LVqlZ_tWK5mocuIfUq37S-l8X5RMWx9fwSd5D97iwgvE_-i4KQkVRZ7D9CcQAHWOALIGA69-RCSfcmig8Lnnj_xMYTfM0U-jdL8glsJR-x3DyEIzLdRS73ZtIeaq3aPKyxsUc7e3uLQ')", backgroundSize: "cover" }}
-                      >
-
-                      </div>
-                    </div>
-                    <div className="w-7 h-7 border-2 border-white dark:border-slate-900 bg-primary/20 flex items-center justify-center rounded-full text-[10px] font-bold text-primary">
-                      {"+7"}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-        <section>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-bold text-primary uppercase tracking-widest border-l-4 border-accent pl-3">
-              {"Agent Directory"}
-            </h3>
+          <div className="mb-4 flex items-center justify-between gap-4">
+            <h3 className="border-l-4 border-accent pl-3 text-sm font-bold uppercase tracking-widest text-primary">{"Agent Directory"}</h3>
             <div className="flex items-center gap-2">
-              <select className="text-xs border border-primary/10 bg-white dark:bg-slate-900 py-1.5 px-3 focus:ring-0">
-                <option>
-                  {"All Specializations"}
-                </option>
-                <option>
-                  {"Residential"}
-                </option>
-                <option>
-                  {"Commercial"}
-                </option>
+              <select className="border border-primary/10 bg-white px-3 py-1.5 text-xs focus:ring-0 dark:bg-slate-900" onChange={(event) => setVerificationFilter(event.target.value as typeof verificationFilter)} value={verificationFilter}>
+                <option value="all">{"All Agents"}</option>
+                <option value="verified">{"Verified Only"}</option>
+                <option value="unverified">{"Unverified Only"}</option>
               </select>
-              <select className="text-xs border border-primary/10 bg-white dark:bg-slate-900 py-1.5 px-3 focus:ring-0">
-                <option>
-                  {"Sort by Revenue"}
-                </option>
-                <option>
-                  {"Sort by Name"}
-                </option>
-                <option>
-                  {"Sort by Listings"}
-                </option>
+              <select className="border border-primary/10 bg-white px-3 py-1.5 text-xs focus:ring-0 dark:bg-slate-900" onChange={(event) => setSortBy(event.target.value as SortKey)} value={sortBy}>
+                <option value="created">{"Sort by Newest"}</option>
+                <option value="name">{"Sort by Name"}</option>
+                <option value="listings">{"Sort by Listings"}</option>
               </select>
             </div>
           </div>
-          <div className="bg-white dark:bg-slate-900 border border-primary/10 overflow-hidden">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-primary/5 text-primary">
-                  <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-wider border-b border-primary/10">
-                    {"Agent"}
-                  </th>
-                  <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-wider border-b border-primary/10">
-                    {"Role"}
-                  </th>
-                  <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-wider border-b border-primary/10">
-                    {"Specialization"}
-                  </th>
-                  <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-wider border-b border-primary/10 text-center">
-                    {"Listings"}
-                  </th>
-                  <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-wider border-b border-primary/10 text-center">
-                    {"Sales"}
-                  </th>
-                  <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-wider border-b border-primary/10 text-right">
-                    {"Revenue"}
-                  </th>
-                  <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-wider border-b border-primary/10 text-right">
-                    {"Actions"}
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-primary/5">
-                <tr className="hover:bg-primary/5 transition-colors">
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div
-                        className="w-10 h-10 border border-primary/10"
-                        data-alt="Portrait of Sarah Jenkins"
-                        style={{ backgroundImage: "url('https://lh3.googleusercontent.com/aida-public/AB6AXuBNFH8vrP82_lBsLpHcE4G6enySky2XSlgNJD87nduoPAEoX4fgWFeGj2F1xlmEbaQqllnRXsTbAcsLkRV9KtFpJbA8smUQzZvjqfzy93AUO51a-UZwxQr4eZJE4Fel3kISFp0wzw9C9LmS1V_susXDhkof_7ZvC4AfqHvQ7F4meZQWTR6nxXQulgYhwsUejFryIcWIU1xBWgNuNb50iNfQuucSolGfhBAcz338_sb3_QwfmVKyZQeexl0UAbe0_mVXJ6xYYasHZiM')", backgroundSize: "cover" }}
-                      >
-
-                      </div>
-                      <div>
-                        <p className="text-sm font-bold">
-                          {"Sarah Jenkins"}
-                        </p>
-                        <p className="text-xs text-slate-500">
-                          {"sarah.j@eliterealty.com"}
-                        </p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="inline-block px-2 py-1 text-[10px] font-bold bg-primary text-white uppercase tracking-tighter">
-                      {"Team Leader"}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <p className="text-xs font-semibold">
-                      {"Residential"}
-                    </p>
-                  </td>
-                  <td className="px-6 py-4 text-center">
-                    <p className="text-sm font-bold text-primary">
-                      {"42"}
-                    </p>
-                  </td>
-                  <td className="px-6 py-4 text-center">
-                    <p className="text-sm font-bold text-primary">
-                      {"18"}
-                    </p>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <p className="text-sm font-bold text-accent">
-                      {"$840k"}
-                    </p>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <button className="text-secondary hover:text-primary">
-                      <AppIcon className="text-sm" name="edit" />
-                    </button>
-                  </td>
-                </tr>
-                <tr className="hover:bg-primary/5 transition-colors">
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div
-                        className="w-10 h-10 border border-primary/10"
-                        data-alt="Portrait of Michael Ross"
-                        style={{ backgroundImage: "url('https://lh3.googleusercontent.com/aida-public/AB6AXuB2Y31yeuyIUnbR01kAdd7Adsil-RjIqoHQEm__252nTjAgu_iumwMgV8krPtAFXyx99eqMPmIlgpBxiyModVA-jLuEsx8vwInaQ38xDo8sLaeUNYkYqYfgYbPYI9ntcNI4fZT4GWMSYt3l1dvML3pPTlP3K3byHwOkfI3-J_Gts1BG8cF-8Pj1PVowZR2GKyzE8d4NfhGPGlMPRxD6BrrPErh_c5QsIKzvW75weW-5JSqcD7caVSO2iGFhlizshcyB-903Zu3Si_g')", backgroundSize: "cover" }}
-                      >
-
-                      </div>
-                      <div>
-                        <p className="text-sm font-bold">
-                          {"Michael Ross"}
-                        </p>
-                        <p className="text-xs text-slate-500">
-                          {"m.ross@eliterealty.com"}
-                        </p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="inline-block px-2 py-1 text-[10px] font-bold bg-primary text-white uppercase tracking-tighter">
-                      {"Team Leader"}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <p className="text-xs font-semibold">
-                      {"Commercial"}
-                    </p>
-                  </td>
-                  <td className="px-6 py-4 text-center">
-                    <p className="text-sm font-bold text-primary">
-                      {"15"}
-                    </p>
-                  </td>
-                  <td className="px-6 py-4 text-center">
-                    <p className="text-sm font-bold text-primary">
-                      {"7"}
-                    </p>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <p className="text-sm font-bold text-accent">
-                      {"$1.2M"}
-                    </p>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <button className="text-secondary hover:text-primary">
-                      <AppIcon className="text-sm" name="edit" />
-                    </button>
-                  </td>
-                </tr>
-                <tr className="hover:bg-primary/5 transition-colors">
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div
-                        className="w-10 h-10 border border-primary/10"
-                        data-alt="Portrait of Rachel Zane"
-                        style={{ backgroundImage: "url('https://lh3.googleusercontent.com/aida-public/AB6AXuCuUFq0H-22Wdp5LFwF5QkCNnNvj6A1xNQeGw6mi6LP1IRW6L-4g6I7IyfakKxdIhFOPgj-vVCbGhb28qxQBQKLng_M8VKFz8CivIHshsin2SDetiXoFTdisRiPPlH6XHU4x145S9Rh1UvBdXJiylDgRFgXb3QF3KzzeuhmjeGU-7nKtvHzSqZOsjA9ENPurSnX3NjCwiJ1DIa193o_QKSUIEvvIbNPouigO5xFwLnVeL_FFH32f382AayVynu1ncu2-rL4nRLS2Cg')", backgroundSize: "cover" }}
-                      >
-
-                      </div>
-                      <div>
-                        <p className="text-sm font-bold">
-                          {"Rachel Zane"}
-                        </p>
-                        <p className="text-xs text-slate-500">
-                          {"r.zane@eliterealty.com"}
-                        </p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="inline-block px-2 py-1 text-[10px] font-bold border border-primary text-primary uppercase tracking-tighter">
-                      {"Agent"}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <p className="text-xs font-semibold">
-                      {"Residential"}
-                    </p>
-                  </td>
-                  <td className="px-6 py-4 text-center">
-                    <p className="text-sm font-bold text-primary">
-                      {"28"}
-                    </p>
-                  </td>
-                  <td className="px-6 py-4 text-center">
-                    <p className="text-sm font-bold text-primary">
-                      {"14"}
-                    </p>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <p className="text-sm font-bold text-accent">
-                      {"$610k"}
-                    </p>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <button className="text-secondary hover:text-primary">
-                      <AppIcon className="text-sm" name="edit" />
-                    </button>
-                  </td>
-                </tr>
-                <tr className="hover:bg-primary/5 transition-colors">
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div
-                        className="w-10 h-10 border border-primary/10"
-                        data-alt="Portrait of Harvey Specter"
-                        style={{ backgroundImage: "url('https://lh3.googleusercontent.com/aida-public/AB6AXuAAS6HfOhOppB9jysa-La9bye1zpl1o6GDGrQvlW8IpmpaJnU_MKAq_6UzJmhC2VBe8N2OKRMryKf7Pl38HVwMcWJfUNJxG9EQYjOz90mmXdEG1wwJwxlpj67nB2JvnJJC5Rpi1YMLxZSd2doah-qCI9mCQaDTgfT43u0hPG05asPu0erHay9u3P0NYo12zgxXXJLyio0wKtRJjEuVmsbd3qphD9d1Mtb5OhMCWExKITOLcKD8S8In_6kcLGAl70XQYQr5GUMJmDvY')", backgroundSize: "cover" }}
-                      >
-
-                      </div>
-                      <div>
-                        <p className="text-sm font-bold">
-                          {"Harvey Specter"}
-                        </p>
-                        <p className="text-xs text-slate-500">
-                          {"h.specter@eliterealty.com"}
-                        </p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="inline-block px-2 py-1 text-[10px] font-bold bg-accent text-white uppercase tracking-tighter">
-                      {"Admin"}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <p className="text-xs font-semibold">
-                      {"Multi-Asset"}
-                    </p>
-                  </td>
-                  <td className="px-6 py-4 text-center">
-                    <p className="text-sm font-bold text-primary">
-                      {"54"}
-                    </p>
-                  </td>
-                  <td className="px-6 py-4 text-center">
-                    <p className="text-sm font-bold text-primary">
-                      {"22"}
-                    </p>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <p className="text-sm font-bold text-accent">
-                      {"$1.8M"}
-                    </p>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <button className="text-secondary hover:text-primary">
-                      <AppIcon className="text-sm" name="edit" />
-                    </button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-            <div className="p-4 border-t border-primary/10 flex items-center justify-between bg-primary/5">
-              <p className="text-xs font-semibold text-slate-500 uppercase">
-                {"Showing 1 to 4 of 48 Agents"}
-              </p>
-              <div className="flex gap-1">
-                <button className="w-8 h-8 flex items-center justify-center border border-primary/10 bg-white text-primary text-xs font-bold">
-                  {"1"}
-                </button>
-                <button className="w-8 h-8 flex items-center justify-center border border-primary/10 bg-white text-secondary text-xs font-bold hover:bg-primary/5">
-                  {"2"}
-                </button>
-                <button className="w-8 h-8 flex items-center justify-center border border-primary/10 bg-white text-secondary text-xs font-bold hover:bg-primary/5">
-                  {"3"}
-                </button>
-                <button className="w-8 h-8 flex items-center justify-center border border-primary/10 bg-white text-secondary text-xs font-bold hover:bg-primary/5">
-                  <AppIcon className="text-sm" name="chevron_right" />
-                </button>
-              </div>
-            </div>
-          </div>
-        </section>
-        <section className="bg-primary/5 border border-primary/10 p-6 flex flex-wrap items-center justify-between gap-6">
-          <div>
-            <h4 className="text-[10px] font-bold text-primary uppercase mb-3">
-              {"Roles Legend"}
-            </h4>
-            <div className="flex flex-wrap gap-4">
-              <div className="flex items-center gap-2">
-                <span className="w-3 h-3 bg-accent">
-
-                </span>
-                <span className="text-xs font-bold text-slate-700 uppercase">
-                  {"Admin"}
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="w-3 h-3 bg-primary">
-
-                </span>
-                <span className="text-xs font-bold text-slate-700 uppercase">
-                  {"Team Leader"}
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="w-3 h-3 border border-primary">
-
-                </span>
-                <span className="text-xs font-bold text-slate-700 uppercase">
-                  {"Agent"}
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="w-3 h-3 bg-slate-300">
-
-                </span>
-                <span className="text-xs font-bold text-slate-700 uppercase">
-                  {"Viewer"}
-                </span>
-              </div>
-            </div>
-          </div>
-          <div className="flex gap-3">
-            <button className="text-[10px] font-bold text-primary px-4 py-2 border border-primary uppercase">
-              {"Manage Role Permissions"}
-            </button>
+          <div className="overflow-hidden border border-primary/10 bg-white dark:bg-slate-900">
+            {isInitialLoading ? <div className="p-8 text-center text-sm font-semibold text-slate-500 dark:text-slate-400">{"Loading agents..."}</div> : agentUsersQuery.error ? <div className="p-8 text-center text-sm font-semibold text-rose-600">{agentUsersQuery.error.message}</div> : filteredAgents.length === 0 ? <div className="p-8 text-center text-sm font-semibold text-slate-500 dark:text-slate-400">{"No agents match the current filters."}</div> : (
+              <table className="w-full border-collapse text-left">
+                <thead><tr className="bg-primary/5 text-primary"><th className="border-b border-primary/10 px-6 py-4 text-[10px] font-bold uppercase tracking-wider">{"Agent"}</th><th className="border-b border-primary/10 px-6 py-4 text-[10px] font-bold uppercase tracking-wider">{"Agency"}</th><th className="border-b border-primary/10 px-6 py-4 text-[10px] font-bold uppercase tracking-wider">{"License"}</th><th className="border-b border-primary/10 px-6 py-4 text-center text-[10px] font-bold uppercase tracking-wider">{"Listings"}</th><th className="border-b border-primary/10 px-6 py-4 text-center text-[10px] font-bold uppercase tracking-wider">{"Status"}</th><th className="border-b border-primary/10 px-6 py-4 text-right text-[10px] font-bold uppercase tracking-wider">{"Commission"}</th><th className="border-b border-primary/10 px-6 py-4 text-right text-[10px] font-bold uppercase tracking-wider">{"Created"}</th></tr></thead>
+                <tbody className="divide-y divide-primary/5">
+                  {filteredAgents.map((agent) => (
+                    <tr key={agent.id} className="transition-colors hover:bg-primary/5">
+                      <td className="px-6 py-4"><div className="flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center border border-primary/10 bg-primary/10 text-xs font-bold text-primary">{initials(agent)}</div><div><p className="text-sm font-bold">{agent.fullName}</p><p className="text-xs text-slate-500">{agent.email}</p><p className="text-xs text-slate-400">{displayText(agent.phone, "No phone")}</p></div></div></td>
+                      <td className="px-6 py-4"><p className="text-xs font-semibold">{displayText(agent.agencyName, "Independent")}</p></td>
+                      <td className="px-6 py-4"><p className="text-xs font-semibold">{displayText(agent.licenseNumber)}</p></td>
+                      <td className="px-6 py-4 text-center"><p className="text-sm font-bold text-primary">{agent.propertyCount ?? 0}</p></td>
+                      <td className="px-6 py-4 text-center"><div className="flex flex-col items-center gap-1"><span className={agent.isVerifiedAgent ? "inline-block bg-primary px-2 py-1 text-[10px] font-bold uppercase tracking-tighter text-white" : "inline-block border border-primary px-2 py-1 text-[10px] font-bold uppercase tracking-tighter text-primary"}>{agent.isVerifiedAgent ? "Verified" : "Agent"}</span><span className={agent.isActive === false ? "text-[10px] font-bold uppercase text-rose-600" : "text-[10px] font-bold uppercase text-green-600"}>{agent.isActive === false ? "Inactive" : "Active"}</span></div></td>
+                      <td className="px-6 py-4 text-right"><p className="text-sm font-bold text-accent">{agent.commissionRate != null ? `${agent.commissionRate}%` : "N/A"}</p></td>
+                      <td className="px-6 py-4 text-right"><p className="text-xs font-bold uppercase text-slate-500">{formatCreatedAt(agent.createdAt)}</p></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         </section>
       </div>
-      <footer className="p-8 mt-auto border-t border-primary/10 text-center">
-        <p className="text-[10px] text-secondary font-bold uppercase tracking-[0.2em]">
-          {" 2024 Elite Realty Group - Internal Management System"}
-        </p>
-      </footer>
+
+      <CreateAgentDialog isSubmitting={createAgentMutation.isPending} onOpenChange={setDialogOpen} onSubmit={handleCreateAgent} open={dialogOpen} />
     </main>
   )
 }
