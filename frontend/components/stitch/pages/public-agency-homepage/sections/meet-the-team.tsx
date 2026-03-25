@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 
-import type { PublicAgentProfile } from "@/types/real-estate-api"
+import type { PublicAgentProfile } from "@/@types/real-estate-api"
 
 type MeetTheTeamSectionProps = {
   agents: PublicAgentProfile[]

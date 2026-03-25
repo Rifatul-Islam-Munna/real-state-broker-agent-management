@@ -1,3 +1,75 @@
+export const publicAgentsStats = [
+  {
+    label: "Top Producers",
+    value: "48",
+    icon: "verified",
+  },
+  {
+    label: "Markets Served",
+    value: "12",
+    icon: "domain",
+  },
+  {
+    label: "Closed Volume",
+    value: "$840M",
+    icon: "trending_up",
+  },
+] as const
+
+export const publicAgentSpecialties = [
+  {
+    title: "Residential",
+    description:
+      "Luxury family homes, move-up buyers, and neighborhood-specific pricing strategy.",
+  },
+  {
+    title: "Commercial",
+    description:
+      "Office, mixed-use, and cash-flow-driven acquisitions backed by market analytics.",
+  },
+  {
+    title: "Relocation",
+    description:
+      "Fast-moving buyer support for executive moves, schools, and lifestyle fit.",
+  },
+] as const
+
+export const publicContactMethods = [
+  {
+    title: "General Inquiries",
+    detail: "hello@estateblue.com",
+    icon: "mail",
+  },
+  {
+    title: "Call Our Desk",
+    detail: "+1 (555) 302-4400",
+    icon: "call",
+  },
+  {
+    title: "Visit Headquarters",
+    detail: "880 Market Street, San Francisco, CA",
+    icon: "location_on",
+  },
+] as const
+
+export const publicOfficeLocations = [
+  {
+    city: "San Francisco",
+    address: "880 Market Street, Suite 600",
+    schedule: "Mon-Fri, 9:00 AM - 6:00 PM",
+  },
+  {
+    city: "Beverly Hills",
+    address: "410 Rodeo Drive, Suite 210",
+    schedule: "Mon-Sat, 10:00 AM - 7:00 PM",
+  },
+  {
+    city: "Miami",
+    address: "55 Biscayne Boulevard, Floor 9",
+    schedule: "Mon-Fri, 9:00 AM - 6:00 PM",
+  },
+] as const
+
 export const agentSettingsOverviewCards = [
   {
     label: "Active Leads",

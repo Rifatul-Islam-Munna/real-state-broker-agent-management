@@ -9,6 +9,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import type { AgentUserOption, DealItem, LeadItem } from "@/hooks/use-real-estate-api"
 import { formatDealStage } from "@/lib/admin-portal"
@@ -32,6 +39,11 @@ function FieldError({ error }: { error?: string }) {
 
   return <p className="text-xs font-semibold text-rose-600">{error}</p>
 }
+
+const formSelectClassName =
+  "h-10 w-full rounded-none border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 dark:border-white/10 dark:bg-slate-900 dark:text-slate-200"
+
+const emptySelectValue = "__empty__"
 
 export function DealCommunicationDialog({
   deal,
@@ -59,7 +71,7 @@ export function DealCommunicationDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xl rounded-none border border-slate-200 bg-white p-0 shadow-none dark:border-white/10 dark:bg-slate-900">
+      <DialogContent className="rounded-none border border-slate-200 bg-white p-0 shadow-none dark:border-white/10 dark:bg-slate-900">
         <div className="border-b border-slate-200 px-6 py-5 dark:border-white/10">
           <DialogTitle className="text-lg font-bold text-slate-900 dark:text-white">{title}</DialogTitle>
           <DialogDescription className="mt-2 text-sm text-slate-500 dark:text-slate-400">{`Send a ${mode} update for ${deal.title}.`}</DialogDescription>
@@ -123,7 +135,7 @@ export function DealCancelDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xl rounded-none border border-slate-200 bg-white p-0 shadow-none dark:border-white/10 dark:bg-slate-900">
+      <DialogContent className="rounded-none border border-slate-200 bg-white p-0 shadow-none dark:border-white/10 dark:bg-slate-900">
         <div className="border-b border-slate-200 px-6 py-5 dark:border-white/10">
           <DialogTitle className="text-lg font-bold text-slate-900 dark:text-white">{"Cancel Deal"}</DialogTitle>
           <DialogDescription className="mt-2 text-sm text-slate-500 dark:text-slate-400">{"Canceling here removes the deal from the active pipeline board and updates the status in place."}</DialogDescription>
@@ -234,7 +246,7 @@ export function DealFormDialog({
         onOpenChange(nextOpen)
       }}
     >
-      <DialogContent className="max-w-5xl rounded-none border border-slate-200 bg-white p-0 shadow-none dark:border-white/10 dark:bg-slate-900">
+      <DialogContent className="rounded-none border border-slate-200 bg-white p-0 shadow-none dark:border-white/10 dark:bg-slate-900">
         <div className="border-b border-slate-200 px-6 py-5 dark:border-white/10">
           <DialogTitle className="text-lg font-bold text-slate-900 dark:text-white">
             {mode === "create" ? "Create Deal" : "Edit Deal"}
@@ -264,18 +276,23 @@ export function DealFormDialog({
           </div>
           <label className="flex flex-col gap-2 text-xs font-bold uppercase tracking-wide text-slate-500">
             {"Assigned Agent"}
-            <select
-              className="h-10 rounded-none border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 outline-none dark:border-white/10 dark:bg-slate-900 dark:text-slate-200"
-              onChange={(event) => updateField("agent", event.target.value)}
-              value={formValues.agent}
+            <Select
+              modal={false}
+              onValueChange={(value) => updateField("agent", !value || value === emptySelectValue ? "" : value)}
+              value={formValues.agent || emptySelectValue}
             >
-              <option value="">{"Select agent"}</option>
-              {agentSelectOptions.map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger className={formSelectClassName}>
+                <SelectValue placeholder="Select agent" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={emptySelectValue}>{"Select agent"}</SelectItem>
+                {agentSelectOptions.map(([value, label]) => (
+                  <SelectItem key={value} value={value}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <FieldError error={errors.agent} />
           </label>
           <div className="flex flex-col gap-2">
@@ -284,46 +301,61 @@ export function DealFormDialog({
           </div>
           <label className="flex flex-col gap-2 text-xs font-bold uppercase tracking-wide text-slate-500">
             {"Deal Type"}
-            <select
-              className="h-10 rounded-none border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 outline-none dark:border-white/10 dark:bg-slate-900 dark:text-slate-200"
-              onChange={(event) => updateField("type", event.target.value as DealFormValues["type"])}
+            <Select
+              modal={false}
+              onValueChange={(value) => updateField("type", (value ?? formValues.type) as DealFormValues["type"])}
               value={formValues.type}
             >
-              {dealTypeOptions.map((type) => (
-                <option key={type} value={type}>
-                  {type}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger className={formSelectClassName}>
+                <SelectValue placeholder="Select deal type" />
+              </SelectTrigger>
+              <SelectContent>
+                {dealTypeOptions.map((type) => (
+                  <SelectItem key={type} value={type}>
+                    {type}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </label>
           <label className="flex flex-col gap-2 text-xs font-bold uppercase tracking-wide text-slate-500">
             {"Stage"}
-            <select
-              className="h-10 rounded-none border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 outline-none dark:border-white/10 dark:bg-slate-900 dark:text-slate-200"
-              onChange={(event) => updateField("stage", event.target.value as DealFormValues["stage"])}
+            <Select
+              modal={false}
+              onValueChange={(value) => updateField("stage", (value ?? formValues.stage) as DealFormValues["stage"])}
               value={formValues.stage}
             >
-              {dealStageOrder.map((stage) => (
-                <option key={stage} value={stage}>
-                  {formatDealStage(stage)}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger className={formSelectClassName}>
+                <SelectValue placeholder="Select stage" />
+              </SelectTrigger>
+              <SelectContent>
+                {dealStageOrder.map((stage) => (
+                  <SelectItem key={stage} value={stage}>
+                    {formatDealStage(stage)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </label>
           <label className="flex flex-col gap-2 text-xs font-bold uppercase tracking-wide text-slate-500 md:col-span-2">
             {"Linked Lead"}
-            <select
-              className="h-10 rounded-none border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 outline-none dark:border-white/10 dark:bg-slate-900 dark:text-slate-200"
-              onChange={(event) => updateField("sourceLeadId", event.target.value)}
-              value={formValues.sourceLeadId}
+            <Select
+              modal={false}
+              onValueChange={(value) => updateField("sourceLeadId", !value || value === emptySelectValue ? "" : value)}
+              value={formValues.sourceLeadId || emptySelectValue}
             >
-              <option value="">{"No linked lead"}</option>
-              {leadSelectOptions.map(([id, name]) => (
-                <option key={id} value={id}>
-                  {name}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger className={formSelectClassName}>
+                <SelectValue placeholder="No linked lead" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={emptySelectValue}>{"No linked lead"}</SelectItem>
+                {leadSelectOptions.map(([id, name]) => (
+                  <SelectItem key={id} value={id}>
+                    {name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </label>
           <div className="flex flex-col gap-2 md:col-span-2">
             <Textarea className="min-h-32 rounded-none border-slate-200 dark:border-white/10" onChange={(event) => updateField("note", event.target.value)} placeholder="Deal note" value={formValues.note} />

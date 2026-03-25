@@ -1,4 +1,4 @@
-import { publicOfficeLocations } from "@/static-data/pages/public-contact-us/data"
+import { publicOfficeLocations } from "@/data/page-content"
 
 export function ContactLocationsSection() {
   return (

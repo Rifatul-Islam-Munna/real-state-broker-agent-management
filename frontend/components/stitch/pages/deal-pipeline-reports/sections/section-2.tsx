@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { ReactSortable } from "react-sortablejs"
 
 import { Sheet, SheetContent } from "@/components/ui/sheet"
@@ -69,17 +69,38 @@ export function Section2Section({
   totalResults,
 }: Section2SectionProps) {
   const pathname = usePathname()
+  const router = useRouter()
+  const searchParams = useSearchParams()
   const portalRoutes = getPortalRoutes(pathname)
 
   const [selectedDealId, setSelectedDealId] = useState<number | null>(null)
   const [viewMode, setViewMode] = useState<DealView>("board")
   const [dialogState, setDialogState] = useState<DealDialogState>(null)
 
+  const selectedDealIdFromQuery = useMemo(() => {
+    const rawDealId = searchParams.get("dealId")
+    const parsedDealId = Number(rawDealId)
+
+    return Number.isInteger(parsedDealId) && parsedDealId > 0 ? parsedDealId : null
+  }, [searchParams])
+
   useEffect(() => {
     if (createDialogVersion > 0) {
       setDialogState({ type: "create" })
     }
   }, [createDialogVersion])
+
+  useEffect(() => {
+    if (!selectedDealIdFromQuery) {
+      return
+    }
+
+    if (!deals.some((deal) => deal.id === selectedDealIdFromQuery)) {
+      return
+    }
+
+    setSelectedDealId((current) => current ?? selectedDealIdFromQuery)
+  }, [deals, selectedDealIdFromQuery])
 
   const dealColumns = useMemo(
     () =>
@@ -136,6 +157,39 @@ export function Section2Section({
     ],
     [deals],
   )
+
+  function buildDealRoute(dealId: number | null) {
+    const params = new URLSearchParams(searchParams.toString())
+
+    if (dealId) {
+      params.set("dealId", `${dealId}`)
+    } else {
+      params.delete("dealId")
+    }
+
+    const query = params.toString()
+    return query ? `${pathname}?${query}` : pathname
+  }
+
+  function openDealDetails(dealId: number) {
+    setSelectedDealId(dealId)
+
+    if (selectedDealIdFromQuery === dealId) {
+      return
+    }
+
+    router.replace(buildDealRoute(dealId), { scroll: false })
+  }
+
+  function closeDealDetails() {
+    setSelectedDealId(null)
+
+    if (selectedDealIdFromQuery === null) {
+      return
+    }
+
+    router.replace(buildDealRoute(null), { scroll: false })
+  }
 
   return (
     <main className="flex min-h-0 flex-1 flex-col">
@@ -210,7 +264,7 @@ export function Section2Section({
                       }}
                     >
                       {dealColumns[stage].map((deal) => (
-                        <DealKanbanCard key={deal.id} deal={deal} isActive={selectedDealId === deal.id} onOpen={setSelectedDealId} />
+                        <DealKanbanCard key={deal.id} deal={deal} isActive={selectedDealId === deal.id} onOpen={openDealDetails} />
                       ))}
                     </ReactSortable>
                   </section>
@@ -219,10 +273,10 @@ export function Section2Section({
             </div>
           ) : orderedDeals.length > 0 ? (
             <div className="space-y-3">
-              {orderedDeals.map((deal) => (
-                <article key={deal.id} className={cn("border border-slate-200 bg-white p-5 dark:border-white/10 dark:bg-slate-900", selectedDealId === deal.id && "border-primary")}>
-                  <div className="grid gap-4 xl:grid-cols-[1.1fr_0.8fr_auto] xl:items-center">
-                    <button className="text-left" onClick={() => setSelectedDealId(deal.id)} type="button">
+                {orderedDeals.map((deal) => (
+                  <article key={deal.id} className={cn("border border-slate-200 bg-white p-5 dark:border-white/10 dark:bg-slate-900", selectedDealId === deal.id && "border-primary")}>
+                    <div className="grid gap-4 xl:grid-cols-[1.1fr_0.8fr_auto] xl:items-center">
+                    <button className="text-left" onClick={() => openDealDetails(deal.id)} type="button">
                       <div className="flex flex-wrap items-center gap-2">
                         <h3 className="text-sm font-bold text-slate-900 dark:text-white">{deal.title}</h3>
                         <span className={cn("inline-flex border px-2 py-1 text-[10px] font-bold uppercase tracking-wide", dealStageMeta[deal.stage].badgeClassName)}>{dealStageMeta[deal.stage].label}</span>
@@ -238,7 +292,7 @@ export function Section2Section({
                       <p className="text-sm text-primary">{formatCompactCurrency(deal.value)}</p>
                     </div>
                     <div className="flex flex-wrap gap-2 xl:justify-end">
-                      <button className={dealButtonClass} onClick={() => setSelectedDealId(deal.id)} type="button">
+                      <button className={dealButtonClass} onClick={() => openDealDetails(deal.id)} type="button">
                         {"View Details"}
                       </button>
                       <DealActions
@@ -265,9 +319,9 @@ export function Section2Section({
         </div>
       </section>
 
-      <Sheet open={Boolean(selectedDeal)} onOpenChange={(open) => (!open ? setSelectedDealId(null) : null)}>
+      <Sheet open={Boolean(selectedDeal)} onOpenChange={(open) => (!open ? closeDealDetails() : null)}>
         <SheetContent
-          className="w-full gap-0 border-slate-200 bg-background-light p-0 shadow-none sm:max-w-2xl dark:border-white/10 dark:bg-background-dark"
+          className="w-full gap-0 border-slate-200 bg-background-light p-0 shadow-none sm:max-w-none dark:border-white/10 dark:bg-background-dark"
           showCloseButton={false}
           side="right"
         >
@@ -275,7 +329,7 @@ export function Section2Section({
             <DealDetailsPanel
               deal={selectedDeal}
               leadHref={portalRoutes.leads}
-              onClose={() => setSelectedDealId(null)}
+              onClose={closeDealDetails}
               onDialogOpen={(type, dealId) => setDialogState({ type, dealId })}
             />
           ) : null}

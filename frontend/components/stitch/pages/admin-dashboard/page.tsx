@@ -11,7 +11,7 @@ type AdminDashboardPageProps = {
   errorMessage?: string | null
   isLoading?: boolean
   portal?: "admin" | "agent"
-  summary?: import("@/types/real-estate-api").DashboardSummary | null
+  summary?: import("@/@types/real-estate-api").DashboardSummary | null
 }
 
 export function AdminDashboardPage({

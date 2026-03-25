@@ -1,5 +1,5 @@
 import { LeadCrmPipelinePage } from "@/components/stitch/pages/lead-crm-pipeline/page"
-import { leadCrmPipelinePageMeta } from "@/static-data/pages/lead-crm-pipeline/meta"
+import { leadCrmPipelinePageMeta } from "@/data/page-metadata/admin"
 import { buildPageMetadata } from "@/lib/build-page-metadata"
 
 export const metadata = buildPageMetadata(leadCrmPipelinePageMeta)

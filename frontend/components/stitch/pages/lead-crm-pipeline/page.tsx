@@ -1,6 +1,7 @@
 "use client"
 
 import { useDeferredValue, useEffect, useState } from "react"
+import { usePathname, useRouter } from "next/navigation"
 
 import {
   type AgentUserOption,
@@ -14,6 +15,7 @@ import {
   useProperties,
   useUpdateLead,
 } from "@/hooks/use-real-estate-api"
+import { getPortalRoutes } from "@/lib/portal-routes"
 
 import { type LeadFormValues, Section1Section, Section2Section } from "./sections"
 
@@ -53,6 +55,9 @@ export function LeadCrmPipelinePage() {
   const [page, setPage] = useState(1)
   const [localLeads, setLocalLeads] = useState<LeadItem[]>([])
   const deferredSearch = useDeferredValue(searchTerm)
+  const pathname = usePathname()
+  const router = useRouter()
+  const portalRoutes = getPortalRoutes(pathname)
 
   const leadsQuery = useLeads({
     page,
@@ -205,7 +210,7 @@ export function LeadCrmPipelinePage() {
         lead.id === leadId
           ? {
               ...lead,
-              inBoard: true,
+              inBoard: false,
               linkedDealId: response.data?.id ?? lead.linkedDealId,
               linkedDealTitle: response.data?.title ?? lead.linkedDealTitle,
               stage: "Deal",
@@ -213,6 +218,10 @@ export function LeadCrmPipelinePage() {
           : lead,
       ),
     )
+
+    if (response.data?.id) {
+      router.push(`${portalRoutes.deals}?dealId=${response.data.id}`)
+    }
 
     return null
   }

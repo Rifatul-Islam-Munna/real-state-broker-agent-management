@@ -1,6 +1,14 @@
 import Link from "next/link"
 
 import { AppIcon } from "@/components/ui/app-icon"
+import { Input } from "@/components/ui/input"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { cn } from "@/lib/utils"
 import { PagePagination } from "@/components/stitch/shared/page-pagination"
 
@@ -101,6 +109,9 @@ function getStatusLabel(listing: PropertyManagementListing) {
   return "Open"
 }
 
+const filterSelectClassName =
+  "h-11 min-w-44 rounded-xl border-slate-200 bg-slate-50 px-4 text-sm dark:border-slate-700 dark:bg-slate-800"
+
 export function Section1Section({
   activeFilter,
   activeAgent,
@@ -140,7 +151,7 @@ export function Section1Section({
           <div className="flex flex-col gap-3 sm:flex-row">
             <label className="relative block min-w-[260px]">
               <AppIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" name="search" />
-              <input
+              <Input
                 className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-4 text-sm outline-none transition-colors focus:border-primary dark:border-slate-700 dark:bg-slate-800"
                 onChange={(event) => onSearchChange(event.target.value)}
                 placeholder="Search listings, cities, or agents"
@@ -208,27 +219,30 @@ export function Section1Section({
               ))}
             </div>
             <div className="flex flex-wrap gap-3">
-              <select
-                className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm outline-none focus:border-primary dark:border-slate-700 dark:bg-slate-800"
-                onChange={(event) => onTypeChange(event.target.value as "All" | "Residential" | "Commercial")}
-                value={activeType}
+              <Select modal={false} onValueChange={(value) => onTypeChange((value ?? activeType) as "All" | "Residential" | "Commercial")} value={activeType}
               >
-                <option value="All">{"All Types"}</option>
-                <option value="Residential">{"Residential"}</option>
-                <option value="Commercial">{"Commercial"}</option>
-              </select>
-              <select
-                className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm outline-none focus:border-primary dark:border-slate-700 dark:bg-slate-800"
-                onChange={(event) => onAgentChange(event.target.value)}
-                value={activeAgent}
-              >
-                <option value="">{"All Agents"}</option>
-                {visibleAgents.map((agent) => (
-                  <option key={agent} value={agent}>
-                    {agent}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger className={filterSelectClassName}>
+                  <SelectValue placeholder="All Types" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="All">{"All Types"}</SelectItem>
+                  <SelectItem value="Residential">{"Residential"}</SelectItem>
+                  <SelectItem value="Commercial">{"Commercial"}</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select modal={false} onValueChange={(value) => onAgentChange(!value || value === "all-agents" ? "" : value)} value={activeAgent || "all-agents"}>
+                <SelectTrigger className={filterSelectClassName}>
+                  <SelectValue placeholder="All Agents" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all-agents">{"All Agents"}</SelectItem>
+                  {visibleAgents.map((agent) => (
+                    <SelectItem key={agent} value={agent}>
+                      {agent}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
         </section>

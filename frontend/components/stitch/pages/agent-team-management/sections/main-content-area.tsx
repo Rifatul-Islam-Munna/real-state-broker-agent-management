@@ -9,6 +9,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { AppIcon } from "@/components/ui/app-icon"
 import {
@@ -92,6 +99,9 @@ function FieldError({ error }: { error?: string }) {
   return error ? <p className="text-xs font-semibold text-rose-600">{error}</p> : null
 }
 
+const filterSelectClassName =
+  "h-9 min-w-40 border-primary/10 bg-white px-3 text-xs dark:bg-slate-900"
+
 function CreateAgentDialog({
   isSubmitting,
   onOpenChange,
@@ -125,7 +135,7 @@ function CreateAgentDialog({
         onOpenChange(nextOpen)
       }}
     >
-      <DialogContent className="max-w-5xl rounded-none border border-primary/10 bg-white p-0 shadow-none dark:border-white/10 dark:bg-slate-900">
+      <DialogContent className="rounded-none border border-primary/10 bg-white p-0 shadow-none dark:border-white/10 dark:bg-slate-900">
         <div className="border-b border-primary/10 px-6 py-5">
           <DialogTitle className="text-lg font-bold uppercase tracking-tight text-primary">{"Create Agent"}</DialogTitle>
           <DialogDescription className="mt-2 text-sm text-slate-500 dark:text-slate-400">
@@ -260,7 +270,7 @@ export function MainContentAreaSection() {
         <div className="flex items-center gap-4">
           <div className="relative">
             <AppIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-secondary" name="search" />
-            <input className="w-64 border border-primary/10 bg-background-light py-2 pl-10 pr-4 text-sm focus:border-primary focus:ring-0 dark:bg-slate-800" onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search agents or teams..." type="text" value={searchTerm} />
+            <Input className="w-64 border border-primary/10 bg-background-light py-2 pl-10 pr-4 text-sm focus-visible:ring-primary/20 dark:bg-slate-800" onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search agents or teams..." type="text" value={searchTerm} />
           </div>
           <button className="border border-accent bg-accent px-4 py-2 text-xs font-bold uppercase tracking-wide text-white" onClick={() => setDialogOpen(true)} type="button">{"Add New Agent"}</button>
         </div>
@@ -303,16 +313,26 @@ export function MainContentAreaSection() {
           <div className="mb-4 flex items-center justify-between gap-4">
             <h3 className="border-l-4 border-accent pl-3 text-sm font-bold uppercase tracking-widest text-primary">{"Agent Directory"}</h3>
             <div className="flex items-center gap-2">
-              <select className="border border-primary/10 bg-white px-3 py-1.5 text-xs focus:ring-0 dark:bg-slate-900" onChange={(event) => setVerificationFilter(event.target.value as typeof verificationFilter)} value={verificationFilter}>
-                <option value="all">{"All Agents"}</option>
-                <option value="verified">{"Verified Only"}</option>
-                <option value="unverified">{"Unverified Only"}</option>
-              </select>
-              <select className="border border-primary/10 bg-white px-3 py-1.5 text-xs focus:ring-0 dark:bg-slate-900" onChange={(event) => setSortBy(event.target.value as SortKey)} value={sortBy}>
-                <option value="created">{"Sort by Newest"}</option>
-                <option value="name">{"Sort by Name"}</option>
-                <option value="listings">{"Sort by Listings"}</option>
-              </select>
+              <Select modal={false} onValueChange={(value) => setVerificationFilter(value as typeof verificationFilter)} value={verificationFilter}>
+                <SelectTrigger className={filterSelectClassName}>
+                  <SelectValue placeholder="All Agents" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">{"All Agents"}</SelectItem>
+                  <SelectItem value="verified">{"Verified Only"}</SelectItem>
+                  <SelectItem value="unverified">{"Unverified Only"}</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select modal={false} onValueChange={(value) => setSortBy(value as SortKey)} value={sortBy}>
+                <SelectTrigger className={filterSelectClassName}>
+                  <SelectValue placeholder="Sort by Newest" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="created">{"Sort by Newest"}</SelectItem>
+                  <SelectItem value="name">{"Sort by Name"}</SelectItem>
+                  <SelectItem value="listings">{"Sort by Listings"}</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
           <div className="overflow-hidden border border-primary/10 bg-white dark:bg-slate-900">

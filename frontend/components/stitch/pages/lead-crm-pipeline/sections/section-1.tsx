@@ -1,6 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { AppIcon } from "@/components/ui/app-icon"
+import { Input } from "@/components/ui/input"
 
 type Section1SectionProps = {
   onAddLeadClick: () => void
@@ -35,7 +36,7 @@ export function Section1Section({
               <div className="flex items-center justify-center pl-3 text-slate-500">
                 <AppIcon className="text-sm" name="search" />
               </div>
-              <input
+              <Input
                 className="form-input w-full border-none bg-transparent text-sm placeholder:text-slate-500 focus:ring-0"
                 onChange={(event) => onSearchChange(event.target.value)}
                 placeholder="Search leads, properties, or assigned agents..."

@@ -1,23 +1,33 @@
 "use client"
 
 import Link from "next/link"
-import { useActionState } from "react"
+import { useActionState, useState } from "react"
 
+import { Input } from "@/components/ui/input"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { registerAction, type AuthActionState } from "@/lib/auth-actions"
 
 const initialState: AuthActionState = { error: null }
 
 export function RegisterForm() {
   const [state, action, pending] = useActionState(registerAction, initialState)
+  const [role, setRole] = useState("Admin")
 
   return (
     <form action={action} className="space-y-5">
+      <input name="role" type="hidden" value={role} />
       <div className="grid gap-5 md:grid-cols-2">
         <div className="space-y-2">
           <label className="text-sm font-bold text-slate-700" htmlFor="firstName">
             {"First Name"}
           </label>
-          <input
+          <Input
             className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition-colors focus:border-primary"
             id="firstName"
             name="firstName"
@@ -30,7 +40,7 @@ export function RegisterForm() {
           <label className="text-sm font-bold text-slate-700" htmlFor="lastName">
             {"Last Name"}
           </label>
-          <input
+          <Input
             className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition-colors focus:border-primary"
             id="lastName"
             name="lastName"
@@ -45,7 +55,7 @@ export function RegisterForm() {
           <label className="text-sm font-bold text-slate-700" htmlFor="email">
             {"Email"}
           </label>
-          <input
+          <Input
             className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition-colors focus:border-primary"
             id="email"
             name="email"
@@ -58,7 +68,7 @@ export function RegisterForm() {
           <label className="text-sm font-bold text-slate-700" htmlFor="phone">
             {"Phone"}
           </label>
-          <input
+          <Input
             className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition-colors focus:border-primary"
             id="phone"
             name="phone"
@@ -72,7 +82,7 @@ export function RegisterForm() {
           <label className="text-sm font-bold text-slate-700" htmlFor="password">
             {"Password"}
           </label>
-          <input
+          <Input
             className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition-colors focus:border-primary"
             id="password"
             name="password"
@@ -85,19 +95,19 @@ export function RegisterForm() {
           <label className="text-sm font-bold text-slate-700" htmlFor="role">
             {"Role"}
           </label>
-          <select
-            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition-colors focus:border-primary"
-            defaultValue="Admin"
-            id="role"
-            name="role"
+          <Select
+            modal={false}
+            onValueChange={(value) => setRole(value ?? "Admin")}
+            value={role}
           >
-            <option value="Admin">
-              {"Admin"}
-            </option>
-            <option value="Agent">
-              {"Agent"}
-            </option>
-          </select>
+            <SelectTrigger className="h-12 w-full rounded-2xl border-slate-200 bg-white px-4 text-sm text-slate-700">
+              <SelectValue placeholder="Select role" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Admin">{"Admin"}</SelectItem>
+              <SelectItem value="Agent">{"Agent"}</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
       {state.error ? (

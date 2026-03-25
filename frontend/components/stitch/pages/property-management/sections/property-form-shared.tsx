@@ -1,4 +1,4 @@
-import type { PropertyItem } from "@/types/real-estate-api"
+import type { PropertyItem } from "@/@types/real-estate-api"
 
 export type NeighborhoodInsightFormValue = {
   type: string

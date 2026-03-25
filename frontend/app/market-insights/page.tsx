@@ -1,5 +1,5 @@
 import { MarketInsightsBlogPage } from "@/components/stitch/pages/market-insights-blog/page"
-import { marketInsightsBlogPageMeta } from "@/static-data/pages/market-insights-blog/meta"
+import { marketInsightsBlogPageMeta } from "@/data/page-metadata/public"
 import { buildPageMetadata } from "@/lib/build-page-metadata"
 
 export const metadata = buildPageMetadata(marketInsightsBlogPageMeta)

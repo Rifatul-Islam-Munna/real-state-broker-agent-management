@@ -10,7 +10,7 @@ import type {
   MailInboxStatus,
   PaginatedResult,
   PropertyItem,
-} from "@/types/real-estate-api"
+} from "@/@types/real-estate-api"
 import {
   formatCompactCurrencyAmount,
   formatCurrencyAmount,

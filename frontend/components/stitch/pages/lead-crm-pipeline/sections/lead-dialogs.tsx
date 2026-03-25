@@ -9,6 +9,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import type { AgentUserOption, LeadItem, PropertyItem } from "@/hooks/use-real-estate-api"
 import { formatLeadPriority, leadStageMeta } from "@/lib/admin-portal"
@@ -31,6 +38,11 @@ function FieldError({ error }: { error?: string }) {
 
   return <p className="text-xs font-semibold text-rose-600">{error}</p>
 }
+
+const formSelectClassName =
+  "h-10 w-full rounded-none border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 dark:border-white/10 dark:bg-slate-900 dark:text-slate-200"
+
+const emptySelectValue = "__empty__"
 
 export function LeadCommunicationDialog({
   isSubmitting,
@@ -58,7 +70,7 @@ export function LeadCommunicationDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xl rounded-none border border-slate-200 bg-white p-0 shadow-none dark:border-white/10 dark:bg-slate-900">
+      <DialogContent className="rounded-none border border-slate-200 bg-white p-0 shadow-none dark:border-white/10 dark:bg-slate-900">
         <div className="border-b border-slate-200 px-6 py-5 dark:border-white/10">
           <DialogTitle className="text-lg font-bold text-slate-900 dark:text-white">
             {title}
@@ -142,7 +154,7 @@ export function LeadCancelDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xl rounded-none border border-slate-200 bg-white p-0 shadow-none dark:border-white/10 dark:bg-slate-900">
+      <DialogContent className="rounded-none border border-slate-200 bg-white p-0 shadow-none dark:border-white/10 dark:bg-slate-900">
         <div className="border-b border-slate-200 px-6 py-5 dark:border-white/10">
           <DialogTitle className="text-lg font-bold text-slate-900 dark:text-white">
             {"Cancel Lead"}
@@ -303,7 +315,7 @@ export function LeadFormDialog({
         onOpenChange(nextOpen)
       }}
     >
-      <DialogContent className="max-w-5xl rounded-none border border-slate-200 bg-white p-0 shadow-none dark:border-white/10 dark:bg-slate-900">
+      <DialogContent className="rounded-none border border-slate-200 bg-white p-0 shadow-none dark:border-white/10 dark:bg-slate-900">
         <div className="border-b border-slate-200 px-6 py-5 dark:border-white/10">
           <DialogTitle className="text-lg font-bold text-slate-900 dark:text-white">
             {mode === "create" ? "Add Lead" : "Edit Lead"}
@@ -345,18 +357,23 @@ export function LeadFormDialog({
           </div>
           <label className="flex flex-col gap-2 text-xs font-bold uppercase tracking-wide text-slate-500">
             {"Property"}
-            <select
-              className="h-10 rounded-none border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 outline-none dark:border-white/10 dark:bg-slate-900 dark:text-slate-200"
-              onChange={(event) => updateField("property", event.target.value)}
-              value={formValues.property}
+            <Select
+              modal={false}
+              onValueChange={(value) => updateField("property", !value || value === emptySelectValue ? "" : value)}
+              value={formValues.property || emptySelectValue}
             >
-              <option value="">{"Select property"}</option>
-              {propertyTitles.map((title) => (
-                <option key={title} value={title}>
-                  {title}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger className={formSelectClassName}>
+                <SelectValue placeholder="Select property" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={emptySelectValue}>{"Select property"}</SelectItem>
+                {propertyTitles.map((title) => (
+                  <SelectItem key={title} value={title}>
+                    {title}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <FieldError error={errors.property} />
           </label>
           <div className="flex flex-col gap-2">
@@ -370,95 +387,125 @@ export function LeadFormDialog({
           </div>
           <label className="flex flex-col gap-2 text-xs font-bold uppercase tracking-wide text-slate-500">
             {"Assigned Agent"}
-            <select
-              className="h-10 rounded-none border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 outline-none dark:border-white/10 dark:bg-slate-900 dark:text-slate-200"
-              onChange={(event) => updateField("agent", event.target.value)}
-              value={formValues.agent}
+            <Select
+              modal={false}
+              onValueChange={(value) => updateField("agent", !value || value === emptySelectValue ? "" : value)}
+              value={formValues.agent || emptySelectValue}
             >
-              <option value="">{"Select agent"}</option>
-              {agentSelectOptions.map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger className={formSelectClassName}>
+                <SelectValue placeholder="Select agent" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={emptySelectValue}>{"Select agent"}</SelectItem>
+                {agentSelectOptions.map(([value, label]) => (
+                  <SelectItem key={value} value={value}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <FieldError error={errors.agent} />
           </label>
           <label className="flex flex-col gap-2 text-xs font-bold uppercase tracking-wide text-slate-500">
             {"Source"}
-            <select
-              className="h-10 rounded-none border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 outline-none dark:border-white/10 dark:bg-slate-900 dark:text-slate-200"
-              onChange={(event) => updateField("source", event.target.value)}
-              value={formValues.source}
+            <Select
+              modal={false}
+              onValueChange={(value) => updateField("source", !value || value === emptySelectValue ? "" : value)}
+              value={formValues.source || emptySelectValue}
             >
-              <option value="">{"Select source"}</option>
-              {sourceOptions.map((source) => (
-                <option key={source} value={source}>
-                  {source}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger className={formSelectClassName}>
+                <SelectValue placeholder="Select source" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={emptySelectValue}>{"Select source"}</SelectItem>
+                {sourceOptions.map((source) => (
+                  <SelectItem key={source} value={source}>
+                    {source}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <FieldError error={errors.source} />
           </label>
           <label className="flex flex-col gap-2 text-xs font-bold uppercase tracking-wide text-slate-500">
             {"Interest"}
-            <select
-              className="h-10 rounded-none border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 outline-none dark:border-white/10 dark:bg-slate-900 dark:text-slate-200"
-              onChange={(event) => updateField("interest", event.target.value)}
-              value={formValues.interest}
+            <Select
+              modal={false}
+              onValueChange={(value) => updateField("interest", !value || value === emptySelectValue ? "" : value)}
+              value={formValues.interest || emptySelectValue}
             >
-              <option value="">{"Select interest"}</option>
-              {interestOptions.map((interest) => (
-                <option key={interest} value={interest}>
-                  {interest}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger className={formSelectClassName}>
+                <SelectValue placeholder="Select interest" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={emptySelectValue}>{"Select interest"}</SelectItem>
+                {interestOptions.map((interest) => (
+                  <SelectItem key={interest} value={interest}>
+                    {interest}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <FieldError error={errors.interest} />
           </label>
           <label className="flex flex-col gap-2 text-xs font-bold uppercase tracking-wide text-slate-500">
             {"Timeline"}
-            <select
-              className="h-10 rounded-none border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 outline-none dark:border-white/10 dark:bg-slate-900 dark:text-slate-200"
-              onChange={(event) => updateField("timeline", event.target.value)}
-              value={formValues.timeline}
+            <Select
+              modal={false}
+              onValueChange={(value) => updateField("timeline", !value || value === emptySelectValue ? "" : value)}
+              value={formValues.timeline || emptySelectValue}
             >
-              <option value="">{"Select timeline"}</option>
-              {timelineOptions.map((timeline) => (
-                <option key={timeline} value={timeline}>
-                  {timeline}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger className={formSelectClassName}>
+                <SelectValue placeholder="Select timeline" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={emptySelectValue}>{"Select timeline"}</SelectItem>
+                {timelineOptions.map((timeline) => (
+                  <SelectItem key={timeline} value={timeline}>
+                    {timeline}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <FieldError error={errors.timeline} />
           </label>
           <label className="flex flex-col gap-2 text-xs font-bold uppercase tracking-wide text-slate-500">
             {"Priority"}
-            <select
-              className="h-10 rounded-none border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 outline-none dark:border-white/10 dark:bg-slate-900 dark:text-slate-200"
-              onChange={(event) => updateField("priority", event.target.value as LeadFormValues["priority"])}
+            <Select
+              modal={false}
+              onValueChange={(value) => updateField("priority", (value ?? formValues.priority) as LeadFormValues["priority"])}
               value={formValues.priority}
             >
-              {leadFormSelectOptions.priorities.map((priority) => (
-                <option key={priority} value={priority}>
-                  {formatLeadPriority(priority)}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger className={formSelectClassName}>
+                <SelectValue placeholder="Select priority" />
+              </SelectTrigger>
+              <SelectContent>
+                {leadFormSelectOptions.priorities.map((priority) => (
+                  <SelectItem key={priority} value={priority}>
+                    {formatLeadPriority(priority)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </label>
           <label className="flex flex-col gap-2 text-xs font-bold uppercase tracking-wide text-slate-500">
             {"Stage"}
-            <select
-              className="h-10 rounded-none border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 outline-none dark:border-white/10 dark:bg-slate-900 dark:text-slate-200"
-              onChange={(event) => updateField("stage", event.target.value as LeadFormValues["stage"])}
+            <Select
+              modal={false}
+              onValueChange={(value) => updateField("stage", (value ?? formValues.stage) as LeadFormValues["stage"])}
               value={formValues.stage}
             >
-              {leadFormSelectOptions.stages.map((stage) => (
-                <option key={stage} value={stage}>
-                  {leadStageMeta[stage].label}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger className={formSelectClassName}>
+                <SelectValue placeholder="Select stage" />
+              </SelectTrigger>
+              <SelectContent>
+                {leadFormSelectOptions.stages.map((stage) => (
+                  <SelectItem key={stage} value={stage}>
+                    {leadStageMeta[stage].label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </label>
           <label className="flex items-center gap-3 text-sm font-semibold text-slate-600 dark:text-slate-300">
             <input

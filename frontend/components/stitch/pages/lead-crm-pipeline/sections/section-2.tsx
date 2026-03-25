@@ -293,7 +293,7 @@ export function Section2Section({
 
       <Sheet open={Boolean(selectedLead)} onOpenChange={(open) => (!open ? setSelectedLeadId(null) : null)}>
         <SheetContent
-          className="w-full gap-0 border-slate-200 bg-background-light p-0 shadow-none sm:max-w-2xl dark:border-white/10 dark:bg-background-dark"
+          className="w-full gap-0 border-slate-200 bg-background-light p-0 shadow-none sm:max-w-none dark:border-white/10 dark:bg-background-dark"
           showCloseButton={false}
           side="right"
         >

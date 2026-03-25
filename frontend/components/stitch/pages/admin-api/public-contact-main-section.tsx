@@ -1,9 +1,10 @@
 "use client"
 
 import { useState } from "react"
+import { sileo } from "sileo"
 
 import { useCreateContactRequest } from "@/hooks/use-real-estate-api"
-import { publicContactMethods } from "@/static-data/pages/public-contact-us/data"
+import { publicContactMethods } from "@/data/page-content"
 import { AppIcon } from "@/components/ui/app-icon"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -24,8 +25,13 @@ export function PublicContactMainApiSection() {
     name: "",
     phone: "",
   })
-  const [submitted, setSubmitted] = useState(false)
-  const [formError, setFormError] = useState<string | null>(null)
+
+  function showValidationError(description: string) {
+    sileo.error({
+      title: "Check the form",
+      description,
+    })
+  }
 
   return (
     <section className="py-20">
@@ -51,26 +57,24 @@ export function PublicContactMainApiSection() {
               event.preventDefault()
 
               if (!formState.name.trim()) {
-                setFormError("Full name is required.")
+                showValidationError("Full name is required.")
                 return
               }
 
               if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formState.email.trim())) {
-                setFormError("Enter a valid email address.")
+                showValidationError("Enter a valid email address.")
                 return
               }
 
               if (!formState.phone.trim()) {
-                setFormError("Phone number is required.")
+                showValidationError("Phone number is required.")
                 return
               }
 
               if (formState.message.trim().length < 20) {
-                setFormError("Message must be at least 20 characters.")
+                showValidationError("Message must be at least 20 characters.")
                 return
               }
-
-              setFormError(null)
 
               const response = await createContactRequest.mutateAsync({
                 email: formState.email,
@@ -81,7 +85,6 @@ export function PublicContactMainApiSection() {
               })
 
               if (response.error) {
-                setFormError(response.error.message)
                 return
               }
 
@@ -91,14 +94,11 @@ export function PublicContactMainApiSection() {
                 name: "",
                 phone: "",
               })
-              setSubmitted(true)
             }}
           >
             <Input
               className="h-auto border-slate-200 px-4 py-3 text-sm"
               onChange={(event) => {
-                setFormError(null)
-                setSubmitted(false)
                 setFormState((current) => ({ ...current, name: event.target.value }))
               }}
               placeholder="Full name"
@@ -108,8 +108,6 @@ export function PublicContactMainApiSection() {
             <Input
               className="h-auto border-slate-200 px-4 py-3 text-sm"
               onChange={(event) => {
-                setFormError(null)
-                setSubmitted(false)
                 setFormState((current) => ({ ...current, email: event.target.value }))
               }}
               placeholder="Email address"
@@ -119,8 +117,6 @@ export function PublicContactMainApiSection() {
             <Input
               className="h-auto border-slate-200 px-4 py-3 text-sm"
               onChange={(event) => {
-                setFormError(null)
-                setSubmitted(false)
                 setFormState((current) => ({ ...current, phone: event.target.value }))
               }}
               placeholder="Phone number"
@@ -136,8 +132,6 @@ export function PublicContactMainApiSection() {
             <Textarea
               className="min-h-40 border-slate-200 px-4 py-3 text-sm md:col-span-2"
               onChange={(event) => {
-                setFormError(null)
-                setSubmitted(false)
                 setFormState((current) => ({ ...current, message: event.target.value }))
               }}
               placeholder="Tell us what you need and include any listing or location details."
@@ -150,16 +144,6 @@ export function PublicContactMainApiSection() {
             >
               {createContactRequest.isPending ? "Sending..." : "Send Inquiry"}
             </button>
-            {formError ? (
-              <p className="md:col-span-2 text-sm font-semibold text-rose-600">
-                {formError}
-              </p>
-            ) : null}
-            {submitted ? (
-              <p className="md:col-span-2 text-sm font-semibold text-primary">
-                {"Inquiry sent. You can now review it from the admin Contact Us inbox."}
-              </p>
-            ) : null}
           </form>
         </div>
         <aside className="grid gap-4">

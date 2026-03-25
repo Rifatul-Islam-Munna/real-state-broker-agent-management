@@ -1,5 +1,14 @@
 import { AppIcon } from "@/components/ui/app-icon"
-import type { AgentUserOption, PropertyItem } from "@/types/real-estate-api"
+import { Input } from "@/components/ui/input"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { Textarea } from "@/components/ui/textarea"
+import type { AgentUserOption, PropertyItem } from "@/@types/real-estate-api"
 
 import {
   amenityOptions,
@@ -8,6 +17,11 @@ import {
   type PropertyFormErrors,
   type PropertyFormValues,
 } from "./property-form-shared"
+
+const formSelectClassName =
+  "h-11 w-full rounded-xl border-slate-200 bg-slate-50 px-4 text-sm dark:border-slate-700 dark:bg-slate-800"
+
+const emptySelectValue = "__empty__"
 
 type PropertyFormFieldsSectionProps = {
   agentOptions: AgentUserOption[]
@@ -59,7 +73,7 @@ export function PropertyFormFieldsSection({
             <label className="text-sm font-bold text-slate-700 dark:text-slate-300">
               {"Listing Title"}
             </label>
-            <input
+            <Input
               className="form-input rounded-xl border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800 focus:ring-primary"
               onChange={(event) => updateField("title", event.target.value)}
               placeholder="e.g. Grand Penthouse Downtown"
@@ -72,53 +86,68 @@ export function PropertyFormFieldsSection({
             <label className="text-sm font-bold text-slate-700 dark:text-slate-300">
               {"Assigned Agent"}
             </label>
-            <select
-              className="form-select rounded-xl border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800 focus:ring-primary"
-              onChange={(event) => updateField("agentId", event.target.value ? Number(event.target.value) : null)}
-              value={formValues.agentId ?? ""}
+            <Select
+              modal={false}
+              onValueChange={(value) => updateField("agentId", value === emptySelectValue ? null : Number(value))}
+              value={formValues.agentId ? `${formValues.agentId}` : emptySelectValue}
             >
-              <option value="">
-                {isAgentOptionsLoading ? "Loading agents..." : "Assign later"}
-              </option>
-              {agentOptions.map((agent) => (
-                <option key={agent.id} value={agent.id}>
-                  {agent.fullName}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger className={formSelectClassName}>
+                <SelectValue placeholder={isAgentOptionsLoading ? "Loading agents..." : "Assign later"} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={emptySelectValue}>
+                  {isAgentOptionsLoading ? "Loading agents..." : "Assign later"}
+                </SelectItem>
+                {agentOptions.map((agent) => (
+                  <SelectItem key={agent.id} value={`${agent.id}`}>
+                    {agent.fullName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <FieldError error={errors.agentId} />
           </div>
           <div className="flex flex-col gap-2">
             <label className="text-sm font-bold text-slate-700 dark:text-slate-300">
               {"Property Type"}
             </label>
-            <select
-              className="form-select rounded-xl border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800 focus:ring-primary"
-              onChange={(event) => updateField("propertyType", event.target.value as PropertyItem["propertyType"])}
+            <Select
+              modal={false}
+              onValueChange={(value) => updateField("propertyType", value as PropertyItem["propertyType"])}
               value={formValues.propertyType}
             >
-              <option value="Residential">{"Residential"}</option>
-              <option value="Commercial">{"Commercial"}</option>
-            </select>
+              <SelectTrigger className={formSelectClassName}>
+                <SelectValue placeholder="Property type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Residential">{"Residential"}</SelectItem>
+                <SelectItem value="Commercial">{"Commercial"}</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <div className="flex flex-col gap-2">
             <label className="text-sm font-bold text-slate-700 dark:text-slate-300">
               {"Listing Type"}
             </label>
-            <select
-              className="form-select rounded-xl border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800 focus:ring-primary"
-              onChange={(event) => updateField("listingType", event.target.value as PropertyItem["listingType"])}
+            <Select
+              modal={false}
+              onValueChange={(value) => updateField("listingType", value as PropertyItem["listingType"])}
               value={formValues.listingType}
             >
-              <option value="ForSale">{"For Sale"}</option>
-              <option value="ForRent">{"For Rent"}</option>
-            </select>
+              <SelectTrigger className={formSelectClassName}>
+                <SelectValue placeholder="Listing type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ForSale">{"For Sale"}</SelectItem>
+                <SelectItem value="ForRent">{"For Rent"}</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <div className="flex flex-col gap-2">
             <label className="text-sm font-bold text-slate-700 dark:text-slate-300">
               {"Listing Price"}
             </label>
-            <input
+            <Input
               className="form-input rounded-xl border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800 focus:ring-primary"
               onChange={(event) => updateField("price", event.target.value)}
               placeholder="e.g. $850,000 or $4,200/mo"
@@ -131,20 +160,25 @@ export function PropertyFormFieldsSection({
             <label className="text-sm font-bold text-slate-700 dark:text-slate-300">
               {"Listing Status"}
             </label>
-            <select
-              className="form-select rounded-xl border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800 focus:ring-primary"
-              onChange={(event) => updateField("status", event.target.value as PropertyItem["status"])}
+            <Select
+              modal={false}
+              onValueChange={(value) => updateField("status", value as PropertyItem["status"])}
               value={formValues.status}
             >
-              <option value="Open">{"Open"}</option>
-              <option value="Closed">{"Closed"}</option>
-            </select>
+              <SelectTrigger className={formSelectClassName}>
+                <SelectValue placeholder="Listing status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Open">{"Open"}</SelectItem>
+                <SelectItem value="Closed">{"Closed"}</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <div className="flex flex-col gap-2">
             <label className="text-sm font-bold text-slate-700 dark:text-slate-300">
               {"Market / City"}
             </label>
-            <input
+            <Input
               className="form-input rounded-xl border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800 focus:ring-primary"
               onChange={(event) => updateField("location", event.target.value)}
               placeholder="e.g. Miami, FL"
@@ -159,7 +193,7 @@ export function PropertyFormFieldsSection({
             </label>
             <div className="relative">
               <AppIcon className="absolute left-4 top-2.5 text-slate-400" name="location_on" />
-              <input
+              <Input
                 className="form-input w-full rounded-xl border-slate-200 bg-slate-50 pl-12 dark:border-slate-700 dark:bg-slate-800 focus:ring-primary"
                 onChange={(event) => updateField("exactLocation", event.target.value)}
                 placeholder="Street, area, and city details"
@@ -182,7 +216,7 @@ export function PropertyFormFieldsSection({
             <label className="text-sm font-bold text-slate-700 dark:text-slate-300">
               {"Bedrooms"}
             </label>
-            <input
+            <Input
               className="form-input rounded-xl border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800 focus:ring-primary"
               onChange={(event) => updateField("bedRoom", event.target.value)}
               placeholder="e.g. 4"
@@ -195,7 +229,7 @@ export function PropertyFormFieldsSection({
             <label className="text-sm font-bold text-slate-700 dark:text-slate-300">
               {"Bathrooms"}
             </label>
-            <input
+            <Input
               className="form-input rounded-xl border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800 focus:ring-primary"
               onChange={(event) => updateField("bathRoom", event.target.value)}
               placeholder="e.g. 3.5"
@@ -208,7 +242,7 @@ export function PropertyFormFieldsSection({
             <label className="text-sm font-bold text-slate-700 dark:text-slate-300">
               {"Sq Ft / Size"}
             </label>
-            <input
+            <Input
               className="form-input rounded-xl border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800 focus:ring-primary"
               onChange={(event) => updateField("width", event.target.value)}
               placeholder="e.g. 3,200 sq ft"
@@ -225,7 +259,7 @@ export function PropertyFormFieldsSection({
           <AppIcon className="text-primary" name="description" />
           {" Property Description "}
         </h4>
-        <textarea
+        <Textarea
           className="form-textarea min-h-36 w-full rounded-xl border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800 focus:ring-primary"
           onChange={(event) => updateField("description", event.target.value)}
           placeholder="Write a compelling description of the property..."
@@ -285,7 +319,7 @@ export function PropertyFormFieldsSection({
                   <label className="text-sm font-bold text-slate-700 dark:text-slate-300">
                     {"Insight Type"}
                   </label>
-                  <input
+                  <Input
                     className="form-input rounded-xl border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900 focus:ring-primary"
                     list={`neighborhood-insight-types-${index}`}
                     onChange={(event) => updateNeighborhoodInsight(index, { type: event.target.value })}
@@ -308,7 +342,7 @@ export function PropertyFormFieldsSection({
                   <label className="text-sm font-bold text-slate-700 dark:text-slate-300">
                     {"Insight Description"}
                   </label>
-                  <textarea
+                  <Textarea
                     className="form-textarea min-h-24 rounded-xl border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900 focus:ring-primary"
                     onChange={(event) => updateNeighborhoodInsight(index, { description: event.target.value })}
                     placeholder="Describe why this neighborhood detail matters for the property."

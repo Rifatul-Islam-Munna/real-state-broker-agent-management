@@ -1,5 +1,5 @@
 import { PropertyManagementPage } from "@/components/stitch/pages/property-management/page"
-import { propertyManagementPageMeta } from "@/static-data/pages/property-management/meta"
+import { propertyManagementPageMeta } from "@/data/page-metadata/admin"
 import { buildPageMetadata } from "@/lib/build-page-metadata"
 
 export const metadata = buildPageMetadata(propertyManagementPageMeta)

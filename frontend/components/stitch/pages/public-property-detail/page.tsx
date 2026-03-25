@@ -1,4 +1,4 @@
-import type { PropertyItem } from "@/types/real-estate-api"
+import type { PropertyItem } from "@/@types/real-estate-api"
 
 import { TopNavigationSection } from "./sections/top-navigation"
 import { Section2Section } from "./sections/section-2"

@@ -4,6 +4,7 @@ import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import { useActionState } from "react"
 
+import { Input } from "@/components/ui/input"
 import { loginAction, type AuthActionState } from "@/lib/auth-actions"
 
 const initialState: AuthActionState = { error: null }
@@ -25,7 +26,7 @@ export function LoginForm() {
         <label className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-500" htmlFor="email">
           {"Email"}
         </label>
-        <input
+        <Input
           className="w-full border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition-colors focus:border-primary"
           id="email"
           name="email"
@@ -43,7 +44,7 @@ export function LoginForm() {
             {"Minimum 6 characters"}
           </span>
         </div>
-        <input
+        <Input
           className="w-full border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition-colors focus:border-primary"
           id="password"
           name="password"

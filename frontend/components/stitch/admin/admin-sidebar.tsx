@@ -10,7 +10,7 @@ import {
   SidebarFooter,
   SidebarHeader,
 } from "@/components/ui/sidebar"
-import { adminNavigation } from "@/static-data/navigation/admin-navigation"
+import { adminNavigation } from "@/data/navigation"
 import { AppIcon } from "@/components/ui/app-icon"
 
 export function AdminSidebar() {

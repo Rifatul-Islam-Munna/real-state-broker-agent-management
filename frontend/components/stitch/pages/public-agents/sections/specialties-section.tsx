@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 
-import { publicAgentSpecialties } from "@/static-data/pages/public-agents/data"
+import { publicAgentSpecialties } from "@/data/page-content"
 
 export function AgentsSpecialtiesSection() {
   const [activeIndex, setActiveIndex] = useState(0)

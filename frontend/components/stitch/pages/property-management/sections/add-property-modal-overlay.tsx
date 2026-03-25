@@ -1,6 +1,6 @@
 import { type ChangeEvent, type FormEvent, useEffect, useMemo, useRef, useState } from "react"
 
-import type { AgentUserOption } from "@/types/real-estate-api"
+import type { AgentUserOption } from "@/@types/real-estate-api"
 import { AppIcon } from "@/components/ui/app-icon"
 import { deleteUploadedAsset, uploadPropertyAsset } from "@/lib/upload-client"
 
@@ -263,7 +263,7 @@ export function AddPropertyModalOverlaySection({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
-      <div className="flex h-full max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white dark:bg-slate-900">
+      <div className="flex h-full max-h-[90vh] w-full max-w-none flex-col overflow-hidden rounded-2xl bg-white lg:w-[78vw] xl:w-[70vw] dark:bg-slate-900">
         <div className="flex items-center justify-between border-b border-slate-200 px-8 py-6 dark:border-slate-800">
           <div>
             <h3 className="text-2xl font-black text-slate-900 dark:text-white">

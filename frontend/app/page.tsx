@@ -1,5 +1,5 @@
 import { PublicHomeApiPage } from "@/components/stitch/pages/admin-api/public-home-api-page"
-import { publicAgencyHomepagePageMeta } from "@/static-data/pages/public-agency-homepage/meta"
+import { publicAgencyHomepagePageMeta } from "@/data/page-metadata/public"
 import { buildPageMetadata } from "@/lib/build-page-metadata"
 
 export const metadata = buildPageMetadata(publicAgencyHomepagePageMeta)

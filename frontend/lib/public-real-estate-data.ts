@@ -3,7 +3,7 @@ import type {
   PropertyItem,
   PublicAgentProfile,
   PublicPropertyFilters,
-} from "@/types/real-estate-api"
+} from "@/@types/real-estate-api"
 
 const baseUrl = process.env.BASE_URL ?? "http://localhost:4000/api"
 

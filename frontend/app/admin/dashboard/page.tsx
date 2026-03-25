@@ -1,5 +1,5 @@
 import { DashboardApiPage } from "@/components/stitch/pages/admin-api/dashboard-api-page"
-import { adminDashboardPageMeta } from "@/static-data/pages/admin-dashboard/meta"
+import { adminDashboardPageMeta } from "@/data/page-metadata/admin"
 import { buildPageMetadata } from "@/lib/build-page-metadata"
 import { requireSession } from "@/lib/auth-actions"
 

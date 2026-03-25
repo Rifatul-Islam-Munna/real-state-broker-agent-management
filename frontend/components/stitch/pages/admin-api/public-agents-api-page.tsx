@@ -3,7 +3,7 @@
 import Link from "next/link"
 
 import { PublicPrimaryNavbar } from "@/components/stitch/public/public-primary-navbar"
-import { FooterSection } from "@/components/stitch/pages/public-agency-homepage/sections/footer"
+import { NewsletterFooterSection } from "./newsletter-footer-section"
 import { getPublicAgents } from "@/lib/public-real-estate-data"
 import { AppIcon } from "@/components/ui/app-icon"
 
@@ -112,7 +112,8 @@ export async function PublicAgentsApiPage() {
       </section>
       <AgentsSpecialtiesSection />
       <AgentsCtaSection />
-      <FooterSection />
+      <NewsletterFooterSection />
     </div>
   )
 }
+

@@ -1,5 +1,6 @@
 
 import { AppIcon } from "@/components/ui/app-icon"
+import { Input } from "@/components/ui/input"
 
 export function MainContentSection() {
   return (
@@ -8,7 +9,7 @@ export function MainContentSection() {
         <div className="flex items-center gap-4 flex-1">
           <div className="relative w-96">
             <AppIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-secondary" name="search" />
-            <input
+            <Input
               className="w-full pl-10 pr-4 py-2 bg-background-light dark:bg-slate-800 border-none rounded-lg text-sm focus:ring-2 focus:ring-primary/20"
               placeholder="Search files, folders or templates..."
               type="text"
@@ -72,7 +73,7 @@ export function MainContentSection() {
               {"Contracts"}
             </h3>
             <p className="text-sm text-secondary mb-4">
-              {"42 active files · 1.2GB"}
+              {"42 active files Ãƒâ€šÃ‚Â· 1.2GB"}
             </p>
             <div className="flex -space-x-2">
               <div className="w-6 h-6 rounded-full border-2 border-white bg-accent text-[8px] flex items-center justify-center text-white">
@@ -99,7 +100,7 @@ export function MainContentSection() {
               {"Floor Plans"}
             </h3>
             <p className="text-sm text-secondary mb-4">
-              {"128 files · 3.4GB"}
+              {"128 files Ãƒâ€šÃ‚Â· 3.4GB"}
             </p>
             <div className="flex -space-x-2">
               <div className="w-6 h-6 rounded-full border-2 border-white bg-slate-400 text-[8px] flex items-center justify-center text-white">
@@ -120,7 +121,7 @@ export function MainContentSection() {
               {"Agreements"}
             </h3>
             <p className="text-sm text-secondary mb-4">
-              {"86 files · 450MB"}
+              {"86 files Ãƒâ€šÃ‚Â· 450MB"}
             </p>
             <div className="flex -space-x-2">
               <div className="w-6 h-6 rounded-full border-2 border-white bg-primary text-[8px] flex items-center justify-center text-white">

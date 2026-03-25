@@ -43,7 +43,7 @@ export function LeadActions({
       {lead.linkedDealId ? (
         <Link
           className="border border-primary bg-primary px-3 py-2 text-xs font-bold uppercase tracking-wide text-white"
-          href={dealHref}
+          href={`${dealHref}?dealId=${lead.linkedDealId}`}
         >
           {"Open Deal"}
         </Link>

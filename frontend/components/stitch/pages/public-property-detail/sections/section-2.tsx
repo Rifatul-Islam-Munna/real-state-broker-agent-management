@@ -6,7 +6,7 @@ import Link from "next/link"
 import { useState } from "react"
 
 import { formatCurrencyAmount, formatPriceLabel, parseCurrencyValue } from "@/lib/currency"
-import type { PropertyItem } from "@/types/real-estate-api"
+import type { PropertyItem } from "@/@types/real-estate-api"
 import { AppIcon } from "@/components/ui/app-icon"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"

@@ -3,7 +3,7 @@
 import Link from "next/link"
 
 import { formatPriceLabel } from "@/lib/currency"
-import type { PropertyItem } from "@/types/real-estate-api"
+import type { PropertyItem } from "@/@types/real-estate-api"
 import { AppIcon } from "@/components/ui/app-icon"
 
 type FeaturedListingsSectionProps = {

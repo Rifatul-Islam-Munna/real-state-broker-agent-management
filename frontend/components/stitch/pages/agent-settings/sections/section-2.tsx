@@ -9,7 +9,7 @@ import {
   agentSettingsAvailability,
   agentSettingsPreferences,
   agentSettingsProfile,
-} from "@/static-data/pages/agent-settings/content"
+} from "@/data/page-content"
 import { AppIcon } from "@/components/ui/app-icon"
 
 type PreferenceId = (typeof agentSettingsPreferences)[number]["id"]

@@ -1,6 +1,6 @@
 import Link from "next/link"
 
-import { publicAgentsStats } from "@/static-data/pages/public-agents/data"
+import { publicAgentsStats } from "@/data/page-content"
 import { AppIcon } from "@/components/ui/app-icon"
 
 export function AgentsHeroSection() {

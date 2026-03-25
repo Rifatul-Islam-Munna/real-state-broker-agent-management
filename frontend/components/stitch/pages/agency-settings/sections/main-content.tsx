@@ -1,5 +1,7 @@
 
 import { AppIcon } from "@/components/ui/app-icon"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 
 export function MainContentSection() {
   return (
@@ -31,7 +33,7 @@ export function MainContentSection() {
                 <label className="block text-xs font-bold uppercase text-primary/70 mb-1">
                   {"Agency Name"}
                 </label>
-                <input
+                <Input
                   className="w-full border-2 border-secondary/20 focus:border-primary outline-none px-3 py-2 bg-white"
                   type="text"
                   defaultValue="Skyline Real Estate Group"
@@ -42,7 +44,7 @@ export function MainContentSection() {
                   <label className="block text-xs font-bold uppercase text-primary/70 mb-1">
                     {"Tax ID"}
                   </label>
-                  <input
+                  <Input
                     className="w-full border-2 border-secondary/20 focus:border-primary outline-none px-3 py-2 bg-white"
                     placeholder="XX-XXXXXXX"
                     type="text"
@@ -52,7 +54,7 @@ export function MainContentSection() {
                   <label className="block text-xs font-bold uppercase text-primary/70 mb-1">
                     {"Standard Commission (%)"}
                   </label>
-                  <input
+                  <Input
                     className="w-full border-2 border-secondary/20 focus:border-primary outline-none px-3 py-2 bg-white"
                     type="number"
                     defaultValue="3.0"
@@ -78,7 +80,7 @@ export function MainContentSection() {
                 </label>
                 <div className="space-y-2">
                   <div className="flex gap-2">
-                    <input
+                    <Input
                       className="flex-1 border-2 border-secondary/20 focus:border-primary outline-none px-3 py-2 bg-white"
                       type="text"
                       defaultValue="123 Main St, New York, NY"
@@ -88,7 +90,7 @@ export function MainContentSection() {
                     </button>
                   </div>
                   <div className="flex gap-2">
-                    <input
+                    <Input
                       className="flex-1 border-2 border-secondary/20 focus:border-primary outline-none px-3 py-2 bg-white"
                       placeholder="Add another location..."
                       type="text"
@@ -103,7 +105,7 @@ export function MainContentSection() {
                 <label className="block text-xs font-bold uppercase text-primary/70 mb-1">
                   {"Contact Email"}
                 </label>
-                <input
+                <Input
                   className="w-full border-2 border-secondary/20 focus:border-primary outline-none px-3 py-2 bg-white"
                   type="email"
                   defaultValue="contact@skyline-re.com"
@@ -153,17 +155,16 @@ export function MainContentSection() {
                   </span>
                 </div>
               </div>
-              <input
+              <Input
                 className="w-full border-2 border-secondary/20 focus:border-primary outline-none px-3 py-2 mb-4 font-bold"
                 type="text"
                 defaultValue="Welcome to Skyline Real Estate, {{client_name}}!"
               />
-              <textarea
+              <Textarea
                 className="w-full border-2 border-secondary/20 focus:border-primary outline-none px-3 py-2 resize-none"
+                defaultValue="Hello {{client_name}}, Thank you for your interest in {{property_address}}. My name is {{agent_name}} and I'll be your primary point of contact. When is a good time for a quick call? Best regards, {{agency_name}}"
                 rows={6}
-              >
-                {"Hello {{client_name}}, Thank you for your interest in {{property_address}}. My name is {{agent_name}} and I'll be your primary point of contact. When is a good time for a quick call? Best regards, {{agency_name}}"}
-              </textarea>
+              />
               <div className="flex gap-2 flex-wrap mt-4">
                 <span className="text-[10px] bg-secondary/10 px-2 py-1 text-primary font-mono cursor-copy hover:bg-secondary/20">
                   {"{{client_name}}"}

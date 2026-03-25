@@ -7,4 +7,4 @@ export { ServicesSection } from "./services-section"
 export { MeetTheTeamSection } from "./meet-the-team"
 export { TestimonialsSection } from "./testimonials"
 export { BlogSection } from "./blog-section"
-export { FooterSection } from "./footer"
+

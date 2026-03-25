@@ -1,8 +1,8 @@
 import Link from "next/link"
 
 import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
-import { publicContactUsPageMeta } from "@/static-data/pages/public-contact-us/meta"
-import { sellerListYourPropertyPageMeta } from "@/static-data/pages/seller-list-your-property/meta"
+import { publicContactUsPageMeta } from "@/data/page-metadata/public"
+import { sellerListYourPropertyPageMeta } from "@/data/page-metadata/public"
 import { AppIcon } from "@/components/ui/app-icon"
 
 const navItems = [

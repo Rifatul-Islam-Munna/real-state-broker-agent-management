@@ -17,7 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { type PropertyItem, useProperties } from "@/hooks/use-real-estate-api"
-import type { PublicPropertyFilters } from "@/types/real-estate-api"
+import type { PublicPropertyFilters } from "@/@types/real-estate-api"
 import { cn } from "@/lib/utils"
 import { AppIcon } from "@/components/ui/app-icon"
 

@@ -6,8 +6,8 @@ import { useRouter } from "next/navigation"
 import { type FormEvent, useMemo, useState } from "react"
 
 import { cn } from "@/lib/utils"
-import { sellerListYourPropertyPageMeta } from "@/static-data/pages/seller-list-your-property/meta"
-import type { PublicPropertyFilters } from "@/types/real-estate-api"
+import { sellerListYourPropertyPageMeta } from "@/data/page-metadata/public"
+import type { PublicPropertyFilters } from "@/@types/real-estate-api"
 import { AppIcon } from "@/components/ui/app-icon"
 import { Input } from "@/components/ui/input"
 import {

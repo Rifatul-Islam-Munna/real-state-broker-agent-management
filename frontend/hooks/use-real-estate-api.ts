@@ -15,7 +15,7 @@ import type {
   PaginatedResult,
   PortalCurrentUser,
   PropertyItem,
-} from "@/types/real-estate-api"
+} from "@/@types/real-estate-api"
 
 export type {
   AgentSummary,
@@ -41,7 +41,7 @@ export type {
   PaginatedResult,
   PortalCurrentUser,
   PropertyItem,
-} from "@/types/real-estate-api"
+} from "@/@types/real-estate-api"
 
 type QueryParams = Record<string, string | number | undefined | null>
 

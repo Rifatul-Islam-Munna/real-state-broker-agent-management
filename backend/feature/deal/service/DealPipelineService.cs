@@ -202,7 +202,7 @@ namespace Services
             lead.Budget = deal.Value > 0
                 ? deal.Value.ToString("C0", CultureInfo.GetCultureInfo("en-US"))
                 : lead.Budget;
-            lead.InBoard = true;
+            lead.InBoard = false;
             lead.LastActivityAt = DateTime.UtcNow;
             lead.Name = deal.Client;
             lead.Property = deal.Title;

@@ -10,7 +10,7 @@ import {
   SidebarFooter,
   SidebarHeader,
 } from "@/components/ui/sidebar"
-import { agentNavigation } from "@/static-data/navigation/agent-navigation"
+import { agentNavigation } from "@/data/navigation"
 import { AppIcon } from "@/components/ui/app-icon"
 
 export function AgentSidebar() {

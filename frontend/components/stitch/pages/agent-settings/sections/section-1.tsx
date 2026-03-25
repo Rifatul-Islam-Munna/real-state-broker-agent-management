@@ -1,4 +1,4 @@
-import { agentSettingsOverviewCards } from "@/static-data/pages/agent-settings/content"
+import { agentSettingsOverviewCards } from "@/data/page-content"
 import { AppIcon } from "@/components/ui/app-icon"
 
 export function Section1Section() {
