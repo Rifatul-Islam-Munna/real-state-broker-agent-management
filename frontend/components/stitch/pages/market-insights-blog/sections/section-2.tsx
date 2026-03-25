@@ -2,6 +2,7 @@
 
 
 import { AppIcon } from "@/components/ui/app-icon"
+import { Input } from "@/components/ui/input"
 
 export function Section2Section() {
   return (
@@ -40,8 +41,8 @@ export function Section2Section() {
           <div className="flex flex-col lg:flex-row gap-6 items-center justify-between">
             <div className="w-full lg:max-w-md relative">
               <AppIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-primary/50" name="search" />
-              <input
-                className="w-full pl-12 pr-4 py-3 bg-background-light dark:bg-slate-800 border border-primary/10 focus:ring-1 focus:ring-primary focus:border-primary outline-none text-sm transition-all"
+              <Input
+                className="h-auto w-full border border-primary/10 bg-background-light py-3 pr-4 pl-12 text-sm transition-all dark:bg-slate-800"
                 placeholder="Search articles, neighborhoods, or trends..."
                 type="text"
               />
@@ -266,8 +267,8 @@ export function Section2Section() {
                   {" Get weekly market insights and the latest neighborhood news delivered straight to your inbox. "}
                 </p>
                 <form className="space-y-3">
-                  <input
-                    className="w-full px-4 py-3 bg-white/10 border border-white/20 focus:bg-white/20 focus:outline-none placeholder:text-white/50 text-sm"
+                  <Input
+                    className="h-auto w-full border border-white/20 bg-white/10 px-4 py-3 text-sm text-white placeholder:text-white/50 focus-visible:bg-white/20"
                     placeholder="Email Address"
                     type="email"
                   />

@@ -8,6 +8,77 @@ export type PaginatedResult<T> = {
   hasPreviousPage: boolean
 }
 
+export type DashboardOverview = {
+  activeListings: number
+  activeListingsChange: number
+  newLeadsThisWeek: number
+  contactedLeadsThisWeek: number
+  convertedLeadsThisWeek: number
+  dealsInProgress: number
+  closingThisMonth: number
+  monthlyRevenue: number
+  monthlyRevenueChange: number
+}
+
+export type DashboardTopAgent = {
+  id: number
+  fullName: string
+  status: "Active" | "Inactive"
+  dealsClosed: number
+  revenue: number
+  growth: number
+  avatarUrl?: string | null
+  agencyName?: string | null
+}
+
+export type DashboardAlert = {
+  id: string
+  title: string
+  description: string
+  count: number
+  tone: "warning" | "danger" | "info"
+  actionLabel: string
+  target: "deals" | "leads"
+}
+
+export type DashboardVisitItem = {
+  id: number
+  propertyTitle: string
+  clientName: string
+  activityAt: string
+  timeline?: string | null
+  status: "Scheduled" | "FollowUp" | "Completed" | "Canceled"
+}
+
+export type DashboardSummary = {
+  overview: DashboardOverview
+  topAgents: DashboardTopAgent[]
+  alerts: DashboardAlert[]
+  visits: DashboardVisitItem[]
+}
+
+export type PortalCurrentUser = {
+  id: number
+  fullName: string
+  role: string
+}
+
+export type PublicAgentProfile = {
+  id: number
+  fullName: string
+  avatarUrl?: string | null
+  agencyName?: string | null
+  bio?: string | null
+  isVerifiedAgent: boolean
+  propertyCount: number
+}
+
+export type PublicPropertyFilters = {
+  propertyTypes: Array<PropertyItem["propertyType"]>
+  listingTypes: Array<PropertyItem["listingType"]>
+  locations: string[]
+}
+
 export type AgentSummary = {
   id: number
   fullName: string

@@ -37,6 +37,27 @@ public interface IFileUploadService
     Task<string> GetPresignedUrlAsync(string objectName, int expirySeconds = 3600);
 }
 
+public sealed class DisabledFileUploadService : IFileUploadService
+{
+    private const string DisabledMessage =
+        "File upload is not configured. Add MinIO settings before using upload endpoints.";
+
+    public Task<FileUploadResponse> UploadAsync(IFormFile file, string folder, CancellationToken ct = default)
+    {
+        throw new InvalidOperationException(DisabledMessage);
+    }
+
+    public Task DeleteAsync(string objectName, CancellationToken ct = default)
+    {
+        throw new InvalidOperationException(DisabledMessage);
+    }
+
+    public Task<string> GetPresignedUrlAsync(string objectName, int expirySeconds = 3600)
+    {
+        throw new InvalidOperationException(DisabledMessage);
+    }
+}
+
 // ─────────────────────────────────────────────
 //  Service
 // ─────────────────────────────────────────────

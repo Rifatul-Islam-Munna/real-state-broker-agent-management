@@ -206,4 +206,26 @@ namespace Endpoints
             await Send.OkAsync(result, ct);
         }
     }
+
+    public class GetPropertyFiltersEndpoint : EndpointWithoutRequest<PublicPropertyFiltersResponse>
+    {
+        public required PropertyService PropertyService { get; set; }
+
+        public override void Configure()
+        {
+            Get("/properties/filters");
+            AllowAnonymous();
+            Summary(s =>
+            {
+                s.Summary = "Fetch public property filter options";
+                s.Description = "Returns public property categories, listing types, and top locations for the search UI.";
+            });
+        }
+
+        public override async Task HandleAsync(CancellationToken ct)
+        {
+            var result = await PropertyService.GetPublicPropertyFiltersAsync();
+            await Send.OkAsync(result, ct);
+        }
+    }
 }

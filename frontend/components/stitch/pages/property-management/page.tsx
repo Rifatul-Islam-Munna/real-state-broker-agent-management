@@ -3,7 +3,9 @@
 import { useMemo, useState } from "react"
 
 import {
+  type AgentUserOption,
   type PropertyItem,
+  useAgentUsers,
   useCreateProperty,
   useProperties,
   useUpdateProperty,
@@ -27,6 +29,7 @@ type PropertyModalState =
 
 function createEmptyPropertyForm(): PropertyFormValues {
   return {
+    agentId: null,
     title: "",
     propertyType: "Residential",
     listingType: "ForSale",
@@ -49,6 +52,7 @@ function createEmptyPropertyForm(): PropertyFormValues {
 
 function mapPropertyToFormValues(property: PropertyItem): PropertyFormValues {
   return {
+    agentId: property.agentId ?? property.agent?.id ?? null,
     title: property.title ?? "",
     propertyType: property.propertyType ?? "Residential",
     listingType: property.listingType ?? "ForSale",
@@ -80,7 +84,7 @@ function buildPropertyPayload(
   property?: PropertyItem,
 ): Omit<PropertyItem, "id" | "slug" | "agent" | "createdAt" | "updatedAt"> | PropertyItem {
   const payload = {
-    agentId: property?.agentId ?? property?.agent?.id ?? null,
+    agentId: values.agentId ?? null,
     bathRoom: values.bathRoom?.trim() ?? "",
     bedRoom: values.bedRoom?.trim() ?? "",
     description: values.description?.trim() ?? "",
@@ -149,9 +153,13 @@ export function PropertyManagementPage() {
   })
 
   const createPropertyMutation = useCreateProperty()
+  const agentUsersQuery = useAgentUsers()
   const updatePropertyMutation = useUpdateProperty()
 
-  const rawProperties = propertiesQuery.data?.items ?? []
+  const rawProperties = useMemo(
+    () => propertiesQuery.data?.items ?? [],
+    [propertiesQuery.data?.items],
+  )
   const isInitialLoading = !propertiesQuery.data && (propertiesQuery.isLoading || propertiesQuery.isFetching)
 
   const listings = useMemo<PropertyManagementListing[]>(
@@ -214,6 +222,11 @@ export function PropertyManagementPage() {
         new Set(rawProperties.map((property) => property.agent?.fullName ?? "").filter(Boolean)),
       ) as string[],
     [rawProperties],
+  )
+
+  const agentOptions = useMemo<AgentUserOption[]>(
+    () => agentUsersQuery.data ?? [],
+    [agentUsersQuery.data],
   )
 
   const initialFormValues = useMemo(() => {
@@ -300,7 +313,9 @@ export function PropertyManagementPage() {
       />
       {modalState ? (
         <AddPropertyModalOverlaySection
+          agentOptions={agentOptions}
           initialValues={initialFormValues}
+          isAgentOptionsLoading={agentUsersQuery.isLoading || agentUsersQuery.isFetching}
           isSubmitting={createPropertyMutation.isPending || updatePropertyMutation.isPending}
           mode={modalState.mode}
           onClose={() => setModalState(null)}

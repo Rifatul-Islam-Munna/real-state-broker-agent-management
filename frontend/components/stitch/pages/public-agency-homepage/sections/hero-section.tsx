@@ -2,51 +2,100 @@
 
 "use client"
 
-import Link from "next/link"
-import { useState } from "react"
+import { useRouter } from "next/navigation"
+import { type FormEvent, useMemo, useState } from "react"
 
 import { cn } from "@/lib/utils"
 import { sellerListYourPropertyPageMeta } from "@/static-data/pages/seller-list-your-property/meta"
+import type { PublicPropertyFilters } from "@/types/real-estate-api"
 import { AppIcon } from "@/components/ui/app-icon"
+import { Input } from "@/components/ui/input"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 
 type SearchMode = "buy" | "rent" | "sell"
+
+type HeroSectionProps = {
+  filterOptions: PublicPropertyFilters
+}
 
 const searchModes: Record<
   SearchMode,
   {
     inputPlaceholder: string
     selectLabel: string
-    propertyTypes: string[]
     ctaLabel: string
-    ctaHref: string
+    ctaHref?: string
+    listingType?: "ForSale" | "ForRent"
   }
 > = {
   buy: {
     inputPlaceholder: "Neighborhood, City, or Zip...",
     selectLabel: "Property Type",
-    propertyTypes: ["Apartment", "Villa", "Townhome", "Condo"],
     ctaLabel: "Search Now",
-    ctaHref: "/property-search",
+    listingType: "ForSale",
   },
   rent: {
     inputPlaceholder: "City, building, or Zip...",
     selectLabel: "Rental Type",
-    propertyTypes: ["Apartment", "Townhome", "Loft", "Studio"],
     ctaLabel: "Browse Rentals",
-    ctaHref: "/property-search",
+    listingType: "ForRent",
   },
   sell: {
     inputPlaceholder: "Enter your property address...",
     selectLabel: "Property Category",
-    propertyTypes: ["House", "Condo", "Land", "Luxury Home"],
     ctaLabel: "List Your Property",
     ctaHref: sellerListYourPropertyPageMeta.routePath,
   },
 }
 
-export function HeroSection() {
+function propertyTypeLabel(propertyType: "Residential" | "Commercial") {
+  return propertyType === "Commercial" ? "Commercial" : "Residential"
+}
+
+export function HeroSection({ filterOptions }: HeroSectionProps) {
   const [activeMode, setActiveMode] = useState<SearchMode>("buy")
+  const [searchTerm, setSearchTerm] = useState("")
+  const [propertyType, setPropertyType] = useState("")
+  const router = useRouter()
   const currentMode = searchModes[activeMode]
+  const propertyTypes = useMemo(
+    () =>
+      filterOptions.propertyTypes.length > 0
+        ? filterOptions.propertyTypes
+        : (["Residential", "Commercial"] as const),
+    [filterOptions.propertyTypes],
+  )
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+
+    if (activeMode === "sell") {
+      router.push(currentMode.ctaHref ?? sellerListYourPropertyPageMeta.routePath)
+      return
+    }
+
+    const params = new URLSearchParams()
+
+    if (searchTerm.trim()) {
+      params.set("search", searchTerm.trim())
+    }
+
+    if (propertyType) {
+      params.set("propertyType", propertyType)
+    }
+
+    if (currentMode.listingType) {
+      params.set("listingType", currentMode.listingType)
+    }
+
+    router.push(`/property-search${params.toString() ? `?${params.toString()}` : ""}`)
+  }
 
   return (
     <section className="relative h-[650px] flex items-center justify-center bg-slate-200">
@@ -88,35 +137,46 @@ export function HeroSection() {
               </button>
             ))}
           </div>
-          <div className="flex flex-col md:flex-row gap-2 p-4">
-            <div className="flex-1 flex items-center border border-slate-200 px-4 py-3">
+          <form className="flex flex-col gap-2 p-4 md:flex-row" onSubmit={handleSubmit}>
+            <div className="flex flex-1 items-center border border-slate-200 px-4 py-3">
               <AppIcon className="text-slate-400 mr-2" name="location_on" />
-              <input
-                className="w-full border-none focus:ring-0 text-sm"
+              <Input
+                className="h-auto border-none px-0 py-0 text-sm shadow-none focus-visible:ring-0"
+                onChange={(event) => setSearchTerm(event.target.value)}
                 placeholder={currentMode.inputPlaceholder}
                 type="text"
+                value={searchTerm}
               />
             </div>
-            <div className="flex-1 flex items-center border border-slate-200 px-4 py-3">
+            <div className="flex flex-1 items-center border border-slate-200 px-4 py-3">
               <AppIcon className="text-slate-400 mr-2" name="home" />
-              <select className="w-full border-none focus:ring-0 text-sm appearance-none bg-transparent">
-                <option>
-                  {currentMode.selectLabel}
-                </option>
-                {currentMode.propertyTypes.map((propertyType) => (
-                  <option key={propertyType}>
-                    {propertyType}
-                  </option>
-                ))}
-              </select>
+              <Select
+                modal={false}
+                onValueChange={(value) => setPropertyType(!value || value === "all" ? "" : value)}
+                value={propertyType || "all"}
+              >
+                <SelectTrigger className="h-auto w-full border-none px-0 py-0 text-sm shadow-none focus-visible:ring-0">
+                  <SelectValue placeholder={currentMode.selectLabel} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">
+                    {currentMode.selectLabel}
+                  </SelectItem>
+                  {propertyTypes.map((item) => (
+                    <SelectItem key={item} value={item}>
+                      {propertyTypeLabel(item)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-            <Link
+            <button
               className="bg-accent px-10 py-4 text-center text-sm font-bold uppercase text-white hover:brightness-110"
-              href={currentMode.ctaHref}
+              type="submit"
             >
               {currentMode.ctaLabel}
-            </Link>
-          </div>
+            </button>
+          </form>
         </div>
       </div>
     </section>

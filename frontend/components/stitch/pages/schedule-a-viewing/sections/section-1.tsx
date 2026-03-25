@@ -1,5 +1,7 @@
 
 import { AppIcon } from "@/components/ui/app-icon"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 
 export function Section1Section() {
   return (
@@ -147,8 +149,8 @@ export function Section1Section() {
               </label>
               <div className="relative">
                 <AppIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-primary/40" name="person" />
-                <input
-                  className="w-full pl-10 pr-4 py-3 bg-white dark:bg-slate-900 border-2 border-primary/10 rounded-lg focus:border-primary outline-none transition-all"
+                <Input
+                  className="h-auto w-full border-2 border-primary/10 bg-white py-3 pr-4 pl-10 transition-all dark:bg-slate-900"
                   placeholder="John Doe"
                   type="text"
                 />
@@ -160,8 +162,8 @@ export function Section1Section() {
               </label>
               <div className="relative">
                 <AppIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-primary/40" name="mail" />
-                <input
-                  className="w-full pl-10 pr-4 py-3 bg-white dark:bg-slate-900 border-2 border-primary/10 rounded-lg focus:border-primary outline-none transition-all"
+                <Input
+                  className="h-auto w-full border-2 border-primary/10 bg-white py-3 pr-4 pl-10 transition-all dark:bg-slate-900"
                   placeholder="john@example.com"
                   type="email"
                 />
@@ -173,8 +175,8 @@ export function Section1Section() {
               </label>
               <div className="relative">
                 <AppIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-primary/40" name="call" />
-                <input
-                  className="w-full pl-10 pr-4 py-3 bg-white dark:bg-slate-900 border-2 border-primary/10 rounded-lg focus:border-primary outline-none transition-all"
+                <Input
+                  className="h-auto w-full border-2 border-primary/10 bg-white py-3 pr-4 pl-10 transition-all dark:bg-slate-900"
                   placeholder="+1 (555) 000-0000"
                   type="tel"
                 />
@@ -184,13 +186,11 @@ export function Section1Section() {
               <label className="text-sm font-semibold text-slate-600 dark:text-slate-400">
                 {"Message for the Agent (Optional)"}
               </label>
-              <textarea
-                className="w-full px-4 py-3 bg-white dark:bg-slate-900 border-2 border-primary/10 rounded-lg focus:border-primary outline-none transition-all resize-none"
+              <Textarea
+                className="w-full resize-none border-2 border-primary/10 bg-white px-4 py-3 transition-all dark:bg-slate-900"
                 placeholder="Is parking available during the tour?"
                 rows={3}
-              >
-
-              </textarea>
+              />
             </div>
             <div className="pt-4">
               <button

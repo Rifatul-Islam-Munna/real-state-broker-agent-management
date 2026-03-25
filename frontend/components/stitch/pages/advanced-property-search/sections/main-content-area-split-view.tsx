@@ -3,312 +3,83 @@
 /* eslint-disable @next/next/no-img-element */
 
 import Link from "next/link"
-import { useState } from "react"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
+import { useMemo, useState } from "react"
 
+import { formatPriceLabel } from "@/lib/currency"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
+import { Input } from "@/components/ui/input"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { type PropertyItem, useProperties } from "@/hooks/use-real-estate-api"
+import type { PublicPropertyFilters } from "@/types/real-estate-api"
 import { cn } from "@/lib/utils"
-import { publicPropertyDetailPageMeta } from "@/static-data/pages/public-property-detail/meta"
 import { AppIcon } from "@/components/ui/app-icon"
 
-type PropertyCard = {
-  status: string
-  statusClassName: string
-  price: string
-  priceSuffix?: string
-  location: string
-  imageAlt: string
-  imageDataAlt?: string
-  imageSrc: string
-  specs: [string, string, string]
-  favorited?: boolean
-  dimmed?: boolean
+type MainContentAreaSplitViewSectionProps = {
+  filterOptions: PublicPropertyFilters
 }
 
 type ViewMode = "grid" | "list"
+type SortMode = "featured" | "price-asc" | "price-desc" | "latest" | "size-desc"
 
-const propertyCards: PropertyCard[] = [
-  {
-    status: "FOR SALE",
-    statusClassName: "bg-primary",
-    price: "$1,250,000",
-    location: "1234 Elm Street, Beverly Hills, CA",
-    imageAlt: "Modern house exterior with pool",
-    imageDataAlt: "Modern house with pool",
-    imageSrc:
-      "https://lh3.googleusercontent.com/aida-public/AB6AXuC8D18z6U40oLkhwMBjJ72v1hz1trxb7xtBIDAjpDMCKdaPo7I3nHehMTY_agXqi5E0l0zVISyEROSt4UiyFhMZfZTqLFM3oIXAOuM6lzxtVUMoGKdmwOBKX3wgMe9zXdTwWhuFZ1ejTjhQjUd-syWTVAn2TbiAjBOnjJrsxoEq8GGzEbyn8SVXLgS4WRDLlrNSBrxw8h0jMI-XJRScUbtI0F7KjHMcUGXjUsBst9maSQpEtNxznU1h0YdmI0icXWTJ1wGafb3T1n8",
-    specs: ["4 Beds", "3 Baths", "2,800 sqft"],
-  },
-  {
-    status: "FOR RENT",
-    statusClassName: "bg-primary",
-    price: "$4,500",
-    priceSuffix: "/mo",
-    location: "88 Downtown Ave, Seattle, WA",
-    imageAlt: "Luxury apartment interior",
-    imageDataAlt: "Luxury apartment interior",
-    imageSrc:
-      "https://lh3.googleusercontent.com/aida-public/AB6AXuC15HyKu2ju1EzbR9-JV72-tF7NtXjIbCrDCkFN4RJnqjg4l8W8uhkqhoud5PARWtf034IuH4wTbhL9mvNBsaXgD01LAoORRjkScsY2VOeV4T_b7cMKWLQvEYLFIg2ienfbYveZdVBHKJT1j19JeRXW8i5dCF8m2_o7LvrH4ZcfbI1j6liOytMXVx17LWVhYZ1yh74g9wUFBsi7bfPGk7nUx1ReJkgX8f5oKuVdLU0NA8DDgVut8EWeXV8E5TAl3xSJC7r_j3OMRrc",
-    specs: ["2 Beds", "2 Baths", "1,200 sqft"],
-  },
-  {
-    status: "FOR SALE",
-    statusClassName: "bg-primary",
-    price: "$850,000",
-    location: "45 Oak Lane, Austin, TX",
-    imageAlt: "Suburban family house",
-    imageDataAlt: "Suburban family house",
-    imageSrc:
-      "https://lh3.googleusercontent.com/aida-public/AB6AXuDuxFTPeLBrSkrgJm2Ii_uXg2q1drjeQw_mFTXODERtWIvo9JZJnR40Ropf4NU3pSGogO-650aH-uyKH08b0pQEyE_u76rE0nnFQcrxIEw4qvbEb0zMGUrAlnyl_B0980iOLiP_DnvCAgUpLNXsYojfR5XPAKcg15XzGponzfv16KtWKpEnkDJ3SPh1u7eKgHd7nP-4kWnrUIxrUqjUppY_lQK2kdd6YWxZEaOxMLEyNaFFyQuk9sOJa9ortSns-wkRe_wdX2c49qw",
-    specs: ["3 Beds", "2.5 Baths", "2,100 sqft"],
-  },
-  {
-    status: "SOLD",
-    statusClassName: "bg-slate-700",
-    price: "$520,000",
-    location: "12 Marina Blvd, Miami, FL",
-    imageAlt: "Modern condo building",
-    imageDataAlt: "Modern condo building",
-    imageSrc:
-      "https://lh3.googleusercontent.com/aida-public/AB6AXuBwD7EaqJPaRK2uGo4zE41Yjd-7Zv7ZTKLIaMrBO_NtPdsknkgw5kGTitG157P6-ak7ohUQSUG1pY3ZA_GtOBHi5OoPy2OVdt_PXH3Drwz-fyTZWZL8M_0GXcIGiQWCPV70lzrxXAqpledoku7EvQ0qp6568noBVunBS18U8r0pOeJkFTsIQqHiskTLWglwMCA-DvfWqORG_KwwSInEPjk_QE7MU2jR0QZF8rDI986Lk3_b9kKDSj_sXlVzIuKKAxa6TDzjcf6tkqA",
-    specs: ["1 Bed", "1 Bath", "850 sqft"],
-    favorited: true,
-    dimmed: true,
-  },
-  {
-    status: "FOR SALE",
-    statusClassName: "bg-primary",
-    price: "$980,000",
-    location: "567 Pine Road, Portland, OR",
-    imageAlt: "Modern house exterior",
-    imageSrc:
-      "https://lh3.googleusercontent.com/aida-public/AB6AXuCHX-V7S5k-9Z8v7oXk6r0x9k7y7z7z7z7z7z7z7z7z7z7z7z7z7z7z7z7z7z7z7z7z7z7z7z7z7z7z7z7z7z7z7z7z7z7z7z7z7z7z7z7z7z",
-    specs: ["4 Beds", "3 Baths", "2,400 sqft"],
-  },
-  {
-    status: "FOR RENT",
-    statusClassName: "bg-primary",
-    price: "$3,200",
-    priceSuffix: "/mo",
-    location: "101 Skyline Dr, Denver, CO",
-    imageAlt: "City apartment",
-    imageSrc:
-      "https://lh3.googleusercontent.com/aida-public/AB6AXuD9e8r7t6y5u4i3o2p1l0k9j8h7g6f5d4s3a2z1x0c9v8b7n6m5l4k3j2h1g0",
-    specs: ["1 Bed", "1 Bath", "900 sqft"],
-  },
-]
-
+const PAGE_SIZE = 12
 const propertyCardIcons = ["bed", "bathtub", "square_foot"] as const
+const fallbackImage = "https://placehold.co/1200x800/e2e8f0/0f172a?text=EstateBlue"
 
-function FilterPanel({ onApply }: { onApply?: () => void }) {
-  return (
-    <div className="space-y-6">
-      <div>
-        <h3 className="mb-3 text-sm font-bold uppercase tracking-wider text-slate-900 dark:text-white">
-          {"Location"}
-        </h3>
-        <input
-          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-primary focus:ring-1 focus:ring-primary dark:border-slate-700 dark:bg-slate-900 dark:text-white"
-          placeholder="City, Neighborhood, ZIP"
-          type="text"
-        />
-      </div>
-      <div>
-        <h3 className="mb-3 text-sm font-bold uppercase tracking-wider text-slate-900 dark:text-white">
-          {"Status"}
-        </h3>
-        <div className="flex flex-col gap-2">
-          <label className="flex cursor-pointer items-center gap-2">
-            <input
-              defaultChecked
-              className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
-              type="checkbox"
-            />
-            <span className="text-sm text-slate-700 dark:text-slate-300">
-              {"For Sale"}
-            </span>
-          </label>
-          <label className="flex cursor-pointer items-center gap-2">
-            <input
-              className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
-              type="checkbox"
-            />
-            <span className="text-sm text-slate-700 dark:text-slate-300">
-              {"For Rent"}
-            </span>
-          </label>
-          <label className="flex cursor-pointer items-center gap-2">
-            <input
-              className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
-              type="checkbox"
-            />
-            <span className="text-sm text-slate-700 dark:text-slate-300">
-              {"Sold"}
-            </span>
-          </label>
-        </div>
-      </div>
-      <div>
-        <h3 className="mb-3 text-sm font-bold uppercase tracking-wider text-slate-900 dark:text-white">
-          {"Property Type"}
-        </h3>
-        <div className="flex flex-col gap-2">
-          <label className="flex cursor-pointer items-center gap-2">
-            <input
-              defaultChecked
-              className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
-              type="checkbox"
-            />
-            <span className="text-sm text-slate-700 dark:text-slate-300">
-              {"House"}
-            </span>
-          </label>
-          <label className="flex cursor-pointer items-center gap-2">
-            <input
-              defaultChecked
-              className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
-              type="checkbox"
-            />
-            <span className="text-sm text-slate-700 dark:text-slate-300">
-              {"Apartment"}
-            </span>
-          </label>
-          <label className="flex cursor-pointer items-center gap-2">
-            <input
-              className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
-              type="checkbox"
-            />
-            <span className="text-sm text-slate-700 dark:text-slate-300">
-              {"Condo"}
-            </span>
-          </label>
-          <label className="flex cursor-pointer items-center gap-2">
-            <input
-              className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
-              type="checkbox"
-            />
-            <span className="text-sm text-slate-700 dark:text-slate-300">
-              {"Land"}
-            </span>
-          </label>
-        </div>
-      </div>
-      <div>
-        <h3 className="mb-3 text-sm font-bold uppercase tracking-wider text-slate-900 dark:text-white">
-          {"Price Range"}
-        </h3>
-        <div className="flex items-center gap-2">
-          <input
-            className="w-1/2 rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-900 outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white"
-            placeholder="Min"
-            type="text"
-          />
-          <span className="text-slate-500">
-            {"-"}
-          </span>
-          <input
-            className="w-1/2 rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-900 outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white"
-            placeholder="Max"
-            type="text"
-          />
-        </div>
-      </div>
-      <div>
-        <h3 className="mb-3 text-sm font-bold uppercase tracking-wider text-slate-900 dark:text-white">
-          {"Beds & Baths"}
-        </h3>
-        <div className="grid grid-cols-2 gap-2">
-          <select className="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-900 outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white">
-            <option>
-              {"Beds (Any)"}
-            </option>
-            <option>
-              {"1+"}
-            </option>
-            <option>
-              {"2+"}
-            </option>
-            <option>
-              {"3+"}
-            </option>
-            <option>
-              {"4+"}
-            </option>
-          </select>
-          <select className="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-900 outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white">
-            <option>
-              {"Baths (Any)"}
-            </option>
-            <option>
-              {"1+"}
-            </option>
-            <option>
-              {"2+"}
-            </option>
-            <option>
-              {"3+"}
-            </option>
-          </select>
-        </div>
-      </div>
-      <div>
-        <h3 className="mb-3 text-sm font-bold uppercase tracking-wider text-slate-900 dark:text-white">
-          {"Features"}
-        </h3>
-        <div className="flex flex-col gap-2">
-          <label className="flex cursor-pointer items-center gap-2">
-            <input
-              className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
-              type="checkbox"
-            />
-            <span className="text-sm text-slate-700 dark:text-slate-300">
-              {"Pool"}
-            </span>
-          </label>
-          <label className="flex cursor-pointer items-center gap-2">
-            <input
-              className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
-              type="checkbox"
-            />
-            <span className="text-sm text-slate-700 dark:text-slate-300">
-              {"Garage"}
-            </span>
-          </label>
-          <label className="flex cursor-pointer items-center gap-2">
-            <input
-              className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
-              type="checkbox"
-            />
-            <span className="text-sm text-slate-700 dark:text-slate-300">
-              {"Garden"}
-            </span>
-          </label>
-          <label className="flex cursor-pointer items-center gap-2">
-            <input
-              className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
-              type="checkbox"
-            />
-            <span className="text-sm text-slate-700 dark:text-slate-300">
-              {"Elevator"}
-            </span>
-          </label>
-        </div>
-      </div>
-      <button
-        className="w-full rounded-lg bg-primary py-2 text-sm font-bold text-white transition-colors hover:bg-primary/90"
-        onClick={onApply}
-        type="button"
-      >
-        {"Apply Filters"}
-      </button>
-    </div>
-  )
+function parsePositiveInteger(value: string | null, fallback: number) {
+  const parsed = Number.parseInt(value ?? "", 10)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
+}
+
+function parsePriceValue(value: string) {
+  const normalized = value.replace(/[^0-9.]/g, "")
+  const parsed = Number.parseFloat(normalized)
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+function parseSizeValue(value: string) {
+  const normalized = value.replace(/[^0-9.]/g, "")
+  const parsed = Number.parseFloat(normalized)
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+function listingTypeLabel(value: "ForSale" | "ForRent") {
+  return value === "ForRent" ? "FOR RENT" : "FOR SALE"
+}
+
+function propertyTypeLabel(value: "Residential" | "Commercial") {
+  return value === "Commercial" ? "Commercial" : "Residential"
+}
+
+function listingImage(property: PropertyItem) {
+  return property.thumbnailUrl ?? property.imageUrls[0] ?? fallbackImage
+}
+
+function listingSpecs(property: PropertyItem) {
+  return [
+    property.bedRoom ? `${property.bedRoom} Beds` : "Beds N/A",
+    property.bathRoom ? `${property.bathRoom} Baths` : "Baths N/A",
+    property.width ? property.width : "Size N/A",
+  ] as const
+}
+
+function buildPageNumbers(currentPage: number, totalPages: number) {
+  const start = Math.max(1, currentPage - 2)
+  const end = Math.min(totalPages, start + 4)
+  return Array.from({ length: end - start + 1 }, (_, index) => start + index)
 }
 
 function PropertyCardItem({
   property,
   viewMode,
 }: {
-  property: PropertyCard
+  property: PropertyItem
   viewMode: ViewMode
 }) {
   const isListView = viewMode === "list"
@@ -316,23 +87,11 @@ function PropertyCardItem({
   return (
     <article
       className={cn(
-        "group relative overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900",
+        "group overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900",
         isListView && "sm:flex",
       )}
     >
-      <button
-        aria-label="Save property"
-        className={cn(
-          "absolute right-3 top-3 z-10 rounded-full p-2 transition-colors",
-          property.favorited
-            ? "bg-white/80 text-primary hover:bg-primary/10 dark:bg-slate-900/80"
-            : "bg-white/80 text-slate-500 hover:bg-primary/10 hover:text-primary dark:bg-slate-900/80",
-        )}
-        type="button"
-      >
-        <AppIcon className="text-lg" name={property.favorited ? "favorite" : "favorite_border"} />
-      </button>
-      <Link href={publicPropertyDetailPageMeta.routePath} className={cn("block h-full", isListView && "sm:flex sm:w-full")}>
+      <Link href={`/properties/${property.slug}`} className={cn("block h-full", isListView && "sm:flex sm:w-full")}>
         <div
           className={cn(
             "relative overflow-hidden bg-slate-200 dark:bg-slate-800",
@@ -340,40 +99,33 @@ function PropertyCardItem({
           )}
         >
           <img
-            alt={property.imageAlt}
+            alt={property.title}
             className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-            data-alt={property.imageDataAlt}
-            src={property.imageSrc}
+            src={listingImage(property)}
           />
-          <span
-            className={cn(
-              "absolute left-3 top-3 rounded px-2 py-1 text-xs font-bold text-white",
-              property.statusClassName,
-            )}
-          >
-            {property.status}
+          <span className="absolute left-3 top-3 rounded bg-primary px-2 py-1 text-xs font-bold text-white">
+            {listingTypeLabel(property.listingType)}
           </span>
         </div>
         <div
           className={cn(
             "p-4",
-            property.dimmed && "opacity-75",
             isListView && "flex flex-col justify-between gap-4 sm:flex-1 sm:p-6",
           )}
         >
           <div>
             <div className="mb-1 text-xl font-bold text-slate-900 dark:text-white">
-              {property.price}
-              {property.priceSuffix ? (
-                <span className="text-sm font-normal text-slate-500">
-                  {property.priceSuffix}
-                </span>
-              ) : null}
+              {formatPriceLabel(property.price)}
             </div>
-            <div className={cn("mb-3 flex items-center gap-1 text-sm text-slate-500 dark:text-slate-400", !isListView && "truncate")}>
+            <div className="mb-2 flex items-center gap-1 text-sm text-slate-500 dark:text-slate-400">
               <AppIcon className="text-sm" name="location_on" />
-              {property.location}
+              <span className={cn(!isListView && "truncate")}>
+                {property.location || property.exactLocation}
+              </span>
             </div>
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-accent">
+              {propertyTypeLabel(property.propertyType)}
+            </p>
           </div>
           <div
             className={cn(
@@ -381,8 +133,8 @@ function PropertyCardItem({
               isListView ? "grid grid-cols-1 gap-2 sm:grid-cols-3" : "flex items-center justify-between",
             )}
           >
-            {property.specs.map((spec, index) => (
-              <div key={spec} className="flex items-center gap-1">
+            {listingSpecs(property).map((spec, index) => (
+              <div key={`${property.id}-${spec}`} className="flex items-center gap-1">
                 <AppIcon className="text-base text-slate-400" name={propertyCardIcons[index] ?? "square_foot"} />
                 {spec}
               </div>
@@ -394,9 +146,282 @@ function PropertyCardItem({
   )
 }
 
-export function MainContentAreaSplitViewSection() {
+type FilterPanelProps = {
+  initialListingType: "" | "ForSale" | "ForRent"
+  initialPropertyType: "" | "Residential" | "Commercial"
+  initialSearch: string
+  listingTypeOptions: Array<"ForSale" | "ForRent">
+  locations: string[]
+  onApply: (values: {
+    listingType: "" | "ForSale" | "ForRent"
+    propertyType: "" | "Residential" | "Commercial"
+    search: string
+  }) => void
+  onReset: () => void
+  propertyTypeOptions: Array<"Residential" | "Commercial">
+}
+
+function FilterPanel({
+  initialListingType,
+  initialPropertyType,
+  initialSearch,
+  listingTypeOptions,
+  locations,
+  onApply,
+  onReset,
+  propertyTypeOptions,
+}: FilterPanelProps) {
+  const [draftSearch, setDraftSearch] = useState(initialSearch)
+  const [draftListingType, setDraftListingType] = useState(initialListingType)
+  const [draftPropertyType, setDraftPropertyType] = useState(initialPropertyType)
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h3 className="mb-3 text-sm font-bold uppercase tracking-wider text-slate-900 dark:text-white">
+          {"Search"}
+        </h3>
+        <div className="flex items-center rounded-lg border border-slate-300 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900">
+          <AppIcon className="mr-2 text-slate-400" name="search" />
+          <Input
+            className="h-auto border-none bg-transparent px-0 py-0 text-sm text-slate-900 shadow-none focus-visible:ring-0 dark:text-white"
+            onChange={(event) => setDraftSearch(event.target.value)}
+            placeholder="City, neighborhood, ZIP, or title"
+            type="text"
+            value={draftSearch}
+          />
+        </div>
+      </div>
+
+      <div>
+        <h3 className="mb-3 text-sm font-bold uppercase tracking-wider text-slate-900 dark:text-white">
+          {"Listing Type"}
+        </h3>
+        <Select
+          modal={false}
+          onValueChange={(value) =>
+            setDraftListingType(!value || value === "all" ? "" : (value as "ForSale" | "ForRent"))
+          }
+          value={draftListingType || "all"}
+        >
+          <SelectTrigger className="h-10 w-full rounded-lg border-slate-300 bg-white px-3 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-white">
+            <SelectValue placeholder="All Listings" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">
+              {"All Listings"}
+            </SelectItem>
+            {listingTypeOptions.map((item) => (
+              <SelectItem key={item} value={item}>
+                {item === "ForRent" ? "For Rent" : "For Sale"}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div>
+        <h3 className="mb-3 text-sm font-bold uppercase tracking-wider text-slate-900 dark:text-white">
+          {"Property Category"}
+        </h3>
+        <Select
+          modal={false}
+          onValueChange={(value) =>
+            setDraftPropertyType(
+              !value || value === "all" ? "" : (value as "Residential" | "Commercial"),
+            )
+          }
+          value={draftPropertyType || "all"}
+        >
+          <SelectTrigger className="h-10 w-full rounded-lg border-slate-300 bg-white px-3 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-white">
+            <SelectValue placeholder="All Categories" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">
+              {"All Categories"}
+            </SelectItem>
+            {propertyTypeOptions.map((item) => (
+              <SelectItem key={item} value={item}>
+                {propertyTypeLabel(item)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div>
+        <h3 className="mb-3 text-sm font-bold uppercase tracking-wider text-slate-900 dark:text-white">
+          {"Popular Markets"}
+        </h3>
+        {locations.length === 0 ? (
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            {"Locations will appear here once public properties are added."}
+          </p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {locations.map((location) => (
+              <button
+                key={location}
+                className="rounded-full border border-slate-300 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-600 transition-colors hover:border-primary hover:text-primary dark:border-slate-700 dark:text-slate-300"
+                onClick={() => setDraftSearch(location)}
+                type="button"
+              >
+                {location}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <button
+          className="w-full rounded-lg bg-primary py-2 text-sm font-bold text-white transition-colors hover:bg-primary/90"
+          onClick={() =>
+            onApply({
+              listingType: draftListingType,
+              propertyType: draftPropertyType,
+              search: draftSearch,
+            })}
+          type="button"
+        >
+          {"Apply Filters"}
+        </button>
+        <button
+          className="w-full rounded-lg border border-slate-300 py-2 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+          onClick={onReset}
+          type="button"
+        >
+          {"Reset"}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+export function MainContentAreaSplitViewSection({ filterOptions }: MainContentAreaSplitViewSectionProps) {
+  const pathname = usePathname()
+  const router = useRouter()
+  const searchParams = useSearchParams()
+
   const [viewMode, setViewMode] = useState<ViewMode>("grid")
   const [isFilterSheetOpen, setIsFilterSheetOpen] = useState(false)
+
+  const currentSearch = searchParams.get("search") ?? ""
+  const currentListingType = searchParams.get("listingType") === "ForRent"
+    ? "ForRent"
+    : searchParams.get("listingType") === "ForSale"
+      ? "ForSale"
+      : ""
+  const currentPropertyType = searchParams.get("propertyType") === "Commercial"
+    ? "Commercial"
+    : searchParams.get("propertyType") === "Residential"
+      ? "Residential"
+      : ""
+  const currentSort = (searchParams.get("sort") ?? "featured") as SortMode
+  const currentPage = parsePositiveInteger(searchParams.get("page"), 1)
+
+  const propertiesQuery = useProperties({
+    listingType: currentListingType || undefined,
+    page: currentPage,
+    pageSize: PAGE_SIZE,
+    propertyType: currentPropertyType || undefined,
+    search: currentSearch || undefined,
+    status: "Open",
+  })
+
+  const listingTypes = useMemo(
+    () =>
+      filterOptions.listingTypes.length > 0
+        ? filterOptions.listingTypes
+        : (["ForSale", "ForRent"] as const),
+    [filterOptions.listingTypes],
+  )
+  const propertyTypes = useMemo(
+    () =>
+      filterOptions.propertyTypes.length > 0
+        ? filterOptions.propertyTypes
+        : (["Residential", "Commercial"] as const),
+    [filterOptions.propertyTypes],
+  )
+
+  const displayedProperties = useMemo(() => {
+    const items = [...(propertiesQuery.data?.items ?? [])]
+
+    switch (currentSort) {
+      case "price-asc":
+        return items.sort((left, right) => parsePriceValue(left.price) - parsePriceValue(right.price))
+      case "price-desc":
+        return items.sort((left, right) => parsePriceValue(right.price) - parsePriceValue(left.price))
+      case "latest":
+        return items.sort(
+          (left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime(),
+        )
+      case "size-desc":
+        return items.sort((left, right) => parseSizeValue(right.width) - parseSizeValue(left.width))
+      default:
+        return items.sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime())
+    }
+  }, [currentSort, propertiesQuery.data?.items])
+
+  const pageNumbers = useMemo(
+    () => buildPageNumbers(currentPage, propertiesQuery.data?.totalPages ?? 1),
+    [currentPage, propertiesQuery.data?.totalPages],
+  )
+
+  function updateUrl(nextValues: {
+    listingType?: "" | "ForSale" | "ForRent"
+    page?: number
+    propertyType?: "" | "Residential" | "Commercial"
+    search?: string
+    sort?: SortMode
+  }) {
+    const params = new URLSearchParams(searchParams.toString())
+
+    const search = nextValues.search ?? currentSearch
+    const listingType = nextValues.listingType ?? currentListingType
+    const propertyType = nextValues.propertyType ?? currentPropertyType
+    const page = nextValues.page ?? currentPage
+    const sort = nextValues.sort ?? currentSort
+
+    if (search) params.set("search", search)
+    else params.delete("search")
+
+    if (listingType) params.set("listingType", listingType)
+    else params.delete("listingType")
+
+    if (propertyType) params.set("propertyType", propertyType)
+    else params.delete("propertyType")
+
+    if (sort && sort !== "featured") params.set("sort", sort)
+    else params.delete("sort")
+
+    if (page > 1) params.set("page", String(page))
+    else params.delete("page")
+
+    router.push(`${pathname}${params.toString() ? `?${params.toString()}` : ""}`, { scroll: false })
+  }
+
+  function applyFilters(values: {
+    listingType: "" | "ForSale" | "ForRent"
+    propertyType: "" | "Residential" | "Commercial"
+    search: string
+  }) {
+    updateUrl({
+      listingType: values.listingType,
+      page: 1,
+      propertyType: values.propertyType,
+      search: values.search.trim(),
+    })
+    setIsFilterSheetOpen(false)
+  }
+
+  function resetFilters() {
+    router.push(pathname, { scroll: false })
+    setIsFilterSheetOpen(false)
+  }
+
+  const isInitialLoading = !propertiesQuery.data && (propertiesQuery.isLoading || propertiesQuery.isFetching)
+  const filterPanelKey = searchParams.toString()
 
   return (
     <div className="flex min-h-0 flex-1 overflow-hidden">
@@ -406,12 +431,24 @@ export function MainContentAreaSplitViewSection() {
             {"Property Search"}
           </h1>
           <p className="text-sm font-normal text-slate-500 dark:text-slate-400">
-            {"Showing 142 properties matching your criteria"}
+            {`${propertiesQuery.data?.totalCount ?? 0} open properties matching your criteria`}
           </p>
         </div>
         <div className="flex flex-1 overflow-hidden">
           <aside className="hidden w-64 shrink-0 overflow-y-auto border-r border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-800/50 md:block">
-            <FilterPanel />
+            <FilterPanel
+              key={`desktop-${filterPanelKey}`}
+              initialListingType={currentListingType}
+              initialPropertyType={currentPropertyType}
+              initialSearch={currentSearch}
+              listingTypeOptions={[...listingTypes]}
+              locations={filterOptions.locations}
+              onApply={({ listingType, propertyType, search }) =>
+                applyFilters({ listingType, propertyType, search })
+              }
+              onReset={resetFilters}
+              propertyTypeOptions={[...propertyTypes]}
+            />
           </aside>
           <div className="flex-1 overflow-y-auto bg-background-light p-4 dark:bg-background-dark">
             <div className="mb-4 flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900 sm:flex-row sm:items-center sm:justify-between">
@@ -432,7 +469,19 @@ export function MainContentAreaSplitViewSection() {
                       </SheetTitle>
                     </SheetHeader>
                     <div className="overflow-y-auto px-5 py-5">
-                      <FilterPanel onApply={() => setIsFilterSheetOpen(false)} />
+                      <FilterPanel
+                        key={`mobile-${filterPanelKey}`}
+                        initialListingType={currentListingType}
+                        initialPropertyType={currentPropertyType}
+                        initialSearch={currentSearch}
+                        listingTypeOptions={[...listingTypes]}
+                        locations={filterOptions.locations}
+                        onApply={({ listingType, propertyType, search }) =>
+                          applyFilters({ listingType, propertyType, search })
+                        }
+                        onReset={resetFilters}
+                        propertyTypeOptions={[...propertyTypes]}
+                      />
                     </div>
                   </SheetContent>
                 </Sheet>
@@ -471,62 +520,122 @@ export function MainContentAreaSplitViewSection() {
                 <span className="hidden text-sm text-slate-500 dark:text-slate-400 sm:inline">
                   {"Sort by:"}
                 </span>
-                <select className="cursor-pointer border-none bg-transparent pl-0 text-sm font-medium text-slate-900 focus:ring-0 dark:text-white">
-                  <option>
-                    {"Featured"}
-                  </option>
-                  <option>
-                    {"Price: Low to High"}
-                  </option>
-                  <option>
-                    {"Price: High to Low"}
-                  </option>
-                  <option>
-                    {"Date Added"}
-                  </option>
-                  <option>
-                    {"Size"}
-                  </option>
-                </select>
+                <Select
+                  modal={false}
+                  onValueChange={(value) => updateUrl({ page: 1, sort: (value ?? "featured") as SortMode })}
+                  value={currentSort}
+                >
+                  <SelectTrigger className="h-auto min-w-40 border-none bg-transparent px-0 py-0 text-sm font-medium text-slate-900 shadow-none focus-visible:ring-0 dark:text-white">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="featured">
+                      {"Featured"}
+                    </SelectItem>
+                    <SelectItem value="price-asc">
+                      {"Price: Low to High"}
+                    </SelectItem>
+                    <SelectItem value="price-desc">
+                      {"Price: High to Low"}
+                    </SelectItem>
+                    <SelectItem value="latest">
+                      {"Date Added"}
+                    </SelectItem>
+                    <SelectItem value="size-desc">
+                      {"Size"}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
-            <div
-              className={cn(
-                viewMode === "grid"
-                  ? "grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
-                  : "flex flex-col gap-4",
-              )}
-            >
-              {propertyCards.map((property) => (
-                <PropertyCardItem
-                  key={`${property.status}-${property.location}`}
-                  property={property}
-                  viewMode={viewMode}
-                />
-              ))}
-            </div>
-            <div className="mb-4 mt-8 flex justify-center">
-              <nav className="flex gap-1">
-                <button className="rounded border border-slate-200 px-3 py-1 text-slate-500 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800" type="button">
-                  {"Prev"}
-                </button>
-                <button className="rounded bg-primary px-3 py-1 text-white" type="button">
-                  {"1"}
-                </button>
-                <button className="rounded border border-slate-200 px-3 py-1 text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800" type="button">
-                  {"2"}
-                </button>
-                <button className="rounded border border-slate-200 px-3 py-1 text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800" type="button">
-                  {"3"}
-                </button>
-                <span className="px-2 py-1 text-slate-500">
-                  {"..."}
+
+            <div className="mb-4 flex flex-wrap gap-2">
+              {currentSearch ? (
+                <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-bold uppercase tracking-wide text-primary">
+                  {`Search: ${currentSearch}`}
                 </span>
-                <button className="rounded border border-slate-200 px-3 py-1 text-slate-500 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800" type="button">
-                  {"Next"}
-                </button>
-              </nav>
+              ) : null}
+              {currentListingType ? (
+                <span className="rounded-full bg-accent/10 px-3 py-1 text-xs font-bold uppercase tracking-wide text-accent">
+                  {currentListingType === "ForRent" ? "For Rent" : "For Sale"}
+                </span>
+              ) : null}
+              {currentPropertyType ? (
+                <span className="rounded-full bg-slate-900/5 px-3 py-1 text-xs font-bold uppercase tracking-wide text-slate-700 dark:bg-white/10 dark:text-slate-200">
+                  {currentPropertyType}
+                </span>
+              ) : null}
             </div>
+
+            {isInitialLoading ? (
+              <div className="rounded-lg border border-slate-200 bg-white p-10 text-center dark:border-slate-800 dark:bg-slate-900">
+                <p className="text-sm font-bold uppercase tracking-[0.2em] text-slate-500">
+                  {"Loading Properties"}
+                </p>
+              </div>
+            ) : displayedProperties.length === 0 ? (
+              <div className="rounded-lg border border-slate-200 bg-white p-10 text-center dark:border-slate-800 dark:bg-slate-900">
+                <p className="text-sm font-bold uppercase tracking-[0.2em] text-slate-500">
+                  {"No Matching Listings"}
+                </p>
+                <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">
+                  {"Try changing the location, category, or listing type filters."}
+                </p>
+              </div>
+            ) : (
+              <>
+                <div
+                  className={cn(
+                    viewMode === "grid"
+                      ? "grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+                      : "flex flex-col gap-4",
+                  )}
+                >
+                  {displayedProperties.map((property) => (
+                    <PropertyCardItem
+                      key={property.id}
+                      property={property}
+                      viewMode={viewMode}
+                    />
+                  ))}
+                </div>
+                <div className="mb-4 mt-8 flex justify-center">
+                  <nav className="flex gap-1">
+                    <button
+                      className="rounded border border-slate-200 px-3 py-1 text-slate-500 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:hover:bg-slate-800"
+                      disabled={currentPage <= 1}
+                      onClick={() => updateUrl({ page: currentPage - 1 })}
+                      type="button"
+                    >
+                      {"Prev"}
+                    </button>
+                    {pageNumbers.map((pageNumber) => (
+                      <button
+                        key={pageNumber}
+                        className={cn(
+                          "rounded px-3 py-1",
+                          pageNumber === currentPage
+                            ? "bg-primary text-white"
+                            : "border border-slate-200 text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800",
+                        )}
+                        onClick={() => updateUrl({ page: pageNumber })}
+                        type="button"
+                      >
+                        {pageNumber}
+                      </button>
+                    ))}
+                    <button
+                      className="rounded border border-slate-200 px-3 py-1 text-slate-500 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:hover:bg-slate-800"
+                      disabled={currentPage >= (propertiesQuery.data?.totalPages ?? 1)}
+                      onClick={() => updateUrl({ page: currentPage + 1 })}
+                      type="button"
+                    >
+                      {"Next"}
+                    </button>
+                  </nav>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>

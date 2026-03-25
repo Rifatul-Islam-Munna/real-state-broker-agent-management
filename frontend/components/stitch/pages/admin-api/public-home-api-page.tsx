@@ -7,19 +7,26 @@ import { ServicesSection } from "@/components/stitch/pages/public-agency-homepag
 import { MeetTheTeamSection } from "@/components/stitch/pages/public-agency-homepage/sections/meet-the-team"
 import { TestimonialsSection } from "@/components/stitch/pages/public-agency-homepage/sections/testimonials"
 import { BlogSection } from "@/components/stitch/pages/public-agency-homepage/sections/blog-section"
+import { getFeaturedProperties, getPublicAgents, getPublicPropertyFilters } from "@/lib/public-real-estate-data"
 
 import { NewsletterFooterSection } from "./newsletter-footer-section"
 
-export function PublicHomeApiPage() {
+export async function PublicHomeApiPage() {
+  const [featuredProperties, publicAgents, publicPropertyFilters] = await Promise.all([
+    getFeaturedProperties(3),
+    getPublicAgents(),
+    getPublicPropertyFilters(),
+  ])
+
   return (
     <div className="bg-background-light dark:bg-background-dark text-[#1A2332] dark:text-slate-100 font-sans transition-colors duration-300">
       <TopNavigationBarSection />
-      <HeroSection />
+      <HeroSection filterOptions={publicPropertyFilters} />
       <WhyChooseUsSection />
-      <FeaturedListingsSection />
+      <FeaturedListingsSection properties={featuredProperties} />
       <PropertiesByNeighborhoodSection />
       <ServicesSection />
-      <MeetTheTeamSection />
+      <MeetTheTeamSection agents={publicAgents} />
       <TestimonialsSection />
       <BlogSection />
       <NewsletterFooterSection />

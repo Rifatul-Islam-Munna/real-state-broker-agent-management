@@ -1,7 +1,17 @@
 /* eslint-disable @next/next/no-img-element */
 
 
+import { CURRENCY_SYMBOL } from "@/lib/currency"
 import { AppIcon } from "@/components/ui/app-icon"
+import { Input } from "@/components/ui/input"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { Textarea } from "@/components/ui/textarea"
 
 export function Section2Section() {
   return (
@@ -53,8 +63,8 @@ export function Section2Section() {
               <label className="block text-xs font-black uppercase tracking-widest text-primary mb-2">
                 {"Property Address"}
               </label>
-              <input
-                className="w-full border-2 border-slate-900 p-4 focus:ring-0 focus:border-accent text-lg font-medium bg-transparent"
+              <Input
+                className="h-auto w-full border-2 border-slate-900 bg-transparent p-4 text-lg font-medium"
                 placeholder="e.g. 742 Evergreen Terrace, Springfield"
                 type="text"
               />
@@ -63,34 +73,39 @@ export function Section2Section() {
               <label className="block text-xs font-black uppercase tracking-widest text-primary mb-2">
                 {"Property Type"}
               </label>
-              <select className="w-full border-2 border-slate-900 p-4 focus:ring-0 focus:border-accent font-medium bg-transparent">
-                <option>
-                  {"Single Family Home"}
-                </option>
-                <option>
-                  {"Condo / Apartment"}
-                </option>
-                <option>
-                  {"Townhouse"}
-                </option>
-                <option>
-                  {"Commercial"}
-                </option>
-                <option>
-                  {"Land"}
-                </option>
-              </select>
+              <Select defaultValue="Single Family Home" modal={false}>
+                <SelectTrigger className="h-auto w-full rounded-none border-2 border-slate-900 bg-transparent p-4 font-medium shadow-none focus-visible:ring-0">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Single Family Home">
+                    {"Single Family Home"}
+                  </SelectItem>
+                  <SelectItem value="Condo / Apartment">
+                    {"Condo / Apartment"}
+                  </SelectItem>
+                  <SelectItem value="Townhouse">
+                    {"Townhouse"}
+                  </SelectItem>
+                  <SelectItem value="Commercial">
+                    {"Commercial"}
+                  </SelectItem>
+                  <SelectItem value="Land">
+                    {"Land"}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <label className="block text-xs font-black uppercase tracking-widest text-primary mb-2">
-                {"Asking Price (USD)"}
+                {"Asking Price"}
               </label>
               <div className="relative">
                 <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-slate-400">
-                  {"$"}
+                  {CURRENCY_SYMBOL}
                 </span>
-                <input
-                  className="w-full border-2 border-slate-900 p-4 pl-8 focus:ring-0 focus:border-accent font-medium bg-transparent"
+                <Input
+                  className="h-auto w-full border-2 border-slate-900 bg-transparent p-4 pl-8 font-medium"
                   placeholder="500,000"
                   type="number"
                 />
@@ -108,8 +123,8 @@ export function Section2Section() {
               <label className="block text-xs font-black uppercase tracking-widest text-primary mb-2">
                 {"Bedrooms"}
               </label>
-              <input
-                className="w-full border-2 border-slate-900 p-4 focus:ring-0 focus:border-accent font-medium bg-transparent"
+              <Input
+                className="h-auto w-full border-2 border-slate-900 bg-transparent p-4 font-medium"
                 type="number"
                 defaultValue="3"
               />
@@ -118,8 +133,8 @@ export function Section2Section() {
               <label className="block text-xs font-black uppercase tracking-widest text-primary mb-2">
                 {"Bathrooms"}
               </label>
-              <input
-                className="w-full border-2 border-slate-900 p-4 focus:ring-0 focus:border-accent font-medium bg-transparent"
+              <Input
+                className="h-auto w-full border-2 border-slate-900 bg-transparent p-4 font-medium"
                 type="number"
                 defaultValue="2"
               />
@@ -128,8 +143,8 @@ export function Section2Section() {
               <label className="block text-xs font-black uppercase tracking-widest text-primary mb-2">
                 {"Square Feet"}
               </label>
-              <input
-                className="w-full border-2 border-slate-900 p-4 focus:ring-0 focus:border-accent font-medium bg-transparent"
+              <Input
+                className="h-auto w-full border-2 border-slate-900 bg-transparent p-4 font-medium"
                 placeholder="2400"
                 type="number"
               />
@@ -140,13 +155,11 @@ export function Section2Section() {
             <label className="block text-xs font-black uppercase tracking-widest text-primary mb-2">
               {"Property Description"}
             </label>
-            <textarea
-              className="w-full border-2 border-slate-900 p-4 focus:ring-0 focus:border-accent font-medium bg-transparent"
+            <Textarea
+              className="w-full border-2 border-slate-900 bg-transparent p-4 font-medium"
               placeholder="Describe the best features of your property, recent renovations, and the neighborhood..."
               rows={5}
-            >
-
-            </textarea>
+            />
           </div>
           <div>
             <label className="block text-xs font-black uppercase tracking-widest text-primary mb-2">

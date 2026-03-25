@@ -102,6 +102,28 @@ public class UserService(AppDbContext db, IConfiguration config)
             .ToListAsync();
     }
 
+    public async Task<List<PublicAgentProfileResponse>> GetPublicAgentsAsync()
+    {
+        return await db.Users
+            .Where(user => user.Role == UserRole.Agent && user.IsActive && user.DeletedAt == null)
+            .OrderByDescending(user => user.IsVerifiedAgent)
+            .ThenByDescending(user => user.Properties.Count())
+            .ThenByDescending(user => user.CreatedAt)
+            .ThenBy(user => user.FirstName)
+            .ThenBy(user => user.LastName)
+            .Select(user => new PublicAgentProfileResponse
+            {
+                Id = user.Id,
+                FullName = (((user.FirstName ?? string.Empty) + " " + (user.LastName ?? string.Empty)).Trim()),
+                AvatarUrl = user.AvatarUrl,
+                AgencyName = user.AgencyName,
+                Bio = user.Bio,
+                IsVerifiedAgent = user.IsVerifiedAgent,
+                PropertyCount = user.Properties.Count()
+            })
+            .ToListAsync();
+    }
+
     public async Task<(bool Success, string Message, AgentUserOptionResponse? Data)> CreateAgentAsync(CreateAgentRequest req)
     {
         var firstName = (req.FirstName ?? string.Empty).Trim();

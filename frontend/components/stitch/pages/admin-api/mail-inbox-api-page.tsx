@@ -6,6 +6,14 @@ import { useMemo, useState } from "react"
 import { PagePagination } from "@/components/stitch/shared/page-pagination"
 import { useMailInbox, useConvertMailInboxToLead } from "@/hooks/use-real-estate-api"
 import { formatDateTimeLabel } from "@/lib/admin-portal"
+import { Input } from "@/components/ui/input"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 
 const PAGE_SIZE = 10
 
@@ -24,7 +32,7 @@ export function MailInboxApiPage() {
   const isInitialLoading =
     !mailInboxQuery.data && (mailInboxQuery.isLoading || mailInboxQuery.isFetching)
 
-  const mailInbox = mailInboxQuery.data?.items ?? []
+  const mailInbox = useMemo(() => mailInboxQuery.data?.items ?? [], [mailInboxQuery.data?.items])
 
   const stats = useMemo(
     () => [
@@ -53,8 +61,8 @@ export function MailInboxApiPage() {
             {"Email capture and newsletter signups land here. Convert a strong inquiry into a lead when it should move into the CRM workflow."}
           </p>
           <div className="mt-5 flex flex-col gap-3 md:flex-row">
-            <input
-              className="border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-primary dark:border-white/10 dark:bg-white/5"
+            <Input
+              className="h-auto border-slate-200 bg-slate-50 px-4 py-3 text-sm dark:border-white/10 dark:bg-white/5"
               onChange={(event) => {
                 setSearchTerm(event.target.value)
                 setPage(1)
@@ -62,19 +70,32 @@ export function MailInboxApiPage() {
               placeholder="Search senders or subjects"
               value={searchTerm}
             />
-            <select
-              className="border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-primary dark:border-white/10 dark:bg-white/5"
-              onChange={(event) => {
-                setStatusFilter(event.target.value as "" | "New" | "Replied" | "Converted")
+            <Select
+              modal={false}
+              onValueChange={(value) => {
+                setStatusFilter(!value || value === "all" ? "" : (value as "New" | "Replied" | "Converted"))
                 setPage(1)
               }}
-              value={statusFilter}
+              value={statusFilter || "all"}
             >
-              <option value="">{"All Statuses"}</option>
-              <option value="New">{"New"}</option>
-              <option value="Replied">{"Replied"}</option>
-              <option value="Converted">{"Converted"}</option>
-            </select>
+              <SelectTrigger className="h-auto min-w-44 border-slate-200 bg-slate-50 px-4 py-3 text-sm dark:border-white/10 dark:bg-white/5">
+                <SelectValue placeholder="All Statuses" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">
+                  {"All Statuses"}
+                </SelectItem>
+                <SelectItem value="New">
+                  {"New"}
+                </SelectItem>
+                <SelectItem value="Replied">
+                  {"Replied"}
+                </SelectItem>
+                <SelectItem value="Converted">
+                  {"Converted"}
+                </SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </section>
 

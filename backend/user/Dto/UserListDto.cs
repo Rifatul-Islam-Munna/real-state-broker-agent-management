@@ -16,6 +16,17 @@ public class AgentUserOptionResponse
     public int PropertyCount { get; set; }
 }
 
+public class PublicAgentProfileResponse
+{
+    public int Id { get; set; }
+    public string FullName { get; set; } = "";
+    public string? AvatarUrl { get; set; }
+    public string? AgencyName { get; set; }
+    public string? Bio { get; set; }
+    public bool IsVerifiedAgent { get; set; }
+    public int PropertyCount { get; set; }
+}
+
 public class CreateAgentRequest
 {
     public string FirstName { get; set; } = "";

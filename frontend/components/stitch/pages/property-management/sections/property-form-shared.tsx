@@ -6,6 +6,7 @@ export type NeighborhoodInsightFormValue = {
 }
 
 export type PropertyFormValues = {
+  agentId: number | null
   title: string
   propertyType: PropertyItem["propertyType"]
   listingType: PropertyItem["listingType"]

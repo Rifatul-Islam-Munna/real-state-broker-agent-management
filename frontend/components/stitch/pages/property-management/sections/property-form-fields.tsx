@@ -1,5 +1,5 @@
 import { AppIcon } from "@/components/ui/app-icon"
-import type { PropertyItem } from "@/types/real-estate-api"
+import type { AgentUserOption, PropertyItem } from "@/types/real-estate-api"
 
 import {
   amenityOptions,
@@ -10,15 +10,19 @@ import {
 } from "./property-form-shared"
 
 type PropertyFormFieldsSectionProps = {
+  agentOptions: AgentUserOption[]
   errors: PropertyFormErrors
   formValues: PropertyFormValues
+  isAgentOptionsLoading?: boolean
   selectedAmenities: Set<string>
   updateField: <K extends keyof PropertyFormValues>(key: K, value: PropertyFormValues[K]) => void
 }
 
 export function PropertyFormFieldsSection({
+  agentOptions,
   errors,
   formValues,
+  isAgentOptionsLoading = false,
   selectedAmenities,
   updateField,
 }: PropertyFormFieldsSectionProps) {
@@ -63,6 +67,26 @@ export function PropertyFormFieldsSection({
               value={formValues.title}
             />
             <FieldError error={errors.title} />
+          </div>
+          <div className="flex flex-col gap-2">
+            <label className="text-sm font-bold text-slate-700 dark:text-slate-300">
+              {"Assigned Agent"}
+            </label>
+            <select
+              className="form-select rounded-xl border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800 focus:ring-primary"
+              onChange={(event) => updateField("agentId", event.target.value ? Number(event.target.value) : null)}
+              value={formValues.agentId ?? ""}
+            >
+              <option value="">
+                {isAgentOptionsLoading ? "Loading agents..." : "Assign later"}
+              </option>
+              {agentOptions.map((agent) => (
+                <option key={agent.id} value={agent.id}>
+                  {agent.fullName}
+                </option>
+              ))}
+            </select>
+            <FieldError error={errors.agentId} />
           </div>
           <div className="flex flex-col gap-2">
             <label className="text-sm font-bold text-slate-700 dark:text-slate-300">

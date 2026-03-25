@@ -55,6 +55,12 @@ namespace Services
         DateTime UpdatedAt
     );
 
+    public record PublicPropertyFiltersResponse(
+        List<string> PropertyTypes,
+        List<string> ListingTypes,
+        List<string> Locations
+    );
+
     public class PropertyService
     {
         private readonly AppDbContext _db;
@@ -207,6 +213,37 @@ namespace Services
                 PageSize = pageSize,
                 TotalPages = (int)Math.Ceiling(totalCount / (double)pageSize)
             };
+        }
+
+        public async Task<PublicPropertyFiltersResponse> GetPublicPropertyFiltersAsync()
+        {
+            var openProperties = _db.Properties.Where(item => item.Status == PropertyStatus.Open);
+
+            var propertyTypes = await openProperties
+                .Select(item => item.PropertyType)
+                .Distinct()
+                .OrderBy(item => item)
+                .ToListAsync();
+
+            var listingTypes = await openProperties
+                .Select(item => item.ListingType)
+                .Distinct()
+                .OrderBy(item => item)
+                .ToListAsync();
+
+            var locations = await openProperties
+                .Where(item => !string.IsNullOrWhiteSpace(item.Location))
+                .Select(item => item.Location.Trim())
+                .Distinct()
+                .OrderBy(item => item)
+                .Take(12)
+                .ToListAsync();
+
+            return new PublicPropertyFiltersResponse(
+                propertyTypes.Select(item => item.ToString()).ToList(),
+                listingTypes.Select(item => item.ToString()).ToList(),
+                locations
+            );
         }
 
         private async Task<PropertyResponse> GetRequiredPropertyResponseAsync(int id)

@@ -46,6 +46,11 @@ public sealed class FileUploadEndpoint : Endpoint<FileUploadRequest, FileUploadR
             await Send
             .ErrorsAsync(400, ct);
         }
+        catch (InvalidOperationException ex)
+        {
+            AddError(ex.Message);
+            await Send.ErrorsAsync(503, ct);
+        }
     }
 }
 
@@ -94,7 +99,15 @@ public sealed class FileDeleteEndpoint : Endpoint<FileDeleteRequest>
             return;
         }
 
-        await _uploadService.DeleteAsync(req.ObjectName, ct);
-        await Send.OkAsync(new { message = "File deleted" }, ct);
+        try
+        {
+            await _uploadService.DeleteAsync(req.ObjectName, ct);
+            await Send.OkAsync(new { message = "File deleted" }, ct);
+        }
+        catch (InvalidOperationException ex)
+        {
+            AddError(ex.Message);
+            await Send.ErrorsAsync(503, ct);
+        }
     }
 }

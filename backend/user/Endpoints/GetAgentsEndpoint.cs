@@ -18,3 +18,22 @@ public class GetAgentsEndpoint(UserService userService) : EndpointWithoutRequest
         await Send.OkAsync(agents, ct);
     }
 }
+
+public class GetPublicAgentsEndpoint(UserService userService) : EndpointWithoutRequest<List<PublicAgentProfileResponse>>
+{
+    public override void Configure()
+    {
+        Get("/public/agents");
+        AllowAnonymous();
+        Summary(s =>
+        {
+            s.Summary = "Get public agent profiles for the homepage and agents directory";
+        });
+    }
+
+    public override async Task HandleAsync(CancellationToken ct)
+    {
+        var agents = await userService.GetPublicAgentsAsync();
+        await Send.OkAsync(agents, ct);
+    }
+}

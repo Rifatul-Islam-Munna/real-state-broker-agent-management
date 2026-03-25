@@ -11,6 +11,11 @@ import type {
   PaginatedResult,
   PropertyItem,
 } from "@/types/real-estate-api"
+import {
+  formatCompactCurrencyAmount,
+  formatCurrencyAmount,
+  parseCurrencyValue,
+} from "@/lib/currency"
 
 export const leadStageOrder: LeadStage[] = [
   "New",
@@ -164,20 +169,11 @@ export function formatRelativeTimeLabel(value: string) {
 }
 
 export function formatCurrency(value: number) {
-  return new Intl.NumberFormat("en-US", {
-    currency: "USD",
-    maximumFractionDigits: 0,
-    style: "currency",
-  }).format(value)
+  return formatCurrencyAmount(value)
 }
 
 export function formatCompactCurrency(value: number) {
-  return new Intl.NumberFormat("en-US", {
-    currency: "USD",
-    maximumFractionDigits: 1,
-    notation: "compact",
-    style: "currency",
-  }).format(value)
+  return formatCompactCurrencyAmount(value)
 }
 
 export function formatCommissionLabel(value: number, commissionRate: number) {
@@ -186,9 +182,7 @@ export function formatCommissionLabel(value: number, commissionRate: number) {
 }
 
 export function parseNumberFromValue(value: string) {
-  const normalized = value.replace(/[^0-9.]/g, "")
-  const parsed = Number.parseFloat(normalized)
-  return Number.isFinite(parsed) ? parsed : 0
+  return parseCurrencyValue(value)
 }
 
 export function inferPropertyType(property: Pick<PropertyItem, "description" | "title">) {

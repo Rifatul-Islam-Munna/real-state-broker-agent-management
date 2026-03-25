@@ -38,6 +38,26 @@ async function getPortalPathByRole(role: string) {
   return role === "Agent" ? "/agent/dashboard" : "/admin/dashboard"
 }
 
+async function resolvePostAuthRedirect(role: string, nextPath: string) {
+  const normalized = nextPath.trim()
+
+  if (
+    normalized.length === 0 ||
+    !normalized.startsWith("/") ||
+    normalized.startsWith("//") ||
+    normalized === "/login" ||
+    normalized === "/register"
+  ) {
+    return getPortalPathByRole(role)
+  }
+
+  if (role === "Agent" && normalized.startsWith("/admin")) {
+    return getPortalPathByRole(role)
+  }
+
+  return normalized
+}
+
 async function readErrorMessage(response: Response) {
   try {
     const payload = await response.json()
@@ -141,8 +161,10 @@ export async function loginAction(
   _prevState: AuthActionState = initialState,
   formData: FormData,
 ): Promise<AuthActionState> {
+  void _prevState
   const email = String(formData.get("email") ?? "").trim()
   const password = String(formData.get("password") ?? "")
+  const nextPath = String(formData.get("next") ?? "")
 
   const response = await fetch(`${baseUrl}/auth/login`, {
     method: "POST",
@@ -159,13 +181,14 @@ export async function loginAction(
 
   const auth = (await response.json()) as AuthResponse
   await persistSession(auth)
-  redirect(await getPortalPathByRole(auth.role))
+  redirect(await resolvePostAuthRedirect(auth.role, nextPath))
 }
 
 export async function registerAction(
   _prevState: AuthActionState = initialState,
   formData: FormData,
 ): Promise<AuthActionState> {
+  void _prevState
   const response = await fetch(`${baseUrl}/auth/register`, {
     method: "POST",
     headers: {
@@ -181,8 +204,6 @@ export async function registerAction(
     }),
     cache: "no-store",
   })
- console.log("response",response)
-
 
   if (!response.ok) {
     return { error: await readErrorMessage(response) }

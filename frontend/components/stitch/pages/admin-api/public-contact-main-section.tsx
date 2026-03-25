@@ -5,6 +5,8 @@ import { useState } from "react"
 import { useCreateContactRequest } from "@/hooks/use-real-estate-api"
 import { publicContactMethods } from "@/static-data/pages/public-contact-us/data"
 import { AppIcon } from "@/components/ui/app-icon"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 
 const inquiryTypes = [
   "Buying",
@@ -92,8 +94,8 @@ export function PublicContactMainApiSection() {
               setSubmitted(true)
             }}
           >
-            <input
-              className="border border-slate-200 px-4 py-3 text-sm outline-none focus:border-primary"
+            <Input
+              className="h-auto border-slate-200 px-4 py-3 text-sm"
               onChange={(event) => {
                 setFormError(null)
                 setSubmitted(false)
@@ -103,8 +105,8 @@ export function PublicContactMainApiSection() {
               type="text"
               value={formState.name}
             />
-            <input
-              className="border border-slate-200 px-4 py-3 text-sm outline-none focus:border-primary"
+            <Input
+              className="h-auto border-slate-200 px-4 py-3 text-sm"
               onChange={(event) => {
                 setFormError(null)
                 setSubmitted(false)
@@ -114,8 +116,8 @@ export function PublicContactMainApiSection() {
               type="email"
               value={formState.email}
             />
-            <input
-              className="border border-slate-200 px-4 py-3 text-sm outline-none focus:border-primary"
+            <Input
+              className="h-auto border-slate-200 px-4 py-3 text-sm"
               onChange={(event) => {
                 setFormError(null)
                 setSubmitted(false)
@@ -125,14 +127,14 @@ export function PublicContactMainApiSection() {
               type="tel"
               value={formState.phone}
             />
-            <input
-              className="border border-slate-200 px-4 py-3 text-sm outline-none focus:border-primary"
+            <Input
+              className="h-auto border-slate-200 px-4 py-3 text-sm"
               defaultValue={activeInquiry}
               readOnly
               type="text"
             />
-            <textarea
-              className="min-h-40 border border-slate-200 px-4 py-3 text-sm outline-none focus:border-primary md:col-span-2"
+            <Textarea
+              className="min-h-40 border-slate-200 px-4 py-3 text-sm md:col-span-2"
               onChange={(event) => {
                 setFormError(null)
                 setSubmitted(false)

@@ -1,5 +1,6 @@
 import { type ChangeEvent, type FormEvent, useEffect, useMemo, useRef, useState } from "react"
 
+import type { AgentUserOption } from "@/types/real-estate-api"
 import { AppIcon } from "@/components/ui/app-icon"
 import { deleteUploadedAsset, uploadPropertyAsset } from "@/lib/upload-client"
 
@@ -12,7 +13,9 @@ import { PropertyFormFieldsSection } from "./property-form-fields"
 import { PropertyMediaSection } from "./property-media-section"
 
 type AddPropertyModalOverlaySectionProps = {
+  agentOptions: AgentUserOption[]
   initialValues: PropertyFormValues
+  isAgentOptionsLoading?: boolean
   isSubmitting?: boolean
   mode: "create" | "edit"
   onClose: () => void
@@ -70,7 +73,9 @@ function createPendingUploadFile(file: File): PendingUploadFile {
 }
 
 export function AddPropertyModalOverlaySection({
+  agentOptions,
   initialValues,
+  isAgentOptionsLoading = false,
   isSubmitting = false,
   mode,
   onClose,
@@ -290,7 +295,14 @@ export function AddPropertyModalOverlaySection({
               thumbnailPreviewUrl={thumbnailPreviewUrl}
               thumbnailStatusLabel={pendingThumbnail ? "New thumbnail selected" : "Current property thumbnail"}
             />
-            <PropertyFormFieldsSection errors={errors} formValues={formValues} selectedAmenities={selectedAmenities} updateField={updateField} />
+            <PropertyFormFieldsSection
+              agentOptions={agentOptions}
+              errors={errors}
+              formValues={formValues}
+              isAgentOptionsLoading={isAgentOptionsLoading}
+              selectedAmenities={selectedAmenities}
+              updateField={updateField}
+            />
           </div>
           <div className="flex justify-end gap-4 border-t border-slate-200 bg-slate-50 px-8 py-6 dark:border-slate-800 dark:bg-slate-800/50">
             <div className="mr-auto">

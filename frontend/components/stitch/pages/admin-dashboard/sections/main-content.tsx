@@ -1,149 +1,270 @@
 /* eslint-disable @next/next/no-img-element */
 
+import Link from "next/link"
 
 import { AppIcon } from "@/components/ui/app-icon"
+import { formatCompactCurrency, formatRelativeTimeLabel } from "@/lib/admin-portal"
+import type { DashboardSummary } from "@/types/real-estate-api"
 
-export function MainContentSection() {
+type MainContentSectionProps = {
+  currentUserName: string
+  errorMessage?: string | null
+  isLoading?: boolean
+  portal: "admin" | "agent"
+  summary?: DashboardSummary | null
+}
+
+const fallbackSummary: DashboardSummary = {
+  overview: {
+    activeListings: 0,
+    activeListingsChange: 0,
+    newLeadsThisWeek: 0,
+    contactedLeadsThisWeek: 0,
+    convertedLeadsThisWeek: 0,
+    dealsInProgress: 0,
+    closingThisMonth: 0,
+    monthlyRevenue: 0,
+    monthlyRevenueChange: 0,
+  },
+  topAgents: [],
+  alerts: [],
+  visits: [],
+}
+
+function formatDeltaLabel(value: number, suffix: string) {
+  if (value > 0) {
+    return `+${value}% ${suffix}`
+  }
+
+  if (value < 0) {
+    return `${value}% ${suffix}`
+  }
+
+  return `0% ${suffix}`
+}
+
+function initialsFromName(name: string) {
+  return name
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((item) => item[0]?.toUpperCase() ?? "")
+    .join("") || "EB"
+}
+
+function portalLinks(portal: "admin" | "agent") {
+  return portal === "admin"
+    ? {
+        deals: "/admin/deal-pipeline-reports",
+        leads: "/admin/lead-crm-pipeline",
+        team: "/admin/agent-team-management",
+      }
+    : {
+        deals: "/agent/deal-pipeline",
+        leads: "/agent/lead",
+        team: "/agent/settings",
+      }
+}
+
+function alertToneClasses(tone: DashboardSummary["alerts"][number]["tone"]) {
+  switch (tone) {
+    case "danger":
+      return {
+        action: "text-red-500",
+        border: "border-red-100 dark:border-red-900/20",
+        icon: "text-red-500",
+        surface: "bg-red-50 dark:bg-red-900/10",
+      }
+    case "warning":
+      return {
+        action: "text-accent",
+        border: "border-orange-100 dark:border-orange-900/20",
+        icon: "text-accent",
+        surface: "bg-orange-50 dark:bg-orange-900/10",
+      }
+    default:
+      return {
+        action: "text-primary",
+        border: "border-sky-100 dark:border-sky-900/20",
+        icon: "text-primary",
+        surface: "bg-sky-50 dark:bg-sky-900/10",
+      }
+  }
+}
+
+function visitDateParts(value: string) {
+  const date = new Date(value)
+
+  if (Number.isNaN(date.getTime())) {
+    return { day: "--", month: "N/A" }
+  }
+
+  return {
+    day: new Intl.DateTimeFormat("en-US", { day: "2-digit" }).format(date),
+    month: new Intl.DateTimeFormat("en-US", { month: "short" }).format(date),
+  }
+}
+
+export function MainContentSection({
+  currentUserName,
+  errorMessage,
+  isLoading,
+  portal,
+  summary,
+}: MainContentSectionProps) {
+  const dashboard = summary ?? fallbackSummary
+  const links = portalLinks(portal)
+  const firstName = currentUserName.split(" ").filter(Boolean)[0] ?? "Account"
+  const initials = initialsFromName(currentUserName)
+
   return (
-    <main className="flex-1 min-h-screen">
-      <header className="h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-8 sticky top-0 z-40">
-        <div className="flex items-center gap-4 w-96">
+    <main className="min-h-screen flex-1">
+      <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b border-slate-200 bg-white px-8 dark:border-slate-800 dark:bg-slate-900">
+        <div className="flex w-96 items-center gap-4">
           <div className="relative w-full">
             <AppIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" name="search" />
             <input
-              className="w-full pl-10 pr-4 py-2 bg-slate-100 dark:bg-slate-800 border-none rounded-lg text-sm focus:ring-2 focus:ring-primary"
+              className="w-full rounded-lg border-none bg-slate-100 py-2 pl-10 pr-4 text-sm focus:ring-2 focus:ring-primary dark:bg-slate-800"
               placeholder="Search leads, deals, or properties..."
+              readOnly
               type="text"
+              value=""
             />
           </div>
         </div>
         <div className="flex items-center gap-4">
-          <button className="w-10 h-10 flex items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 relative">
+          <button className="relative flex h-10 w-10 items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800" type="button">
             <AppIcon className="text-slate-600 dark:text-slate-400" name="notifications" />
-            <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-accent rounded-full border-2 border-white">
-
-            </span>
+            <span className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full border-2 border-white bg-accent" />
           </button>
-          <button className="w-10 h-10 flex items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800">
+          <button className="flex h-10 w-10 items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800" type="button">
             <AppIcon className="text-slate-600 dark:text-slate-400" name="help_outline" />
           </button>
-          <div className="h-6 w-[1px] bg-slate-200 dark:bg-slate-800 mx-2">
-
-          </div>
-          <button className="flex items-center gap-2 hover:bg-slate-100 dark:hover:bg-slate-800 p-1 pr-2 rounded-lg">
-            <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white text-xs font-bold">
-              {"AM"}
+          <div className="mx-2 h-6 w-[1px] bg-slate-200 dark:bg-slate-800" />
+          <button className="flex items-center gap-2 rounded-lg p-1 pr-2 hover:bg-slate-100 dark:hover:bg-slate-800" type="button">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-xs font-bold text-white">
+              {initials}
             </div>
             <span className="text-sm font-medium">
-              {"Account"}
+              {currentUserName}
             </span>
           </button>
         </div>
       </header>
-      <div className="p-8 space-y-8">
+      <div className="space-y-8 p-8">
         <div>
           <h1 className="text-2xl font-black text-slate-900 dark:text-white">
-            {"Good morning, Alex"}
+            {`Good morning, ${firstName}`}
           </h1>
-          <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
             {"Here's what's happening in your agency today."}
           </p>
+          {isLoading && !summary ? (
+            <p className="mt-3 text-xs font-bold uppercase tracking-[0.2em] text-primary">
+              {"Loading live dashboard data..."}
+            </p>
+          ) : null}
+          {errorMessage ? (
+            <p className="mt-3 border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
+              {errorMessage}
+            </p>
+          ) : null}
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <div className="bg-white dark:bg-slate-900 p-6 border-l-4 border-primary rounded-lg">
-            <p className="text-slate-500 dark:text-slate-400 text-sm font-medium mb-2 uppercase tracking-wider">
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
+          <div className="rounded-lg border-l-4 border-primary bg-white p-6 dark:bg-slate-900">
+            <p className="mb-2 text-sm font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">
               {"Active Listings"}
             </p>
             <div className="flex items-end justify-between">
               <div>
                 <h3 className="text-3xl font-black text-slate-900 dark:text-white">
-                  {"142"}
+                  {dashboard.overview.activeListings}
                 </h3>
-                <p className="text-green-600 text-xs font-bold mt-1">
-                  {"+12% from last month"}
+                <p className={`mt-1 text-xs font-bold ${dashboard.overview.activeListingsChange >= 0 ? "text-green-600" : "text-rose-600"}`}>
+                  {formatDeltaLabel(dashboard.overview.activeListingsChange, "from last month")}
                 </p>
               </div>
-              <AppIcon className="text-primary/20 text-4xl" name="home" />
+              <AppIcon className="text-4xl text-primary/20" name="home" />
             </div>
           </div>
-          <div className="bg-white dark:bg-slate-900 p-6 border-l-4 border-secondary rounded-lg">
-            <p className="text-slate-500 dark:text-slate-400 text-sm font-medium mb-2 uppercase tracking-wider">
+          <div className="rounded-lg border-l-4 border-secondary bg-white p-6 dark:bg-slate-900">
+            <p className="mb-2 text-sm font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">
               {"Leads this Week"}
             </p>
-            <div className="grid grid-cols-3 gap-2 mt-2">
+            <div className="mt-2 grid grid-cols-3 gap-2">
               <div className="text-center">
                 <p className="text-xl font-bold text-slate-900 dark:text-white">
-                  {"48"}
+                  {dashboard.overview.newLeadsThisWeek}
                 </p>
-                <p className="text-[10px] text-slate-400 uppercase">
+                <p className="text-[10px] uppercase text-slate-400">
                   {"New"}
                 </p>
               </div>
-              <div className="text-center border-x border-slate-100 dark:border-slate-800">
+              <div className="border-x border-slate-100 text-center dark:border-slate-800">
                 <p className="text-xl font-bold text-slate-900 dark:text-white">
-                  {"32"}
+                  {dashboard.overview.contactedLeadsThisWeek}
                 </p>
-                <p className="text-[10px] text-slate-400 uppercase">
+                <p className="text-[10px] uppercase text-slate-400">
                   {"Cont."}
                 </p>
               </div>
               <div className="text-center">
                 <p className="text-xl font-bold text-accent">
-                  {"14"}
+                  {dashboard.overview.convertedLeadsThisWeek}
                 </p>
-                <p className="text-[10px] text-slate-400 uppercase">
+                <p className="text-[10px] uppercase text-slate-400">
                   {"Conv."}
                 </p>
               </div>
             </div>
           </div>
-          <div className="bg-white dark:bg-slate-900 p-6 border-l-4 border-accent rounded-lg">
-            <p className="text-slate-500 dark:text-slate-400 text-sm font-medium mb-2 uppercase tracking-wider">
+          <div className="rounded-lg border-l-4 border-accent bg-white p-6 dark:bg-slate-900">
+            <p className="mb-2 text-sm font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">
               {"Deals in Progress"}
             </p>
             <div className="flex items-end justify-between">
               <div>
                 <h3 className="text-3xl font-black text-slate-900 dark:text-white">
-                  {"24"}
+                  {dashboard.overview.dealsInProgress}
                 </h3>
-                <p className="text-slate-400 text-xs mt-1">
-                  {"8 closing this month"}
+                <p className="mt-1 text-xs text-slate-400">
+                  {`${dashboard.overview.closingThisMonth} closing this month`}
                 </p>
               </div>
-              <AppIcon className="text-accent/20 text-4xl" name="contract" />
+              <AppIcon className="text-4xl text-accent/20" name="contract" />
             </div>
           </div>
-          <div className="bg-white dark:bg-slate-900 p-6 border-l-4 border-slate-400 rounded-lg">
-            <p className="text-slate-500 dark:text-slate-400 text-sm font-medium mb-2 uppercase tracking-wider">
+          <div className="rounded-lg border-l-4 border-slate-400 bg-white p-6 dark:bg-slate-900">
+            <p className="mb-2 text-sm font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">
               {"Monthly Revenue"}
             </p>
             <div className="flex items-end justify-between">
               <div>
                 <h3 className="text-3xl font-black text-slate-900 dark:text-white">
-                  {"$84.2k"}
+                  {formatCompactCurrency(dashboard.overview.monthlyRevenue)}
                 </h3>
-                <p className="text-green-600 text-xs font-bold mt-1">
-                  {"94% of target"}
+                <p className={`mt-1 text-xs font-bold ${dashboard.overview.monthlyRevenueChange >= 0 ? "text-green-600" : "text-rose-600"}`}>
+                  {formatDeltaLabel(dashboard.overview.monthlyRevenueChange, "vs last month")}
                 </p>
               </div>
-              <AppIcon className="text-slate-400/20 text-4xl" name="payments" />
+              <AppIcon className="text-4xl text-slate-400/20" name="payments" />
             </div>
           </div>
         </div>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2 space-y-4">
+        <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
+          <div className="space-y-4 lg:col-span-2">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold text-slate-900 dark:text-white">
                 {"Top-Performing Agents"}
               </h2>
-              <button className="text-primary text-xs font-bold hover:underline">
+              <Link className="text-xs font-bold text-primary hover:underline" href={links.team}>
                 {"View All"}
-              </button>
+              </Link>
             </div>
-            <div className="bg-white dark:bg-slate-900 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-800">
+            <div className="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
               <table className="w-full text-left">
                 <thead>
-                  <tr className="bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-wider">
+                  <tr className="bg-slate-50 text-xs font-bold uppercase tracking-wider text-slate-500 dark:bg-slate-800/50 dark:text-slate-400">
                     <th className="px-6 py-4">
                       {"Agent"}
                     </th>
@@ -162,117 +283,55 @@ export function MainContentSection() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  <tr>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-slate-200 overflow-hidden">
-                          <img
-                            alt="Sarah"
-                            data-alt="Agent headshot portrait"
-                            src="https://lh3.googleusercontent.com/aida-public/AB6AXuBx4X0x9H9kwWbDeyzUrfVYppy1U8xi4OfEj0AsGSAKCB63oSdnc8WjyF4ct6RFLe_sKDk5r52S__bg3wkt3wtDxQt4xqyEyFX8qSscjJlvyYhlEuO2MuqJvTPTYHsjGwxZ7V3Zh4jVCOwTUupjsHP5_VqbLNMibnXmX5X4QsWmATzz2rKJiZ1LijPf52yvBfOZYMAq1HdXCZi-NO9yNdGJcmsYl3ee5hekcAyJZVtH4KGyDoYOGanFvXbpolRO4gkc3aLoiWzJ06s"
-                          />
-                        </div>
-                        <span className="text-sm font-bold">
-                          {"Sarah Jenkins"}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className="px-2 py-1 bg-green-100 text-green-700 text-[10px] font-bold rounded uppercase">
-                        {"Active"}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-sm">
-                      {"12"}
-                    </td>
-                    <td className="px-6 py-4 text-sm font-bold text-primary">
-                      {"$2.4M"}
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 max-w-[80px]">
-                        <div
-                          className="bg-primary h-1.5 rounded-full"
-                          style={{ width: "85%" }}
-                        >
-
-                        </div>
-                      </div>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-slate-200 overflow-hidden">
-                          <img
-                            alt="David"
-                            data-alt="Agent headshot portrait"
-                            src="https://lh3.googleusercontent.com/aida-public/AB6AXuDul9IB9OprCIm-4AcaKALkV_Wr3PVfHKojbDCj7TfZ-jyDAfu2oMwndx73aVrPUH-FAK9NcPIkO-n2Lnv_Sm0FXhVzoHU4bwHZHtcOiGMPZiK8HrlKdzkDsDoOPKozL9K98LBZSvtCS85vxze1OfawCMIH5zPCXUueY2HSUnXPAo3rYV3tlt-hz9nYAzTZ1Pxtaj1L8f_0_BRkNJwKVyurQXpaPQBNNMg9B00iMt1jgRGNnGPrBWMjFcpetnZfExy4uWWDsKC5b8o"
-                          />
-                        </div>
-                        <span className="text-sm font-bold">
-                          {"David Thorne"}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className="px-2 py-1 bg-green-100 text-green-700 text-[10px] font-bold rounded uppercase">
-                        {"Active"}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-sm">
-                      {"9"}
-                    </td>
-                    <td className="px-6 py-4 text-sm font-bold text-primary">
-                      {"$1.8M"}
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 max-w-[80px]">
-                        <div
-                          className="bg-primary h-1.5 rounded-full"
-                          style={{ width: "60%" }}
-                        >
-
-                        </div>
-                      </div>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-slate-200 overflow-hidden">
-                          <img
-                            alt="Emma"
-                            data-alt="Agent headshot portrait"
-                            src="https://lh3.googleusercontent.com/aida-public/AB6AXuAC0ieFRry1aPmj1X2AAvHevy-8aIr2kMDpd2RBb-IyDTj5SJ7sqcjBPmbRZxaJx9Ub8zYdnhgf4IOFEiXnqWoUcZ5QzZjfBkkOm5_bX80-wQEMNFfGbxv-tZnNoVS3YGDrP-kgzI0FMCBe-T-wAVsVk6cQFp8vKpVvh8hc8QKx4_Iz4yFQG_PulTlixGPlpzIRIHcEkNpnwhjXybHl41O8gs7oLF7UtIYky-H-LAr732XZGqKcPYj3xqK-LkuGLXIUDbJf4wxwh-w"
-                          />
-                        </div>
-                        <span className="text-sm font-bold">
-                          {"Emma Wilson"}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className="px-2 py-1 bg-blue-100 text-blue-700 text-[10px] font-bold rounded uppercase">
-                        {"Away"}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-sm">
-                      {"7"}
-                    </td>
-                    <td className="px-6 py-4 text-sm font-bold text-primary">
-                      {"$1.1M"}
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 max-w-[80px]">
-                        <div
-                          className="bg-primary h-1.5 rounded-full"
-                          style={{ width: "45%" }}
-                        >
-
-                        </div>
-                      </div>
-                    </td>
-                  </tr>
+                  {dashboard.topAgents.length === 0 ? (
+                    <tr>
+                      <td className="px-6 py-8 text-sm text-slate-500 dark:text-slate-400" colSpan={5}>
+                        {"No agent performance data is available yet."}
+                      </td>
+                    </tr>
+                  ) : (
+                    dashboard.topAgents.map((agent) => (
+                      <tr key={agent.id}>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="h-8 w-8 overflow-hidden rounded-full bg-slate-200">
+                              {agent.avatarUrl ? (
+                                <img alt={agent.fullName} className="h-full w-full object-cover" src={agent.avatarUrl} />
+                              ) : (
+                                <div className="flex h-full w-full items-center justify-center bg-primary text-[10px] font-black text-white">
+                                  {initialsFromName(agent.fullName)}
+                                </div>
+                              )}
+                            </div>
+                            <div>
+                              <span className="text-sm font-bold">
+                                {agent.fullName}
+                              </span>
+                              <p className="text-[10px] uppercase tracking-wide text-slate-400">
+                                {agent.agencyName ?? "EstateBlue Team"}
+                              </p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className={`rounded px-2 py-1 text-[10px] font-bold uppercase ${agent.status === "Active" ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"}`}>
+                            {agent.status}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-sm">
+                          {agent.dealsClosed}
+                        </td>
+                        <td className="px-6 py-4 text-sm font-bold text-primary">
+                          {formatCompactCurrency(agent.revenue)}
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="h-1.5 w-full max-w-[80px] rounded-full bg-slate-100 dark:bg-slate-800">
+                            <div className="h-1.5 rounded-full bg-primary" style={{ width: `${agent.growth}%` }} />
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -280,35 +339,41 @@ export function MainContentSection() {
               <h2 className="text-lg font-bold text-slate-900 dark:text-white">
                 {"Priority Alerts"}
               </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="flex items-start gap-4 p-4 bg-orange-50 dark:bg-orange-900/10 border border-orange-100 dark:border-orange-900/20 rounded-lg">
-                  <AppIcon className="text-accent" name="warning" />
-                  <div>
-                    <p className="text-sm font-bold text-slate-900 dark:text-white">
-                      {"4 Pending Contracts"}
-                    </p>
-                    <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
-                      {"Awaiting digital signatures for more than 48 hours."}
-                    </p>
-                    <button className="mt-2 text-xs font-black text-accent uppercase tracking-tighter hover:underline">
-                      {"Review Now"}
-                    </button>
-                  </div>
-                </div>
-                <div className="flex items-start gap-4 p-4 bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/20 rounded-lg">
-                  <AppIcon className="text-red-500" name="event_busy" />
-                  <div>
-                    <p className="text-sm font-bold text-slate-900 dark:text-white">
-                      {"2 Expiring Listings"}
-                    </p>
-                    <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
-                      {"The Oakwood Heights listings will expire in 3 days."}
-                    </p>
-                    <button className="mt-2 text-xs font-black text-red-500 uppercase tracking-tighter hover:underline">
-                      {"Renew Listings"}
-                    </button>
-                  </div>
-                </div>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                {(dashboard.alerts.length > 0 ? dashboard.alerts : [
+                  {
+                    actionLabel: "Review Leads",
+                    count: 0,
+                    description: "No urgent lead or deal actions are pending yet.",
+                    id: "empty-state",
+                    target: "leads" as const,
+                    title: "0 Priority Items",
+                    tone: "info" as const,
+                  },
+                ]).map((alert) => {
+                  const tone = alertToneClasses(alert.tone)
+                  const href = alert.target === "deals" ? links.deals : links.leads
+
+                  return (
+                    <div
+                      key={alert.id}
+                      className={`flex items-start gap-4 rounded-lg border p-4 ${tone.surface} ${tone.border}`}
+                    >
+                      <AppIcon className={tone.icon} name={alert.target === "deals" ? "warning" : "event_busy"} />
+                      <div>
+                        <p className="text-sm font-bold text-slate-900 dark:text-white">
+                          {alert.title}
+                        </p>
+                        <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
+                          {alert.description}
+                        </p>
+                        <Link className={`mt-2 inline-block text-xs font-black uppercase tracking-tighter hover:underline ${tone.action}`} href={href}>
+                          {alert.actionLabel}
+                        </Link>
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             </div>
           </div>
@@ -317,105 +382,65 @@ export function MainContentSection() {
               <h2 className="text-lg font-bold text-slate-900 dark:text-white">
                 {"Property Visits"}
               </h2>
-              <span className="px-2 py-0.5 bg-primary/10 text-primary text-[10px] font-bold rounded">
-                {"Today"}
+              <span className="rounded bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary">
+                {"Live"}
               </span>
             </div>
-            <div className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 divide-y divide-slate-100 dark:divide-slate-800">
-              <div className="p-4 flex gap-4">
-                <div className="flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-800 w-14 h-14 rounded-lg flex-shrink-0">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase leading-none">
-                    {"Oct"}
-                  </p>
-                  <p className="text-lg font-black text-primary leading-none mt-1">
-                    {"12"}
+            <div className="divide-y divide-slate-100 rounded-lg border border-slate-200 bg-white dark:divide-slate-800 dark:border-slate-800 dark:bg-slate-900">
+              {dashboard.visits.length === 0 ? (
+                <div className="p-4">
+                  <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">
+                    {"No property visit activity has been logged yet."}
                   </p>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-bold text-slate-900 dark:text-white truncate">
-                    {"The Grand Penthouse"}
-                  </p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                    {"10:30 AM - 11:30 AM"}
-                  </p>
-                  <div className="flex items-center gap-1 mt-2">
-                    <AppIcon className="text-[14px] text-slate-400" name="person" />
-                    <p className="text-[10px] text-slate-500 dark:text-slate-400">
-                      {"Mr. & Mrs. Henderson"}
-                    </p>
-                  </div>
-                </div>
-              </div>
-              <div className="p-4 flex gap-4">
-                <div className="flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-800 w-14 h-14 rounded-lg flex-shrink-0">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase leading-none">
-                    {"Oct"}
-                  </p>
-                  <p className="text-lg font-black text-primary leading-none mt-1">
-                    {"12"}
-                  </p>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-bold text-slate-900 dark:text-white truncate">
-                    {"Sunset Ridge Estate"}
-                  </p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                    {"02:00 PM - 03:00 PM"}
-                  </p>
-                  <div className="flex items-center gap-1 mt-2">
-                    <AppIcon className="text-[14px] text-slate-400" name="person" />
-                    <p className="text-[10px] text-slate-500 dark:text-slate-400">
-                      {"James Miller"}
-                    </p>
-                  </div>
-                </div>
-              </div>
-              <div className="p-4 flex gap-4 opacity-60 bg-slate-50/50 dark:bg-slate-800/20">
-                <div className="flex flex-col items-center justify-center bg-slate-100 dark:bg-slate-800 w-14 h-14 rounded-lg flex-shrink-0">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase leading-none">
-                    {"Oct"}
-                  </p>
-                  <p className="text-lg font-black text-slate-400 leading-none mt-1">
-                    {"12"}
-                  </p>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-bold text-slate-500 truncate line-through">
-                    {"Suburban Villa"}
-                  </p>
-                  <p className="text-[10px] font-bold text-red-500 mt-1 uppercase">
-                    {"Cancelled"}
-                  </p>
-                </div>
-              </div>
-              <div className="p-4 flex gap-4">
-                <div className="flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-800 w-14 h-14 rounded-lg flex-shrink-0">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase leading-none">
-                    {"Oct"}
-                  </p>
-                  <p className="text-lg font-black text-primary leading-none mt-1">
-                    {"13"}
-                  </p>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-bold text-slate-900 dark:text-white truncate">
-                    {"Modern Loft Central"}
-                  </p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                    {"09:00 AM - 10:00 AM"}
-                  </p>
-                  <div className="flex items-center gap-1 mt-2">
-                    <AppIcon className="text-[14px] text-slate-400" name="person" />
-                    <p className="text-[10px] text-slate-500 dark:text-slate-400">
-                      {"Tech Startups Inc."}
-                    </p>
-                  </div>
-                </div>
-              </div>
+              ) : (
+                dashboard.visits.map((visit) => {
+                  const dateParts = visitDateParts(visit.activityAt)
+                  const isCanceled = visit.status === "Canceled"
+
+                  return (
+                    <div
+                      key={visit.id}
+                      className={`flex gap-4 p-4 ${isCanceled ? "bg-slate-50/50 opacity-60 dark:bg-slate-800/20" : ""}`}
+                    >
+                      <div className={`flex h-14 w-14 flex-shrink-0 flex-col items-center justify-center rounded-lg ${isCanceled ? "bg-slate-100 dark:bg-slate-800" : "bg-slate-50 dark:bg-slate-800"}`}>
+                        <p className="text-[10px] font-bold uppercase leading-none text-slate-400">
+                          {dateParts.month}
+                        </p>
+                        <p className={`mt-1 text-lg font-black leading-none ${isCanceled ? "text-slate-400" : "text-primary"}`}>
+                          {dateParts.day}
+                        </p>
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className={`truncate text-sm font-bold ${isCanceled ? "text-slate-500 line-through" : "text-slate-900 dark:text-white"}`}>
+                          {visit.propertyTitle}
+                        </p>
+                        <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                          {visit.timeline || formatRelativeTimeLabel(visit.activityAt)}
+                        </p>
+                        <div className="mt-2 flex items-center gap-1">
+                          <AppIcon className="text-[14px] text-slate-400" name="person" />
+                          <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                            {visit.clientName}
+                          </p>
+                        </div>
+                        {visit.status !== "FollowUp" ? (
+                          <p className={`mt-1 text-[10px] font-bold uppercase ${isCanceled ? "text-red-500" : "text-primary"}`}>
+                            {visit.status}
+                          </p>
+                        ) : null}
+                      </div>
+                    </div>
+                  )
+                })
+              )}
             </div>
-            <button className="w-full py-3 bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-xs font-bold rounded-lg hover:bg-slate-300 dark:hover:bg-slate-700 transition-colors">
-              {" View Full Calendar "}
-            </button>
+            <Link
+              className="block w-full rounded-lg bg-slate-200 py-3 text-center text-xs font-bold text-slate-600 transition-colors hover:bg-slate-300 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700"
+              href={links.leads}
+            >
+              {"View Lead Pipeline"}
+            </Link>
           </div>
         </div>
       </div>

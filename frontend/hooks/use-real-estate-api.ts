@@ -8,10 +8,12 @@ import type {
   AgentUserOption,
   ContactRequestItem,
   CreateAgentUserInput,
+  DashboardSummary,
   DealItem,
   LeadItem,
   MailInboxItem,
   PaginatedResult,
+  PortalCurrentUser,
   PropertyItem,
 } from "@/types/real-estate-api"
 
@@ -21,6 +23,11 @@ export type {
   ContactRequestItem,
   ContactRequestStatus,
   CreateAgentUserInput,
+  DashboardAlert,
+  DashboardOverview,
+  DashboardSummary,
+  DashboardTopAgent,
+  DashboardVisitItem,
   DealItem,
   DealStage,
   DealType,
@@ -32,6 +39,7 @@ export type {
   MailInboxStatus,
   NeighborhoodInsight,
   PaginatedResult,
+  PortalCurrentUser,
   PropertyItem,
 } from "@/types/real-estate-api"
 
@@ -71,6 +79,26 @@ export function useProperties(params?: QueryParams) {
     defaultQueryOptions,
     0,
     "properties",
+  )
+}
+
+export function useDashboardSummary() {
+  return useQueryWrapper<DashboardSummary>(
+    ["dashboard"],
+    "/dashboard/summary",
+    defaultQueryOptions,
+    0,
+    "dashboard",
+  )
+}
+
+export function usePortalCurrentUser() {
+  return useQueryWrapper<PortalCurrentUser>(
+    ["portal-current-user"],
+    "/auth/me",
+    defaultQueryOptions,
+    0,
+    "portal-current-user",
   )
 }
 

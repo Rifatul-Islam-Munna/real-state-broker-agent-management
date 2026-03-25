@@ -8,17 +8,24 @@ import { MeetTheTeamSection } from "./sections/meet-the-team"
 import { TestimonialsSection } from "./sections/testimonials"
 import { BlogSection } from "./sections/blog-section"
 import { FooterSection } from "./sections/footer"
+import { getFeaturedProperties, getPublicAgents, getPublicPropertyFilters } from "@/lib/public-real-estate-data"
 
-export function PublicAgencyHomepagePage() {
+export async function PublicAgencyHomepagePage() {
+  const [featuredProperties, publicAgents, publicPropertyFilters] = await Promise.all([
+    getFeaturedProperties(3),
+    getPublicAgents(),
+    getPublicPropertyFilters(),
+  ])
+
   return (
     <div className="bg-background-light dark:bg-background-dark text-[#1A2332] dark:text-slate-100 font-sans transition-colors duration-300">
       <TopNavigationBarSection />
-      <HeroSection />
+      <HeroSection filterOptions={publicPropertyFilters} />
       <WhyChooseUsSection />
-      <FeaturedListingsSection />
+      <FeaturedListingsSection properties={featuredProperties} />
       <PropertiesByNeighborhoodSection />
       <ServicesSection />
-      <MeetTheTeamSection />
+      <MeetTheTeamSection agents={publicAgents} />
       <TestimonialsSection />
       <BlogSection />
       <FooterSection />

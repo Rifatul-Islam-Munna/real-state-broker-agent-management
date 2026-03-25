@@ -1,19 +1,18 @@
-using FastEndpoints;
-using FastEndpoints.Swagger;
-using FastEndpoints.Security;
-using Microsoft.EntityFrameworkCore;
-using Serilog;
-using dotenv.net;
-using Scalar.AspNetCore;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.IdentityModel.Tokens;
-using System.Text;
 using Data;
+using dotenv.net;
+using FastEndpoints;
+using FastEndpoints.Security;
+using FastEndpoints.Swagger;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Tokens;
+using Minio;
+using Scalar.AspNetCore;
+using Serilog;
+using System.Text;
 using System.Text.Json.Serialization;
 using YourApp.Features.Upload;
-using Minio;
-using Microsoft.Extensions.Options;
-
 
 DotEnv.Load();
 
@@ -25,7 +24,6 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Host.UseSerilog();
 
-// ─── Database ────────────────────────────────────────────
 builder.Services.AddDbContext<AppDbContext>(opts =>
     opts.UseNpgsql(builder.Configuration.GetConnectionString("Default")
         ?? Environment.GetEnvironmentVariable("DATABASE_URL"))
@@ -36,19 +34,9 @@ builder.Services.AddDbContext<AppDbContext>(opts =>
 builder.Services.Configure<MinIOSettings>(
     builder.Configuration.GetSection(MinIOSettings.SectionName)
 );
-builder.Services.AddSingleton<IMinioClient>(sp =>
-{
-    var cfg = sp.GetRequiredService<IOptions<MinIOSettings>>().Value;
+var minioEndpoint = builder.Configuration[$"{MinIOSettings.SectionName}:Endpoint"];
+var minioBucketName = builder.Configuration[$"{MinIOSettings.SectionName}:BucketName"];
 
-    return new MinioClient()
-        .WithEndpoint(cfg.Endpoint)
-        .WithCredentials(cfg.AccessKey, cfg.SecretKey)
-        .WithSSL(cfg.WithSSL)
-        .Build();
-});
-
-
-// ─── FastEndpoints ────────────────────────────────────────
 builder.Services.AddFastEndpoints();
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -65,21 +53,22 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateLifetime = true,
         };
 
-        // ✅ Read from custom header "access_token" instead of Authorization
         options.Events = new JwtBearerEvents
         {
             OnMessageReceived = context =>
             {
                 var token = context.Request.Headers["access_token"].FirstOrDefault();
                 if (!string.IsNullOrEmpty(token))
+                {
                     context.Token = token;
+                }
+
                 return Task.CompletedTask;
             }
         };
     });
 builder.Services.AddAuthorization();
 
-// ✅ missing — generates the OpenAPI spec
 builder.Services.SwaggerDocument(o =>
 {
     o.DocumentSettings = s =>
@@ -89,42 +78,42 @@ builder.Services.SwaggerDocument(o =>
     };
 });
 
-// ─── Scrutor Auto-register Services ──────────────────────
 builder.Services.Scan(scan => scan
     .FromAssemblyOf<Program>()
     .AddClasses(c => c.Where(t =>
-        (t.Name.EndsWith("Service") ||
+        ((t.Name.EndsWith("Service") ||
         (t.Namespace != null && t.Namespace.EndsWith("Service")))
-        && t != typeof(FileUploadService) // ✅ exclude it from Scrutor
+        && t != typeof(FileUploadService)
+        && t != typeof(DisabledFileUploadService))
     ))
     .AsSelf()
     .WithScopedLifetime()
 );
 
 builder.Services.Configure<Microsoft.AspNetCore.Http.Json.JsonOptions>(o =>
-    o.SerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter())
+    o.SerializerOptions.Converters.Add(new JsonStringEnumConverter())
 );
-// ✅ ADD THIS — Register FileUploadService manually after IMinioClient
-builder.Services.AddSingleton<IFileUploadService, FileUploadService>();
 
-var app = builder.Build();
-
-// ─── Auto Migrate ─────────────────────────────────────────
-using (var scope = app.Services.CreateScope())
+if (!string.IsNullOrWhiteSpace(minioEndpoint) && !string.IsNullOrWhiteSpace(minioBucketName))
 {
-    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    builder.Services.AddSingleton<IMinioClient>(sp =>
+    {
+        var cfg = sp.GetRequiredService<IOptions<MinIOSettings>>().Value;
 
-    if (app.Environment.IsDevelopment())
-    {
-        await db.Database.EnsureDeletedAsync();  // ✅ drops all tables
-        await db.Database.EnsureCreatedAsync();  // ✅ recreates from current entities
-    }
-    else
-    {
-        await db.Database.MigrateAsync();        // ✅ safe migrations in prod
-    }
+        return new MinioClient()
+            .WithEndpoint(cfg.Endpoint)
+            .WithCredentials(cfg.AccessKey, cfg.SecretKey)
+            .WithSSL(cfg.WithSSL)
+            .Build();
+    });
+    builder.Services.AddSingleton<IFileUploadService, FileUploadService>();
+}
+else
+{
+    builder.Services.AddSingleton<IFileUploadService, DisabledFileUploadService>();
 }
 
+var app = builder.Build();
 
 app.UseAuthentication();
 app.UseAuthorization();

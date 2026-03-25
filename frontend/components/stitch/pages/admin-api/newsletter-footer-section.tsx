@@ -5,6 +5,7 @@ import { useState } from "react"
 
 import { useCreateMailInboxItem } from "@/hooks/use-real-estate-api"
 import { AppIcon } from "@/components/ui/app-icon"
+import { Input } from "@/components/ui/input"
 
 export function NewsletterFooterSection() {
   const createMailInboxItem = useCreateMailInboxItem()
@@ -100,8 +101,8 @@ export function NewsletterFooterSection() {
                 setJoined(true)
               }}
             >
-              <input
-                className="w-full bg-white/10 border-none px-4 py-3 text-sm focus:ring-1 focus:ring-accent"
+              <Input
+                className="h-auto rounded-none border-none bg-white/10 px-4 py-3 text-sm text-white placeholder:text-white/55 focus-visible:ring-accent/50"
                 onChange={(event) => {
                   setJoinError(null)
                   setJoined(false)
