@@ -39,9 +39,9 @@ export function FooterSection() {
             <li>
               <Link
                 className="hover:text-white transition-colors"
-                href="/market-insights"
+                href="/blog"
               >
-                {"Market Reports"}
+                {"Blog"}
               </Link>
             </li>
             <li>

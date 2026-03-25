@@ -61,6 +61,8 @@ public class User
     public string? Bio { get; set; }
     public decimal? CommissionRate { get; set; }      // e.g. 2.5 = 2.5%
     public bool IsVerifiedAgent { get; set; } = false;
+    public bool HasCustomAgentRoutePermissions { get; set; } = false;
+    public List<string> AgentRoutePermissions { get; set; } = [];
 
     // ─── Client-Specific ──────────────────────────────────
     public string? NationalId { get; set; }

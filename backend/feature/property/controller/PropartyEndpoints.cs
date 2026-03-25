@@ -7,6 +7,7 @@ namespace Endpoints
 {
     public class CreatePropertyEndpoint : Endpoint<Property, PropertyResponse>
     {
+        public required AgentRouteAccessService AgentRouteAccessService { get; set; }
         public required PropertyService PropertyService { get; set; }
 
         public override void Configure()
@@ -22,6 +23,7 @@ namespace Endpoints
 
         public override async Task HandleAsync(Property req, CancellationToken ct)
         {
+            await AgentRouteAccessService.EnsureCanAccessAsync(HttpContext.User, AgentRoutePermissions.Properties, ct);
             var result = await PropertyService.CreatePropertyAsync(req);
             await Send.OkAsync(result, ct);
         }
@@ -29,6 +31,7 @@ namespace Endpoints
 
     public class UpdatePropertyEndpoint : Endpoint<Property, PropertyResponse>
     {
+        public required AgentRouteAccessService AgentRouteAccessService { get; set; }
         public required PropertyService PropertyService { get; set; }
 
         public override void Configure()
@@ -44,6 +47,7 @@ namespace Endpoints
 
         public override async Task HandleAsync(Property req, CancellationToken ct)
         {
+            await AgentRouteAccessService.EnsureCanAccessAsync(HttpContext.User, AgentRoutePermissions.Properties, ct);
             var result = await PropertyService.UpdatePropertyAsync(req);
 
             if (result is null)
@@ -58,6 +62,7 @@ namespace Endpoints
 
     public class PatchPropertyEndpoint : Endpoint<Property, PropertyResponse>
     {
+        public required AgentRouteAccessService AgentRouteAccessService { get; set; }
         public required PropertyService PropertyService { get; set; }
 
         public override void Configure()
@@ -73,6 +78,7 @@ namespace Endpoints
 
         public override async Task HandleAsync(Property req, CancellationToken ct)
         {
+            await AgentRouteAccessService.EnsureCanAccessAsync(HttpContext.User, AgentRoutePermissions.Properties, ct);
             var result = await PropertyService.UpdatePropertyAsync(req);
 
             if (result is null)
@@ -87,6 +93,7 @@ namespace Endpoints
 
     public class DeletePropertyEndpoint : Endpoint<DeletePropertyEndpoint.Request>
     {
+        public required AgentRouteAccessService AgentRouteAccessService { get; set; }
         public class Request
         {
             [QueryParam]
@@ -108,6 +115,7 @@ namespace Endpoints
 
         public override async Task HandleAsync(Request req, CancellationToken ct)
         {
+            await AgentRouteAccessService.EnsureCanAccessAsync(HttpContext.User, AgentRoutePermissions.Properties, ct);
             await PropertyService.DeletePropertyAsync(req.Id);
             await Send.NoContentAsync(ct);
         }

@@ -61,6 +61,7 @@ export type PortalCurrentUser = {
   id: number
   fullName: string
   role: string
+  agentRoutePermissions: string[]
 }
 
 export type PublicAgentProfile = {
@@ -77,6 +78,145 @@ export type PublicPropertyFilters = {
   propertyTypes: Array<PropertyItem["propertyType"]>
   listingTypes: Array<PropertyItem["listingType"]>
   locations: string[]
+}
+
+export type HomePageImageAsset = {
+  url: string
+  objectName?: string | null
+}
+
+export type HomePageHeroSearchMode = {
+  tabLabel: string
+  inputPlaceholder: string
+  selectLabel: string
+  ctaLabel: string
+}
+
+export type HomePageHeroSection = {
+  headline: string
+  highlightedHeadline: string
+  description: string
+  backgroundImage: HomePageImageAsset
+  buyMode: HomePageHeroSearchMode
+  rentMode: HomePageHeroSearchMode
+  sellMode: HomePageHeroSearchMode
+}
+
+export type HomePageSectionIntro = {
+  eyebrow: string
+  title: string
+}
+
+export type HomePageFeatureItem = {
+  title: string
+  description: string
+}
+
+export type HomePageStatItem = {
+  value: string
+  label: string
+}
+
+export type HomePageWhyChooseUsSection = HomePageSectionIntro & {
+  description: string
+  features: HomePageFeatureItem[]
+  stats: HomePageStatItem[]
+  primaryImage: HomePageImageAsset
+  secondaryImage: HomePageImageAsset
+}
+
+export type HomePageNeighborhoodCard = {
+  name: string
+  propertyCountLabel: string
+  image: HomePageImageAsset
+}
+
+export type HomePageNeighborhoodSection = HomePageSectionIntro & {
+  cards: HomePageNeighborhoodCard[]
+}
+
+export type HomePageServiceCard = {
+  title: string
+  description: string
+  linkLabel: string
+}
+
+export type HomePageTeamSection = HomePageSectionIntro & {
+  buttonLabel: string
+}
+
+export type HomePageTestimonialSection = {
+  quote: string
+  name: string
+  role: string
+  avatarImage: HomePageImageAsset
+}
+
+export type HomePageSettings = {
+  hero: HomePageHeroSection
+  featuredListings: HomePageSectionIntro
+  whyChooseUs: HomePageWhyChooseUsSection
+  neighborhoods: HomePageNeighborhoodSection
+  services: HomePageServiceCard[]
+  team: HomePageTeamSection
+  testimonial: HomePageTestimonialSection
+  updatedAt: string
+}
+
+export type BlogPostSummary = {
+  id: number
+  title: string
+  slug: string
+  excerpt: string
+  category: string
+  coverImageUrl: string
+  authorName: string
+  publishedAt: string
+  readTimeMinutes: number
+  isFeatured: boolean
+}
+
+export type BlogPostItem = {
+  id: number
+  title: string
+  slug: string
+  excerpt: string
+  category: string
+  coverImageUrl: string
+  coverImageObjectName?: string | null
+  authorName: string
+  readTimeMinutes: number
+  isFeatured: boolean
+  isPublished: boolean
+  publishedAt?: string | null
+  tags: string[]
+  highlights: string[]
+  paragraphs: string[]
+  createdAt: string
+  updatedAt: string
+}
+
+export type BlogPostSaveInput = {
+  title: string
+  excerpt: string
+  category: string
+  coverImageUrl: string
+  coverImageObjectName?: string | null
+  authorName: string
+  readTimeMinutes: number
+  isFeatured: boolean
+  isPublished: boolean
+  publishedAt?: string | null
+  tags: string[]
+  highlights: string[]
+  paragraphs: string[]
+}
+
+export type BlogPostDetail = BlogPostSummary & {
+  tags: string[]
+  highlights: string[]
+  paragraphs: string[]
+  relatedPosts: BlogPostSummary[]
 }
 
 export type AgentSummary = {
@@ -104,6 +244,8 @@ export type AgentUserOption = {
   bio?: string | null
   createdAt?: string
   propertyCount?: number
+  hasCustomAgentRoutePermissions?: boolean
+  agentRoutePermissions: string[]
 }
 
 export type CreateAgentUserInput = {
@@ -119,6 +261,12 @@ export type CreateAgentUserInput = {
   commissionRate?: number | null
   isVerifiedAgent?: boolean
   isActive?: boolean
+}
+
+export type UpdateAgentRoutePermissionsInput = {
+  agentId: number
+  useCustomAgentRoutePermissions: boolean
+  agentRoutePermissions: string[]
 }
 
 export type NeighborhoodInsight = {

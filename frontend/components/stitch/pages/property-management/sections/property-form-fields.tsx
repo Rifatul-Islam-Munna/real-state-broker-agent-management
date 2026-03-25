@@ -1,3 +1,5 @@
+import { useMemo, useState } from "react"
+
 import { AppIcon } from "@/components/ui/app-icon"
 import { Input } from "@/components/ui/input"
 import {
@@ -11,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea"
 import type { AgentUserOption, PropertyItem } from "@/@types/real-estate-api"
 
 import {
-  amenityOptions,
+  defaultAmenityOptions,
   FieldError,
   type NeighborhoodInsightFormValue,
   type PropertyFormErrors,
@@ -40,7 +42,62 @@ export function PropertyFormFieldsSection({
   selectedAmenities,
   updateField,
 }: PropertyFormFieldsSectionProps) {
+  const [newAmenity, setNewAmenity] = useState("")
   const neighborhoodInsights = formValues.neighborhoodInsights ?? []
+  const selectedAgentLabel = formValues.agentId
+    ? agentOptions.find((agent) => agent.id === formValues.agentId)?.fullName ?? `Agent #${formValues.agentId}`
+    : isAgentOptionsLoading
+      ? "Loading agents..."
+      : "Assign later"
+  const propertyTypeLabel = formValues.propertyType === "Commercial" ? "Commercial" : "Residential"
+  const listingTypeLabel = formValues.listingType === "ForRent" ? "For Rent" : "For Sale"
+  const listingStatusLabel = formValues.status === "Closed" ? "Closed" : "Open"
+  const amenityOptions = useMemo(() => {
+    const mergedAmenities = new Set(
+      [...defaultAmenityOptions, ...(formValues.keyAmenities ?? [])]
+        .map((item) => item.trim())
+        .filter(Boolean),
+    )
+
+    return Array.from(mergedAmenities)
+  }, [formValues.keyAmenities])
+
+  function toggleAmenity(amenity: string, checked: boolean) {
+    const currentAmenities = formValues.keyAmenities ?? []
+
+    if (checked) {
+      const alreadyExists = currentAmenities.some((item) => item.toLowerCase() === amenity.toLowerCase())
+
+      if (!alreadyExists) {
+        updateField("keyAmenities", [...currentAmenities, amenity])
+      }
+
+      return
+    }
+
+    updateField(
+      "keyAmenities",
+      currentAmenities.filter((item) => item.toLowerCase() !== amenity.toLowerCase()),
+    )
+  }
+
+  function addAmenity() {
+    const nextAmenity = newAmenity.trim()
+
+    if (!nextAmenity) {
+      return
+    }
+
+    const alreadyExists = (formValues.keyAmenities ?? []).some(
+      (item) => item.toLowerCase() === nextAmenity.toLowerCase(),
+    )
+
+    if (!alreadyExists) {
+      updateField("keyAmenities", [...(formValues.keyAmenities ?? []), nextAmenity])
+    }
+
+    setNewAmenity("")
+  }
 
   function updateNeighborhoodInsight(index: number, value: Partial<NeighborhoodInsightFormValue>) {
     const nextInsights = neighborhoodInsights.map((item, itemIndex) =>
@@ -92,7 +149,9 @@ export function PropertyFormFieldsSection({
               value={formValues.agentId ? `${formValues.agentId}` : emptySelectValue}
             >
               <SelectTrigger className={formSelectClassName}>
-                <SelectValue placeholder={isAgentOptionsLoading ? "Loading agents..." : "Assign later"} />
+                <SelectValue>
+                  {selectedAgentLabel}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value={emptySelectValue}>
@@ -117,7 +176,9 @@ export function PropertyFormFieldsSection({
               value={formValues.propertyType}
             >
               <SelectTrigger className={formSelectClassName}>
-                <SelectValue placeholder="Property type" />
+                <SelectValue>
+                  {propertyTypeLabel}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="Residential">{"Residential"}</SelectItem>
@@ -135,7 +196,9 @@ export function PropertyFormFieldsSection({
               value={formValues.listingType}
             >
               <SelectTrigger className={formSelectClassName}>
-                <SelectValue placeholder="Listing type" />
+                <SelectValue>
+                  {listingTypeLabel}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="ForSale">{"For Sale"}</SelectItem>
@@ -166,7 +229,9 @@ export function PropertyFormFieldsSection({
               value={formValues.status}
             >
               <SelectTrigger className={formSelectClassName}>
-                <SelectValue placeholder="Listing status" />
+                <SelectValue>
+                  {listingStatusLabel}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="Open">{"Open"}</SelectItem>
@@ -273,18 +338,51 @@ export function PropertyFormFieldsSection({
           <AppIcon className="text-primary" name="checklist" />
           {" Amenities "}
         </h4>
+        <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4 md:flex-row md:items-center dark:border-slate-700 dark:bg-slate-800/50">
+          <Input
+            className="form-input rounded-xl border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900 focus:ring-primary"
+            onChange={(event) => setNewAmenity(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault()
+                addAmenity()
+              }
+            }}
+            placeholder="Add a custom amenity"
+            type="text"
+            value={newAmenity}
+          />
+          <button
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-primary/90"
+            onClick={addAmenity}
+            type="button"
+          >
+            <AppIcon className="text-base" name="add" />
+            {"Add Amenity"}
+          </button>
+        </div>
+        {(formValues.keyAmenities ?? []).length > 0 ? (
+          <div className="mb-6 flex flex-wrap gap-3">
+            {(formValues.keyAmenities ?? []).map((amenity) => (
+              <button
+                key={`selected-${amenity}`}
+                className="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/5 px-4 py-2 text-sm font-semibold text-primary transition-colors hover:border-primary hover:bg-primary/10"
+                onClick={() => toggleAmenity(amenity, false)}
+                type="button"
+              >
+                <span>{amenity}</span>
+                <AppIcon className="text-sm" name="close" />
+              </button>
+            ))}
+          </div>
+        ) : null}
         <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
           {amenityOptions.map((amenity) => (
             <label key={amenity} className="group flex cursor-pointer items-center gap-3">
               <input
                 checked={selectedAmenities.has(amenity)}
                 className="form-checkbox rounded border-slate-300 text-primary focus:ring-primary"
-                onChange={(event) => {
-                  const nextAmenities = event.target.checked
-                    ? [...(formValues.keyAmenities ?? []), amenity]
-                    : (formValues.keyAmenities ?? []).filter((item) => item !== amenity)
-                  updateField("keyAmenities", nextAmenities)
-                }}
+                onChange={(event) => toggleAmenity(amenity, event.target.checked)}
                 type="checkbox"
               />
               <span className="text-sm text-slate-600 transition-colors group-hover:text-primary dark:text-slate-400">

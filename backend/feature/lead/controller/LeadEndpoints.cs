@@ -7,6 +7,7 @@ namespace Endpoints
 {
     public class CreateLeadEndpoint : Endpoint<Lead, LeadResponse>
     {
+        public required AgentRouteAccessService AgentRouteAccessService { get; set; }
         public required LeadService LeadService { get; set; }
 
         public override void Configure()
@@ -18,6 +19,7 @@ namespace Endpoints
 
         public override async Task HandleAsync(Lead req, CancellationToken ct)
         {
+            await AgentRouteAccessService.EnsureCanAccessAsync(HttpContext.User, AgentRoutePermissions.Lead, ct);
             var result = await LeadService.CreateLeadAsync(req);
             await Send.OkAsync(result, ct);
         }
@@ -25,6 +27,7 @@ namespace Endpoints
 
     public class UpdateLeadEndpoint : Endpoint<Lead, LeadResponse>
     {
+        public required AgentRouteAccessService AgentRouteAccessService { get; set; }
         public required LeadService LeadService { get; set; }
 
         public override void Configure()
@@ -36,6 +39,7 @@ namespace Endpoints
 
         public override async Task HandleAsync(Lead req, CancellationToken ct)
         {
+            await AgentRouteAccessService.EnsureCanAccessAsync(HttpContext.User, AgentRoutePermissions.Lead, ct);
             var result = await LeadService.UpdateLeadAsync(req);
 
             if (result is null)
@@ -50,6 +54,7 @@ namespace Endpoints
 
     public class DeleteLeadEndpoint : Endpoint<DeleteLeadEndpoint.Request>
     {
+        public required AgentRouteAccessService AgentRouteAccessService { get; set; }
         public class Request
         {
             [QueryParam]
@@ -67,6 +72,7 @@ namespace Endpoints
 
         public override async Task HandleAsync(Request req, CancellationToken ct)
         {
+            await AgentRouteAccessService.EnsureCanAccessAsync(HttpContext.User, AgentRoutePermissions.Lead, ct);
             await LeadService.DeleteLeadAsync(req.Id);
             await Send.NoContentAsync(ct);
         }
@@ -74,6 +80,7 @@ namespace Endpoints
 
     public class GetLeadEndpoint : Endpoint<GetLeadEndpoint.Request>
     {
+        public required AgentRouteAccessService AgentRouteAccessService { get; set; }
         public class Request
         {
             [QueryParam]
@@ -103,6 +110,7 @@ namespace Endpoints
 
         public override async Task HandleAsync(Request req, CancellationToken ct)
         {
+            await AgentRouteAccessService.EnsureCanAccessAsync(HttpContext.User, AgentRoutePermissions.Lead, ct);
             if (req.Id.HasValue)
             {
                 var result = await LeadService.GetLeadAsync(req.Id.Value);

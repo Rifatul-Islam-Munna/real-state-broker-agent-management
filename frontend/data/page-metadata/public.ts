@@ -48,10 +48,10 @@ export const scheduleAViewingPageMeta = {
 
 export const marketInsightsBlogPageMeta = {
   id: "market-insights-blog",
-  title: "Market Insights | EstateInsights",
+  title: "Blog | EstateBlue",
   description:
     "Real estate market insights blog with featured analysis, editorial content, and category highlights.",
-  routePath: "/market-insights",
+  routePath: "/blog",
 } as const
 
 export const buyerWishlistPageMeta = {

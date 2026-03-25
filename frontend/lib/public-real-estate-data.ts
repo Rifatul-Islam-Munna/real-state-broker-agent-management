@@ -1,9 +1,13 @@
 import type {
+  BlogPostDetail,
+  BlogPostSummary,
+  HomePageSettings,
   PaginatedResult,
   PropertyItem,
   PublicAgentProfile,
   PublicPropertyFilters,
 } from "@/@types/real-estate-api"
+import { cloneHomePageSettings, defaultHomePageSettings } from "@/lib/home-page-settings"
 
 const baseUrl = process.env.BASE_URL ?? "http://localhost:4000/api"
 
@@ -11,6 +15,25 @@ async function fetchPublicJson<T>(path: string): Promise<T | null> {
   try {
     const response = await fetch(`${baseUrl}${path}`, {
       cache: "no-store",
+    })
+
+    if (!response.ok) {
+      return null
+    }
+
+    return (await response.json()) as T
+  } catch {
+    return null
+  }
+}
+
+async function fetchCachedPublicJson<T>(path: string, tag: string): Promise<T | null> {
+  try {
+    const response = await fetch(`${baseUrl}${path}`, {
+      cache: "force-cache",
+      next: {
+        tags: [tag],
+      },
     })
 
     if (!response.ok) {
@@ -64,4 +87,42 @@ export async function getPublicPropertyFilters(): Promise<PublicPropertyFilters>
     listingTypes: ["ForSale", "ForRent"] as Array<PropertyItem["listingType"]>,
     locations: [],
   }
+}
+
+export async function getPublicHomePageSettings(): Promise<HomePageSettings> {
+  const settings = await fetchCachedPublicJson<HomePageSettings>("/public/homepage-settings", "homepage-settings")
+  return settings ? settings : cloneHomePageSettings(defaultHomePageSettings)
+}
+
+export async function getBlogPosts(limit = 9) {
+  const query = new URLSearchParams({
+    page: "1",
+    pageSize: `${limit}`,
+  })
+  const result = await fetchPublicJson<PaginatedResult<BlogPostSummary>>(`/blogs?${query.toString()}`)
+
+  return result ?? {
+    items: [],
+    totalCount: 0,
+    page: 1,
+    pageSize: limit,
+    totalPages: 0,
+    hasNextPage: false,
+    hasPreviousPage: false,
+  }
+}
+
+export async function getFeaturedBlogPosts(limit = 3) {
+  const query = new URLSearchParams({
+    featuredOnly: "true",
+    page: "1",
+    pageSize: `${limit}`,
+  })
+  const result = await fetchPublicJson<PaginatedResult<BlogPostSummary>>(`/blogs?${query.toString()}`)
+
+  return result?.items ?? []
+}
+
+export async function getBlogPostBySlug(slug: string) {
+  return fetchPublicJson<BlogPostDetail>(`/blogs/details?slug=${encodeURIComponent(slug)}`)
 }

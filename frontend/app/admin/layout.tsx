@@ -1,6 +1,6 @@
 import Link from "next/link"
 
-import { AdminSidebar } from "@/components/stitch/admin/admin-sidebar"
+import { AdminSidebarWithBlog } from "@/components/stitch/shared/admin-sidebar-with-blog"
 import {
   SidebarProvider,
   SidebarTrigger,
@@ -14,7 +14,7 @@ export default function AdminLayout({
 }>) {
   return (
     <SidebarProvider className="min-h-screen bg-background-light text-slate-900 dark:bg-background-dark dark:text-slate-100">
-      <AdminSidebar />
+      <AdminSidebarWithBlog />
       <div className="min-w-0 flex-1 bg-background-light dark:bg-background-dark">
         <div className="border-b border-primary/10 bg-white px-4 py-3 dark:bg-slate-900 md:hidden">
           <div className="flex items-center justify-between gap-4">

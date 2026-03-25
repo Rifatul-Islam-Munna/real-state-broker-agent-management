@@ -17,11 +17,14 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
+import { AgentRouteAccessDialog } from "@/components/agent-route-access-dialog"
+import { type AgentRoutePermission, agentRouteAccessItems } from "@/lib/agent-route-access"
 import { AppIcon } from "@/components/ui/app-icon"
 import {
   type AgentUserOption,
   useAgentUsers,
   useCreateAgentUser,
+  useUpdateAgentRoutePermissions,
 } from "@/hooks/use-real-estate-api"
 
 type SortKey = "created" | "listings" | "name"
@@ -74,6 +77,26 @@ function formatCreatedAt(value?: string) {
 function parseCommissionRate(value: string) {
   const numericValue = Number.parseFloat(value.trim())
   return Number.isFinite(numericValue) ? numericValue : null
+}
+
+const agentRouteLabelMap = new Map<AgentRoutePermission, string>(
+  agentRouteAccessItems.map((item) => [item.permission, item.label] as const),
+)
+
+function formatAccessSummary(agent: AgentUserOption) {
+  return agent.hasCustomAgentRoutePermissions ? "Custom Access" : "Full Access"
+}
+
+function formatAccessDetails(agent: AgentUserOption) {
+  if (!agent.hasCustomAgentRoutePermissions) {
+    return "All agent portal routes"
+  }
+
+  const labels = (agent.agentRoutePermissions ?? [])
+    .map((permission) => agentRouteLabelMap.get(permission as AgentRoutePermission) ?? permission)
+    .filter(Boolean)
+
+  return labels.length > 0 ? labels.join(", ") : "No routes selected"
 }
 
 function validate(values: FormValues) {
@@ -198,10 +221,13 @@ export function MainContentAreaSection() {
   const [searchTerm, setSearchTerm] = useState("")
   const [verificationFilter, setVerificationFilter] = useState<"all" | "verified" | "unverified">("all")
   const [sortBy, setSortBy] = useState<SortKey>("created")
+  const [accessAgent, setAccessAgent] = useState<AgentUserOption | null>(null)
+  const [accessDialogOpen, setAccessDialogOpen] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
 
   const agentUsersQuery = useAgentUsers()
   const createAgentMutation = useCreateAgentUser()
+  const updateAgentRoutePermissionsMutation = useUpdateAgentRoutePermissions()
   const isInitialLoading = !agentUsersQuery.data && (agentUsersQuery.isLoading || agentUsersQuery.isFetching)
   const agents = agentUsersQuery.data ?? []
 
@@ -258,6 +284,20 @@ export function MainContentAreaSection() {
 
     if (response.error?.statusCode === 404) {
       return "POST /api/users/agents is not available on the running backend. Restart the backend to load the new agent endpoint."
+    }
+
+    return response.error?.message ?? null
+  }
+
+  async function handleUpdateAgentAccess(agentId: number, useCustomAgentRoutePermissions: boolean, agentRoutePermissions: string[]) {
+    const response = await updateAgentRoutePermissionsMutation.mutateAsync({
+      agentId,
+      agentRoutePermissions,
+      useCustomAgentRoutePermissions,
+    })
+
+    if (response.error?.statusCode === 404) {
+      return "PATCH /api/users/agents/permissions is not available on the running backend. Restart the backend to load the new permissions endpoint."
     }
 
     return response.error?.message ?? null
@@ -335,10 +375,10 @@ export function MainContentAreaSection() {
               </Select>
             </div>
           </div>
-          <div className="overflow-hidden border border-primary/10 bg-white dark:bg-slate-900">
+          <div className="overflow-x-auto border border-primary/10 bg-white dark:bg-slate-900">
             {isInitialLoading ? <div className="p-8 text-center text-sm font-semibold text-slate-500 dark:text-slate-400">{"Loading agents..."}</div> : agentUsersQuery.error ? <div className="p-8 text-center text-sm font-semibold text-rose-600">{agentUsersQuery.error.message}</div> : filteredAgents.length === 0 ? <div className="p-8 text-center text-sm font-semibold text-slate-500 dark:text-slate-400">{"No agents match the current filters."}</div> : (
               <table className="w-full border-collapse text-left">
-                <thead><tr className="bg-primary/5 text-primary"><th className="border-b border-primary/10 px-6 py-4 text-[10px] font-bold uppercase tracking-wider">{"Agent"}</th><th className="border-b border-primary/10 px-6 py-4 text-[10px] font-bold uppercase tracking-wider">{"Agency"}</th><th className="border-b border-primary/10 px-6 py-4 text-[10px] font-bold uppercase tracking-wider">{"License"}</th><th className="border-b border-primary/10 px-6 py-4 text-center text-[10px] font-bold uppercase tracking-wider">{"Listings"}</th><th className="border-b border-primary/10 px-6 py-4 text-center text-[10px] font-bold uppercase tracking-wider">{"Status"}</th><th className="border-b border-primary/10 px-6 py-4 text-right text-[10px] font-bold uppercase tracking-wider">{"Commission"}</th><th className="border-b border-primary/10 px-6 py-4 text-right text-[10px] font-bold uppercase tracking-wider">{"Created"}</th></tr></thead>
+                <thead><tr className="bg-primary/5 text-primary"><th className="border-b border-primary/10 px-6 py-4 text-[10px] font-bold uppercase tracking-wider">{"Agent"}</th><th className="border-b border-primary/10 px-6 py-4 text-[10px] font-bold uppercase tracking-wider">{"Agency"}</th><th className="border-b border-primary/10 px-6 py-4 text-[10px] font-bold uppercase tracking-wider">{"License"}</th><th className="border-b border-primary/10 px-6 py-4 text-center text-[10px] font-bold uppercase tracking-wider">{"Listings"}</th><th className="border-b border-primary/10 px-6 py-4 text-center text-[10px] font-bold uppercase tracking-wider">{"Status"}</th><th className="border-b border-primary/10 px-6 py-4 text-right text-[10px] font-bold uppercase tracking-wider">{"Commission"}</th><th className="border-b border-primary/10 px-6 py-4 text-[10px] font-bold uppercase tracking-wider">{"Access"}</th><th className="border-b border-primary/10 px-6 py-4 text-right text-[10px] font-bold uppercase tracking-wider">{"Created"}</th></tr></thead>
                 <tbody className="divide-y divide-primary/5">
                   {filteredAgents.map((agent) => (
                     <tr key={agent.id} className="transition-colors hover:bg-primary/5">
@@ -348,6 +388,7 @@ export function MainContentAreaSection() {
                       <td className="px-6 py-4 text-center"><p className="text-sm font-bold text-primary">{agent.propertyCount ?? 0}</p></td>
                       <td className="px-6 py-4 text-center"><div className="flex flex-col items-center gap-1"><span className={agent.isVerifiedAgent ? "inline-block bg-primary px-2 py-1 text-[10px] font-bold uppercase tracking-tighter text-white" : "inline-block border border-primary px-2 py-1 text-[10px] font-bold uppercase tracking-tighter text-primary"}>{agent.isVerifiedAgent ? "Verified" : "Agent"}</span><span className={agent.isActive === false ? "text-[10px] font-bold uppercase text-rose-600" : "text-[10px] font-bold uppercase text-green-600"}>{agent.isActive === false ? "Inactive" : "Active"}</span></div></td>
                       <td className="px-6 py-4 text-right"><p className="text-sm font-bold text-accent">{agent.commissionRate != null ? `${agent.commissionRate}%` : "N/A"}</p></td>
+                      <td className="px-6 py-4"><div className="space-y-2"><p className={agent.hasCustomAgentRoutePermissions ? "text-[10px] font-bold uppercase tracking-[0.18em] text-accent" : "text-[10px] font-bold uppercase tracking-[0.18em] text-primary"}>{formatAccessSummary(agent)}</p><p className="max-w-xs text-xs leading-5 text-slate-500">{formatAccessDetails(agent)}</p><button className="text-xs font-bold uppercase tracking-[0.16em] text-primary transition-colors hover:text-accent" onClick={() => { setAccessAgent(agent); setAccessDialogOpen(true) }} type="button">{"Manage Access"}</button></div></td>
                       <td className="px-6 py-4 text-right"><p className="text-xs font-bold uppercase text-slate-500">{formatCreatedAt(agent.createdAt)}</p></td>
                     </tr>
                   ))}
@@ -359,6 +400,23 @@ export function MainContentAreaSection() {
       </div>
 
       <CreateAgentDialog isSubmitting={createAgentMutation.isPending} onOpenChange={setDialogOpen} onSubmit={handleCreateAgent} open={dialogOpen} />
+      <AgentRouteAccessDialog
+        agent={accessAgent}
+        isSubmitting={updateAgentRoutePermissionsMutation.isPending}
+        onOpenChange={(open) => {
+          setAccessDialogOpen(open)
+          if (!open) {
+            setAccessAgent(null)
+          }
+        }}
+        onSubmit={async (input) =>
+          handleUpdateAgentAccess(
+            input.agentId,
+            input.useCustomAgentRoutePermissions,
+            input.agentRoutePermissions,
+          )}
+        open={accessDialogOpen}
+      />
     </main>
   )
 }

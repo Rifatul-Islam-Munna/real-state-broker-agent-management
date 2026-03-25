@@ -24,6 +24,7 @@ namespace Endpoints
 
     public class UpdateMailInboxEndpoint : Endpoint<MailInboxItem, MailInboxResponse>
     {
+        public required AgentRouteAccessService AgentRouteAccessService { get; set; }
         public required MailInboxService MailInboxService { get; set; }
 
         public override void Configure()
@@ -35,6 +36,7 @@ namespace Endpoints
 
         public override async Task HandleAsync(MailInboxItem req, CancellationToken ct)
         {
+            await AgentRouteAccessService.EnsureCanAccessAsync(HttpContext.User, AgentRoutePermissions.Mail, ct);
             var result = await MailInboxService.UpdateMailInboxItemAsync(req);
 
             if (result is null)
@@ -49,6 +51,7 @@ namespace Endpoints
 
     public class DeleteMailInboxEndpoint : Endpoint<DeleteMailInboxEndpoint.Request>
     {
+        public required AgentRouteAccessService AgentRouteAccessService { get; set; }
         public class Request
         {
             [QueryParam]
@@ -66,6 +69,7 @@ namespace Endpoints
 
         public override async Task HandleAsync(Request req, CancellationToken ct)
         {
+            await AgentRouteAccessService.EnsureCanAccessAsync(HttpContext.User, AgentRoutePermissions.Mail, ct);
             await MailInboxService.DeleteMailInboxItemAsync(req.Id);
             await Send.NoContentAsync(ct);
         }
@@ -73,6 +77,7 @@ namespace Endpoints
 
     public class GetMailInboxEndpoint : Endpoint<GetMailInboxEndpoint.Request>
     {
+        public required AgentRouteAccessService AgentRouteAccessService { get; set; }
         public class Request
         {
             [QueryParam]
@@ -102,6 +107,7 @@ namespace Endpoints
 
         public override async Task HandleAsync(Request req, CancellationToken ct)
         {
+            await AgentRouteAccessService.EnsureCanAccessAsync(HttpContext.User, AgentRoutePermissions.Mail, ct);
             if (req.Id.HasValue)
             {
                 var result = await MailInboxService.GetMailInboxItemAsync(req.Id.Value);
@@ -123,6 +129,7 @@ namespace Endpoints
 
     public class ConvertMailInboxToLeadEndpoint : Endpoint<ConvertMailInboxInput, LeadResponse>
     {
+        public required AgentRouteAccessService AgentRouteAccessService { get; set; }
         public required MailInboxService MailInboxService { get; set; }
 
         public override void Configure()
@@ -134,6 +141,7 @@ namespace Endpoints
 
         public override async Task HandleAsync(ConvertMailInboxInput req, CancellationToken ct)
         {
+            await AgentRouteAccessService.EnsureCanAccessAsync(HttpContext.User, AgentRoutePermissions.Mail, ct);
             var result = await MailInboxService.ConvertToLeadAsync(req.MailInboxId);
 
             if (result is null)

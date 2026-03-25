@@ -3,9 +3,10 @@
 import { redirect } from "next/navigation"
 
 import { LoginForm } from "@/components/auth/login-form"
-import { PublicPrimaryNavbar } from "@/components/stitch/public/public-primary-navbar"
+import { PublicPrimaryNavbar } from "@/components/stitch/shared/public-site-navbar"
 import { getSessionUser } from "@/lib/auth-actions"
 import { formatPriceLabel } from "@/lib/currency"
+import { getPortalHomePath } from "@/lib/portal-paths"
 
 type FeaturedProperty = {
   id: number
@@ -56,7 +57,7 @@ export default async function LoginPage() {
   const featuredPropertyFeed = await getFeaturedPropertyFeed()
 
   if (user) {
-    redirect(user.role === "Agent" ? "/agent/dashboard" : "/admin/dashboard")
+    redirect(getPortalHomePath(user))
   }
 
   const heroImage =

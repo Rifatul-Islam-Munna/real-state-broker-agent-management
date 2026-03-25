@@ -1,56 +1,35 @@
 
+import type { HomePageServiceCard } from "@/@types/real-estate-api"
 import { AppIcon } from "@/components/ui/app-icon"
 
-export function ServicesSection() {
+type ServicesSectionProps = {
+  items: HomePageServiceCard[]
+}
+
+const serviceIcons = ["assessment", "handshake", "corporate_fare"] as const
+
+export function ServicesSection({ items }: ServicesSectionProps) {
   return (
     <section className="py-24 bg-primary text-white">
       <div className="max-w-7xl mx-auto px-4">
         <div className="grid md:grid-cols-3 gap-12 text-center">
-          <div className="p-8 border border-white/10 hover:border-accent transition-colors">
-            <AppIcon className="text-5xl text-accent mb-6" name="assessment" />
-            <h3 className="text-2xl font-bold mb-4 uppercase tracking-tighter">
-              {"Property Valuation"}
-            </h3>
-            <p className="text-white/70 text-sm leading-relaxed mb-6">
-              {"Receive a comprehensive market analysis and pinpoint accuracy for your property's value."}
-            </p>
-            <a
-              className="text-xs font-black tracking-widest uppercase border-b-2 border-accent pb-1"
-              href="#"
-            >
-              {"Learn More"}
-            </a>
-          </div>
-          <div className="p-8 border border-white/10 hover:border-accent transition-colors">
-            <AppIcon className="text-5xl text-accent mb-6" name="handshake" />
-            <h3 className="text-2xl font-bold mb-4 uppercase tracking-tighter">
-              {"Consulting"}
-            </h3>
-            <p className="text-white/70 text-sm leading-relaxed mb-6">
-              {"Expert advisory for investment portfolios, residential acquisitions, and commercial projects."}
-            </p>
-            <a
-              className="text-xs font-black tracking-widest uppercase border-b-2 border-accent pb-1"
-              href="#"
-            >
-              {"Learn More"}
-            </a>
-          </div>
-          <div className="p-8 border border-white/10 hover:border-accent transition-colors">
-            <AppIcon className="text-5xl text-accent mb-6" name="corporate_fare" />
-            <h3 className="text-2xl font-bold mb-4 uppercase tracking-tighter">
-              {"Asset Management"}
-            </h3>
-            <p className="text-white/70 text-sm leading-relaxed mb-6">
-              {"Full-cycle property management focused on maximizing yield and tenant satisfaction."}
-            </p>
-            <a
-              className="text-xs font-black tracking-widest uppercase border-b-2 border-accent pb-1"
-              href="#"
-            >
-              {"Learn More"}
-            </a>
-          </div>
+          {items.map((item, index) => (
+            <div key={`${item.title}-${index}`} className="p-8 border border-white/10 hover:border-accent transition-colors">
+              <AppIcon className="text-5xl text-accent mb-6" name={serviceIcons[index] ?? "star"} />
+              <h3 className="text-2xl font-bold mb-4 uppercase tracking-tighter">
+                {item.title}
+              </h3>
+              <p className="text-white/70 text-sm leading-relaxed mb-6">
+                {item.description}
+              </p>
+              <a
+                className="text-xs font-black tracking-widest uppercase border-b-2 border-accent pb-1"
+                href="#"
+              >
+                {item.linkLabel}
+              </a>
+            </div>
+          ))}
         </div>
       </div>
     </section>

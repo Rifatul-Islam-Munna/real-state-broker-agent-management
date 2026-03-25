@@ -1,4 +1,4 @@
-import { PublicPrimaryNavbar } from "@/components/stitch/public/public-primary-navbar"
+import { PublicPrimaryNavbar } from "@/components/stitch/shared/public-site-navbar"
 import { ContactHeroSection } from "@/components/stitch/pages/public-contact-us/sections/hero-section"
 import { ContactLocationsSection } from "@/components/stitch/pages/public-contact-us/sections/locations-section"
 

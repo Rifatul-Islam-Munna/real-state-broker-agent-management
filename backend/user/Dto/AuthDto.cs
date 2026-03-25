@@ -43,4 +43,5 @@ public class UserResponse
     public bool IsActive { get; set; }
     public bool IsEmailVerified { get; set; }
     public DateTime CreatedAt { get; set; }
+    public List<string> AgentRoutePermissions { get; set; } = [];
 }

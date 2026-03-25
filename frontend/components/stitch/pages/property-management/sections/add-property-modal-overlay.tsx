@@ -262,7 +262,7 @@ export function AddPropertyModalOverlaySection({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/60 p-4 backdrop-blur-sm">
       <div className="flex h-full max-h-[90vh] w-full max-w-none flex-col overflow-hidden rounded-2xl bg-white lg:w-[78vw] xl:w-[70vw] dark:bg-slate-900">
         <div className="flex items-center justify-between border-b border-slate-200 px-8 py-6 dark:border-slate-800">
           <div>

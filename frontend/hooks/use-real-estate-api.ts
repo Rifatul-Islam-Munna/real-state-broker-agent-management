@@ -6,20 +6,30 @@ import { useQueryWrapper } from "@/api-hooks/react-query-wrapper"
 import { useCommonMutationApi } from "@/api-hooks/use-api-mutation"
 import type {
   AgentUserOption,
+  BlogPostDetail,
+  BlogPostItem,
+  BlogPostSaveInput,
+  BlogPostSummary,
   ContactRequestItem,
   CreateAgentUserInput,
   DashboardSummary,
   DealItem,
+  HomePageSettings,
   LeadItem,
   MailInboxItem,
   PaginatedResult,
   PortalCurrentUser,
   PropertyItem,
+  UpdateAgentRoutePermissionsInput,
 } from "@/@types/real-estate-api"
 
 export type {
   AgentSummary,
   AgentUserOption,
+  BlogPostDetail,
+  BlogPostItem,
+  BlogPostSaveInput,
+  BlogPostSummary,
   ContactRequestItem,
   ContactRequestStatus,
   CreateAgentUserInput,
@@ -31,6 +41,19 @@ export type {
   DealItem,
   DealStage,
   DealType,
+  HomePageFeatureItem,
+  HomePageHeroSearchMode,
+  HomePageHeroSection,
+  HomePageImageAsset,
+  HomePageNeighborhoodCard,
+  HomePageNeighborhoodSection,
+  HomePageSectionIntro,
+  HomePageServiceCard,
+  HomePageSettings,
+  HomePageStatItem,
+  HomePageTeamSection,
+  HomePageTestimonialSection,
+  HomePageWhyChooseUsSection,
   LeadItem,
   LeadPriority,
   LeadStage,
@@ -41,9 +64,10 @@ export type {
   PaginatedResult,
   PortalCurrentUser,
   PropertyItem,
+  UpdateAgentRoutePermissionsInput,
 } from "@/@types/real-estate-api"
 
-type QueryParams = Record<string, string | number | undefined | null>
+type QueryParams = Record<string, string | number | boolean | undefined | null>
 
 const defaultQueryOptions = {
   placeholderData: keepPreviousData,
@@ -80,6 +104,110 @@ export function useProperties(params?: QueryParams) {
     0,
     "properties",
   )
+}
+
+export function useAdminHomePageSettings() {
+  return useQueryWrapper<HomePageSettings>(
+    ["homepage-settings"],
+    "/homepage-settings",
+    {
+      ...defaultQueryOptions,
+      placeholderData: undefined,
+    },
+    0,
+    "homepage-settings",
+  )
+}
+
+export function usePublicHomePageSettings() {
+  return useQueryWrapper<HomePageSettings>(
+    ["public-homepage-settings"],
+    "/public/homepage-settings",
+    {
+      ...defaultQueryOptions,
+      placeholderData: undefined,
+    },
+    0,
+    "public-homepage-settings",
+  )
+}
+
+export function useUpdateHomePageSettings() {
+  const invalidate = useInvalidate(["homepage-settings", "public-homepage-settings"])
+
+  return useCommonMutationApi<HomePageSettings, HomePageSettings>({
+    method: "PATCH",
+    onSuccess: () => void invalidate(),
+    successMessage: "Homepage updated",
+    url: "/homepage-settings",
+  })
+}
+
+export function useAdminBlogPosts(params?: QueryParams) {
+  return useQueryWrapper<PaginatedResult<BlogPostItem>>(
+    ["admin-blog-posts", params],
+    `/blogs/admin${buildQuery(params)}`,
+    defaultQueryOptions,
+    0,
+    "admin-blog-posts",
+  )
+}
+
+export function usePublicBlogPosts(params?: QueryParams) {
+  return useQueryWrapper<PaginatedResult<BlogPostSummary>>(
+    ["public-blog-posts", params],
+    `/blogs${buildQuery(params)}`,
+    defaultQueryOptions,
+    0,
+    "public-blog-posts",
+  )
+}
+
+export function usePublicBlogPostDetail(slug?: string) {
+  return useQueryWrapper<BlogPostDetail>(
+    ["public-blog-post-detail", slug],
+    `/blogs/details${buildQuery({ slug })}`,
+    {
+      ...defaultQueryOptions,
+      enabled: Boolean(slug),
+      placeholderData: undefined,
+    },
+    0,
+    "public-blog-post-detail",
+  )
+}
+
+export function useCreateBlogPost() {
+  const invalidate = useInvalidate(["admin-blog-posts"])
+
+  return useCommonMutationApi<BlogPostItem, BlogPostSaveInput>({
+    method: "POST",
+    onSuccess: () => void invalidate(),
+    successMessage: "Blog post created",
+    url: "/blogs",
+  })
+}
+
+export function useUpdateBlogPost() {
+  const invalidate = useInvalidate(["admin-blog-posts"])
+
+  return useCommonMutationApi<BlogPostItem, BlogPostItem>({
+    method: "PATCH",
+    onSuccess: () => void invalidate(),
+    successMessage: "Blog post updated",
+    url: "/blogs",
+  })
+}
+
+export function useDeleteBlogPost() {
+  const invalidate = useInvalidate(["admin-blog-posts"])
+
+  return useCommonMutationApi<unknown, { id: string }>({
+    method: "DELETE",
+    onSuccess: () => void invalidate(),
+    successMessage: "Blog post deleted",
+    url: "/blogs",
+  })
 }
 
 export function useDashboardSummary() {
@@ -120,6 +248,17 @@ export function useCreateAgentUser() {
     onSuccess: () => void invalidate(),
     successMessage: "Agent created",
     url: "/users/agents",
+  })
+}
+
+export function useUpdateAgentRoutePermissions() {
+  const invalidate = useInvalidate(["agent-users", "portal-current-user"])
+
+  return useCommonMutationApi<AgentUserOption, UpdateAgentRoutePermissionsInput>({
+    method: "PATCH",
+    onSuccess: () => void invalidate(),
+    successMessage: "Agent access updated",
+    url: "/users/agents/permissions",
   })
 }
 

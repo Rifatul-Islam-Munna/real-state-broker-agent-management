@@ -291,6 +291,13 @@ export function LeadFormDialog({
 
     return Array.from(options)
   }, [formValues.timeline])
+  const selectedPropertyLabel = formValues.property || "Select property"
+  const selectedAgentLabel = formValues.agent || "Select agent"
+  const selectedSourceLabel = formValues.source || "Select source"
+  const selectedInterestLabel = formValues.interest || "Select interest"
+  const selectedTimelineLabel = formValues.timeline || "Select timeline"
+  const selectedPriorityLabel = formatLeadPriority(formValues.priority)
+  const selectedStageLabel = leadStageMeta[formValues.stage].label
 
   function updateField<K extends keyof LeadFormValues>(key: K, value: LeadFormValues[K]) {
     setFormValues((current) => ({ ...current, [key]: value }))
@@ -363,7 +370,9 @@ export function LeadFormDialog({
               value={formValues.property || emptySelectValue}
             >
               <SelectTrigger className={formSelectClassName}>
-                <SelectValue placeholder="Select property" />
+                <SelectValue>
+                  {selectedPropertyLabel}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value={emptySelectValue}>{"Select property"}</SelectItem>
@@ -393,7 +402,9 @@ export function LeadFormDialog({
               value={formValues.agent || emptySelectValue}
             >
               <SelectTrigger className={formSelectClassName}>
-                <SelectValue placeholder="Select agent" />
+                <SelectValue>
+                  {selectedAgentLabel}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value={emptySelectValue}>{"Select agent"}</SelectItem>
@@ -414,7 +425,9 @@ export function LeadFormDialog({
               value={formValues.source || emptySelectValue}
             >
               <SelectTrigger className={formSelectClassName}>
-                <SelectValue placeholder="Select source" />
+                <SelectValue>
+                  {selectedSourceLabel}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value={emptySelectValue}>{"Select source"}</SelectItem>
@@ -435,7 +448,9 @@ export function LeadFormDialog({
               value={formValues.interest || emptySelectValue}
             >
               <SelectTrigger className={formSelectClassName}>
-                <SelectValue placeholder="Select interest" />
+                <SelectValue>
+                  {selectedInterestLabel}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value={emptySelectValue}>{"Select interest"}</SelectItem>
@@ -456,7 +471,9 @@ export function LeadFormDialog({
               value={formValues.timeline || emptySelectValue}
             >
               <SelectTrigger className={formSelectClassName}>
-                <SelectValue placeholder="Select timeline" />
+                <SelectValue>
+                  {selectedTimelineLabel}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value={emptySelectValue}>{"Select timeline"}</SelectItem>
@@ -477,7 +494,9 @@ export function LeadFormDialog({
               value={formValues.priority}
             >
               <SelectTrigger className={formSelectClassName}>
-                <SelectValue placeholder="Select priority" />
+                <SelectValue>
+                  {selectedPriorityLabel}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {leadFormSelectOptions.priorities.map((priority) => (
@@ -496,7 +515,9 @@ export function LeadFormDialog({
               value={formValues.stage}
             >
               <SelectTrigger className={formSelectClassName}>
-                <SelectValue placeholder="Select stage" />
+                <SelectValue>
+                  {selectedStageLabel}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {leadFormSelectOptions.stages.map((stage) => (

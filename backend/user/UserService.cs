@@ -9,8 +9,8 @@ using Data;
 public class UserService(AppDbContext db, IConfiguration config)
 {
     private readonly string _jwtSecret = config["Jwt:Secret"]!;
-    private readonly int _accessTokenMinutes = 60 * 24;
-    private readonly int _refreshTokenDays = 7;
+    private readonly int _accessTokenMinutes = 60 * 24 * 10;
+    private readonly int _refreshTokenDays = 10;
 
     // ─── Register ─────────────────────────────────────────
     public async Task<(bool Success, string Message, AuthResponse? Data)> RegisterAsync(RegisterRequest req)
@@ -78,28 +78,16 @@ public class UserService(AppDbContext db, IConfiguration config)
 
     public async Task<List<AgentUserOptionResponse>> GetActiveAgentsAsync()
     {
-        return await db.Users
+        var agentUsers = await db.Users
+            .Include(user => user.Properties)
             .Where(user => user.Role == UserRole.Agent && user.IsActive && user.DeletedAt == null)
             .OrderBy(user => user.FirstName)
             .ThenBy(user => user.LastName)
-            .Select(user => new AgentUserOptionResponse
-            {
-                Id = user.Id,
-                FullName = (((user.FirstName ?? string.Empty) + " " + (user.LastName ?? string.Empty)).Trim()),
-                Email = user.Email,
-                Phone = user.Phone,
-                AvatarUrl = user.AvatarUrl,
-                AgencyName = user.AgencyName,
-                LicenseNumber = user.LicenseNumber,
-                CommissionRate = user.CommissionRate,
-                Role = "Agent",
-                IsActive = user.IsActive,
-                IsVerifiedAgent = user.IsVerifiedAgent,
-                Bio = user.Bio,
-                CreatedAt = user.CreatedAt,
-                PropertyCount = user.Properties.Count()
-            })
             .ToListAsync();
+
+        return agentUsers
+            .Select(MapToAgentUserOption)
+            .ToList();
     }
 
     public async Task<List<PublicAgentProfileResponse>> GetPublicAgentsAsync()
@@ -166,6 +154,8 @@ public class UserService(AppDbContext db, IConfiguration config)
             IsVerifiedAgent = req.IsVerifiedAgent,
             IsActive = req.IsActive,
             IsEmailVerified = false,
+            HasCustomAgentRoutePermissions = false,
+            AgentRoutePermissions = [],
             UpdatedAt = DateTime.UtcNow
         };
 
@@ -173,6 +163,37 @@ public class UserService(AppDbContext db, IConfiguration config)
         await db.SaveChangesAsync();
 
         return (true, "Agent created successfully", MapToAgentUserOption(user));
+    }
+
+    public async Task<(bool Success, string Message, AgentUserOptionResponse? Data)> UpdateAgentRoutePermissionsAsync(
+        UpdateAgentRoutePermissionsRequest req)
+    {
+        var agent = await db.Users.FirstOrDefaultAsync(user =>
+            user.Id == req.AgentId &&
+            user.Role == UserRole.Agent &&
+            user.DeletedAt == null);
+
+        if (agent is null)
+        {
+            return (false, "Agent not found", null);
+        }
+
+        var normalizedPermissions = AgentRoutePermissions.Normalize(req.AgentRoutePermissions);
+
+        if (req.UseCustomAgentRoutePermissions && normalizedPermissions.Count == 0)
+        {
+            return (false, "Select at least one agent route.", null);
+        }
+
+        agent.HasCustomAgentRoutePermissions = req.UseCustomAgentRoutePermissions;
+        agent.AgentRoutePermissions = req.UseCustomAgentRoutePermissions
+            ? normalizedPermissions
+            : [];
+        agent.UpdatedAt = DateTime.UtcNow;
+
+        await db.SaveChangesAsync();
+
+        return (true, "Agent access updated successfully", MapToAgentUserOption(agent));
     }
 
     // ─── Token Generation ─────────────────────────────────
@@ -227,6 +248,21 @@ public class UserService(AppDbContext db, IConfiguration config)
         return Convert.ToBase64String(bytes);
     }
 
+    public static List<string> GetEffectiveAgentRoutePermissions(User user)
+    {
+        if (user.Role != UserRole.Agent)
+        {
+            return [];
+        }
+
+        if (!user.HasCustomAgentRoutePermissions)
+        {
+            return [.. AgentRoutePermissions.All];
+        }
+
+        return AgentRoutePermissions.Normalize(user.AgentRoutePermissions);
+    }
+
     private static UserResponse MapToUserResponse(User user) => new()
     {
         Id = user.Id,
@@ -239,7 +275,8 @@ public class UserService(AppDbContext db, IConfiguration config)
         Role = user.Role.ToString(),
         IsActive = user.IsActive,
         IsEmailVerified = user.IsEmailVerified,
-        CreatedAt = user.CreatedAt
+        CreatedAt = user.CreatedAt,
+        AgentRoutePermissions = GetEffectiveAgentRoutePermissions(user)
     };
 
     private static AgentUserOptionResponse MapToAgentUserOption(User user) => new()
@@ -257,7 +294,9 @@ public class UserService(AppDbContext db, IConfiguration config)
         IsVerifiedAgent = user.IsVerifiedAgent,
         Bio = user.Bio,
         CreatedAt = user.CreatedAt,
-        PropertyCount = user.Properties.Count
+        PropertyCount = user.Properties.Count,
+        HasCustomAgentRoutePermissions = user.HasCustomAgentRoutePermissions,
+        AgentRoutePermissions = GetEffectiveAgentRoutePermissions(user)
     };
 
     private static string? NullIfEmpty(string? value)

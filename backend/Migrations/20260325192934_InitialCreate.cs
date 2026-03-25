@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -12,6 +13,48 @@ namespace backend.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.CreateTable(
+                name: "blog_post",
+                columns: table => new
+                {
+                    id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    title = table.Column<string>(type: "text", nullable: false),
+                    slug = table.Column<string>(type: "text", nullable: false),
+                    excerpt = table.Column<string>(type: "text", nullable: false),
+                    category = table.Column<string>(type: "text", nullable: false),
+                    cover_image_url = table.Column<string>(type: "text", nullable: false),
+                    cover_image_object_name = table.Column<string>(type: "text", nullable: true),
+                    author_name = table.Column<string>(type: "text", nullable: false),
+                    read_time_minutes = table.Column<int>(type: "integer", nullable: false),
+                    is_featured = table.Column<bool>(type: "boolean", nullable: false),
+                    is_published = table.Column<bool>(type: "boolean", nullable: false),
+                    published_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    tags = table.Column<string>(type: "jsonb", nullable: false),
+                    highlights = table.Column<string>(type: "jsonb", nullable: false),
+                    paragraphs = table.Column<string>(type: "jsonb", nullable: false),
+                    created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_blog_post", x => x.id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "home_page_settings",
+                columns: table => new
+                {
+                    id = table.Column<int>(type: "integer", nullable: false),
+                    content_json = table.Column<string>(type: "text", nullable: false),
+                    created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_home_page_settings", x => x.id);
+                });
+
             migrationBuilder.CreateTable(
                 name: "lead",
                 columns: table => new
@@ -67,6 +110,8 @@ namespace backend.Migrations
                     bio = table.Column<string>(type: "text", nullable: true),
                     commission_rate = table.Column<decimal>(type: "numeric", nullable: true),
                     is_verified_agent = table.Column<bool>(type: "boolean", nullable: false),
+                    has_custom_agent_route_permissions = table.Column<bool>(type: "boolean", nullable: false),
+                    agent_route_permissions = table.Column<List<string>>(type: "text[]", nullable: false, defaultValueSql: "'{}'"),
                     national_id = table.Column<string>(type: "text", nullable: true),
                     address = table.Column<string>(type: "text", nullable: true),
                     city = table.Column<string>(type: "text", nullable: true),
@@ -225,6 +270,12 @@ namespace backend.Migrations
                 });
 
             migrationBuilder.CreateIndex(
+                name: "ix_blog_post_slug",
+                table: "blog_post",
+                column: "slug",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
                 name: "ix_contact_request_lead_id",
                 table: "contact_request",
                 column: "lead_id");
@@ -266,10 +317,16 @@ namespace backend.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropTable(
+                name: "blog_post");
+
+            migrationBuilder.DropTable(
                 name: "contact_request");
 
             migrationBuilder.DropTable(
                 name: "deal_pipeline");
+
+            migrationBuilder.DropTable(
+                name: "home_page_settings");
 
             migrationBuilder.DropTable(
                 name: "mail_inbox");

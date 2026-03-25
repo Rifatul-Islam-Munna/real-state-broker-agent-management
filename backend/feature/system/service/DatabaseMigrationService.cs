@@ -98,9 +98,9 @@ public class DatabaseMigrationService(
             createHistoryCommand.CommandText =
                 """
                 CREATE TABLE IF NOT EXISTS "__EFMigrationsHistory" (
-                    "MigrationId" character varying(150) NOT NULL,
-                    "ProductVersion" character varying(32) NOT NULL,
-                    CONSTRAINT "PK___EFMigrationsHistory" PRIMARY KEY ("MigrationId")
+                    migration_id character varying(150) NOT NULL,
+                    product_version character varying(32) NOT NULL,
+                    CONSTRAINT pk___ef_migrations_history PRIMARY KEY (migration_id)
                 );
                 """;
             await createHistoryCommand.ExecuteNonQueryAsync(ct);
@@ -109,9 +109,9 @@ public class DatabaseMigrationService(
         await using var insertBaselineCommand = connection.CreateCommand();
         insertBaselineCommand.CommandText =
             """
-            INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+            INSERT INTO "__EFMigrationsHistory" (migration_id, product_version)
             VALUES (@migrationId, @productVersion)
-            ON CONFLICT ("MigrationId") DO NOTHING;
+            ON CONFLICT (migration_id) DO NOTHING;
             """;
 
         insertBaselineCommand.Parameters.AddWithValue("@migrationId", baselineMigrationId);
@@ -155,7 +155,7 @@ public class DatabaseMigrationService(
             SELECT EXISTS (
                 SELECT 1
                 FROM "__EFMigrationsHistory"
-                WHERE "MigrationId" = @migrationId
+                WHERE migration_id = @migrationId
             );
             """;
         command.Parameters.AddWithValue("@migrationId", migrationId);

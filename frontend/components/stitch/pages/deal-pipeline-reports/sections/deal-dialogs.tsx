@@ -222,6 +222,11 @@ export function DealFormDialog({
     }
     return Array.from(options.entries())
   }, [agentOptions, formValues.agent])
+  const selectedAgentLabel = formValues.agent || "Select agent"
+  const selectedTypeLabel = formValues.type
+  const selectedStageLabel = formatDealStage(formValues.stage)
+  const selectedLeadLabel =
+    leadSelectOptions.find(([id]) => id === formValues.sourceLeadId)?.[1] ?? "No linked lead"
 
   function updateField<K extends keyof DealFormValues>(key: K, value: DealFormValues[K]) {
     setFormValues((current) => ({ ...current, [key]: value }))
@@ -282,7 +287,9 @@ export function DealFormDialog({
               value={formValues.agent || emptySelectValue}
             >
               <SelectTrigger className={formSelectClassName}>
-                <SelectValue placeholder="Select agent" />
+                <SelectValue>
+                  {selectedAgentLabel}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value={emptySelectValue}>{"Select agent"}</SelectItem>
@@ -307,7 +314,9 @@ export function DealFormDialog({
               value={formValues.type}
             >
               <SelectTrigger className={formSelectClassName}>
-                <SelectValue placeholder="Select deal type" />
+                <SelectValue>
+                  {selectedTypeLabel}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {dealTypeOptions.map((type) => (
@@ -326,7 +335,9 @@ export function DealFormDialog({
               value={formValues.stage}
             >
               <SelectTrigger className={formSelectClassName}>
-                <SelectValue placeholder="Select stage" />
+                <SelectValue>
+                  {selectedStageLabel}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {dealStageOrder.map((stage) => (
@@ -345,7 +356,9 @@ export function DealFormDialog({
               value={formValues.sourceLeadId || emptySelectValue}
             >
               <SelectTrigger className={formSelectClassName}>
-                <SelectValue placeholder="No linked lead" />
+                <SelectValue>
+                  {selectedLeadLabel}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value={emptySelectValue}>{"No linked lead"}</SelectItem>

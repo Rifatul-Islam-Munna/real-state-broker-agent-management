@@ -2,10 +2,11 @@
 
 import Link from "next/link"
 
-import type { PublicAgentProfile } from "@/@types/real-estate-api"
+import type { HomePageTeamSection, PublicAgentProfile } from "@/@types/real-estate-api"
 
 type MeetTheTeamSectionProps = {
   agents: PublicAgentProfile[]
+  intro: HomePageTeamSection
 }
 
 const fallbackImage = "https://placehold.co/640x960/e2e8f0/0f172a?text=Agent"
@@ -26,7 +27,7 @@ function imageForAgent(agent: PublicAgentProfile) {
   return agent.avatarUrl ?? fallbackImage
 }
 
-export function MeetTheTeamSection({ agents }: MeetTheTeamSectionProps) {
+export function MeetTheTeamSection({ agents, intro }: MeetTheTeamSectionProps) {
   const featuredAgents = agents.slice(0, 4)
 
   return (
@@ -35,17 +36,17 @@ export function MeetTheTeamSection({ agents }: MeetTheTeamSectionProps) {
         <div className="mb-16 flex flex-col items-center justify-between md:flex-row">
           <div>
             <span className="text-accent font-bold tracking-widest uppercase text-xs">
-              {"Our Professionals"}
+              {intro.eyebrow}
             </span>
             <h2 className="text-4xl font-black text-primary mt-2">
-              {"Meet Our Expert Team"}
+              {intro.title}
             </h2>
           </div>
           <Link
             className="mt-6 border-2 border-primary px-8 py-3 text-xs font-bold uppercase text-primary transition-all hover:bg-primary hover:text-white md:mt-0"
             href="/agents"
           >
-            {"View All Agents"}
+            {intro.buttonLabel}
           </Link>
         </div>
         {featuredAgents.length === 0 ? (

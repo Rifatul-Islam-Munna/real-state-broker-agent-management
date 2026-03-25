@@ -3,6 +3,10 @@
 import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
 
+import { type AgentRoutePermission } from "@/lib/agent-route-access"
+import { hasAgentRoutePermission } from "@/lib/agent-route-access"
+import { getPortalHomePath, getPortalPathByRole, resolvePostAuthRedirect } from "@/lib/portal-paths"
+
 type AuthResponse = {
   id: number
   fullName: string
@@ -25,6 +29,7 @@ export type SessionUser = {
   isActive: boolean
   isEmailVerified: boolean
   createdAt: string
+  agentRoutePermissions: string[]
 }
 
 export type AuthActionState = {
@@ -33,30 +38,7 @@ export type AuthActionState = {
 
 const initialState: AuthActionState = { error: null }
 const baseUrl = process.env.BASE_URL ?? "http://localhost:4000/api"
-
-async function getPortalPathByRole(role: string) {
-  return role === "Agent" ? "/agent/dashboard" : "/admin/dashboard"
-}
-
-async function resolvePostAuthRedirect(role: string, nextPath: string) {
-  const normalized = nextPath.trim()
-
-  if (
-    normalized.length === 0 ||
-    !normalized.startsWith("/") ||
-    normalized.startsWith("//") ||
-    normalized === "/login" ||
-    normalized === "/register"
-  ) {
-    return getPortalPathByRole(role)
-  }
-
-  if (role === "Agent" && normalized.startsWith("/admin")) {
-    return getPortalPathByRole(role)
-  }
-
-  return normalized
-}
+const sessionCookieDays = 10
 
 async function readErrorMessage(response: Response) {
   try {
@@ -94,7 +76,7 @@ async function persistSession(auth: AuthResponse) {
   })
 
   cookieStore.set("refresh_token", auth.refreshToken, {
-    expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    expires: new Date(Date.now() + sessionCookieDays * 24 * 60 * 60 * 1000),
     httpOnly: true,
     path: "/",
     sameSite: "lax",
@@ -102,7 +84,7 @@ async function persistSession(auth: AuthResponse) {
   })
 
   cookieStore.set("user_role", auth.role, {
-    expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    expires: new Date(Date.now() + sessionCookieDays * 24 * 60 * 60 * 1000),
     path: "/",
     sameSite: "lax",
     secure,
@@ -143,7 +125,10 @@ export async function getSessionUser() {
   return fetchCurrentUser(accessToken)
 }
 
-export async function requireSession(allowedRoles?: string[]) {
+export async function requireSession(
+  allowedRoles?: string[],
+  requiredAgentPermission?: AgentRoutePermission,
+) {
   const user = await getSessionUser()
 
   if (!user) {
@@ -151,7 +136,15 @@ export async function requireSession(allowedRoles?: string[]) {
   }
 
   if (allowedRoles && !allowedRoles.includes(user.role)) {
-    redirect(await getPortalPathByRole(user.role))
+    redirect(getPortalHomePath(user))
+  }
+
+  if (
+    user.role === "Agent" &&
+    requiredAgentPermission &&
+    !hasAgentRoutePermission(user.agentRoutePermissions, requiredAgentPermission)
+  ) {
+    redirect(getPortalHomePath(user))
   }
 
   return user
@@ -181,7 +174,8 @@ export async function loginAction(
 
   const auth = (await response.json()) as AuthResponse
   await persistSession(auth)
-  redirect(await resolvePostAuthRedirect(auth.role, nextPath))
+  const currentUser = await fetchCurrentUser(auth.accessToken)
+  redirect(await resolvePostAuthRedirect(auth.role, nextPath, currentUser?.agentRoutePermissions ?? []))
 }
 
 export async function registerAction(
@@ -211,7 +205,8 @@ export async function registerAction(
 
   const auth = (await response.json()) as AuthResponse
   await persistSession(auth)
-  redirect(await getPortalPathByRole(auth.role))
+  const currentUser = await fetchCurrentUser(auth.accessToken)
+  redirect(getPortalPathByRole(auth.role, currentUser?.agentRoutePermissions ?? []))
 }
 
 export async function logoutAction() {

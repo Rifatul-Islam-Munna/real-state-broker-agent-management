@@ -34,7 +34,7 @@ export type PendingUploadFile = {
   previewUrl: string
 }
 
-export const amenityOptions = [
+export const defaultAmenityOptions = [
   "Swimming Pool",
   "Gym / Fitness Center",
   "Central Cooling",

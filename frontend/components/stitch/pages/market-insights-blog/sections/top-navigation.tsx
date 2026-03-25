@@ -1,4 +1,4 @@
-import { PublicPrimaryNavbar } from "@/components/stitch/public/public-primary-navbar"
+import { PublicPrimaryNavbar } from "@/components/stitch/shared/public-site-navbar"
 
 export function TopNavigationSection() {
   return <PublicPrimaryNavbar />

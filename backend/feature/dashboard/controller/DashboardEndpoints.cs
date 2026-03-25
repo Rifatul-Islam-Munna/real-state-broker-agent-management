@@ -5,6 +5,7 @@ namespace Endpoints
 {
     public class GetDashboardSummaryEndpoint : EndpointWithoutRequest<DashboardSummaryResponse>
     {
+        public required AgentRouteAccessService AgentRouteAccessService { get; set; }
         public required DashboardService DashboardService { get; set; }
 
         public override void Configure()
@@ -16,6 +17,7 @@ namespace Endpoints
 
         public override async Task HandleAsync(CancellationToken ct)
         {
+            await AgentRouteAccessService.EnsureCanAccessAsync(HttpContext.User, AgentRoutePermissions.Dashboard, ct);
             var summary = await DashboardService.GetSummaryAsync();
             await Send.OkAsync(summary, ct);
         }

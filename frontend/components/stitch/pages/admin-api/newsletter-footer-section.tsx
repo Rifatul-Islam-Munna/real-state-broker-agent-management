@@ -48,7 +48,7 @@ export function NewsletterFooterSection() {
               <li><Link className="hover:text-white transition-colors" href="/profile/seller/list-your-property">{"Sell Your Home"}</Link></li>
               <li><Link className="hover:text-white transition-colors" href="/profile/buyer/wishlist">{"Buyer Profile"}</Link></li>
               <li><Link className="hover:text-white transition-colors" href="/admin">{"Agent Portal"}</Link></li>
-              <li><Link className="hover:text-white transition-colors" href="/market-insights">{"Market Insights"}</Link></li>
+              <li><Link className="hover:text-white transition-colors" href="/blog">{"Blog"}</Link></li>
               <li><Link className="hover:text-white transition-colors" href="/agents">{"Our Agents"}</Link></li>
               <li><Link className="hover:text-white transition-colors" href="/contact-us">{"Contact Us"}</Link></li>
             </ul>

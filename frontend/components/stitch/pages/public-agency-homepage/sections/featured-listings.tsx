@@ -3,10 +3,11 @@
 import Link from "next/link"
 
 import { formatPriceLabel } from "@/lib/currency"
-import type { PropertyItem } from "@/@types/real-estate-api"
+import type { HomePageSectionIntro, PropertyItem } from "@/@types/real-estate-api"
 import { AppIcon } from "@/components/ui/app-icon"
 
 type FeaturedListingsSectionProps = {
+  intro: HomePageSectionIntro
   properties: PropertyItem[]
 }
 
@@ -37,7 +38,7 @@ function listingSpecs(property: PropertyItem) {
   ]
 }
 
-export function FeaturedListingsSection({ properties }: FeaturedListingsSectionProps) {
+export function FeaturedListingsSection({ intro, properties }: FeaturedListingsSectionProps) {
   const featuredListings = properties.slice(0, 3)
 
   return (
@@ -46,10 +47,10 @@ export function FeaturedListingsSection({ properties }: FeaturedListingsSectionP
         <div className="mb-12 flex justify-between items-end">
           <div>
             <span className="text-accent font-bold tracking-widest uppercase text-xs">
-              {"Exclusives"}
+              {intro.eyebrow}
             </span>
             <h2 className="text-4xl font-black text-primary mt-2">
-              {"Featured Listings"}
+              {intro.title}
             </h2>
           </div>
           <div className="flex gap-2">

@@ -7,6 +7,7 @@ namespace Endpoints
 {
     public class CreateDealPipelineEndpoint : Endpoint<DealPipeline, DealPipelineResponse>
     {
+        public required AgentRouteAccessService AgentRouteAccessService { get; set; }
         public required DealPipelineService DealPipelineService { get; set; }
 
         public override void Configure()
@@ -18,6 +19,7 @@ namespace Endpoints
 
         public override async Task HandleAsync(DealPipeline req, CancellationToken ct)
         {
+            await AgentRouteAccessService.EnsureCanAccessAsync(HttpContext.User, AgentRoutePermissions.DealPipeline, ct);
             var result = await DealPipelineService.CreateDealAsync(req);
             await Send.OkAsync(result, ct);
         }
@@ -25,6 +27,7 @@ namespace Endpoints
 
     public class UpdateDealPipelineEndpoint : Endpoint<DealPipeline, DealPipelineResponse>
     {
+        public required AgentRouteAccessService AgentRouteAccessService { get; set; }
         public required DealPipelineService DealPipelineService { get; set; }
 
         public override void Configure()
@@ -36,6 +39,7 @@ namespace Endpoints
 
         public override async Task HandleAsync(DealPipeline req, CancellationToken ct)
         {
+            await AgentRouteAccessService.EnsureCanAccessAsync(HttpContext.User, AgentRoutePermissions.DealPipeline, ct);
             var result = await DealPipelineService.UpdateDealAsync(req);
 
             if (result is null)
@@ -50,6 +54,7 @@ namespace Endpoints
 
     public class DeleteDealPipelineEndpoint : Endpoint<DeleteDealPipelineEndpoint.Request>
     {
+        public required AgentRouteAccessService AgentRouteAccessService { get; set; }
         public class Request
         {
             [QueryParam]
@@ -67,6 +72,7 @@ namespace Endpoints
 
         public override async Task HandleAsync(Request req, CancellationToken ct)
         {
+            await AgentRouteAccessService.EnsureCanAccessAsync(HttpContext.User, AgentRoutePermissions.DealPipeline, ct);
             await DealPipelineService.DeleteDealAsync(req.Id);
             await Send.NoContentAsync(ct);
         }
@@ -74,6 +80,7 @@ namespace Endpoints
 
     public class GetDealPipelineEndpoint : Endpoint<GetDealPipelineEndpoint.Request>
     {
+        public required AgentRouteAccessService AgentRouteAccessService { get; set; }
         public class Request
         {
             [QueryParam]
@@ -103,6 +110,7 @@ namespace Endpoints
 
         public override async Task HandleAsync(Request req, CancellationToken ct)
         {
+            await AgentRouteAccessService.EnsureCanAccessAsync(HttpContext.User, AgentRoutePermissions.DealPipeline, ct);
             if (req.Id.HasValue)
             {
                 var result = await DealPipelineService.GetDealAsync(req.Id.Value);
@@ -124,6 +132,7 @@ namespace Endpoints
 
     public class ConvertLeadToDealEndpoint : Endpoint<ConvertLeadToDealInput, DealPipelineResponse>
     {
+        public required AgentRouteAccessService AgentRouteAccessService { get; set; }
         public required DealPipelineService DealPipelineService { get; set; }
 
         public override void Configure()
@@ -135,6 +144,7 @@ namespace Endpoints
 
         public override async Task HandleAsync(ConvertLeadToDealInput req, CancellationToken ct)
         {
+            await AgentRouteAccessService.EnsureCanAccessAsync(HttpContext.User, AgentRoutePermissions.DealPipeline, ct);
             var result = await DealPipelineService.ConvertLeadToDealAsync(req.LeadId);
 
             if (result is null)

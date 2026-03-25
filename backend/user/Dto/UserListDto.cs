@@ -14,6 +14,8 @@ public class AgentUserOptionResponse
     public string? Bio { get; set; }
     public DateTime CreatedAt { get; set; }
     public int PropertyCount { get; set; }
+    public bool HasCustomAgentRoutePermissions { get; set; }
+    public List<string> AgentRoutePermissions { get; set; } = [];
 }
 
 public class PublicAgentProfileResponse
@@ -41,4 +43,11 @@ public class CreateAgentRequest
     public decimal? CommissionRate { get; set; }
     public bool IsVerifiedAgent { get; set; }
     public bool IsActive { get; set; } = true;
+}
+
+public class UpdateAgentRoutePermissionsRequest
+{
+    public int AgentId { get; set; }
+    public bool UseCustomAgentRoutePermissions { get; set; } = true;
+    public List<string> AgentRoutePermissions { get; set; } = [];
 }

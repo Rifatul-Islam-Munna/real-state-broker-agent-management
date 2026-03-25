@@ -7,7 +7,7 @@ import { type FormEvent, useMemo, useState } from "react"
 
 import { cn } from "@/lib/utils"
 import { sellerListYourPropertyPageMeta } from "@/data/page-metadata/public"
-import type { PublicPropertyFilters } from "@/@types/real-estate-api"
+import type { HomePageHeroSection, PublicPropertyFilters } from "@/@types/real-estate-api"
 import { AppIcon } from "@/components/ui/app-icon"
 import { Input } from "@/components/ui/input"
 import {
@@ -19,50 +19,56 @@ import {
 } from "@/components/ui/select"
 
 type SearchMode = "buy" | "rent" | "sell"
-
-type HeroSectionProps = {
-  filterOptions: PublicPropertyFilters
+type SearchModeConfig = {
+  inputPlaceholder: string
+  selectLabel: string
+  ctaLabel: string
+  tabLabel: string
+  ctaHref?: string
+  listingType?: "ForSale" | "ForRent"
 }
 
-const searchModes: Record<
-  SearchMode,
-  {
-    inputPlaceholder: string
-    selectLabel: string
-    ctaLabel: string
-    ctaHref?: string
-    listingType?: "ForSale" | "ForRent"
-  }
-> = {
-  buy: {
-    inputPlaceholder: "Neighborhood, City, or Zip...",
-    selectLabel: "Property Type",
-    ctaLabel: "Search Now",
-    listingType: "ForSale",
-  },
-  rent: {
-    inputPlaceholder: "City, building, or Zip...",
-    selectLabel: "Rental Type",
-    ctaLabel: "Browse Rentals",
-    listingType: "ForRent",
-  },
-  sell: {
-    inputPlaceholder: "Enter your property address...",
-    selectLabel: "Property Category",
-    ctaLabel: "List Your Property",
-    ctaHref: sellerListYourPropertyPageMeta.routePath,
-  },
+type HeroSectionProps = {
+  content: HomePageHeroSection
+  filterOptions: PublicPropertyFilters
 }
 
 function propertyTypeLabel(propertyType: "Residential" | "Commercial") {
   return propertyType === "Commercial" ? "Commercial" : "Residential"
 }
 
-export function HeroSection({ filterOptions }: HeroSectionProps) {
+export function HeroSection({ content, filterOptions }: HeroSectionProps) {
   const [activeMode, setActiveMode] = useState<SearchMode>("buy")
   const [searchTerm, setSearchTerm] = useState("")
   const [propertyType, setPropertyType] = useState("")
   const router = useRouter()
+  const searchModes = useMemo<Record<SearchMode, SearchModeConfig>>(
+    () =>
+      ({
+        buy: {
+          ctaLabel: content.buyMode.ctaLabel,
+          inputPlaceholder: content.buyMode.inputPlaceholder,
+          listingType: "ForSale" as const,
+          selectLabel: content.buyMode.selectLabel,
+          tabLabel: content.buyMode.tabLabel,
+        },
+        rent: {
+          ctaLabel: content.rentMode.ctaLabel,
+          inputPlaceholder: content.rentMode.inputPlaceholder,
+          listingType: "ForRent" as const,
+          selectLabel: content.rentMode.selectLabel,
+          tabLabel: content.rentMode.tabLabel,
+        },
+        sell: {
+          ctaHref: sellerListYourPropertyPageMeta.routePath,
+          ctaLabel: content.sellMode.ctaLabel,
+          inputPlaceholder: content.sellMode.inputPlaceholder,
+          selectLabel: content.sellMode.selectLabel,
+          tabLabel: content.sellMode.tabLabel,
+        },
+      }),
+    [content.buyMode, content.rentMode, content.sellMode],
+  )
   const currentMode = searchModes[activeMode]
   const propertyTypes = useMemo(
     () =>
@@ -104,19 +110,19 @@ export function HeroSection({ filterOptions }: HeroSectionProps) {
           alt="Luxury modern house exterior"
           className="w-full h-full object-cover brightness-50"
           data-alt="Luxury modern house exterior with glass windows"
-          src="https://lh3.googleusercontent.com/aida-public/AB6AXuCNzyh5mt5knkbR3OCn2xCpbUmNOq2pGyTdwYKMzAj70mI62TdwalfugFIumWCtRPu1VcMVKavr6TsX3BP9lgHwHBq-xhF-VnEFTDtMtQJ-wrvaOG6gXu0BlNF1EQnKMK69jCZMXYqKgMz4OlmOlrfDLbMLaDMKJS1Ee_Ucwy8be2XaIbNp3LF1N0_oHsqPEm9bvzeAlhVo7ySGdd4IhWNhurSiZxafHVQEkQhoby-KWNBJ72WRT5PUMOQRTj8IONpCs8zbHzfXMds"
+          src={content.backgroundImage.url}
         />
       </div>
       <div className="relative z-10 w-full max-w-4xl px-4 text-center">
         <h1 className="text-4xl md:text-6xl font-black text-white mb-6 uppercase tracking-tight">
-          {" Your Vision. Our Expertise. "}
+          {content.headline}
           <br />
           <span className="text-accent">
-            {"Exceptional Results."}
+            {content.highlightedHeadline}
           </span>
         </h1>
         <p className="text-white/90 text-lg mb-10 max-w-2xl mx-auto">
-          {"Discover a new level of real estate excellence with personalized service and market-leading insights."}
+          {content.description}
         </p>
         <div className="bg-white p-2">
           <div className="flex border-b border-slate-100">
@@ -133,7 +139,7 @@ export function HeroSection({ filterOptions }: HeroSectionProps) {
                 onClick={() => setActiveMode(mode)}
                 type="button"
               >
-                {mode}
+                {searchModes[mode].tabLabel}
               </button>
             ))}
           </div>

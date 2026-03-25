@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 
-import { PublicPrimaryNavbar } from "@/components/stitch/public/public-primary-navbar"
+import { PublicPrimaryNavbar } from "@/components/stitch/shared/public-site-navbar"
 import { NewsletterFooterSection } from "./newsletter-footer-section"
 import { getPublicAgents } from "@/lib/public-real-estate-data"
 import { AppIcon } from "@/components/ui/app-icon"

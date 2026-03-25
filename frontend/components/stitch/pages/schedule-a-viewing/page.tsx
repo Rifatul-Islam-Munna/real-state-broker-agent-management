@@ -1,4 +1,4 @@
-import { PublicPrimaryNavbar } from "@/components/stitch/public/public-primary-navbar"
+import { PublicPrimaryNavbar } from "@/components/stitch/shared/public-site-navbar"
 import { Section1Section } from "./sections/section-1"
 import { SimpleSuccessToastSimulatedSection } from "./sections/simple-success-toast-simulated"
 
