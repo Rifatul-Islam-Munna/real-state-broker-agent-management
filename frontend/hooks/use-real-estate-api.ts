@@ -21,6 +21,7 @@ import type {
   PortalCurrentUser,
   PropertyItem,
   UpdateAgentRoutePermissionsInput,
+  UpdateAgentUserInput,
 } from "@/@types/real-estate-api"
 
 export type {
@@ -65,6 +66,7 @@ export type {
   PortalCurrentUser,
   PropertyItem,
   UpdateAgentRoutePermissionsInput,
+  UpdateAgentUserInput,
 } from "@/@types/real-estate-api"
 
 type QueryParams = Record<string, string | number | boolean | undefined | null>
@@ -230,10 +232,10 @@ export function usePortalCurrentUser() {
   )
 }
 
-export function useAgentUsers() {
+export function useAgentUsers(params?: QueryParams) {
   return useQueryWrapper<AgentUserOption[]>(
-    ["agent-users"],
-    "/users/agents",
+    ["agent-users", params],
+    `/users/agents${buildQuery(params)}`,
     defaultQueryOptions,
     0,
     "agent-users",
@@ -259,6 +261,28 @@ export function useUpdateAgentRoutePermissions() {
     onSuccess: () => void invalidate(),
     successMessage: "Agent access updated",
     url: "/users/agents/permissions",
+  })
+}
+
+export function useUpdateAgentUser() {
+  const invalidate = useInvalidate(["agent-users", "portal-current-user"])
+
+  return useCommonMutationApi<AgentUserOption, UpdateAgentUserInput>({
+    method: "PATCH",
+    onSuccess: () => void invalidate(),
+    successMessage: "Agent updated",
+    url: "/users/agents",
+  })
+}
+
+export function useDeleteAgentUser() {
+  const invalidate = useInvalidate(["agent-users", "portal-current-user"])
+
+  return useCommonMutationApi<unknown, { id: string }>({
+    method: "DELETE",
+    onSuccess: () => void invalidate(),
+    successMessage: "Agent deleted",
+    url: "/users/agents",
   })
 }
 

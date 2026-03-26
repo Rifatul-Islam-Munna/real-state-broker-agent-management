@@ -261,6 +261,26 @@ export type CreateAgentUserInput = {
   commissionRate?: number | null
   isVerifiedAgent?: boolean
   isActive?: boolean
+  useCustomAgentRoutePermissions?: boolean
+  agentRoutePermissions?: string[]
+}
+
+export type UpdateAgentUserInput = {
+  id: number
+  firstName: string
+  lastName: string
+  email: string
+  password?: string | null
+  phone?: string | null
+  avatarUrl?: string | null
+  agencyName?: string | null
+  licenseNumber?: string | null
+  bio?: string | null
+  commissionRate?: number | null
+  isVerifiedAgent?: boolean
+  isActive?: boolean
+  useCustomAgentRoutePermissions?: boolean
+  agentRoutePermissions?: string[]
 }
 
 export type UpdateAgentRoutePermissionsInput = {

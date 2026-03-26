@@ -76,11 +76,18 @@ public class UserService(AppDbContext db, IConfiguration config)
         return MapToUserResponse(user);
     }
 
-    public async Task<List<AgentUserOptionResponse>> GetActiveAgentsAsync()
+    public async Task<List<AgentUserOptionResponse>> GetAgentsAsync(bool includeInactive = false)
     {
-        var agentUsers = await db.Users
+        var query = db.Users
             .Include(user => user.Properties)
-            .Where(user => user.Role == UserRole.Agent && user.IsActive && user.DeletedAt == null)
+            .Where(user => user.Role == UserRole.Agent && user.DeletedAt == null);
+
+        if (!includeInactive)
+        {
+            query = query.Where(user => user.IsActive);
+        }
+
+        var agentUsers = await query
             .OrderBy(user => user.FirstName)
             .ThenBy(user => user.LastName)
             .ToListAsync();
@@ -138,6 +145,15 @@ public class UserService(AppDbContext db, IConfiguration config)
         if (phone.Length > 0 && await db.Users.AnyAsync(u => u.Phone == phone))
             return (false, "Phone already exists", null);
 
+        if (!TryNormalizeAgentRoutePermissions(
+                req.UseCustomAgentRoutePermissions,
+                req.AgentRoutePermissions,
+                out var normalizedPermissions,
+                out var permissionError))
+        {
+            return (false, permissionError, null);
+        }
+
         var user = new User
         {
             FirstName = firstName,
@@ -154,8 +170,10 @@ public class UserService(AppDbContext db, IConfiguration config)
             IsVerifiedAgent = req.IsVerifiedAgent,
             IsActive = req.IsActive,
             IsEmailVerified = false,
-            HasCustomAgentRoutePermissions = false,
-            AgentRoutePermissions = [],
+            HasCustomAgentRoutePermissions = req.UseCustomAgentRoutePermissions,
+            AgentRoutePermissions = req.UseCustomAgentRoutePermissions
+                ? normalizedPermissions
+                : [],
             UpdatedAt = DateTime.UtcNow
         };
 
@@ -163,6 +181,79 @@ public class UserService(AppDbContext db, IConfiguration config)
         await db.SaveChangesAsync();
 
         return (true, "Agent created successfully", MapToAgentUserOption(user));
+    }
+
+    public async Task<(bool Success, string Message, AgentUserOptionResponse? Data)> UpdateAgentAsync(UpdateAgentRequest req)
+    {
+        var agent = await db.Users
+            .FirstOrDefaultAsync(user =>
+                user.Id == req.Id &&
+                user.Role == UserRole.Agent &&
+                user.DeletedAt == null);
+
+        if (agent is null)
+        {
+            return (false, "Agent not found", null);
+        }
+
+        var firstName = (req.FirstName ?? string.Empty).Trim();
+        var lastName = (req.LastName ?? string.Empty).Trim();
+        var email = (req.Email ?? string.Empty).Trim().ToLowerInvariant();
+        var phone = (req.Phone ?? string.Empty).Trim();
+        var password = (req.Password ?? string.Empty).Trim();
+
+        if (firstName.Length == 0)
+            return (false, "First name is required", null);
+
+        if (lastName.Length == 0)
+            return (false, "Last name is required", null);
+
+        if (email.Length == 0)
+            return (false, "Email is required", null);
+
+        if (password.Length > 0 && password.Length < 6)
+            return (false, "Password must be at least 6 characters", null);
+
+        if (await db.Users.AnyAsync(u => u.Id != agent.Id && u.Email == email))
+            return (false, "Email already exists", null);
+
+        if (phone.Length > 0 && await db.Users.AnyAsync(u => u.Id != agent.Id && u.Phone == phone))
+            return (false, "Phone already exists", null);
+
+        if (!TryNormalizeAgentRoutePermissions(
+                req.UseCustomAgentRoutePermissions,
+                req.AgentRoutePermissions,
+                out var normalizedPermissions,
+                out var permissionError))
+        {
+            return (false, permissionError, null);
+        }
+
+        agent.FirstName = firstName;
+        agent.LastName = lastName;
+        agent.Email = email;
+        agent.Phone = phone.Length > 0 ? phone : null;
+        agent.AvatarUrl = NullIfEmpty(req.AvatarUrl);
+        agent.AgencyName = NullIfEmpty(req.AgencyName);
+        agent.LicenseNumber = NullIfEmpty(req.LicenseNumber);
+        agent.Bio = NullIfEmpty(req.Bio);
+        agent.CommissionRate = req.CommissionRate;
+        agent.IsVerifiedAgent = req.IsVerifiedAgent;
+        agent.IsActive = req.IsActive;
+        agent.HasCustomAgentRoutePermissions = req.UseCustomAgentRoutePermissions;
+        agent.AgentRoutePermissions = req.UseCustomAgentRoutePermissions
+            ? normalizedPermissions
+            : [];
+        agent.UpdatedAt = DateTime.UtcNow;
+
+        if (password.Length > 0)
+        {
+            agent.PasswordHash = BCrypt.Net.BCrypt.HashPassword(password);
+        }
+
+        await db.SaveChangesAsync();
+
+        return (true, "Agent updated successfully", await GetAgentUserOptionByIdAsync(agent.Id));
     }
 
     public async Task<(bool Success, string Message, AgentUserOptionResponse? Data)> UpdateAgentRoutePermissionsAsync(
@@ -178,11 +269,13 @@ public class UserService(AppDbContext db, IConfiguration config)
             return (false, "Agent not found", null);
         }
 
-        var normalizedPermissions = AgentRoutePermissions.Normalize(req.AgentRoutePermissions);
-
-        if (req.UseCustomAgentRoutePermissions && normalizedPermissions.Count == 0)
+        if (!TryNormalizeAgentRoutePermissions(
+                req.UseCustomAgentRoutePermissions,
+                req.AgentRoutePermissions,
+                out var normalizedPermissions,
+                out var permissionError))
         {
-            return (false, "Select at least one agent route.", null);
+            return (false, permissionError, null);
         }
 
         agent.HasCustomAgentRoutePermissions = req.UseCustomAgentRoutePermissions;
@@ -193,7 +286,40 @@ public class UserService(AppDbContext db, IConfiguration config)
 
         await db.SaveChangesAsync();
 
-        return (true, "Agent access updated successfully", MapToAgentUserOption(agent));
+        return (true, "Agent access updated successfully", await GetAgentUserOptionByIdAsync(agent.Id));
+    }
+
+    public async Task<(bool Success, string Message)> DeleteAgentAsync(int agentId)
+    {
+        var agent = await db.Users
+            .Include(user => user.Properties)
+            .FirstOrDefaultAsync(user =>
+                user.Id == agentId &&
+                user.Role == UserRole.Agent &&
+                user.DeletedAt == null);
+
+        if (agent is null)
+        {
+            return (false, "Agent not found");
+        }
+
+        var now = DateTime.UtcNow;
+
+        foreach (var property in agent.Properties)
+        {
+            property.AgentId = null;
+            property.UpdatedAt = now;
+        }
+
+        agent.IsActive = false;
+        agent.RefreshToken = null;
+        agent.RefreshTokenExpiry = null;
+        agent.DeletedAt = now;
+        agent.UpdatedAt = now;
+
+        await db.SaveChangesAsync();
+
+        return (true, "Agent deleted successfully");
     }
 
     // ─── Token Generation ─────────────────────────────────
@@ -298,6 +424,36 @@ public class UserService(AppDbContext db, IConfiguration config)
         HasCustomAgentRoutePermissions = user.HasCustomAgentRoutePermissions,
         AgentRoutePermissions = GetEffectiveAgentRoutePermissions(user)
     };
+
+    private async Task<AgentUserOptionResponse?> GetAgentUserOptionByIdAsync(int agentId)
+    {
+        var user = await db.Users
+            .Include(item => item.Properties)
+            .FirstOrDefaultAsync(item =>
+                item.Id == agentId &&
+                item.Role == UserRole.Agent &&
+                item.DeletedAt == null);
+
+        return user is null ? null : MapToAgentUserOption(user);
+    }
+
+    private static bool TryNormalizeAgentRoutePermissions(
+        bool useCustomAgentRoutePermissions,
+        IEnumerable<string>? routePermissions,
+        out List<string> normalizedPermissions,
+        out string errorMessage)
+    {
+        normalizedPermissions = AgentRoutePermissions.Normalize(routePermissions);
+        errorMessage = string.Empty;
+
+        if (useCustomAgentRoutePermissions && normalizedPermissions.Count == 0)
+        {
+            errorMessage = "Select at least one agent route.";
+            return false;
+        }
+
+        return true;
+    }
 
     private static string? NullIfEmpty(string? value)
     {

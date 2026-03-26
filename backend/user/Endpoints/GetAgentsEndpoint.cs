@@ -1,7 +1,13 @@
 using FastEndpoints;
 
-public class GetAgentsEndpoint(UserService userService) : EndpointWithoutRequest<List<AgentUserOptionResponse>>
+public class GetAgentsEndpoint(UserService userService) : Endpoint<GetAgentsEndpoint.Request, List<AgentUserOptionResponse>>
 {
+    public class Request
+    {
+        [QueryParam]
+        public bool IncludeInactive { get; set; }
+    }
+
     public override void Configure()
     {
         Get("/users/agents");
@@ -12,9 +18,9 @@ public class GetAgentsEndpoint(UserService userService) : EndpointWithoutRequest
         });
     }
 
-    public override async Task HandleAsync(CancellationToken ct)
+    public override async Task HandleAsync(Request req, CancellationToken ct)
     {
-        var agents = await userService.GetActiveAgentsAsync();
+        var agents = await userService.GetAgentsAsync(req.IncludeInactive);
         await Send.OkAsync(agents, ct);
     }
 }

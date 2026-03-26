@@ -77,11 +77,11 @@ export function PublicContactMainApiSection() {
               }
 
               const response = await createContactRequest.mutateAsync({
-                email: formState.email,
+                email: formState.email.trim(),
                 inquiryType: activeInquiry,
-                message: formState.message,
-                name: formState.name,
-                phone: formState.phone,
+                message: formState.message.trim(),
+                name: formState.name.trim(),
+                phone: formState.phone.trim(),
               })
 
               if (response.error) {
@@ -125,7 +125,7 @@ export function PublicContactMainApiSection() {
             />
             <Input
               className="h-auto border-slate-200 px-4 py-3 text-sm"
-              defaultValue={activeInquiry}
+              value={activeInquiry}
               readOnly
               type="text"
             />

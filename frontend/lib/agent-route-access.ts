@@ -1,35 +1,41 @@
 export const agentRouteAccessItems = [
   {
+    description: "Overview metrics, recent activity, and quick portal snapshots.",
     href: "/agent/dashboard",
     icon: "dashboard",
     label: "Dashboard",
     permission: "dashboard",
   },
   {
+    description: "Assigned property inventory, listing updates, and availability work.",
     href: "/agent/properties",
     icon: "domain",
     label: "Property",
     permission: "properties",
   },
   {
+    description: "Deal stages, negotiation progress, and pipeline tracking.",
     href: "/agent/deal-pipeline",
     icon: "partner_exchange",
     label: "Deal Pipeline",
     permission: "deal-pipeline",
   },
   {
+    description: "Lead follow-up, qualification, and conversion tasks.",
     href: "/agent/lead",
     icon: "group",
     label: "Lead",
     permission: "lead",
   },
   {
+    description: "Customer messages, inbox management, and email workflow.",
     href: "/agent/mail",
     icon: "mail",
     label: "Mail",
     permission: "mail",
   },
   {
+    description: "Agent account preferences and personal portal settings.",
     href: "/agent/settings",
     icon: "settings",
     label: "Settings",
