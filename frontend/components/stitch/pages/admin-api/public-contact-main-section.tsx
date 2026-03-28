@@ -3,11 +3,12 @@
 import { useState } from "react"
 import { sileo } from "sileo"
 
+import type { PublicAgencyProfileSettings } from "@/@types/real-estate-api"
 import { useCreateContactRequest } from "@/hooks/use-real-estate-api"
-import { publicContactMethods } from "@/data/page-content"
 import { AppIcon } from "@/components/ui/app-icon"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import { agencySocialPlatformOptions, getConfiguredAgencySocialLinks } from "@/lib/agency-social-links"
 
 const inquiryTypes = [
   "Buying",
@@ -16,7 +17,11 @@ const inquiryTypes = [
   "Agent Introduction",
 ] as const
 
-export function PublicContactMainApiSection() {
+export function PublicContactMainApiSection({
+  profile,
+}: {
+  profile: PublicAgencyProfileSettings
+}) {
   const [activeInquiry, setActiveInquiry] = useState<typeof inquiryTypes[number]>("Buying")
   const createContactRequest = useCreateContactRequest()
   const [formState, setFormState] = useState({
@@ -25,6 +30,25 @@ export function PublicContactMainApiSection() {
     name: "",
     phone: "",
   })
+  const configuredSocialLinks = getConfiguredAgencySocialLinks(profile.socialLinks)
+  const primaryOfficeLocation = profile.officeLocations.find((item) => item.trim().length > 0) ?? "Office location not added yet"
+  const contactMethods = [
+    {
+      title: "General Inquiries",
+      detail: profile.contactEmail || "Contact email not added yet",
+      icon: "mail",
+    },
+    {
+      title: "Call Our Desk",
+      detail: profile.contactPhone || "Phone number not added yet",
+      icon: "call",
+    },
+    {
+      title: "Visit Headquarters",
+      detail: primaryOfficeLocation,
+      icon: "location_on",
+    },
+  ] as const
 
   function showValidationError(description: string) {
     sileo.error({
@@ -147,7 +171,7 @@ export function PublicContactMainApiSection() {
           </form>
         </div>
         <aside className="grid gap-4">
-          {publicContactMethods.map((method) => (
+          {contactMethods.map((method) => (
             <div
               key={method.title}
               className="border border-slate-200 bg-white p-6"
@@ -165,6 +189,35 @@ export function PublicContactMainApiSection() {
               </div>
             </div>
           ))}
+          <div className="border border-slate-200 bg-white p-6">
+            <p className="text-xs font-bold uppercase tracking-[0.22em] text-slate-500">
+              {"Social Channels"}
+            </p>
+            {configuredSocialLinks.length > 0 ? (
+              <div className="mt-4 flex flex-wrap gap-3">
+                {configuredSocialLinks.map((link) => {
+                  const platform = agencySocialPlatformOptions.find((item) => item.platform === link.platform)
+
+                  return (
+                    <a
+                      key={link.platform}
+                      className="inline-flex items-center gap-2 border border-primary/10 px-4 py-2 text-sm font-semibold text-primary transition-colors hover:border-primary"
+                      href={link.url}
+                      rel="noreferrer"
+                      target="_blank"
+                    >
+                      <AppIcon className="text-base" name={platform?.icon ?? "share"} />
+                      {platform?.label ?? link.platform}
+                    </a>
+                  )
+                })}
+              </div>
+            ) : (
+              <p className="mt-3 text-sm text-slate-500">
+                {"No social channels added yet in agency settings."}
+              </p>
+            )}
+          </div>
           <div className="border border-primary/10 bg-primary p-6 text-white">
             <p className="text-xs font-bold uppercase tracking-[0.22em] text-accent">
               {"Response Standard"}

@@ -58,6 +58,9 @@ export function PropertyMediaSection({
               <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                 {"Primary cover image for property cards and previews."}
               </p>
+              <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
+                {"Recommended ratio: 4:3"}
+              </p>
             </div>
             <button
               className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 transition-colors hover:border-primary hover:text-primary dark:border-slate-700 dark:text-slate-300"
@@ -121,6 +124,9 @@ export function PropertyMediaSection({
               </p>
               <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                 {`Upload up to ${maxGalleryImages} gallery images for the property details and slider.`}
+              </p>
+              <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
+                {"Recommended ratio: 4:3 or 16:9 | Keep the main subject centered"}
               </p>
             </div>
             <button

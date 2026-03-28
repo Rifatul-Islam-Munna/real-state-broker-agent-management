@@ -14,8 +14,10 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 
 type ImageUploadFieldProps = {
+  aspectRatio: string
   description: string
   label: string
+  ratioNote?: string
   uploadPath: string
   value: HomePageImageAsset
   onChange: (value: HomePageImageAsset) => void
@@ -129,8 +131,10 @@ function TextAreaField({
 }
 
 function ImageUploadField({
+  aspectRatio,
   description,
   label,
+  ratioNote,
   uploadPath,
   value,
   onChange,
@@ -165,6 +169,9 @@ function ImageUploadField({
           </p>
           <p className="mt-1 max-w-xl text-sm leading-6 text-slate-500">
             {description}
+          </p>
+          <p className="mt-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+            {`Recommended ratio: ${aspectRatio}${ratioNote ? ` | ${ratioNote}` : ""}`}
           </p>
         </div>
         <div className="flex gap-3">
@@ -407,6 +414,7 @@ export function HomePageManagementPage() {
           />
 
           <ImageUploadField
+            aspectRatio="16:9"
             description="Large hero background image shown behind the search form."
             label="Hero Background"
             onChange={(value) =>
@@ -414,6 +422,7 @@ export function HomePageManagementPage() {
                 ...current,
                 hero: { ...current.hero, backgroundImage: value },
               }))}
+            ratioNote="Wide landscape image"
             uploadPath="homepage/hero"
             value={formValues.hero.backgroundImage}
           />
@@ -645,6 +654,7 @@ export function HomePageManagementPage() {
 
           <div className="grid gap-6 xl:grid-cols-2">
             <ImageUploadField
+              aspectRatio="1:1"
               description="Top-left photo inside the trust section grid."
               label="Primary Image"
               onChange={(value) =>
@@ -656,6 +666,7 @@ export function HomePageManagementPage() {
               value={formValues.whyChooseUs.primaryImage}
             />
             <ImageUploadField
+              aspectRatio="1:1"
               description="Bottom-right photo inside the trust section grid."
               label="Secondary Image"
               onChange={(value) =>
@@ -734,6 +745,7 @@ export function HomePageManagementPage() {
                     value={card.propertyCountLabel}
                   />
                   <ImageUploadField
+                    aspectRatio={index === 3 ? "2:1" : "1:1"}
                     description="Background image for this neighborhood tile."
                     label={`Neighborhood Image ${index + 1}`}
                     onChange={(value) =>
@@ -885,6 +897,7 @@ export function HomePageManagementPage() {
             />
           </div>
           <ImageUploadField
+            aspectRatio="1:1"
             description="Small round avatar image shown beside the testimonial author details."
             label="Testimonial Avatar"
             onChange={(value) =>
@@ -892,6 +905,7 @@ export function HomePageManagementPage() {
                 ...current,
                 testimonial: { ...current.testimonial, avatarImage: value },
               }))}
+            ratioNote="Keep the face centered for the round crop"
             uploadPath="homepage/testimonial"
             value={formValues.testimonial.avatarImage}
           />

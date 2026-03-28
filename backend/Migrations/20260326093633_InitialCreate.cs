@@ -14,6 +14,25 @@ namespace backend.Migrations
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.CreateTable(
+                name: "agency_integration_settings",
+                columns: table => new
+                {
+                    id = table.Column<int>(type: "integer", nullable: false),
+                    twilio_payload = table.Column<string>(type: "text", nullable: true),
+                    twilio_updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    ai_provider_payload = table.Column<string>(type: "text", nullable: true),
+                    ai_provider_updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    smtp_payload = table.Column<string>(type: "text", nullable: true),
+                    smtp_updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_agency_integration_settings", x => x.id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "blog_post",
                 columns: table => new
                 {
@@ -39,6 +58,34 @@ namespace backend.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("pk_blog_post", x => x.id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "document_repository_item",
+                columns: table => new
+                {
+                    id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    title = table.Column<string>(type: "text", nullable: false),
+                    file_name = table.Column<string>(type: "text", nullable: false),
+                    file_url = table.Column<string>(type: "text", nullable: false),
+                    file_object_name = table.Column<string>(type: "text", nullable: true),
+                    mime_type = table.Column<string>(type: "text", nullable: false),
+                    size_bytes = table.Column<long>(type: "bigint", nullable: false),
+                    category = table.Column<string>(type: "text", nullable: false),
+                    folder = table.Column<string>(type: "text", nullable: false),
+                    description = table.Column<string>(type: "text", nullable: false),
+                    version_label = table.Column<string>(type: "text", nullable: false),
+                    tags = table.Column<string>(type: "jsonb", nullable: false),
+                    access_level = table.Column<int>(type: "integer", nullable: false),
+                    is_template = table.Column<bool>(type: "boolean", nullable: false),
+                    requires_signature = table.Column<bool>(type: "boolean", nullable: false),
+                    created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_document_repository_item", x => x.id);
                 });
 
             migrationBuilder.CreateTable(
@@ -82,6 +129,20 @@ namespace backend.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("pk_lead", x => x.id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "marketing_settings",
+                columns: table => new
+                {
+                    id = table.Column<int>(type: "integer", nullable: false),
+                    content_json = table.Column<string>(type: "text", nullable: false),
+                    created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_marketing_settings", x => x.id);
                 });
 
             migrationBuilder.CreateTable(
@@ -317,6 +378,9 @@ namespace backend.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropTable(
+                name: "agency_integration_settings");
+
+            migrationBuilder.DropTable(
                 name: "blog_post");
 
             migrationBuilder.DropTable(
@@ -326,10 +390,16 @@ namespace backend.Migrations
                 name: "deal_pipeline");
 
             migrationBuilder.DropTable(
+                name: "document_repository_item");
+
+            migrationBuilder.DropTable(
                 name: "home_page_settings");
 
             migrationBuilder.DropTable(
                 name: "mail_inbox");
+
+            migrationBuilder.DropTable(
+                name: "marketing_settings");
 
             migrationBuilder.DropTable(
                 name: "neighborhood_insight");

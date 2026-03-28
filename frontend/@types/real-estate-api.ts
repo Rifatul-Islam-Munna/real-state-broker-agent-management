@@ -163,6 +163,174 @@ export type HomePageSettings = {
   updatedAt: string
 }
 
+export type MarketingTrendDirection = "Up" | "Down" | "Stable"
+
+export type MarketingSummaryMetric = {
+  value: string
+  deltaLabel: string
+  progressPercent: number
+  trendDirection: MarketingTrendDirection
+}
+
+export type MarketingSummarySection = {
+  emailOpenRate: MarketingSummaryMetric
+  smsCtr: MarketingSummaryMetric
+  conversions: MarketingSummaryMetric
+  socialReach: MarketingSummaryMetric
+}
+
+export type MarketingEmailCampaignItem = {
+  id: string
+  name: string
+  type: string
+  status: string
+  performancePercent: number
+}
+
+export type MarketingSmsStatusItem = {
+  id: string
+  title: string
+  recipientCount: number
+  status: string
+  lastActivityAt: string
+}
+
+export type MarketingHomepageBoostSlot = {
+  id: string
+  propertyId?: number | null
+  isActive: boolean
+}
+
+export type MarketingHomepageBoostSection = {
+  title: string
+  description: string
+  buttonLabel: string
+  slots: MarketingHomepageBoostSlot[]
+}
+
+export type MarketingTemplateItem = {
+  id: string
+  name: string
+  variableHint: string
+}
+
+export type MarketingSocialChannel = {
+  id: string
+  label: string
+  icon: string
+  accentClassName: string
+  isEnabled: boolean
+}
+
+export type MarketingSocialSharingSettings = {
+  autoPostEnabled: boolean
+  autoPostMessage: string
+  channels: MarketingSocialChannel[]
+}
+
+export type MarketingSettings = {
+  summary: MarketingSummarySection
+  emailCampaigns: MarketingEmailCampaignItem[]
+  smsStatuses: MarketingSmsStatusItem[]
+  homepageBoost: MarketingHomepageBoostSection
+  templates: MarketingTemplateItem[]
+  socialSharing: MarketingSocialSharingSettings
+  updatedAt?: string | null
+}
+
+export type AgencyIntegrationStatus = {
+  hasTwilioConfig: boolean
+  twilioUpdatedAt?: string | null
+  hasAiProviderConfig: boolean
+  aiProviderUpdatedAt?: string | null
+  hasSmtpConfig: boolean
+  smtpUpdatedAt?: string | null
+  updatedAt?: string | null
+}
+
+export type TwilioIntegrationWriteInput = {
+  accountSid: string
+  authToken: string
+  fromNumber: string
+}
+
+export type AiProviderIntegrationWriteInput = {
+  providerName: string
+  baseUrl?: string | null
+  model: string
+  apiKey: string
+}
+
+export type SmtpIntegrationWriteInput = {
+  host: string
+  port: number
+  username: string
+  password: string
+  fromEmail: string
+  fromName?: string | null
+  useSsl: boolean
+}
+
+export type UpdateAgencyIntegrationSettingsInput = {
+  twilio?: TwilioIntegrationWriteInput
+  aiProvider?: AiProviderIntegrationWriteInput
+  smtp?: SmtpIntegrationWriteInput
+  clearTwilio?: boolean
+  clearAiProvider?: boolean
+  clearSmtp?: boolean
+}
+
+export type AgencyCommunicationChannel = "Email" | "SMS"
+
+export type AgencySocialLinkPlatform =
+  | "facebook"
+  | "instagram"
+  | "linkedin"
+  | "x"
+  | "youtube"
+  | "tiktok"
+
+export type AgencySocialLink = {
+  platform: AgencySocialLinkPlatform
+  url: string
+}
+
+export type AgencyProfileSettings = {
+  agencyName: string
+  taxId: string
+  standardCommissionPercent: string
+  logo: HomePageImageAsset
+  officeLocations: string[]
+  contactEmail: string
+  contactPhone: string
+  socialLinks: AgencySocialLink[]
+}
+
+export type AgencyCommunicationTemplateItem = {
+  id: string
+  name: string
+  subject: string
+  body: string
+  channels: AgencyCommunicationChannel[]
+  variableTokens: string[]
+}
+
+export type AgencySettings = {
+  profile: AgencyProfileSettings
+  communicationTemplates: AgencyCommunicationTemplateItem[]
+  updatedAt: string
+}
+
+export type PublicAgencyProfileSettings = Pick<
+  AgencyProfileSettings,
+  "agencyName" | "logo" | "officeLocations" | "contactEmail" | "contactPhone" | "socialLinks"
+>
+
+export type PublicAgencySettings = {
+  profile: PublicAgencyProfileSettings
+  updatedAt: string
+}
+
 export type BlogPostSummary = {
   id: number
   title: string
@@ -217,6 +385,59 @@ export type BlogPostDetail = BlogPostSummary & {
   highlights: string[]
   paragraphs: string[]
   relatedPosts: BlogPostSummary[]
+}
+
+export type DocumentAccessLevel = "AdminOnly" | "AgentAccess" | "Public"
+
+export type DocumentRepositoryItem = {
+  id: number
+  title: string
+  fileName: string
+  fileUrl: string
+  fileObjectName?: string | null
+  mimeType: string
+  sizeBytes: number
+  category: string
+  folder: string
+  description: string
+  versionLabel: string
+  tags: string[]
+  accessLevel: DocumentAccessLevel
+  isTemplate: boolean
+  requiresSignature: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export type DocumentRepositorySummary = {
+  totalDocuments: number
+  adminOnlyCount: number
+  agentAccessCount: number
+  publicCount: number
+  templateCount: number
+  signatureRequiredCount: number
+  totalSizeBytes: number
+}
+
+export type DocumentRepositorySaveInput = {
+  title: string
+  fileName: string
+  fileUrl: string
+  fileObjectName?: string | null
+  mimeType: string
+  sizeBytes: number
+  category: string
+  folder: string
+  description: string
+  versionLabel: string
+  tags: string[]
+  accessLevel: DocumentAccessLevel
+  isTemplate: boolean
+  requiresSignature: boolean
+}
+
+export type UpdateDocumentRepositoryInput = DocumentRepositorySaveInput & {
+  id: number
 }
 
 export type AgentSummary = {
@@ -296,6 +517,26 @@ export type NeighborhoodInsight = {
   propertyId?: number
 }
 
+export type PropertyPreQuestion = {
+  id?: number
+  prompt: string
+  helperText: string
+  isRequired: boolean
+  sortOrder: number
+  allowsFileUpload: boolean
+  attachmentUrl?: string | null
+  attachmentObjectName?: string | null
+}
+
+export type PropertySellPrediction = {
+  predictedDays: number
+  isModelTrained: boolean
+  trainingSampleSize: number
+  confidence: number
+  historicalAverageDays: number
+  basis: string
+}
+
 export type PropertyItem = {
   id: number
   slug: string
@@ -316,9 +557,34 @@ export type PropertyItem = {
   imageObjectNames: string[]
   keyAmenities: string[]
   neighborhoodInsights: NeighborhoodInsight[]
+  preQuestions: PropertyPreQuestion[]
   createdAt: string
   updatedAt: string
+  closedAt?: string | null
+  sellPrediction: PropertySellPrediction
   agent?: AgentSummary | null
+  agentId?: number | null
+}
+
+export type PropertySaveInput = {
+  title: string
+  propertyType: "Residential" | "Commercial"
+  listingType: "ForSale" | "ForRent"
+  price: string
+  status: "Open" | "Closed"
+  location: string
+  exactLocation: string
+  bedRoom: string
+  bathRoom: string
+  width: string
+  description: string
+  thumbnailUrl?: string | null
+  thumbnailObjectName?: string | null
+  imageUrls: string[]
+  imageObjectNames: string[]
+  keyAmenities: string[]
+  neighborhoodInsights: NeighborhoodInsight[]
+  preQuestions: PropertyPreQuestion[]
   agentId?: number | null
 }
 
@@ -399,6 +665,58 @@ export type ContactRequestItem = {
   leadId?: number | null
   createdAt: string
   updatedAt: string
+}
+
+export type PropertyChatConversationStatus = "New" | "LeadCreated" | "NeedsReview"
+
+export type PropertyChatMessage = {
+  id: number
+  senderRole: "System" | "Visitor" | "Agent"
+  message: string
+  attachmentUrl?: string | null
+  attachmentObjectName?: string | null
+  createdAt: string
+}
+
+export type PropertyChatConversationItem = {
+  id: number
+  propertyId: number
+  propertyTitle: string
+  assignedAgent: string
+  contactName: string
+  contactEmail: string
+  contactPhone: string
+  budget: string
+  timeline: string
+  interest: string
+  summary: string
+  qualificationScore: number
+  autoQualified: boolean
+  status: PropertyChatConversationStatus
+  leadId?: number | null
+  createdAt: string
+  updatedAt: string
+  messages: PropertyChatMessage[]
+}
+
+export type PropertyChatAnswerInput = {
+  questionId?: number | null
+  questionPrompt: string
+  answerText: string
+  attachmentUrl?: string | null
+  attachmentObjectName?: string | null
+}
+
+export type CreatePropertyChatConversationInput = {
+  propertyId: number
+  contactName: string
+  contactEmail: string
+  contactPhone: string
+  budget: string
+  timeline: string
+  interest: string
+  additionalMessage: string
+  answers: PropertyChatAnswerInput[]
 }
 
 export type MailInboxStatus = "New" | "Replied" | "Converted"

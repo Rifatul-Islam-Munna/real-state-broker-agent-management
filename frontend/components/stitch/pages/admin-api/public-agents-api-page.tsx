@@ -4,7 +4,7 @@ import Link from "next/link"
 
 import { PublicPrimaryNavbar } from "@/components/stitch/shared/public-site-navbar"
 import { NewsletterFooterSection } from "./newsletter-footer-section"
-import { getPublicAgents } from "@/lib/public-real-estate-data"
+import { getPublicAgencySettings, getPublicAgents } from "@/lib/public-real-estate-data"
 import { AppIcon } from "@/components/ui/app-icon"
 
 import { AgentsCtaSection } from "../public-agents/sections/cta-section"
@@ -29,7 +29,10 @@ function roleLabel(agent: {
 }
 
 export async function PublicAgentsApiPage() {
-  const agents = await getPublicAgents()
+  const [agents, publicAgencySettings] = await Promise.all([
+    getPublicAgents(),
+    getPublicAgencySettings(),
+  ])
 
   return (
     <div className="bg-background-light font-sans text-slate-900 dark:bg-background-dark dark:text-slate-100">
@@ -112,7 +115,7 @@ export async function PublicAgentsApiPage() {
       </section>
       <AgentsSpecialtiesSection />
       <AgentsCtaSection />
-      <NewsletterFooterSection />
+      <NewsletterFooterSection profile={publicAgencySettings.profile} />
     </div>
   )
 }

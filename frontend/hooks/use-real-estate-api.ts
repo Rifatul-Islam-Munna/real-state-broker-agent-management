@@ -5,26 +5,49 @@ import { keepPreviousData, useQueryClient } from "@tanstack/react-query"
 import { useQueryWrapper } from "@/api-hooks/react-query-wrapper"
 import { useCommonMutationApi } from "@/api-hooks/use-api-mutation"
 import type {
+  AgencyCommunicationChannel,
+  AgencyCommunicationTemplateItem,
+  AgencyIntegrationStatus,
+  AgencyProfileSettings,
+  AgencySettings,
+  AiProviderIntegrationWriteInput,
   AgentUserOption,
   BlogPostDetail,
   BlogPostItem,
   BlogPostSaveInput,
   BlogPostSummary,
   ContactRequestItem,
+  CreatePropertyChatConversationInput,
   CreateAgentUserInput,
   DashboardSummary,
   DealItem,
+  DocumentRepositoryItem,
+  DocumentRepositorySaveInput,
+  DocumentRepositorySummary,
   HomePageSettings,
   LeadItem,
   MailInboxItem,
+  MarketingSettings,
   PaginatedResult,
   PortalCurrentUser,
   PropertyItem,
+  PropertyChatConversationItem,
+  PropertySaveInput,
+  SmtpIntegrationWriteInput,
+  TwilioIntegrationWriteInput,
+  UpdateAgencyIntegrationSettingsInput,
+  UpdateDocumentRepositoryInput,
   UpdateAgentRoutePermissionsInput,
   UpdateAgentUserInput,
 } from "@/@types/real-estate-api"
 
 export type {
+  AgencyCommunicationChannel,
+  AgencyCommunicationTemplateItem,
+  AgencyIntegrationStatus,
+  AgencyProfileSettings,
+  AgencySettings,
+  AiProviderIntegrationWriteInput,
   AgentSummary,
   AgentUserOption,
   BlogPostDetail,
@@ -42,6 +65,10 @@ export type {
   DealItem,
   DealStage,
   DealType,
+  DocumentAccessLevel,
+  DocumentRepositoryItem,
+  DocumentRepositorySaveInput,
+  DocumentRepositorySummary,
   HomePageFeatureItem,
   HomePageHeroSearchMode,
   HomePageHeroSection,
@@ -61,10 +88,32 @@ export type {
   MailInboxItem,
   MailInboxKind,
   MailInboxStatus,
+  MarketingEmailCampaignItem,
+  MarketingHomepageBoostSection,
+  MarketingHomepageBoostSlot,
+  MarketingSettings,
+  MarketingSmsStatusItem,
+  MarketingSocialChannel,
+  MarketingSocialSharingSettings,
+  MarketingSummaryMetric,
+  MarketingSummarySection,
+  MarketingTemplateItem,
+  MarketingTrendDirection,
   NeighborhoodInsight,
   PaginatedResult,
   PortalCurrentUser,
   PropertyItem,
+  PropertyChatAnswerInput,
+  PropertyChatConversationItem,
+  PropertyChatConversationStatus,
+  PropertyChatMessage,
+  PropertyPreQuestion,
+  PropertySaveInput,
+  PropertySellPrediction,
+  SmtpIntegrationWriteInput,
+  TwilioIntegrationWriteInput,
+  UpdateAgencyIntegrationSettingsInput,
+  UpdateDocumentRepositoryInput,
   UpdateAgentRoutePermissionsInput,
   UpdateAgentUserInput,
 } from "@/@types/real-estate-api"
@@ -145,6 +194,78 @@ export function useUpdateHomePageSettings() {
   })
 }
 
+export function useMarketingSettings() {
+  return useQueryWrapper<MarketingSettings>(
+    ["marketing-settings"],
+    "/marketing-settings",
+    {
+      ...defaultQueryOptions,
+      placeholderData: undefined,
+    },
+    0,
+    "marketing-settings",
+  )
+}
+
+export function useUpdateMarketingSettings() {
+  const invalidate = useInvalidate(["marketing-settings"])
+
+  return useCommonMutationApi<MarketingSettings, MarketingSettings>({
+    method: "PATCH",
+    onSuccess: () => void invalidate(),
+    successMessage: "Marketing updated",
+    url: "/marketing-settings",
+  })
+}
+
+export function useAgencyIntegrationSettings() {
+  return useQueryWrapper<AgencyIntegrationStatus>(
+    ["agency-integration-settings"],
+    "/settings/integrations",
+    {
+      ...defaultQueryOptions,
+      placeholderData: undefined,
+    },
+    0,
+    "agency-integration-settings",
+  )
+}
+
+export function useUpdateAgencyIntegrationSettings() {
+  const invalidate = useInvalidate(["agency-integration-settings"])
+
+  return useCommonMutationApi<AgencyIntegrationStatus, UpdateAgencyIntegrationSettingsInput>({
+    method: "PATCH",
+    onSuccess: () => void invalidate(),
+    successMessage: "Integration settings updated",
+    url: "/settings/integrations",
+  })
+}
+
+export function useAgencySettings() {
+  return useQueryWrapper<AgencySettings>(
+    ["agency-settings"],
+    "/agency-settings",
+    {
+      ...defaultQueryOptions,
+      placeholderData: undefined,
+    },
+    0,
+    "agency-settings",
+  )
+}
+
+export function useUpdateAgencySettings() {
+  const invalidate = useInvalidate(["agency-settings"])
+
+  return useCommonMutationApi<AgencySettings, AgencySettings>({
+    method: "PATCH",
+    onSuccess: () => void invalidate(),
+    successMessage: "Agency settings updated",
+    url: "/agency-settings",
+  })
+}
+
 export function useAdminBlogPosts(params?: QueryParams) {
   return useQueryWrapper<PaginatedResult<BlogPostItem>>(
     ["admin-blog-posts", params],
@@ -209,6 +330,62 @@ export function useDeleteBlogPost() {
     onSuccess: () => void invalidate(),
     successMessage: "Blog post deleted",
     url: "/blogs",
+  })
+}
+
+export function useDocumentRepository(params?: QueryParams) {
+  return useQueryWrapper<PaginatedResult<DocumentRepositoryItem>>(
+    ["documents", params],
+    `/documents${buildQuery(params)}`,
+    defaultQueryOptions,
+    0,
+    "documents",
+  )
+}
+
+export function useDocumentRepositorySummary() {
+  return useQueryWrapper<DocumentRepositorySummary>(
+    ["document-summary"],
+    "/documents/summary",
+    {
+      ...defaultQueryOptions,
+      placeholderData: undefined,
+    },
+    0,
+    "document-summary",
+  )
+}
+
+export function useCreateDocumentRepositoryItem() {
+  const invalidate = useInvalidate(["documents", "document-summary"])
+
+  return useCommonMutationApi<DocumentRepositoryItem, DocumentRepositorySaveInput>({
+    method: "POST",
+    onSuccess: () => void invalidate(),
+    successMessage: "Document created",
+    url: "/documents",
+  })
+}
+
+export function useUpdateDocumentRepositoryItem() {
+  const invalidate = useInvalidate(["documents", "document-summary"])
+
+  return useCommonMutationApi<DocumentRepositoryItem, UpdateDocumentRepositoryInput>({
+    method: "PATCH",
+    onSuccess: () => void invalidate(),
+    successMessage: "Document updated",
+    url: "/documents",
+  })
+}
+
+export function useDeleteDocumentRepositoryItem() {
+  const invalidate = useInvalidate(["documents", "document-summary"])
+
+  return useCommonMutationApi<unknown, { id: string }>({
+    method: "DELETE",
+    onSuccess: () => void invalidate(),
+    successMessage: "Document deleted",
+    url: "/documents",
   })
 }
 
@@ -289,10 +466,7 @@ export function useDeleteAgentUser() {
 export function useCreateProperty() {
   const invalidate = useInvalidate(["properties"])
 
-  return useCommonMutationApi<
-    PropertyItem,
-    Omit<PropertyItem, "id" | "slug" | "agent" | "createdAt" | "updatedAt">
-  >({
+  return useCommonMutationApi<PropertyItem, PropertySaveInput>({
     method: "POST",
     onSuccess: () => void invalidate(),
     successMessage: "Property saved",
@@ -468,6 +642,27 @@ export function useConvertContactRequestToLead() {
     onSuccess: () => void invalidate(),
     successMessage: "Contact converted to lead",
     url: "/contact-requests/convert-to-lead",
+  })
+}
+
+export function usePropertyChats(params?: QueryParams) {
+  return useQueryWrapper<PaginatedResult<PropertyChatConversationItem>>(
+    ["property-chats", params],
+    `/property-chats${buildQuery(params)}`,
+    defaultQueryOptions,
+    0,
+    "property-chats",
+  )
+}
+
+export function useCreatePropertyChat() {
+  const invalidate = useInvalidate(["property-chats", "leads", "dashboard"])
+
+  return useCommonMutationApi<PropertyChatConversationItem, CreatePropertyChatConversationInput>({
+    method: "POST",
+    onSuccess: () => void invalidate(),
+    successMessage: "Chat sent",
+    url: "/property-chats",
   })
 }
 

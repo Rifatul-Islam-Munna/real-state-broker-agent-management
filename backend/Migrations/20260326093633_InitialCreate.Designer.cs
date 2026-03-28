@@ -13,7 +13,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace backend.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260325192934_InitialCreate")]
+    [Migration("20260326093633_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -25,6 +25,50 @@ namespace backend.Migrations
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
+
+            modelBuilder.Entity("Entities.AgencyIntegrationSettingsRecord", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    b.Property<string>("AiProviderPayload")
+                        .HasColumnType("text")
+                        .HasColumnName("ai_provider_payload");
+
+                    b.Property<DateTime?>("AiProviderUpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("ai_provider_updated_at");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("SmtpPayload")
+                        .HasColumnType("text")
+                        .HasColumnName("smtp_payload");
+
+                    b.Property<DateTime?>("SmtpUpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("smtp_updated_at");
+
+                    b.Property<string>("TwilioPayload")
+                        .HasColumnType("text")
+                        .HasColumnName("twilio_payload");
+
+                    b.Property<DateTime?>("TwilioUpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("twilio_updated_at");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_agency_integration_settings");
+
+                    b.ToTable("agency_integration_settings", (string)null);
+                });
 
             modelBuilder.Entity("Entities.BlogPost", b =>
                 {
@@ -248,6 +292,94 @@ namespace backend.Migrations
                     b.ToTable("deal_pipeline", (string)null);
                 });
 
+            modelBuilder.Entity("Entities.DocumentRepositoryItem", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AccessLevel")
+                        .HasColumnType("integer")
+                        .HasColumnName("access_level");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("category");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("description");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("file_name");
+
+                    b.Property<string>("FileObjectName")
+                        .HasColumnType("text")
+                        .HasColumnName("file_object_name");
+
+                    b.Property<string>("FileUrl")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("file_url");
+
+                    b.Property<string>("Folder")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("folder");
+
+                    b.Property<bool>("IsTemplate")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_template");
+
+                    b.Property<string>("MimeType")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("mime_type");
+
+                    b.Property<bool>("RequiresSignature")
+                        .HasColumnType("boolean")
+                        .HasColumnName("requires_signature");
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("bigint")
+                        .HasColumnName("size_bytes");
+
+                    b.PrimitiveCollection<string>("Tags")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("tags");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("title");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<string>("VersionLabel")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("version_label");
+
+                    b.HasKey("Id")
+                        .HasName("pk_document_repository_item");
+
+                    b.ToTable("document_repository_item", (string)null);
+                });
+
             modelBuilder.Entity("Entities.HomePageSettingsRecord", b =>
                 {
                     b.Property<int>("Id")
@@ -423,6 +555,31 @@ namespace backend.Migrations
                         .HasDatabaseName("ix_mail_inbox_lead_id");
 
                     b.ToTable("mail_inbox", (string)null);
+                });
+
+            modelBuilder.Entity("Entities.MarketingSettingsRecord", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    b.Property<string>("ContentJson")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("content_json");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_marketing_settings");
+
+                    b.ToTable("marketing_settings", (string)null);
                 });
 
             modelBuilder.Entity("Entities.NeighborhoodInsight", b =>

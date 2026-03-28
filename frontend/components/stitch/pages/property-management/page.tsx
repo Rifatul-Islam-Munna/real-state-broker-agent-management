@@ -5,6 +5,7 @@ import { useMemo, useState } from "react"
 import {
   type AgentUserOption,
   type PropertyItem,
+  type PropertySaveInput,
   useAgentUsers,
   useCreateProperty,
   useProperties,
@@ -47,6 +48,7 @@ function createEmptyPropertyForm(): PropertyFormValues {
     thumbnailObjectName: "",
     imageUrls: [],
     imageObjectNames: [],
+    preQuestions: [],
   }
 }
 
@@ -69,6 +71,15 @@ function mapPropertyToFormValues(property: PropertyItem): PropertyFormValues {
     imageUrls: property.imageUrls ?? [],
     imageObjectNames: property.imageObjectNames ?? [],
     keyAmenities: property.keyAmenities ?? [],
+    preQuestions: (property.preQuestions ?? []).map((question) => ({
+      allowsFileUpload: question.allowsFileUpload ?? false,
+      attachmentObjectName: question.attachmentObjectName ?? "",
+      attachmentUrl: question.attachmentUrl ?? "",
+      helperText: question.helperText ?? "",
+      id: question.id,
+      isRequired: question.isRequired ?? true,
+      prompt: question.prompt ?? "",
+    })),
     neighborhoodInsights:
       (property.neighborhoodInsights ?? []).length > 0
         ? (property.neighborhoodInsights ?? []).map((insight) => ({
@@ -82,8 +93,8 @@ function mapPropertyToFormValues(property: PropertyItem): PropertyFormValues {
 function buildPropertyPayload(
   values: PropertyFormValues,
   property?: PropertyItem,
-): Omit<PropertyItem, "id" | "slug" | "agent" | "createdAt" | "updatedAt"> | PropertyItem {
-  const payload = {
+): PropertySaveInput | PropertyItem {
+  const payload: PropertySaveInput = {
     agentId: values.agentId ?? null,
     bathRoom: values.bathRoom?.trim() ?? "",
     bedRoom: values.bedRoom?.trim() ?? "",
@@ -100,6 +111,18 @@ function buildPropertyPayload(
         title: item.type?.trim() ?? "",
       }))
       .filter((item) => item.title || item.description),
+    preQuestions: (values.preQuestions ?? [])
+      .map((item, index) => ({
+        allowsFileUpload: item.allowsFileUpload ?? false,
+        attachmentObjectName: item.attachmentObjectName?.trim() || null,
+        attachmentUrl: item.attachmentUrl?.trim() || null,
+        helperText: item.helperText?.trim() ?? "",
+        id: item.id,
+        isRequired: item.isRequired ?? true,
+        prompt: item.prompt?.trim() ?? "",
+        sortOrder: index + 1,
+      }))
+      .filter((item) => item.prompt),
     price: values.price?.trim() ?? "",
     propertyType: values.propertyType ?? "Residential",
     status: values.status ?? "Open",
@@ -176,6 +199,8 @@ export function PropertyManagementPage() {
           listingType:
             (property.listingType === "ForRent" ? "For Rent" : "For Sale") as "For Sale" | "For Rent",
           price: property.price ?? "",
+          predictedSellDays: property.sellPrediction?.predictedDays ?? 0,
+          predictionLabel: property.sellPrediction?.isModelTrained ? "ML model" : "History fallback",
           propertyType: property.propertyType ?? "Residential",
           slug: property.slug ?? "",
           status: property.status ?? "Open",
@@ -251,7 +276,7 @@ export function PropertyManagementPage() {
       }
     } else {
       const response = await createPropertyMutation.mutateAsync(
-        buildPropertyPayload(values) as Omit<PropertyItem, "id" | "slug" | "agent" | "createdAt" | "updatedAt">,
+        buildPropertyPayload(values) as PropertySaveInput,
       )
 
       if (response.error) {

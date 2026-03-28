@@ -23,6 +23,8 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
+    <PackageReference Include="Microsoft.ML" Version="4.0.2" />
+    <PackageReference Include="Microsoft.ML.FastTree" Version="4.0.2" />
     <PackageReference Include="Minio" Version="7.0.0" />
     <PackageReference Include="NetVips" Version="3.2.0" />
     <PackageReference Include="NetVips.Native" Version="8.18.1" />

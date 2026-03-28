@@ -1,4 +1,5 @@
 import type {
+  PublicAgencySettings,
   BlogPostDetail,
   BlogPostSummary,
   HomePageSettings,
@@ -7,6 +8,8 @@ import type {
   PublicAgentProfile,
   PublicPropertyFilters,
 } from "@/@types/real-estate-api"
+import { defaultAgencySettings } from "@/lib/agency-settings"
+import { normalizeAgencySocialLinks } from "@/lib/agency-social-links"
 import { cloneHomePageSettings, defaultHomePageSettings } from "@/lib/home-page-settings"
 
 const baseUrl = process.env.BASE_URL ?? "http://localhost:4000/api"
@@ -92,6 +95,42 @@ export async function getPublicPropertyFilters(): Promise<PublicPropertyFilters>
 export async function getPublicHomePageSettings(): Promise<HomePageSettings> {
   const settings = await fetchCachedPublicJson<HomePageSettings>("/public/homepage-settings", "homepage-settings")
   return settings ? settings : cloneHomePageSettings(defaultHomePageSettings)
+}
+
+export async function getPublicAgencySettings(): Promise<PublicAgencySettings> {
+  const settings = await fetchPublicJson<PublicAgencySettings>("/public/agency-settings")
+
+  if (settings) {
+    return {
+      ...settings,
+      profile: {
+        agencyName: settings.profile?.agencyName ?? defaultAgencySettings.profile.agencyName,
+        logo: {
+          objectName: settings.profile?.logo?.objectName ?? defaultAgencySettings.profile.logo.objectName ?? null,
+          url: settings.profile?.logo?.url ?? defaultAgencySettings.profile.logo.url,
+        },
+        officeLocations: [...(settings.profile?.officeLocations ?? defaultAgencySettings.profile.officeLocations)],
+        contactEmail: settings.profile?.contactEmail ?? defaultAgencySettings.profile.contactEmail,
+        contactPhone: settings.profile?.contactPhone ?? defaultAgencySettings.profile.contactPhone,
+        socialLinks: normalizeAgencySocialLinks(settings.profile?.socialLinks),
+      },
+    }
+  }
+
+  return {
+    profile: {
+      agencyName: defaultAgencySettings.profile.agencyName,
+      logo: {
+        objectName: defaultAgencySettings.profile.logo.objectName ?? null,
+        url: defaultAgencySettings.profile.logo.url,
+      },
+      officeLocations: [...defaultAgencySettings.profile.officeLocations],
+      contactEmail: defaultAgencySettings.profile.contactEmail,
+      contactPhone: defaultAgencySettings.profile.contactPhone,
+      socialLinks: normalizeAgencySocialLinks(defaultAgencySettings.profile.socialLinks),
+    },
+    updatedAt: "",
+  }
 }
 
 export async function getBlogPosts(limit = 9) {

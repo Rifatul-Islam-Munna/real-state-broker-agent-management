@@ -5,6 +5,16 @@ export type NeighborhoodInsightFormValue = {
   description: string
 }
 
+export type PropertyPreQuestionFormValue = {
+  id?: number
+  prompt: string
+  helperText: string
+  isRequired: boolean
+  allowsFileUpload: boolean
+  attachmentUrl: string
+  attachmentObjectName: string
+}
+
 export type PropertyFormValues = {
   agentId: number | null
   title: string
@@ -24,6 +34,7 @@ export type PropertyFormValues = {
   thumbnailObjectName: string
   imageUrls: string[]
   imageObjectNames: string[]
+  preQuestions: PropertyPreQuestionFormValue[]
 }
 
 export type PropertyFormErrors = Partial<Record<keyof PropertyFormValues | "form", string>>

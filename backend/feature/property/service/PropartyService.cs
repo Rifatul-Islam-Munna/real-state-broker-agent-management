@@ -29,6 +29,17 @@ namespace Services
         bool IsVerifiedAgent
     );
 
+    public record PropertyPreQuestionResponse(
+        int Id,
+        string Prompt,
+        string HelperText,
+        bool IsRequired,
+        int SortOrder,
+        bool AllowsFileUpload,
+        string? AttachmentUrl,
+        string? AttachmentObjectName
+    );
+
     public record PropertyResponse(
         int Id,
         string Title,
@@ -49,10 +60,13 @@ namespace Services
         List<string> ImageObjectNames,
         List<string> KeyAmenities,
         List<NeighborhoodInsight> NeighborhoodInsights,
+        List<PropertyPreQuestionResponse> PreQuestions,
         int? AgentId,
         AgentSummary? Agent,
         DateTime CreatedAt,
-        DateTime UpdatedAt
+        DateTime UpdatedAt,
+        DateTime? ClosedAt,
+        PropertySellPredictionResponse SellPrediction
     );
 
     public record PublicPropertyFiltersResponse(
@@ -64,10 +78,12 @@ namespace Services
     public class PropertyService
     {
         private readonly AppDbContext _db;
+        private readonly PropertySalesPredictionService _propertySalesPredictionService;
 
-        public PropertyService(AppDbContext db)
+        public PropertyService(AppDbContext db, PropertySalesPredictionService propertySalesPredictionService)
         {
             _db = db;
+            _propertySalesPredictionService = propertySalesPredictionService;
         }
 
         public async Task<PropertyResponse> CreatePropertyAsync(Property property)
@@ -82,6 +98,8 @@ namespace Services
         {
             var existing = await _db.Properties
                 .Include(item => item.NeighborhoodInsights)
+                .Include(item => item.PreQuestions)
+                .Include(item => item.Agent)
                 .FirstOrDefaultAsync(item => item.Id == property.Id);
 
             if (existing is null)
@@ -107,9 +125,13 @@ namespace Services
             existing.KeyAmenities = NormalizeAmenities(property.KeyAmenities);
             existing.AgentId = property.AgentId;
             existing.UpdatedAt = DateTime.UtcNow;
+            existing.ClosedAt = ResolveClosedAt(existing.ClosedAt, property.Status);
 
             _db.NeighborhoodInsights.RemoveRange(existing.NeighborhoodInsights);
             existing.NeighborhoodInsights = NormalizeNeighborhoodInsights(property.NeighborhoodInsights);
+
+            _db.PropertyPreQuestions.RemoveRange(existing.PreQuestions);
+            existing.PreQuestions = NormalizePreQuestions(property.PreQuestions);
 
             await _db.SaveChangesAsync();
             return await GetRequiredPropertyResponseAsync(existing.Id);
@@ -119,6 +141,7 @@ namespace Services
         {
             var property = await _db.Properties
                 .Include(item => item.NeighborhoodInsights)
+                .Include(item => item.PreQuestions)
                 .FirstOrDefaultAsync(item => item.Id == id);
 
             if (property is null)
@@ -127,28 +150,35 @@ namespace Services
             }
 
             _db.NeighborhoodInsights.RemoveRange(property.NeighborhoodInsights);
+            _db.PropertyPreQuestions.RemoveRange(property.PreQuestions);
             _db.Properties.Remove(property);
             await _db.SaveChangesAsync();
         }
 
         public async Task<PropertyResponse?> GetPropertyAsync(int id)
         {
-            return await _db.Properties
+            var property = await _db.Properties
                 .Include(item => item.NeighborhoodInsights)
+                .Include(item => item.PreQuestions)
                 .Include(item => item.Agent)
-                .Where(item => item.Id == id)
-                .Select(MapProperty())
-                .FirstOrDefaultAsync();
+                .FirstOrDefaultAsync(item => item.Id == id);
+
+            return property is null
+                ? null
+                : await MapPropertyAsync(property);
         }
 
         public async Task<PropertyResponse?> GetPropertyBySlugAsync(string slug)
         {
-            return await _db.Properties
+            var property = await _db.Properties
                 .Include(item => item.NeighborhoodInsights)
+                .Include(item => item.PreQuestions)
                 .Include(item => item.Agent)
-                .Where(item => item.Slug == slug)
-                .Select(MapProperty())
-                .FirstOrDefaultAsync();
+                .FirstOrDefaultAsync(item => item.Slug == slug);
+
+            return property is null
+                ? null
+                : await MapPropertyAsync(property);
         }
 
         public async Task<PaginatedResult<PropertyResponse>> GetAllPropertiesAsync(
@@ -162,6 +192,7 @@ namespace Services
         {
             var query = _db.Properties
                 .Include(item => item.NeighborhoodInsights)
+                .Include(item => item.PreQuestions)
                 .Include(item => item.Agent)
                 .AsQueryable();
 
@@ -198,12 +229,17 @@ namespace Services
             }
 
             var totalCount = await query.CountAsync();
-            var items = await query
+            var entities = await query
                 .OrderByDescending(item => item.UpdatedAt)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
-                .Select(MapProperty())
                 .ToListAsync();
+
+            var items = new List<PropertyResponse>(entities.Count);
+            foreach (var entity in entities)
+            {
+                items.Add(await MapPropertyAsync(entity));
+            }
 
             return new PaginatedResult<PropertyResponse>
             {
@@ -252,9 +288,11 @@ namespace Services
                 ?? throw new InvalidOperationException("Property was not found after save.");
         }
 
-        private static System.Linq.Expressions.Expression<Func<Property, PropertyResponse>> MapProperty()
+        private async Task<PropertyResponse> MapPropertyAsync(Property item)
         {
-            return item => new PropertyResponse(
+            var prediction = await _propertySalesPredictionService.PredictAsync(item);
+
+            return new PropertyResponse(
                 item.Id,
                 item.Title,
                 item.Slug,
@@ -273,7 +311,28 @@ namespace Services
                 item.ImageUrls,
                 item.ImageObjectNames,
                 item.KeyAmenities,
-                item.NeighborhoodInsights.ToList(),
+                item.NeighborhoodInsights
+                    .Select(insight => new NeighborhoodInsight
+                    {
+                        Id = insight.Id,
+                        Description = insight.Description,
+                        PropertyId = insight.PropertyId,
+                        Title = insight.Title,
+                    })
+                    .ToList(),
+                item.PreQuestions
+                    .OrderBy(question => question.SortOrder)
+                    .ThenBy(question => question.Id)
+                    .Select(question => new PropertyPreQuestionResponse(
+                        question.Id,
+                        question.Prompt,
+                        question.HelperText,
+                        question.IsRequired,
+                        question.SortOrder,
+                        question.AllowsFileUpload,
+                        question.AttachmentUrl,
+                        question.AttachmentObjectName))
+                    .ToList(),
                 item.AgentId,
                 item.Agent == null ? null : new AgentSummary(
                     item.Agent.Id,
@@ -285,7 +344,9 @@ namespace Services
                     item.Agent.IsVerifiedAgent
                 ),
                 item.CreatedAt,
-                item.UpdatedAt
+                item.UpdatedAt,
+                item.ClosedAt,
+                prediction
             );
         }
 
@@ -305,6 +366,8 @@ namespace Services
             property.ImageObjectNames = NormalizeStringList(property.ImageObjectNames);
             property.KeyAmenities = NormalizeAmenities(property.KeyAmenities);
             property.NeighborhoodInsights = NormalizeNeighborhoodInsights(property.NeighborhoodInsights);
+            property.PreQuestions = NormalizePreQuestions(property.PreQuestions);
+            property.ClosedAt = ResolveClosedAt(property.ClosedAt, property.Status);
 
             var now = DateTime.UtcNow;
             property.UpdatedAt = now;
@@ -313,6 +376,13 @@ namespace Services
             {
                 property.CreatedAt = now;
             }
+        }
+
+        private static DateTime? ResolveClosedAt(DateTime? existingClosedAt, PropertyStatus status)
+        {
+            return status == PropertyStatus.Closed
+                ? existingClosedAt ?? DateTime.UtcNow
+                : null;
         }
 
         private static List<string> NormalizeAmenities(List<string>? amenities)
@@ -349,6 +419,27 @@ namespace Services
                     Description = (item.Description ?? string.Empty).Trim(),
                     Title = (item.Title ?? string.Empty).Trim(),
                 })
+                .ToList();
+        }
+
+        private static List<PropertyPreQuestion> NormalizePreQuestions(List<PropertyPreQuestion>? questions)
+        {
+            var now = DateTime.UtcNow;
+            return (questions ?? [])
+                .Where(item => !string.IsNullOrWhiteSpace(item.Prompt))
+                .Select((item, index) => new PropertyPreQuestion
+                {
+                    AttachmentObjectName = NormalizeOptionalString(item.AttachmentObjectName),
+                    AttachmentUrl = NormalizeOptionalString(item.AttachmentUrl),
+                    AllowsFileUpload = item.AllowsFileUpload,
+                    CreatedAt = now,
+                    HelperText = (item.HelperText ?? string.Empty).Trim(),
+                    IsRequired = item.IsRequired,
+                    Prompt = (item.Prompt ?? string.Empty).Trim(),
+                    SortOrder = item.SortOrder <= 0 ? index + 1 : item.SortOrder,
+                    UpdatedAt = now,
+                })
+                .OrderBy(item => item.SortOrder)
                 .ToList();
         }
     }

@@ -51,6 +51,16 @@ function validatePropertyForm(values: PropertyFormValues, options: { galleryCoun
   ) {
     errors.neighborhoodInsights = "Each neighborhood insight needs both a type and a description."
   }
+  if (
+    (values.preQuestions ?? []).some((item) => {
+      const prompt = item.prompt?.trim() ?? ""
+      const helperText = item.helperText?.trim() ?? ""
+      const hasAttachment = Boolean(item.attachmentUrl || item.attachmentObjectName)
+      return (helperText.length > 0 || hasAttachment) && prompt.length === 0
+    })
+  ) {
+    errors.preQuestions = "Each pre-question needs a prompt before you add help text or files."
+  }
 
   return errors
 }

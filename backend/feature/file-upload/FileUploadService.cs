@@ -73,10 +73,12 @@ public sealed class FileUploadService : IFileUploadService
         "image/jpeg",
         "image/png",
         "image/webp",
-        "application/pdf"
+        "application/pdf",
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     ];
 
-    private const long MaxFileSizeBytes = 10 * 1024 * 1024; // 10 MB
+    private const long MaxFileSizeBytes = 50 * 1024 * 1024; // 50 MB
 
     public FileUploadService(
         IMinioClient minio,
@@ -150,7 +152,7 @@ public sealed class FileUploadService : IFileUploadService
             throw new ArgumentException("No file was provided.");
 
         if (file.Length > MaxFileSizeBytes)
-            throw new ArgumentException($"File size exceeds the 10MB limit.");
+            throw new ArgumentException($"File size exceeds the 50MB limit.");
 
         if (!AllowedMimeTypes.Contains(file.ContentType.ToLower()))
             throw new ArgumentException($"File type '{file.ContentType}' is not allowed.");

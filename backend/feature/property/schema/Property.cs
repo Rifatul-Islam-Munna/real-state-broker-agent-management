@@ -98,6 +98,9 @@ namespace Entities
         [Column("agent_id")]
         public int? AgentId { get; set; }
 
+        [Column("closed_at")]
+        public DateTime? ClosedAt { get; set; }
+
         [Column("created_at")]
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
@@ -107,6 +110,11 @@ namespace Entities
         [ForeignKey("AgentId")]
         [JsonIgnore]
         public User? Agent { get; set; }
+
+        public List<PropertyPreQuestion> PreQuestions { get; set; } = [];
+
+        [JsonIgnore]
+        public List<PropertyChatConversation> ChatConversations { get; set; } = [];
 
         private static string GenerateSlug(string title)
         {

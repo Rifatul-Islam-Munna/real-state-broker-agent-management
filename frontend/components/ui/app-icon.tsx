@@ -41,6 +41,14 @@ import {
   X,
 } from "lucide-react"
 import {
+  FaFacebookF,
+  FaInstagram,
+  FaLinkedinIn,
+  FaTiktok,
+  FaXTwitter,
+  FaYoutube,
+} from "react-icons/fa6"
+import {
   MdAdd,
   MdAddAPhoto,
   MdAlternateEmail,
@@ -154,6 +162,7 @@ const appIconMap: Record<string, IconComponent> = {
   expand_more: ChevronDown,
   favorite: MdFavorite,
   favorite_border: MdFavoriteBorder,
+  facebook: FaFacebookF,
   file_download: MdFileDownload,
   filter_list: Filter,
   folder_shared: MdFolderShared,
@@ -171,8 +180,10 @@ const appIconMap: Record<string, IconComponent> = {
   house: MdHouse,
   hub: MdHub,
   info: Info,
+  instagram: FaInstagram,
   leaderboard: MdLeaderboard,
   library_books: MdLibraryBooks,
+  linkedin: FaLinkedinIn,
   link: Link2,
   location_on: MdLocationOn,
   mail: Mail,
@@ -212,6 +223,9 @@ const appIconMap: Record<string, IconComponent> = {
   visibility: Eye,
   warning: TriangleAlert,
   work: MdWork,
+  x_social: FaXTwitter,
+  youtube: FaYoutube,
+  tiktok: FaTiktok,
 }
 
 export function AppIcon({

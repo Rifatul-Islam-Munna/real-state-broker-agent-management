@@ -27,6 +27,8 @@ export type PropertyManagementListing = {
   agent: string
   status: "Open" | "Closed"
   daysOnMarket: number
+  predictedSellDays: number
+  predictionLabel: string
 }
 
 type StatusCard = {
@@ -283,6 +285,9 @@ export function Section1Section({
                   <th className="px-6 py-4 text-xs font-bold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
                     {"Days Open"}
                   </th>
+                  <th className="px-6 py-4 text-xs font-bold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
+                    {"ML Forecast"}
+                  </th>
                   <th className="px-6 py-4 text-right text-xs font-bold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
                     {"Actions"}
                   </th>
@@ -291,19 +296,19 @@ export function Section1Section({
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                 {isLoading ? (
                   <tr>
-                    <td className="px-6 py-12 text-center text-sm font-semibold text-slate-500 dark:text-slate-400" colSpan={7}>
+                    <td className="px-6 py-12 text-center text-sm font-semibold text-slate-500 dark:text-slate-400" colSpan={8}>
                       {"Loading listings..."}
                     </td>
                   </tr>
                 ) : errorMessage ? (
                   <tr>
-                    <td className="px-6 py-12 text-center text-sm font-semibold text-rose-600" colSpan={7}>
+                    <td className="px-6 py-12 text-center text-sm font-semibold text-rose-600" colSpan={8}>
                       {errorMessage}
                     </td>
                   </tr>
                 ) : listings.length === 0 ? (
                   <tr>
-                    <td className="px-6 py-12 text-center text-sm font-semibold text-slate-500 dark:text-slate-400" colSpan={7}>
+                    <td className="px-6 py-12 text-center text-sm font-semibold text-slate-500 dark:text-slate-400" colSpan={8}>
                       {"No listings match the current filters."}
                     </td>
                   </tr>
@@ -358,6 +363,16 @@ export function Section1Section({
                       </td>
                       <td className="px-6 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300">
                         {listing.status === "Closed" ? "-" : `${listing.daysOnMarket} days`}
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="space-y-1">
+                          <p className="text-sm font-bold text-primary">
+                            {`${listing.predictedSellDays} days`}
+                          </p>
+                          <p className="text-xs text-slate-500 dark:text-slate-400">
+                            {listing.predictionLabel}
+                          </p>
+                        </div>
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex justify-end gap-2">

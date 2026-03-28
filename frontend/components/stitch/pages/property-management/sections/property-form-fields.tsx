@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { type ChangeEvent, useMemo, useState } from "react"
 
 import { AppIcon } from "@/components/ui/app-icon"
 import { Input } from "@/components/ui/input"
@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import type { AgentUserOption, PropertyItem } from "@/@types/real-estate-api"
+import { uploadPropertyAsset } from "@/lib/upload-client"
 
 import {
   defaultAmenityOptions,
@@ -18,6 +19,7 @@ import {
   type NeighborhoodInsightFormValue,
   type PropertyFormErrors,
   type PropertyFormValues,
+  type PropertyPreQuestionFormValue,
 } from "./property-form-shared"
 
 const formSelectClassName =
@@ -43,7 +45,9 @@ export function PropertyFormFieldsSection({
   updateField,
 }: PropertyFormFieldsSectionProps) {
   const [newAmenity, setNewAmenity] = useState("")
+  const [uploadingQuestionIndex, setUploadingQuestionIndex] = useState<number | null>(null)
   const neighborhoodInsights = formValues.neighborhoodInsights ?? []
+  const preQuestions = formValues.preQuestions ?? []
   const selectedAgentLabel = formValues.agentId
     ? agentOptions.find((agent) => agent.id === formValues.agentId)?.fullName ?? `Agent #${formValues.agentId}`
     : isAgentOptionsLoading
@@ -116,6 +120,59 @@ export function PropertyFormFieldsSection({
       "neighborhoodInsights",
       nextInsights.length > 0 ? nextInsights : [{ type: "", description: "" }],
     )
+  }
+
+  function updatePreQuestion(index: number, value: Partial<PropertyPreQuestionFormValue>) {
+    const nextQuestions = preQuestions.map((item, itemIndex) =>
+      itemIndex === index ? { ...item, ...value } : item,
+    )
+    updateField("preQuestions", nextQuestions)
+  }
+
+  function addPreQuestion() {
+    updateField("preQuestions", [
+      ...preQuestions,
+      {
+        allowsFileUpload: false,
+        attachmentObjectName: "",
+        attachmentUrl: "",
+        helperText: "",
+        isRequired: true,
+        prompt: "",
+      },
+    ])
+  }
+
+  async function handlePreQuestionAttachment(index: number, event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    event.target.value = ""
+
+    if (!file) {
+      return
+    }
+
+    setUploadingQuestionIndex(index)
+
+    try {
+      const upload = await uploadPropertyAsset(file, "properties/pre-questions")
+      updatePreQuestion(index, {
+        attachmentObjectName: upload.objectName,
+        attachmentUrl: upload.url,
+      })
+    } finally {
+      setUploadingQuestionIndex(null)
+    }
+  }
+
+  function removePreQuestionAttachment(index: number) {
+    updatePreQuestion(index, {
+      attachmentObjectName: "",
+      attachmentUrl: "",
+    })
+  }
+
+  function removePreQuestion(index: number) {
+    updateField("preQuestions", preQuestions.filter((_, itemIndex) => itemIndex !== index))
   }
 
   return (
@@ -459,6 +516,130 @@ export function PropertyFormFieldsSection({
             >
               <AppIcon className="text-base" name="add" />
               {"Add Insight"}
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h4 className="mb-6 flex items-center gap-2 text-lg font-bold text-slate-900 dark:text-white">
+          <AppIcon className="text-primary" name="forum" />
+          {" Pre-Questions For Chat "}
+        </h4>
+        <div className="space-y-4">
+          {preQuestions.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-400">
+              {"No pre-questions added yet. Add one if the listing chat should collect details before the visitor shares contact information."}
+            </div>
+          ) : (
+            preQuestions.map((question, index) => (
+              <div key={`pre-question-${question.id ?? index}`} className="rounded-2xl border border-slate-200 bg-slate-50 p-5 dark:border-slate-700 dark:bg-slate-800/60">
+                <div className="mb-4 flex items-center justify-between gap-4">
+                  <p className="text-sm font-bold text-slate-700 dark:text-slate-300">{`Pre-question ${index + 1}`}</p>
+                  <button
+                    className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-rose-600"
+                    onClick={() => removePreQuestion(index)}
+                    type="button"
+                  >
+                    <AppIcon className="text-base" name="delete" />
+                    {"Remove"}
+                  </button>
+                </div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="flex flex-col gap-2 md:col-span-2">
+                    <label className="text-sm font-bold text-slate-700 dark:text-slate-300">
+                      {"Question Prompt"}
+                    </label>
+                    <Input
+                      className="form-input rounded-xl border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900 focus:ring-primary"
+                      onChange={(event) => updatePreQuestion(index, { prompt: event.target.value })}
+                      placeholder="e.g. What would you like to know before speaking to the agent?"
+                      type="text"
+                      value={question.prompt}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-2 md:col-span-2">
+                    <label className="text-sm font-bold text-slate-700 dark:text-slate-300">
+                      {"Helper Text"}
+                    </label>
+                    <Textarea
+                      className="form-textarea min-h-24 rounded-xl border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900 focus:ring-primary"
+                      onChange={(event) => updatePreQuestion(index, { helperText: event.target.value })}
+                      placeholder="Optional instruction shown inside the chat prompt."
+                      value={question.helperText}
+                    />
+                  </div>
+                  <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
+                    <input
+                      checked={question.isRequired}
+                      className="form-checkbox rounded border-slate-300 text-primary focus:ring-primary"
+                      onChange={(event) => updatePreQuestion(index, { isRequired: event.target.checked })}
+                      type="checkbox"
+                    />
+                    {"Required before continuing"}
+                  </label>
+                  <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
+                    <input
+                      checked={question.allowsFileUpload}
+                      className="form-checkbox rounded border-slate-300 text-primary focus:ring-primary"
+                      onChange={(event) => updatePreQuestion(index, { allowsFileUpload: event.target.checked })}
+                      type="checkbox"
+                    />
+                    {"Allow visitor file upload"}
+                  </label>
+                  <div className="flex flex-col gap-3 md:col-span-2">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-primary/20 bg-primary/5 px-4 py-2 text-sm font-bold text-primary transition-colors hover:bg-primary/10">
+                        <AppIcon className="text-base" name="attach_file" />
+                        {uploadingQuestionIndex === index
+                          ? "Uploading..."
+                          : question.attachmentUrl
+                            ? "Replace Reference File"
+                            : "Upload Reference File"}
+                        <input
+                          className="hidden"
+                          onChange={(event) => void handlePreQuestionAttachment(index, event)}
+                          type="file"
+                        />
+                      </label>
+                      {question.attachmentUrl ? (
+                        <button
+                          className="text-xs font-bold uppercase tracking-wide text-rose-600"
+                          onClick={() => removePreQuestionAttachment(index)}
+                          type="button"
+                        >
+                          {"Remove File"}
+                        </button>
+                      ) : null}
+                    </div>
+                    {question.attachmentUrl ? (
+                      <a
+                        className="text-sm font-semibold text-primary underline-offset-4 hover:underline"
+                        href={question.attachmentUrl}
+                        rel="noreferrer"
+                        target="_blank"
+                      >
+                        {"Open uploaded reference file"}
+                      </a>
+                    ) : (
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        {"Optional file the chat can show before the visitor answers."}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+          <div className="flex items-center justify-between gap-4">
+            <FieldError error={errors.preQuestions} />
+            <button
+              className="inline-flex items-center gap-2 rounded-xl border border-primary/20 bg-primary/5 px-4 py-2 text-sm font-bold text-primary transition-colors hover:bg-primary/10"
+              onClick={addPreQuestion}
+              type="button"
+            >
+              <AppIcon className="text-base" name="add" />
+              {"Add Pre-Question"}
             </button>
           </div>
         </div>

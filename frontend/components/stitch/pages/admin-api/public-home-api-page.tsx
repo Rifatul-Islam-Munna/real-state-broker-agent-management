@@ -9,6 +9,7 @@ import { TestimonialsSection } from "@/components/stitch/pages/public-agency-hom
 import { BlogSection } from "@/components/stitch/pages/public-agency-homepage/sections/blog-section"
 import {
   getFeaturedProperties,
+  getPublicAgencySettings,
   getPublicHomePageSettings,
   getPublicAgents,
   getPublicPropertyFilters,
@@ -17,11 +18,12 @@ import {
 import { NewsletterFooterSection } from "./newsletter-footer-section"
 
 export async function PublicHomeApiPage() {
-  const [featuredProperties, homepageSettings, publicAgents, publicPropertyFilters] = await Promise.all([
+  const [featuredProperties, homepageSettings, publicAgents, publicPropertyFilters, publicAgencySettings] = await Promise.all([
     getFeaturedProperties(3),
     getPublicHomePageSettings(),
     getPublicAgents(),
     getPublicPropertyFilters(),
+    getPublicAgencySettings(),
   ])
 
   return (
@@ -35,7 +37,7 @@ export async function PublicHomeApiPage() {
       <MeetTheTeamSection agents={publicAgents} intro={homepageSettings.team} />
       <TestimonialsSection content={homepageSettings.testimonial} />
       <BlogSection />
-      <NewsletterFooterSection />
+      <NewsletterFooterSection profile={publicAgencySettings.profile} />
     </div>
   )
 }

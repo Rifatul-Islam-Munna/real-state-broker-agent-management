@@ -247,7 +247,7 @@ function BlogEditorDialog({
 
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => (!nextOpen ? onClose() : undefined)}>
-      <DialogContent className="w-[min(100%-1.5rem,80rem)] max-h-[calc(100dvh-1.5rem)] max-w-5xl overflow-hidden rounded-2xl border border-slate-200 bg-white p-0 shadow-[0_28px_90px_rgba(15,23,42,0.18)]">
+      <DialogContent className="flex w-[min(100%-1.5rem,80rem)] max-h-[calc(100dvh-1.5rem)] max-w-5xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white p-0 shadow-[0_28px_90px_rgba(15,23,42,0.18)]">
         <div className="border-b border-slate-200 px-8 py-6">
           <DialogTitle className="text-2xl font-black text-slate-900">
             {mode === "create" ? "Create Blog Post" : "Edit Blog Post"}
@@ -257,7 +257,7 @@ function BlogEditorDialog({
           </DialogDescription>
         </div>
         <form
-          className="flex min-h-0 flex-col"
+          className="flex min-h-0 flex-1 flex-col overflow-hidden"
           onSubmit={async (event) => {
             event.preventDefault()
             const nextErrors = validateBlogForm(formValues)
@@ -375,6 +375,9 @@ function BlogEditorDialog({
                     </p>
                     <p className="mt-1 text-xs text-slate-500">
                       {"Used for the blog cards, detail hero, and homepage blog section."}
+                    </p>
+                    <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                      {"Recommended ratio: 16:9 | Keep the subject centered for square and 4:3 crops"}
                     </p>
                   </div>
                   <button

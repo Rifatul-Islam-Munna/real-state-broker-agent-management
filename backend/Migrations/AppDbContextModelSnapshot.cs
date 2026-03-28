@@ -23,6 +23,75 @@ namespace backend.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("Entities.AgencyIntegrationSettingsRecord", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    b.Property<string>("AiProviderPayload")
+                        .HasColumnType("text")
+                        .HasColumnName("ai_provider_payload");
+
+                    b.Property<DateTime?>("AiProviderUpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("ai_provider_updated_at");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("SmtpPayload")
+                        .HasColumnType("text")
+                        .HasColumnName("smtp_payload");
+
+                    b.Property<DateTime?>("SmtpUpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("smtp_updated_at");
+
+                    b.Property<string>("TwilioPayload")
+                        .HasColumnType("text")
+                        .HasColumnName("twilio_payload");
+
+                    b.Property<DateTime?>("TwilioUpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("twilio_updated_at");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_agency_integration_settings");
+
+                    b.ToTable("agency_integration_settings", (string)null);
+                });
+
+            modelBuilder.Entity("Entities.AgencySettingsRecord", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    b.Property<string>("ContentJson")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("content_json");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_agency_settings");
+
+                    b.ToTable("agency_settings", (string)null);
+                });
+
             modelBuilder.Entity("Entities.BlogPost", b =>
                 {
                     b.Property<int>("Id")
@@ -245,6 +314,94 @@ namespace backend.Migrations
                     b.ToTable("deal_pipeline", (string)null);
                 });
 
+            modelBuilder.Entity("Entities.DocumentRepositoryItem", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AccessLevel")
+                        .HasColumnType("integer")
+                        .HasColumnName("access_level");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("category");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("description");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("file_name");
+
+                    b.Property<string>("FileObjectName")
+                        .HasColumnType("text")
+                        .HasColumnName("file_object_name");
+
+                    b.Property<string>("FileUrl")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("file_url");
+
+                    b.Property<string>("Folder")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("folder");
+
+                    b.Property<bool>("IsTemplate")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_template");
+
+                    b.Property<string>("MimeType")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("mime_type");
+
+                    b.Property<bool>("RequiresSignature")
+                        .HasColumnType("boolean")
+                        .HasColumnName("requires_signature");
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("bigint")
+                        .HasColumnName("size_bytes");
+
+                    b.PrimitiveCollection<string>("Tags")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("tags");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("title");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<string>("VersionLabel")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("version_label");
+
+                    b.HasKey("Id")
+                        .HasName("pk_document_repository_item");
+
+                    b.ToTable("document_repository_item", (string)null);
+                });
+
             modelBuilder.Entity("Entities.HomePageSettingsRecord", b =>
                 {
                     b.Property<int>("Id")
@@ -422,6 +579,31 @@ namespace backend.Migrations
                     b.ToTable("mail_inbox", (string)null);
                 });
 
+            modelBuilder.Entity("Entities.MarketingSettingsRecord", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    b.Property<string>("ContentJson")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("content_json");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_marketing_settings");
+
+                    b.ToTable("marketing_settings", (string)null);
+                });
+
             modelBuilder.Entity("Entities.NeighborhoodInsight", b =>
                 {
                     b.Property<int>("Id")
@@ -476,6 +658,10 @@ namespace backend.Migrations
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("bed_room");
+
+                    b.Property<DateTime?>("ClosedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("closed_at");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
@@ -562,6 +748,203 @@ namespace backend.Migrations
                         .HasDatabaseName("ix_property_agent_id");
 
                     b.ToTable("property", (string)null);
+                });
+
+            modelBuilder.Entity("Entities.PropertyChatConversation", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AssignedAgent")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("assigned_agent");
+
+                    b.Property<bool>("AutoQualified")
+                        .HasColumnType("boolean")
+                        .HasColumnName("auto_qualified");
+
+                    b.Property<string>("Budget")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("budget");
+
+                    b.Property<string>("ContactEmail")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("contact_email");
+
+                    b.Property<string>("ContactName")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("contact_name");
+
+                    b.Property<string>("ContactPhone")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("contact_phone");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Interest")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("interest");
+
+                    b.Property<int?>("LeadId")
+                        .HasColumnType("integer")
+                        .HasColumnName("lead_id");
+
+                    b.Property<int>("PropertyId")
+                        .HasColumnType("integer")
+                        .HasColumnName("property_id");
+
+                    b.Property<string>("PropertyTitle")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("property_title");
+
+                    b.Property<float>("QualificationScore")
+                        .HasColumnType("real")
+                        .HasColumnName("qualification_score");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer")
+                        .HasColumnName("status");
+
+                    b.Property<string>("Summary")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("summary");
+
+                    b.Property<string>("Timeline")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("timeline");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_property_chat_conversation");
+
+                    b.HasIndex("LeadId")
+                        .HasDatabaseName("ix_property_chat_conversation_lead_id");
+
+                    b.HasIndex("PropertyId")
+                        .HasDatabaseName("ix_property_chat_conversation_property_id");
+
+                    b.ToTable("property_chat_conversation", (string)null);
+                });
+
+            modelBuilder.Entity("Entities.PropertyChatMessage", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AttachmentObjectName")
+                        .HasColumnType("text")
+                        .HasColumnName("attachment_object_name");
+
+                    b.Property<string>("AttachmentUrl")
+                        .HasColumnType("text")
+                        .HasColumnName("attachment_url");
+
+                    b.Property<int>("ConversationId")
+                        .HasColumnType("integer")
+                        .HasColumnName("conversation_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("message");
+
+                    b.Property<int>("SenderRole")
+                        .HasColumnType("integer")
+                        .HasColumnName("sender_role");
+
+                    b.HasKey("Id")
+                        .HasName("pk_property_chat_message");
+
+                    b.HasIndex("ConversationId")
+                        .HasDatabaseName("ix_property_chat_message_conversation_id");
+
+                    b.ToTable("property_chat_message", (string)null);
+                });
+
+            modelBuilder.Entity("Entities.PropertyPreQuestion", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("AllowsFileUpload")
+                        .HasColumnType("boolean")
+                        .HasColumnName("allows_file_upload");
+
+                    b.Property<string>("AttachmentObjectName")
+                        .HasColumnType("text")
+                        .HasColumnName("attachment_object_name");
+
+                    b.Property<string>("AttachmentUrl")
+                        .HasColumnType("text")
+                        .HasColumnName("attachment_url");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("HelperText")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("helper_text");
+
+                    b.Property<bool>("IsRequired")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_required");
+
+                    b.Property<string>("Prompt")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("prompt");
+
+                    b.Property<int>("PropertyId")
+                        .HasColumnType("integer")
+                        .HasColumnName("property_id");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer")
+                        .HasColumnName("sort_order");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_property_pre_question");
+
+                    b.HasIndex("PropertyId")
+                        .HasDatabaseName("ix_property_pre_question_property_id");
+
+                    b.ToTable("property_pre_question", (string)null);
                 });
 
             modelBuilder.Entity("User", b =>
@@ -774,6 +1157,50 @@ namespace backend.Migrations
                     b.Navigation("Agent");
                 });
 
+            modelBuilder.Entity("Entities.PropertyChatConversation", b =>
+                {
+                    b.HasOne("Entities.Lead", "Lead")
+                        .WithMany()
+                        .HasForeignKey("LeadId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_property_chat_conversation_lead_lead_id");
+
+                    b.HasOne("Entities.Property", "Property")
+                        .WithMany("ChatConversations")
+                        .HasForeignKey("PropertyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_property_chat_conversation_property_property_id");
+
+                    b.Navigation("Lead");
+
+                    b.Navigation("Property");
+                });
+
+            modelBuilder.Entity("Entities.PropertyChatMessage", b =>
+                {
+                    b.HasOne("Entities.PropertyChatConversation", "Conversation")
+                        .WithMany("Messages")
+                        .HasForeignKey("ConversationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_property_chat_message_property_chat_conversation_conversati");
+
+                    b.Navigation("Conversation");
+                });
+
+            modelBuilder.Entity("Entities.PropertyPreQuestion", b =>
+                {
+                    b.HasOne("Entities.Property", "Property")
+                        .WithMany("PreQuestions")
+                        .HasForeignKey("PropertyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_property_pre_question_property_property_id");
+
+                    b.Navigation("Property");
+                });
+
             modelBuilder.Entity("Entities.Lead", b =>
                 {
                     b.Navigation("ContactRequests");
@@ -785,7 +1212,16 @@ namespace backend.Migrations
 
             modelBuilder.Entity("Entities.Property", b =>
                 {
+                    b.Navigation("ChatConversations");
+
                     b.Navigation("NeighborhoodInsights");
+
+                    b.Navigation("PreQuestions");
+                });
+
+            modelBuilder.Entity("Entities.PropertyChatConversation", b =>
+                {
+                    b.Navigation("Messages");
                 });
 
             modelBuilder.Entity("User", b =>
