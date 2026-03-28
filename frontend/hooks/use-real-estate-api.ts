@@ -16,7 +16,9 @@ import type {
   BlogPostItem,
   BlogPostSaveInput,
   BlogPostSummary,
+  CommunicationProviderWriteInput,
   ContactRequestItem,
+  CreateLeadHistoryEntryInput,
   CreatePropertyChatConversationInput,
   CreateAgentUserInput,
   DashboardSummary,
@@ -26,6 +28,8 @@ import type {
   DocumentRepositorySummary,
   HomePageSettings,
   LeadItem,
+  LeadHistoryEntry,
+  MailboxSyncStatus,
   MailInboxItem,
   MarketingSettings,
   PaginatedResult,
@@ -54,8 +58,10 @@ export type {
   BlogPostItem,
   BlogPostSaveInput,
   BlogPostSummary,
+  CommunicationProviderWriteInput,
   ContactRequestItem,
   ContactRequestStatus,
+  CreateLeadHistoryEntryInput,
   CreateAgentUserInput,
   DashboardAlert,
   DashboardOverview,
@@ -83,6 +89,11 @@ export type {
   HomePageTestimonialSection,
   HomePageWhyChooseUsSection,
   LeadItem,
+  LeadHistoryDirection,
+  LeadHistoryEntry,
+  LeadHistoryKind,
+  LeadHistoryStatus,
+  MailboxSyncStatus,
   LeadPriority,
   LeadStage,
   MailInboxItem,
@@ -221,7 +232,7 @@ export function useUpdateMarketingSettings() {
 export function useAgencyIntegrationSettings() {
   return useQueryWrapper<AgencyIntegrationStatus>(
     ["agency-integration-settings"],
-    "/settings/integrations",
+    "/settings/integrations/workspace",
     {
       ...defaultQueryOptions,
       placeholderData: undefined,
@@ -238,7 +249,32 @@ export function useUpdateAgencyIntegrationSettings() {
     method: "PATCH",
     onSuccess: () => void invalidate(),
     successMessage: "Integration settings updated",
-    url: "/settings/integrations",
+    url: "/settings/integrations/workspace",
+  })
+}
+
+export function useLeadHistory(leadId?: number) {
+  return useQueryWrapper<LeadHistoryEntry[]>(
+    ["lead-history", leadId],
+    `/lead-history${buildQuery({ leadId })}`,
+    {
+      ...defaultQueryOptions,
+      enabled: Boolean(leadId),
+      placeholderData: undefined,
+    },
+    0,
+    "lead-history",
+  )
+}
+
+export function useCreateLeadHistory() {
+  const invalidate = useInvalidate(["lead-history", "lead", "leads"])
+
+  return useCommonMutationApi<LeadHistoryEntry, CreateLeadHistoryEntryInput>({
+    method: "POST",
+    onSuccess: () => void invalidate(),
+    successMessage: "Lead history saved",
+    url: "/lead-history",
   })
 }
 
@@ -506,6 +542,20 @@ export function useLeads(params?: QueryParams) {
   )
 }
 
+export function useLead(leadId?: number) {
+  return useQueryWrapper<LeadItem>(
+    ["lead", leadId],
+    `/leads${buildQuery({ id: leadId })}`,
+    {
+      ...defaultQueryOptions,
+      enabled: Boolean(leadId),
+      placeholderData: undefined,
+    },
+    0,
+    "lead",
+  )
+}
+
 export function useCreateLead() {
   const invalidate = useInvalidate(["leads", "deals", "dashboard"])
 
@@ -674,6 +724,30 @@ export function useMailInbox(params?: QueryParams) {
     0,
     "mail-inbox",
   )
+}
+
+export function useMailInboxSyncStatus() {
+  return useQueryWrapper<MailboxSyncStatus>(
+    ["mail-inbox-sync-status"],
+    "/mail-inbox/sync-status",
+    {
+      ...defaultQueryOptions,
+      placeholderData: undefined,
+    },
+    0,
+    "mail-inbox-sync-status",
+  )
+}
+
+export function useRunMailInboxSync() {
+  const invalidate = useInvalidate(["mail-inbox", "mail-inbox-sync-status", "leads", "lead-history", "dashboard"])
+
+  return useCommonMutationApi<MailboxSyncStatus, void>({
+    method: "POST",
+    onSuccess: () => void invalidate(),
+    successMessage: "Mailbox sync completed",
+    url: "/mail-inbox/sync",
+  })
 }
 
 export function useCreateMailInboxItem() {

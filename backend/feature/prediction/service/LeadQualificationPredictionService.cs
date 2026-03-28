@@ -44,7 +44,7 @@ namespace Services
 
             if (!model.IsModelTrained || model.PredictionEngine is null)
             {
-                return BuildFallbackPrediction(completenessScore);
+                return BuildFallbackPrediction(completenessScore, summary, interest, timeline);
             }
 
             var predictionScore = model.PredictionEngine.Predict(new LeadPredictionInput
@@ -59,8 +59,12 @@ namespace Services
                 Timeline = timeline ?? string.Empty,
             }).Probability;
 
-            var finalScore = Math.Clamp((predictionScore * 0.7f) + (completenessScore * 0.3f), 0, 1);
-            return BuildPrediction(finalScore, "ML.NET lead qualification blended with intake completeness");
+            var intentBoost = BuildIntentBoost(summary, interest, timeline);
+            var finalScore = Math.Clamp((predictionScore * 0.65f) + (completenessScore * 0.25f) + intentBoost, 0, 1);
+            return BuildPrediction(
+                finalScore,
+                "ML.NET lead qualification blended with intake completeness and urgency intent",
+                HasStrongIntent(summary, interest, timeline));
         }
 
         private Task<ModelState> EnsureModelAsync(CancellationToken ct)
@@ -129,27 +133,31 @@ namespace Services
             return new ModelState(true, engine);
         }
 
-        private static LeadQualificationPrediction BuildFallbackPrediction(float completenessScore)
+        private static LeadQualificationPrediction BuildFallbackPrediction(float completenessScore, string summary, string interest, string timeline)
         {
-            return BuildPrediction(completenessScore, "Rule-based qualification until enough lead history exists");
+            return BuildPrediction(
+                completenessScore + BuildIntentBoost(summary, interest, timeline),
+                "Rule-based qualification until enough lead history exists",
+                HasStrongIntent(summary, interest, timeline));
         }
 
-        private static LeadQualificationPrediction BuildPrediction(float score, string basis)
+        private static LeadQualificationPrediction BuildPrediction(float score, string basis, bool forceBoard = false)
         {
-            var shouldCreateLead = score >= 0.45f;
-            var priority = score >= 0.75f
+            var effectiveScore = Math.Clamp(forceBoard ? Math.Max(score, 0.72f) : score, 0, 1);
+            var shouldCreateLead = forceBoard || effectiveScore >= 0.45f;
+            var priority = effectiveScore >= 0.8f
                 ? LeadPriority.HighPriority
-                : score >= 0.55f
+                : effectiveScore >= 0.6f
                     ? LeadPriority.Warm
                     : LeadPriority.FollowUp;
-            var stage = score >= 0.65f ? LeadStage.Qualified : LeadStage.New;
+            var stage = forceBoard || effectiveScore >= 0.65f ? LeadStage.Qualified : LeadStage.New;
 
             return new LeadQualificationPrediction(
                 shouldCreateLead,
-                score,
+                effectiveScore,
                 priority,
                 stage,
-                score >= 0.65f,
+                forceBoard || effectiveScore >= 0.65f,
                 basis
             );
         }
@@ -202,6 +210,68 @@ namespace Services
                 .ToList();
 
             return values.Count == 0 ? 0 : values.Average();
+        }
+
+        private static bool HasStrongIntent(string? summary, string? interest, string? timeline)
+        {
+            var normalizedInterest = Normalize(interest);
+            var normalizedTimeline = Normalize(timeline);
+            var normalizedSummary = Normalize(summary);
+
+            var urgentTimeline = normalizedTimeline.Contains("this month") ||
+                                 normalizedTimeline.Contains("immediate") ||
+                                 normalizedTimeline.Contains("asap") ||
+                                 normalizedTimeline.Contains("urgent") ||
+                                 normalizedTimeline.Contains("within 30 days");
+
+            var strongInterest = normalizedInterest.Contains("schedule viewing") ||
+                                 normalizedInterest.Contains("schedule a viewing") ||
+                                 normalizedInterest.Contains("buy") ||
+                                 normalizedInterest.Contains("visit") ||
+                                 normalizedInterest.Contains("book a tour") ||
+                                 normalizedSummary.Contains("schedule viewing") ||
+                                 normalizedSummary.Contains("schedule a viewing") ||
+                                 normalizedSummary.Contains("book a tour");
+
+            return urgentTimeline && strongInterest;
+        }
+
+        private static float BuildIntentBoost(string? summary, string? interest, string? timeline)
+        {
+            var normalizedInterest = Normalize(interest);
+            var normalizedTimeline = Normalize(timeline);
+            var normalizedSummary = Normalize(summary);
+            float boost = 0;
+
+            if (normalizedTimeline.Contains("this month") ||
+                normalizedTimeline.Contains("within 30 days") ||
+                normalizedTimeline.Contains("immediate") ||
+                normalizedTimeline.Contains("asap"))
+            {
+                boost += 0.14f;
+            }
+
+            if (normalizedInterest.Contains("schedule viewing") ||
+                normalizedInterest.Contains("schedule a viewing") ||
+                normalizedInterest.Contains("visit") ||
+                normalizedInterest.Contains("buy"))
+            {
+                boost += 0.12f;
+            }
+
+            if (normalizedSummary.Contains("need") ||
+                normalizedSummary.Contains("urgent") ||
+                normalizedSummary.Contains("as soon as possible"))
+            {
+                boost += 0.06f;
+            }
+
+            return Math.Clamp(boost, 0, 0.28f);
+        }
+
+        private static string Normalize(string? value)
+        {
+            return (value ?? string.Empty).Trim().ToLowerInvariant();
         }
 
         private sealed class ModelState

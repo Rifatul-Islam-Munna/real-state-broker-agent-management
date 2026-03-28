@@ -12,6 +12,7 @@ namespace Data
             public DbSet<PropertyChatMessage> PropertyChatMessages => Set<PropertyChatMessage>();
             public DbSet<NeighborhoodInsight> NeighborhoodInsights => Set<NeighborhoodInsight>();
             public DbSet<Lead> Leads => Set<Lead>();
+            public DbSet<LeadHistoryEntry> LeadHistoryEntries => Set<LeadHistoryEntry>();
             public DbSet<DealPipeline> DealPipelines => Set<DealPipeline>();
             public DbSet<ContactRequest> ContactRequests => Set<ContactRequest>();
             public DbSet<MailInboxItem> MailInbox => Set<MailInboxItem>();
@@ -57,6 +58,11 @@ namespace Data
             .WithMany(lead => lead.Deals)
             .HasForeignKey(item => item.SourceLeadId)
             .OnDelete(DeleteBehavior.SetNull);
+                  modelBuilder.Entity<LeadHistoryEntry>()
+            .HasOne(item => item.Lead)
+            .WithMany()
+            .HasForeignKey(item => item.LeadId)
+            .OnDelete(DeleteBehavior.Cascade);
                   modelBuilder.Entity<PropertyChatConversation>()
             .HasOne(item => item.Lead)
             .WithMany()

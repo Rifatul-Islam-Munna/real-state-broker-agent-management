@@ -1,5 +1,6 @@
-import { MailInboxApiPage } from "@/components/stitch/pages/admin-api/mail-inbox-api-page"
+import { ManagedMailInboxPage } from "@/components/stitch/pages/lead-history/managed-mail-inbox-page"
 
 export function MailInboxPage() {
-  return <MailInboxApiPage />
+  return <ManagedMailInboxPage />
 }
+

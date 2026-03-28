@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { usePathname } from "next/navigation"
+import { usePathname, useSearchParams } from "next/navigation"
 import { ReactSortable } from "react-sortablejs"
 
 import { Sheet, SheetContent } from "@/components/ui/sheet"
@@ -12,24 +12,21 @@ import { AppIcon } from "@/components/ui/app-icon"
 import { cn } from "@/lib/utils"
 
 import { LeadActions, LeadDetailsPanel, LeadKanbanCard } from "./lead-detail-components"
-import {
-  LeadCancelDialog,
-  LeadCommunicationDialog,
-  LeadFormDialog,
-} from "./lead-dialogs"
+import { LeadCancelDialog, LeadFormDialog } from "./lead-dialogs"
+import { LeadOutreachDialog } from "./lead-outreach-dialog"
+import type { LeadOutreachComposerValues, LeadOutreachMode } from "./lead-outreach-types"
 import {
   boardLeadStages,
   leadButtonClass,
   type LeadFormValues,
   leadStageMeta,
   leadStageOrder,
-  type OutreachType,
 } from "./lead-shared"
 
 type LeadView = "board" | "list"
 type LeadDialogState =
   | {
-      type: "cancel" | "create" | "edit" | "email" | "message"
+      type: "cancel" | "create" | "edit" | LeadOutreachMode
       leadId?: number
     }
   | null
@@ -43,7 +40,7 @@ type Section2SectionProps = {
   isMutating: boolean
   leads: LeadItem[]
   onCancelLead: (leadId: number, reason: string) => Promise<string | null>
-  onCommunicate: (leadId: number, mode: OutreachType, message: string) => Promise<string | null>
+  onCommunicate: (leadId: number, mode: LeadOutreachMode, values: LeadOutreachComposerValues) => Promise<string | null>
   onConvertLeadToDeal: (leadId: number) => Promise<string | null>
   onCreateLead: (values: LeadFormValues) => Promise<string | null>
   onPageChange: (page: number) => void
@@ -53,6 +50,10 @@ type Section2SectionProps = {
   propertyOptions: PropertyItem[]
   totalPages: number
   totalResults: number
+}
+
+function buildHistoryHref(baseHref: string, leadId: number) {
+  return `${baseHref}${baseHref.includes("?") ? "&" : "?"}leadId=${leadId}`
 }
 
 export function Section2Section({
@@ -76,6 +77,7 @@ export function Section2Section({
   totalResults,
 }: Section2SectionProps) {
   const pathname = usePathname()
+  const searchParams = useSearchParams()
   const portalRoutes = getPortalRoutes(pathname)
 
   const [selectedLeadId, setSelectedLeadId] = useState<number | null>(null)
@@ -87,6 +89,17 @@ export function Section2Section({
       setDialogState({ type: "create" })
     }
   }, [createDialogVersion])
+
+  useEffect(() => {
+    const rawLeadId = searchParams.get("leadId")
+    const parsedLeadId = rawLeadId ? Number(rawLeadId) : NaN
+
+    if (!Number.isFinite(parsedLeadId)) {
+      return
+    }
+
+    setSelectedLeadId(parsedLeadId)
+  }, [searchParams])
 
   const boardColumns = useMemo(
     () =>
@@ -266,6 +279,7 @@ export function Section2Section({
                         </button>
                         <LeadActions
                           dealHref={portalRoutes.deals}
+                          historyHref={buildHistoryHref(portalRoutes.leadHistory, lead.id)}
                           lead={lead}
                           onConvertLeadToDeal={onConvertLeadToDeal}
                           onDialogOpen={(type, leadId) => setDialogState({ type, leadId })}
@@ -300,6 +314,7 @@ export function Section2Section({
           {selectedLead ? (
             <LeadDetailsPanel
               dealHref={portalRoutes.deals}
+              historyHref={buildHistoryHref(portalRoutes.leadHistory, selectedLead.id)}
               lead={selectedLead}
               onClose={() => setSelectedLeadId(null)}
               onConvertLeadToDeal={onConvertLeadToDeal}
@@ -310,18 +325,18 @@ export function Section2Section({
         </SheetContent>
       </Sheet>
 
-      <LeadCommunicationDialog
-        key={dialogLead ? `${dialogLead.id}-${dialogState?.type}` : "lead-communication"}
+      <LeadOutreachDialog
+        key={dialogLead ? `${dialogLead.id}-${dialogState?.type}` : "lead-outreach"}
         isSubmitting={isMutating}
         lead={dialogLead}
-        mode={dialogState?.type === "email" || dialogState?.type === "message" ? dialogState.type : null}
+        mode={dialogState?.type === "email" || dialogState?.type === "message" || dialogState?.type === "call" ? dialogState.type : null}
         onOpenChange={(open) => setDialogState(open ? dialogState : null)}
-        onSubmit={(message) =>
-          dialogLead && (dialogState?.type === "email" || dialogState?.type === "message")
-            ? onCommunicate(dialogLead.id, dialogState.type, message)
+        onSubmit={(values) =>
+          dialogLead && (dialogState?.type === "email" || dialogState?.type === "message" || dialogState?.type === "call")
+            ? onCommunicate(dialogLead.id, dialogState.type, values)
             : Promise.resolve("Lead not found.")
         }
-        open={dialogState?.type === "email" || dialogState?.type === "message"}
+        open={dialogState?.type === "email" || dialogState?.type === "message" || dialogState?.type === "call"}
       />
       <LeadCancelDialog
         key={dialogLead ? `${dialogLead.id}-cancel` : "lead-cancel"}
@@ -353,3 +368,8 @@ export function Section2Section({
     </main>
   )
 }
+
+
+
+
+

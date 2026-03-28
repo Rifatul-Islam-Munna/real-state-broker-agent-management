@@ -58,13 +58,16 @@ namespace Services
     public class PropertyChatConversationService
     {
         private readonly AppDbContext _db;
+        private readonly LeadHistoryService _leadHistoryService;
         private readonly LeadQualificationPredictionService _leadQualificationPredictionService;
 
         public PropertyChatConversationService(
             AppDbContext db,
+            LeadHistoryService leadHistoryService,
             LeadQualificationPredictionService leadQualificationPredictionService)
         {
             _db = db;
+            _leadHistoryService = leadHistoryService;
             _leadQualificationPredictionService = leadQualificationPredictionService;
         }
 
@@ -237,6 +240,7 @@ namespace Services
 
                 await _db.Leads.AddAsync(lead);
                 await _db.SaveChangesAsync();
+                await LogLeadHistoryAsync(lead.Id, property.Title, summary);
                 return lead;
             }
 
@@ -265,6 +269,7 @@ namespace Services
             }
 
             await _db.SaveChangesAsync();
+            await LogLeadHistoryAsync(existingLead.Id, property.Title, summary);
             return existingLead;
         }
 
@@ -272,10 +277,6 @@ namespace Services
         {
             var lines = new List<string>();
 
-            if (!string.IsNullOrWhiteSpace(input.ContactName)) lines.Add($"Name: {input.ContactName.Trim()}");
-            if (!string.IsNullOrWhiteSpace(input.ContactEmail)) lines.Add($"Email: {input.ContactEmail.Trim()}");
-            if (!string.IsNullOrWhiteSpace(input.ContactPhone)) lines.Add($"Phone: {input.ContactPhone.Trim()}");
-            if (!string.IsNullOrWhiteSpace(input.Budget)) lines.Add($"Budget: {input.Budget.Trim()}");
             if (!string.IsNullOrWhiteSpace(input.Timeline)) lines.Add($"Timeline: {input.Timeline.Trim()}");
             if (!string.IsNullOrWhiteSpace(input.Interest)) lines.Add($"Interest: {input.Interest.Trim()}");
             if (!string.IsNullOrWhiteSpace(input.AdditionalMessage)) lines.Add($"Message: {input.AdditionalMessage.Trim()}");
@@ -296,7 +297,7 @@ namespace Services
 
             if (lines.Count == 0)
             {
-                lines.Add($"Inquiry about {property.Title}");
+                lines.Add("No extra intake details shared.");
             }
 
             return string.Join("\n", lines);
@@ -378,6 +379,19 @@ namespace Services
             if (!string.IsNullOrWhiteSpace(input.AdditionalMessage)) lines.Add($"Message: {input.AdditionalMessage.Trim()}");
 
             return string.Join("\n", lines);
+        }
+
+        private async Task LogLeadHistoryAsync(int leadId, string propertyTitle, string summary)
+        {
+            await _leadHistoryService.AppendAsync(
+                leadId,
+                LeadHistoryKind.PropertyChat,
+                LeadHistoryDirection.Incoming,
+                LeadHistoryStatus.Received,
+                $"Property chat for {propertyTitle}",
+                string.IsNullOrWhiteSpace(summary) ? "Property chat received." : summary,
+                summary,
+                createdBy: "System");
         }
 
         private static bool HasMinimumLeadData(CreatePropertyChatConversationInput input)

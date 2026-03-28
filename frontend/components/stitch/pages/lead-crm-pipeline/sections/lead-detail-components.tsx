@@ -3,7 +3,7 @@
 import Link from "next/link"
 
 import { AppIcon } from "@/components/ui/app-icon"
-import type { LeadItem } from "@/hooks/use-real-estate-api"
+import { type LeadItem, useLeadHistory } from "@/hooks/use-real-estate-api"
 import { formatDateTimeLabel, formatLeadPriority, formatRelativeTimeLabel } from "@/lib/admin-portal"
 import { cn } from "@/lib/utils"
 
@@ -20,15 +20,17 @@ function getLeadNotes(notes?: string[] | null) {
 
 export function LeadActions({
   dealHref,
+  historyHref,
   lead,
   onConvertLeadToDeal,
   onDialogOpen,
   onToggleBoard,
 }: {
   dealHref: string
+  historyHref: string
   lead: LeadItem
   onConvertLeadToDeal: (leadId: number) => Promise<string | null>
-  onDialogOpen: (type: "cancel" | "edit" | "email" | "message", leadId: number) => void
+  onDialogOpen: (type: "cancel" | "edit" | "email" | "message" | "call", leadId: number) => void
   onToggleBoard: (leadId: number, inBoard: boolean) => Promise<void>
 }) {
   return (
@@ -56,11 +58,17 @@ export function LeadActions({
           {"Create Deal"}
         </button>
       )}
+      <Link className={leadButtonClass} href={historyHref}>
+        {"History"}
+      </Link>
       <button className={leadButtonClass} onClick={() => onDialogOpen("email", lead.id)} type="button">
         {"Send Mail"}
       </button>
       <button className={leadButtonClass} onClick={() => onDialogOpen("message", lead.id)} type="button">
         {"Send Message"}
+      </button>
+      <button className={leadButtonClass} onClick={() => onDialogOpen("call", lead.id)} type="button">
+        {"Call"}
       </button>
       <button className={leadButtonClass} onClick={() => onDialogOpen("edit", lead.id)} type="button">
         {"Edit"}
@@ -130,6 +138,7 @@ export function LeadKanbanCard({
 
 export function LeadDetailsPanel({
   dealHref,
+  historyHref,
   lead,
   onClose,
   onConvertLeadToDeal,
@@ -137,14 +146,16 @@ export function LeadDetailsPanel({
   onToggleBoard,
 }: {
   dealHref: string
+  historyHref: string
   lead: LeadItem
   onClose: () => void
   onConvertLeadToDeal: (leadId: number) => Promise<string | null>
-  onDialogOpen: (type: "cancel" | "edit" | "email" | "message", leadId: number) => void
+  onDialogOpen: (type: "cancel" | "edit" | "email" | "message" | "call", leadId: number) => void
   onToggleBoard: (leadId: number, inBoard: boolean) => Promise<void>
 }) {
   const leadNotes = getLeadNotes(lead.notes)
   const sourceLabel = displayText(lead.source)
+  const historyQuery = useLeadHistory(lead.id)
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -176,6 +187,7 @@ export function LeadDetailsPanel({
           <div className="mt-5">
             <LeadActions
               dealHref={dealHref}
+              historyHref={historyHref}
               lead={lead}
               onConvertLeadToDeal={onConvertLeadToDeal}
               onDialogOpen={onDialogOpen}
@@ -208,6 +220,35 @@ export function LeadDetailsPanel({
               <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{`Stage is ${leadStageMeta[lead.stage].label}.`}</p>
               <p className="mt-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">{formatDateTimeLabel(lead.updatedAt)}</p>
             </div>
+            {historyQuery.isLoading ? (
+              <p className="text-sm text-slate-500 dark:text-slate-400">{"Loading history..."}</p>
+            ) : historyQuery.error ? (
+              <p className="text-sm font-semibold text-rose-600">{historyQuery.error.message}</p>
+            ) : historyQuery.data && historyQuery.data.length > 0 ? (
+              historyQuery.data.map((entry) => (
+                <div key={`${lead.id}-history-${entry.id}-${entry.createdAt}`} className="relative">
+                  <div className="absolute -left-[29px] top-1 size-3 bg-primary ring-4 ring-white dark:ring-slate-900" />
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-sm font-semibold text-slate-900 dark:text-white">{entry.title}</p>
+                    <span className="border border-slate-200 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-600 dark:border-white/10 dark:text-slate-300">
+                      {entry.kind}
+                    </span>
+                    <span className="border border-primary/20 bg-primary/5 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-primary">
+                      {entry.status}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{entry.summary}</p>
+                  {entry.provider ? (
+                    <p className="mt-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">
+                      {`Provider: ${entry.provider}`}
+                    </p>
+                  ) : null}
+                  <p className="mt-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">
+                    {formatDateTimeLabel(entry.scheduledAt ?? entry.occurredAt ?? entry.createdAt)}
+                  </p>
+                </div>
+              ))
+            ) : null}
             {leadNotes.length > 0 ? (
               leadNotes.map((note, index) => (
                 <div key={`${lead.id}-note-${index}`} className="relative">
@@ -225,3 +266,5 @@ export function LeadDetailsPanel({
     </div>
   )
 }
+
+

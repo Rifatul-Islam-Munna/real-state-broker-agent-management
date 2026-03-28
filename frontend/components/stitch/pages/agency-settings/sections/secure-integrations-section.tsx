@@ -8,22 +8,28 @@ import { Input } from "@/components/ui/input"
 import { useAgencyIntegrationSettings, useUpdateAgencyIntegrationSettings } from "@/hooks/use-real-estate-api"
 import { formatDateTimeLabel } from "@/lib/admin-portal"
 
-type SectionKey = "twilio" | "aiProvider" | "smtp"
+type SectionKey = "aiProvider" | "communication" | "smtp"
 
-type TwilioFormValues = {
-  accountSid: string
+type CommunicationFormValues = {
+  providerName: "Custom" | "Plivo" | "Twilio"
+  accountId: string
   authToken: string
   fromNumber: string
+  baseUrl: string
+  voiceWebhookUrl: string
+  supportsSms: boolean
+  supportsVoice: boolean
 }
 
 type AiProviderFormValues = {
-  providerName: string
+  providerName: "Custom" | "Ollama" | "OpenAI"
   baseUrl: string
   model: string
   apiKey: string
 }
 
 type SmtpFormValues = {
+  providerName: "Custom" | "Gmail" | "Outlook"
   host: string
   port: string
   username: string
@@ -31,6 +37,15 @@ type SmtpFormValues = {
   fromEmail: string
   fromName: string
   useSsl: boolean
+  enableInboxSync: boolean
+  imapHost: string
+  imapPort: string
+  imapUsername: string
+  imapPassword: string
+  imapUseSsl: boolean
+  imapFolder: string
+  syncIntervalMinutes: string
+  maxMessagesPerSync: string
 }
 
 type IntegrationCardProps = {
@@ -43,33 +58,49 @@ type IntegrationCardProps = {
   isBusy: boolean
   onClear: () => void
   onSave: () => void
+  providerLabel?: string | null
   saveDisabled: boolean
   subtitle: string
   title: string
   updatedAt?: string | null
 }
 
-const blankTwilioForm = (): TwilioFormValues => ({
-  accountSid: "",
+const blankCommunicationForm = (): CommunicationFormValues => ({
+  providerName: "Twilio",
+  accountId: "",
   authToken: "",
   fromNumber: "",
+  baseUrl: "",
+  voiceWebhookUrl: "",
+  supportsSms: true,
+  supportsVoice: true,
 })
 
 const blankAiProviderForm = (): AiProviderFormValues => ({
-  providerName: "",
+  providerName: "OpenAI",
   baseUrl: "",
-  model: "",
+  model: "gpt-5.4",
   apiKey: "",
 })
 
 const blankSmtpForm = (): SmtpFormValues => ({
-  host: "",
+  providerName: "Gmail",
+  host: "smtp.gmail.com",
   port: "587",
   username: "",
   password: "",
   fromEmail: "",
   fromName: "",
   useSsl: true,
+  enableInboxSync: false,
+  imapHost: "imap.gmail.com",
+  imapPort: "993",
+  imapUsername: "",
+  imapPassword: "",
+  imapUseSsl: true,
+  imapFolder: "INBOX",
+  syncIntervalMinutes: "10",
+  maxMessagesPerSync: "25",
 })
 
 function updateLabel(configured: boolean, updatedAt?: string | null) {
@@ -108,6 +139,7 @@ function IntegrationCard({
   isBusy,
   onClear,
   onSave,
+  providerLabel,
   saveDisabled,
   subtitle,
   title,
@@ -132,6 +164,11 @@ function IntegrationCard({
             <p className="mt-2 text-sm leading-6 text-slate-600">{description}</p>
             <p className="mt-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">{subtitle}</p>
             <p className="mt-3 text-xs font-semibold text-slate-500">{updateLabel(configured, updatedAt)}</p>
+            {providerLabel ? (
+              <p className="mt-2 text-xs font-semibold uppercase tracking-[0.16em] text-primary">
+                {`Provider: ${providerLabel}`}
+              </p>
+            ) : null}
           </div>
         </div>
       </div>
@@ -145,7 +182,7 @@ function IntegrationCard({
           onClick={onSave}
           type="button"
         >
-          {isBusy ? "Saving..." : "Save"}
+          {isBusy ? "Validating..." : "Validate & Save"}
         </button>
         <button
           className="rounded-xl border border-rose-200 px-5 py-3 text-sm font-bold text-rose-700 transition-colors hover:border-rose-300 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
@@ -172,45 +209,167 @@ function SectionError({ error }: { error?: string | null }) {
   )
 }
 
+function FieldLabel({ children }: { children: ReactNode }) {
+  return <span className="text-sm font-bold text-slate-700">{children}</span>
+}
+
+function NativeSelect({
+  disabled,
+  onChange,
+  options,
+  value,
+}: {
+  disabled: boolean
+  onChange: (value: string) => void
+  options: Array<{ label: string; value: string }>
+  value: string
+}) {
+  return (
+    <select
+      className="h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-800"
+      disabled={disabled}
+      onChange={(event) => onChange(event.target.value)}
+      value={value}
+    >
+      {options.map((option) => (
+        <option key={option.value} value={option.value}>
+          {option.label}
+        </option>
+      ))}
+    </select>
+  )
+}
+
 function trimValue(value: string) {
   return value.trim()
 }
 
-function buildTwilioPayload(values: TwilioFormValues): UpdateAgencyIntegrationSettingsInput {
+function applyCommunicationPreset(
+  current: CommunicationFormValues,
+  providerName: CommunicationFormValues["providerName"],
+): CommunicationFormValues {
+  const nextBaseUrl =
+    providerName === "Plivo"
+      ? "https://api.plivo.com"
+      : providerName === "Twilio"
+        ? "https://api.twilio.com"
+        : current.baseUrl
+
   return {
-    twilio: {
-      accountSid: trimValue(values.accountSid),
+    ...current,
+    providerName,
+    baseUrl: nextBaseUrl,
+  }
+}
+
+function applyAiProviderPreset(
+  current: AiProviderFormValues,
+  providerName: AiProviderFormValues["providerName"],
+): AiProviderFormValues {
+  if (providerName === "Ollama") {
+    return {
+      ...current,
+      providerName,
+      apiKey: "",
+      baseUrl: "http://localhost:11434",
+      model: current.model || "llama3.2",
+    }
+  }
+
+  if (providerName === "OpenAI") {
+    return {
+      ...current,
+      providerName,
+      baseUrl: "https://api.openai.com/v1",
+      model: current.model || "gpt-5.4",
+    }
+  }
+
+  return {
+    ...current,
+    providerName,
+  }
+}
+
+function applyMailPreset(current: SmtpFormValues, providerName: SmtpFormValues["providerName"]): SmtpFormValues {
+  if (providerName === "Gmail") {
+    return {
+      ...current,
+      providerName,
+      host: "smtp.gmail.com",
+      imapHost: "imap.gmail.com",
+      imapPort: "993",
+      port: "587",
+      imapUseSsl: true,
+      useSsl: true,
+    }
+  }
+
+  if (providerName === "Outlook") {
+    return {
+      ...current,
+      providerName,
+      host: "smtp.office365.com",
+      imapHost: "outlook.office365.com",
+      imapPort: "993",
+      port: "587",
+      imapUseSsl: true,
+      useSsl: true,
+    }
+  }
+
+  return {
+    ...current,
+    providerName,
+  }
+}
+
+function buildCommunicationPayload(values: CommunicationFormValues): UpdateAgencyIntegrationSettingsInput {
+  return {
+    communication: {
+      accountId: trimValue(values.accountId),
       authToken: trimValue(values.authToken),
+      baseUrl: trimValue(values.baseUrl) || undefined,
+      voiceWebhookUrl: trimValue(values.voiceWebhookUrl) || undefined,
       fromNumber: trimValue(values.fromNumber),
+      providerName: values.providerName,
+      supportsSms: values.supportsSms,
+      supportsVoice: values.supportsVoice,
     },
   }
 }
 
 function buildAiProviderPayload(values: AiProviderFormValues): UpdateAgencyIntegrationSettingsInput {
-  const baseUrl = trimValue(values.baseUrl)
-
   return {
     aiProvider: {
       apiKey: trimValue(values.apiKey),
-      baseUrl: baseUrl || undefined,
+      baseUrl: trimValue(values.baseUrl) || undefined,
       model: trimValue(values.model),
-      providerName: trimValue(values.providerName),
+      providerName: values.providerName,
     },
   }
 }
 
 function buildSmtpPayload(values: SmtpFormValues): UpdateAgencyIntegrationSettingsInput {
-  const fromName = trimValue(values.fromName)
-
   return {
     smtp: {
       fromEmail: trimValue(values.fromEmail),
-      fromName: fromName || undefined,
+      fromName: trimValue(values.fromName) || undefined,
       host: trimValue(values.host),
       password: trimValue(values.password),
       port: Math.max(1, Number(values.port) || 0),
+      providerName: values.providerName,
       useSsl: values.useSsl,
       username: trimValue(values.username),
+      enableInboxSync: values.enableInboxSync,
+      imapFolder: trimValue(values.imapFolder) || undefined,
+      imapHost: trimValue(values.imapHost) || undefined,
+      imapPassword: trimValue(values.imapPassword) || undefined,
+      imapPort: Math.max(1, Number(values.imapPort) || 0),
+      imapUseSsl: values.imapUseSsl,
+      imapUsername: trimValue(values.imapUsername) || undefined,
+      maxMessagesPerSync: Math.max(5, Number(values.maxMessagesPerSync) || 0),
+      syncIntervalMinutes: Math.max(5, Number(values.syncIntervalMinutes) || 0),
     },
   }
 }
@@ -220,14 +379,14 @@ export function SecureIntegrationsSection() {
   const updateMutation = useUpdateAgencyIntegrationSettings()
 
   const [aiProviderValues, setAiProviderValues] = useState<AiProviderFormValues>(() => blankAiProviderForm())
+  const [communicationValues, setCommunicationValues] = useState<CommunicationFormValues>(() => blankCommunicationForm())
   const [pendingSection, setPendingSection] = useState<SectionKey | null>(null)
   const [sectionErrors, setSectionErrors] = useState<Record<SectionKey, string | null>>({
     aiProvider: null,
+    communication: null,
     smtp: null,
-    twilio: null,
   })
   const [smtpValues, setSmtpValues] = useState<SmtpFormValues>(() => blankSmtpForm())
-  const [twilioValues, setTwilioValues] = useState<TwilioFormValues>(() => blankTwilioForm())
 
   const status = integrationStatusQuery.data
   const isBusy = updateMutation.isPending
@@ -244,11 +403,9 @@ export function SecureIntegrationsSection() {
       const response = await updateMutation.mutateAsync(payload)
 
       if (response.error) {
-        const message = response.error.message || "Failed to update this integration."
-
         setSectionErrors((current) => ({
           ...current,
-          [section]: message,
+          [section]: response.error?.message || "Failed to update this integration.",
         }))
         return
       }
@@ -266,24 +423,35 @@ export function SecureIntegrationsSection() {
     }
   }
 
-  const canSaveTwilio =
-    trimValue(twilioValues.accountSid).length > 0 &&
-    trimValue(twilioValues.authToken).length > 0 &&
-    trimValue(twilioValues.fromNumber).length > 0
+  const canSaveCommunication =
+    trimValue(communicationValues.accountId).length > 0 &&
+    trimValue(communicationValues.authToken).length > 0 &&
+    trimValue(communicationValues.fromNumber).length > 0 &&
+    (communicationValues.providerName !== "Custom" || trimValue(communicationValues.baseUrl).length > 0)
 
+  const requiresAiKey = aiProviderValues.providerName === "OpenAI"
   const canSaveAiProvider =
-    trimValue(aiProviderValues.providerName).length > 0 &&
     trimValue(aiProviderValues.model).length > 0 &&
-    trimValue(aiProviderValues.apiKey).length > 0
+    (aiProviderValues.providerName !== "Custom" || trimValue(aiProviderValues.baseUrl).length > 0) &&
+    (!requiresAiKey || trimValue(aiProviderValues.apiKey).length > 0)
 
   const smtpPort = Number(smtpValues.port)
+  const imapPort = Number(smtpValues.imapPort)
   const canSaveSmtp =
     trimValue(smtpValues.host).length > 0 &&
     trimValue(smtpValues.username).length > 0 &&
     trimValue(smtpValues.password).length > 0 &&
     trimValue(smtpValues.fromEmail).length > 0 &&
     Number.isFinite(smtpPort) &&
-    smtpPort > 0
+    smtpPort > 0 &&
+    (
+      !smtpValues.enableInboxSync ||
+      (
+        trimValue(smtpValues.imapHost).length > 0 &&
+        Number.isFinite(imapPort) &&
+        imapPort > 0
+      )
+    )
 
   return (
     <div className="space-y-6">
@@ -291,9 +459,9 @@ export function SecureIntegrationsSection() {
         <div className="flex items-start gap-3">
           <AppIcon className="mt-0.5 text-lg text-amber-700" name="settings" />
           <div>
-            <p className="text-sm font-bold text-amber-900">{"Write-only integration vault"}</p>
+            <p className="text-sm font-bold text-amber-900">{"Validated integration vault"}</p>
             <p className="mt-1 text-sm leading-6 text-amber-900/80">
-              {"These credentials are saved on the server, encrypted there, and never returned to the admin panel again."}
+              {"Each save now validates the provider connection first, then stores the credentials encrypted on the server without sending them back to the browser."}
             </p>
             {status?.updatedAt ? (
               <p className="mt-2 text-xs font-semibold uppercase tracking-[0.16em] text-amber-800/80">
@@ -318,116 +486,200 @@ export function SecureIntegrationsSection() {
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         <IntegrationCard
-          configured={status?.hasTwilioConfig ?? false}
-          description="Send SMS alerts, lead follow-ups, and call triggers with your Twilio account."
+          configured={status?.hasCommunicationConfig ?? false}
+          description="Use Twilio, Plivo, or a custom provider for lead SMS, call triggers, reminders, and scheduled outreach."
           iconContainerClassName="bg-red-50"
           iconClassName="text-red-600"
-          iconName="sms"
-          isBusy={isBusy && pendingSection === "twilio"}
-          onClear={() => void submitSection("twilio", { clearTwilio: true }, () => setTwilioValues(blankTwilioForm()))}
-          onSave={() => void submitSection("twilio", buildTwilioPayload(twilioValues), () => setTwilioValues(blankTwilioForm()))}
-          saveDisabled={!canSaveTwilio || isBusy}
-          subtitle="Write only. Save to overwrite the stored secret."
-          title="Twilio"
-          updatedAt={status?.twilioUpdatedAt}
+          iconName="phone_in_talk"
+          isBusy={isBusy && pendingSection === "communication"}
+          onClear={() =>
+            void submitSection("communication", { clearCommunication: true }, () => setCommunicationValues(blankCommunicationForm()))
+          }
+          onSave={() =>
+            void submitSection("communication", buildCommunicationPayload(communicationValues), () => setCommunicationValues(blankCommunicationForm()))
+          }
+          providerLabel={status?.communicationProviderName}
+          saveDisabled={!canSaveCommunication || isBusy}
+          subtitle="Choose the provider first, then validate the credentials before they are stored."
+          title="Calls & SMS"
+          updatedAt={status?.communicationUpdatedAt}
         >
           <label className="flex flex-col gap-2">
-            <span className="text-sm font-bold text-slate-700">{"Account SID"}</span>
+            <FieldLabel>{"Provider"}</FieldLabel>
+            <NativeSelect
+              disabled={isBusy}
+              onChange={(value) =>
+                setCommunicationValues((current) => applyCommunicationPreset(current, value as CommunicationFormValues["providerName"]))
+              }
+              options={[
+                { label: "Twilio", value: "Twilio" },
+                { label: "Plivo", value: "Plivo" },
+                { label: "Custom", value: "Custom" },
+              ]}
+              value={communicationValues.providerName}
+            />
+          </label>
+          <label className="flex flex-col gap-2">
+            <FieldLabel>{communicationValues.providerName === "Plivo" ? "Auth ID" : "Account ID"}</FieldLabel>
             <Input
               autoComplete="off"
               className="rounded-xl border-slate-200 bg-slate-50"
               disabled={isBusy}
-              onChange={(event) => setTwilioValues((current) => ({ ...current, accountSid: event.target.value }))}
-              placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+              onChange={(event) => setCommunicationValues((current) => ({ ...current, accountId: event.target.value }))}
+              placeholder={communicationValues.providerName === "Plivo" ? "MA..." : "AC..."}
               spellCheck={false}
-              value={twilioValues.accountSid}
+              value={communicationValues.accountId}
             />
           </label>
           <label className="flex flex-col gap-2">
-            <span className="text-sm font-bold text-slate-700">{"Auth Token"}</span>
+            <FieldLabel>{"Auth Token"}</FieldLabel>
             <Input
               autoComplete="new-password"
               className="rounded-xl border-slate-200 bg-slate-50"
               disabled={isBusy}
-              onChange={(event) => setTwilioValues((current) => ({ ...current, authToken: event.target.value }))}
-              placeholder="Enter a new Twilio auth token"
+              onChange={(event) => setCommunicationValues((current) => ({ ...current, authToken: event.target.value }))}
+              placeholder={`Enter a new ${communicationValues.providerName} auth token`}
               spellCheck={false}
               type="password"
-              value={twilioValues.authToken}
+              value={communicationValues.authToken}
             />
           </label>
           <label className="flex flex-col gap-2">
-            <span className="text-sm font-bold text-slate-700">{"From Number"}</span>
+            <FieldLabel>{"From Number"}</FieldLabel>
             <Input
               autoComplete="off"
               className="rounded-xl border-slate-200 bg-slate-50"
               disabled={isBusy}
-              onChange={(event) => setTwilioValues((current) => ({ ...current, fromNumber: event.target.value }))}
+              onChange={(event) => setCommunicationValues((current) => ({ ...current, fromNumber: event.target.value }))}
               placeholder="+1 555 010 2000"
-              value={twilioValues.fromNumber}
+              value={communicationValues.fromNumber}
             />
           </label>
-          <SectionError error={sectionErrors.twilio} />
+          <label className="flex flex-col gap-2">
+            <FieldLabel>{"Validation URL / Base URL"}</FieldLabel>
+            <Input
+              autoComplete="off"
+              className="rounded-xl border-slate-200 bg-slate-50"
+              disabled={isBusy}
+              onChange={(event) => setCommunicationValues((current) => ({ ...current, baseUrl: event.target.value }))}
+              placeholder={communicationValues.providerName === "Custom" ? "https://api.your-provider.com" : "Optional override"}
+              spellCheck={false}
+              type="url"
+              value={communicationValues.baseUrl}
+            />
+          </label>
+          <label className="flex flex-col gap-2">
+            <FieldLabel>{"Voice Webhook URL"}</FieldLabel>
+            <Input
+              autoComplete="off"
+              className="rounded-xl border-slate-200 bg-slate-50"
+              disabled={isBusy}
+              onChange={(event) => setCommunicationValues((current) => ({ ...current, voiceWebhookUrl: event.target.value }))}
+              placeholder="https://crm.example.com/api/lead-outreach/call-script"
+              spellCheck={false}
+              type="url"
+              value={communicationValues.voiceWebhookUrl}
+            />
+            <p className="text-xs text-slate-500">
+              {"Twilio can speak inline without this, but Plivo voice calls need a public callback URL that points to your lead outreach call-script endpoint."}
+            </p>
+          </label>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
+            <label className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+              <div>
+                <p className="text-sm font-bold text-slate-800">{"Enable SMS"}</p>
+                <p className="text-xs text-slate-500">{"Store this provider as SMS-ready for reminders and lead follow-up."}</p>
+              </div>
+              <input
+                checked={communicationValues.supportsSms}
+                className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
+                disabled={isBusy}
+                onChange={(event) => setCommunicationValues((current) => ({ ...current, supportsSms: event.target.checked }))}
+                type="checkbox"
+              />
+            </label>
+            <label className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+              <div>
+                <p className="text-sm font-bold text-slate-800">{"Enable Voice"}</p>
+                <p className="text-xs text-slate-500">{"Store this provider as call-ready for visit reminders and follow-ups."}</p>
+              </div>
+              <input
+                checked={communicationValues.supportsVoice}
+                className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
+                disabled={isBusy}
+                onChange={(event) => setCommunicationValues((current) => ({ ...current, supportsVoice: event.target.checked }))}
+                type="checkbox"
+              />
+            </label>
+          </div>
+          <SectionError error={sectionErrors.communication} />
         </IntegrationCard>
 
         <IntegrationCard
           configured={status?.hasAiProviderConfig ?? false}
-          description="Store a third-party AI API key and model target for automation, copilots, or content workflows."
+          description="Choose a hosted model provider or a local Ollama server, then save the model target you want the system to use."
           iconContainerClassName="bg-violet-50"
           iconClassName="text-violet-600"
           iconName="auto_awesome"
           isBusy={isBusy && pendingSection === "aiProvider"}
-          onClear={() => void submitSection("aiProvider", { clearAiProvider: true }, () => setAiProviderValues(blankAiProviderForm()))}
-          onSave={() => void submitSection("aiProvider", buildAiProviderPayload(aiProviderValues), () => setAiProviderValues(blankAiProviderForm()))}
+          onClear={() =>
+            void submitSection("aiProvider", { clearAiProvider: true }, () => setAiProviderValues(blankAiProviderForm()))
+          }
+          onSave={() =>
+            void submitSection("aiProvider", buildAiProviderPayload(aiProviderValues), () => setAiProviderValues(blankAiProviderForm()))
+          }
+          providerLabel={status?.aiProviderName}
           saveDisabled={!canSaveAiProvider || isBusy}
-          subtitle="API keys never come back to the browser after save."
+          subtitle="OpenAI, Ollama, or a custom endpoint with your own model name."
           title="AI Provider"
           updatedAt={status?.aiProviderUpdatedAt}
         >
           <label className="flex flex-col gap-2">
-            <span className="text-sm font-bold text-slate-700">{"Provider Name"}</span>
-            <Input
-              autoComplete="off"
-              className="rounded-xl border-slate-200 bg-slate-50"
+            <FieldLabel>{"Provider"}</FieldLabel>
+            <NativeSelect
               disabled={isBusy}
-              onChange={(event) => setAiProviderValues((current) => ({ ...current, providerName: event.target.value }))}
-              placeholder="OpenAI"
+              onChange={(value) => setAiProviderValues((current) => applyAiProviderPreset(current, value as AiProviderFormValues["providerName"]))}
+              options={[
+                { label: "OpenAI", value: "OpenAI" },
+                { label: "Ollama", value: "Ollama" },
+                { label: "Custom", value: "Custom" },
+              ]}
               value={aiProviderValues.providerName}
             />
           </label>
           <label className="flex flex-col gap-2">
-            <span className="text-sm font-bold text-slate-700">{"Base URL"}</span>
+            <FieldLabel>{"Base URL"}</FieldLabel>
             <Input
               autoComplete="off"
               className="rounded-xl border-slate-200 bg-slate-50"
               disabled={isBusy}
               onChange={(event) => setAiProviderValues((current) => ({ ...current, baseUrl: event.target.value }))}
-              placeholder="https://api.openai.com/v1"
+              placeholder={aiProviderValues.providerName === "Ollama" ? "http://localhost:11434" : "https://api.openai.com/v1"}
               spellCheck={false}
               type="url"
               value={aiProviderValues.baseUrl}
             />
           </label>
           <label className="flex flex-col gap-2">
-            <span className="text-sm font-bold text-slate-700">{"Model"}</span>
+            <FieldLabel>{"Model"}</FieldLabel>
             <Input
               autoComplete="off"
               className="rounded-xl border-slate-200 bg-slate-50"
               disabled={isBusy}
               onChange={(event) => setAiProviderValues((current) => ({ ...current, model: event.target.value }))}
-              placeholder="gpt-5.4"
+              placeholder={aiProviderValues.providerName === "Ollama" ? "llama3.2" : "gpt-5.4"}
               spellCheck={false}
               value={aiProviderValues.model}
             />
           </label>
           <label className="flex flex-col gap-2">
-            <span className="text-sm font-bold text-slate-700">{"API Key"}</span>
+            <FieldLabel>{aiProviderValues.providerName === "Ollama" ? "API Key (Optional)" : "API Key"}</FieldLabel>
             <Input
               autoComplete="new-password"
               className="rounded-xl border-slate-200 bg-slate-50"
               disabled={isBusy}
               onChange={(event) => setAiProviderValues((current) => ({ ...current, apiKey: event.target.value }))}
-              placeholder="Enter a new provider API key"
+              placeholder={aiProviderValues.providerName === "Ollama" ? "Leave blank for local Ollama" : "Enter a provider API key"}
               spellCheck={false}
               type="password"
               value={aiProviderValues.apiKey}
@@ -438,21 +690,44 @@ export function SecureIntegrationsSection() {
 
         <IntegrationCard
           configured={status?.hasSmtpConfig ?? false}
-          description="Manage transactional mail delivery for inquiries, alerts, and automated email handoffs."
+          description="Save Gmail, Outlook, or custom mail details for sending mail, then optionally turn on mailbox sync so incoming email can be pulled into leads automatically."
           iconContainerClassName="bg-sky-50"
           iconClassName="text-sky-700"
           iconName="mail"
           isBusy={isBusy && pendingSection === "smtp"}
-          onClear={() => void submitSection("smtp", { clearSmtp: true }, () => setSmtpValues(blankSmtpForm()))}
-          onSave={() => void submitSection("smtp", buildSmtpPayload(smtpValues), () => setSmtpValues(blankSmtpForm()))}
+          onClear={() =>
+            void submitSection("smtp", { clearSmtp: true }, () => setSmtpValues(blankSmtpForm()))
+          }
+          onSave={() =>
+            void submitSection("smtp", buildSmtpPayload(smtpValues), () => setSmtpValues(blankSmtpForm()))
+          }
+          providerLabel={status?.smtpProviderName}
           saveDisabled={!canSaveSmtp || isBusy}
-          subtitle="Write only mail credentials with optional sender name."
+          subtitle="Gmail app passwords work here, and mailbox sync can reuse the same login automatically."
           title="SMTP Mail"
           updatedAt={status?.smtpUpdatedAt}
         >
+          {status?.mailboxSyncEnabled ? (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
+              {`Inbox sync is enabled${status.mailboxSyncIntervalMinutes ? ` every ${status.mailboxSyncIntervalMinutes} minutes` : ""}.`}
+            </div>
+          ) : null}
+          <label className="flex flex-col gap-2">
+            <FieldLabel>{"Provider"}</FieldLabel>
+            <NativeSelect
+              disabled={isBusy}
+              onChange={(value) => setSmtpValues((current) => applyMailPreset(current, value as SmtpFormValues["providerName"]))}
+              options={[
+                { label: "Gmail", value: "Gmail" },
+                { label: "Outlook", value: "Outlook" },
+                { label: "Custom", value: "Custom" },
+              ]}
+              value={smtpValues.providerName}
+            />
+          </label>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
             <label className="flex flex-col gap-2">
-              <span className="text-sm font-bold text-slate-700">{"Host"}</span>
+              <FieldLabel>{"Host"}</FieldLabel>
               <Input
                 autoComplete="off"
                 className="rounded-xl border-slate-200 bg-slate-50"
@@ -464,7 +739,7 @@ export function SecureIntegrationsSection() {
               />
             </label>
             <label className="flex flex-col gap-2">
-              <span className="text-sm font-bold text-slate-700">{"Port"}</span>
+              <FieldLabel>{"Port"}</FieldLabel>
               <Input
                 className="rounded-xl border-slate-200 bg-slate-50"
                 disabled={isBusy}
@@ -476,7 +751,7 @@ export function SecureIntegrationsSection() {
             </label>
           </div>
           <label className="flex flex-col gap-2">
-            <span className="text-sm font-bold text-slate-700">{"Username"}</span>
+            <FieldLabel>{"Username"}</FieldLabel>
             <Input
               autoComplete="off"
               className="rounded-xl border-slate-200 bg-slate-50"
@@ -488,13 +763,13 @@ export function SecureIntegrationsSection() {
             />
           </label>
           <label className="flex flex-col gap-2">
-            <span className="text-sm font-bold text-slate-700">{"Password"}</span>
+            <FieldLabel>{smtpValues.providerName === "Gmail" ? "App Password" : "Password"}</FieldLabel>
             <Input
               autoComplete="new-password"
               className="rounded-xl border-slate-200 bg-slate-50"
               disabled={isBusy}
               onChange={(event) => setSmtpValues((current) => ({ ...current, password: event.target.value }))}
-              placeholder="Enter a new SMTP password"
+              placeholder={smtpValues.providerName === "Gmail" ? "Google app password" : "Enter SMTP password"}
               spellCheck={false}
               type="password"
               value={smtpValues.password}
@@ -502,7 +777,7 @@ export function SecureIntegrationsSection() {
           </label>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
             <label className="flex flex-col gap-2">
-              <span className="text-sm font-bold text-slate-700">{"From Email"}</span>
+              <FieldLabel>{"From Email"}</FieldLabel>
               <Input
                 autoComplete="off"
                 className="rounded-xl border-slate-200 bg-slate-50"
@@ -514,7 +789,7 @@ export function SecureIntegrationsSection() {
               />
             </label>
             <label className="flex flex-col gap-2">
-              <span className="text-sm font-bold text-slate-700">{"From Name"}</span>
+              <FieldLabel>{"From Name"}</FieldLabel>
               <Input
                 autoComplete="off"
                 className="rounded-xl border-slate-200 bg-slate-50"
@@ -528,7 +803,7 @@ export function SecureIntegrationsSection() {
           <label className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
             <div>
               <p className="text-sm font-bold text-slate-800">{"Use SSL / TLS"}</p>
-              <p className="text-xs text-slate-500">{"Enable secure SMTP transport for the stored mail connection."}</p>
+              <p className="text-xs text-slate-500">{"Port 587 + STARTTLS works well for Gmail and Outlook app-password setups."}</p>
             </div>
             <input
               checked={smtpValues.useSsl}
@@ -538,6 +813,152 @@ export function SecureIntegrationsSection() {
               type="checkbox"
             />
           </label>
+          <label className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+            <div>
+              <p className="text-sm font-bold text-slate-800">{"Enable Mailbox Sync"}</p>
+              <p className="text-xs text-slate-500">{"Pull inbound mail every 10-20 minutes and let the CRM match or create leads from those messages."}</p>
+            </div>
+            <input
+              checked={smtpValues.enableInboxSync}
+              className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
+              disabled={isBusy}
+              onChange={(event) => setSmtpValues((current) => ({ ...current, enableInboxSync: event.target.checked }))}
+              type="checkbox"
+            />
+          </label>
+          {smtpValues.enableInboxSync ? (
+            <div className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div>
+                <p className="text-sm font-bold text-slate-800">{"Mailbox Sync"}</p>
+                <p className="mt-1 text-xs leading-5 text-slate-500">
+                  {smtpValues.providerName === "Custom"
+                    ? "Custom mailboxes can set their own mailbox host and login here."
+                    : "For Gmail and Outlook, just enable mailbox access in the provider settings. This form reuses your same email login automatically behind the scenes."}
+                </p>
+                {status?.hasAiProviderConfig ? null : (
+                  <p className="mt-2 text-xs font-semibold text-amber-700">
+                    {"Set up an AI provider too. The inbox can still pull email, but auto-detecting property intent for brand-new senders depends on the LLM connection."}
+                  </p>
+                )}
+              </div>
+              {smtpValues.providerName === "Custom" ? (
+                <>
+                  <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
+                    <label className="flex flex-col gap-2">
+                      <FieldLabel>{"Mailbox Host"}</FieldLabel>
+                      <Input
+                        autoComplete="off"
+                        className="rounded-xl border-slate-200 bg-white"
+                        disabled={isBusy}
+                        onChange={(event) => setSmtpValues((current) => ({ ...current, imapHost: event.target.value }))}
+                        placeholder="imap.mailprovider.com"
+                        spellCheck={false}
+                        value={smtpValues.imapHost}
+                      />
+                    </label>
+                    <label className="flex flex-col gap-2">
+                      <FieldLabel>{"Mailbox Port"}</FieldLabel>
+                      <Input
+                        className="rounded-xl border-slate-200 bg-white"
+                        disabled={isBusy}
+                        min="1"
+                        onChange={(event) => setSmtpValues((current) => ({ ...current, imapPort: event.target.value }))}
+                        type="number"
+                        value={smtpValues.imapPort}
+                      />
+                    </label>
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
+                    <label className="flex flex-col gap-2">
+                      <FieldLabel>{"Mailbox Username"}</FieldLabel>
+                      <Input
+                        autoComplete="off"
+                        className="rounded-xl border-slate-200 bg-white"
+                        disabled={isBusy}
+                        onChange={(event) => setSmtpValues((current) => ({ ...current, imapUsername: event.target.value }))}
+                        placeholder="Leave blank to reuse mail username"
+                        spellCheck={false}
+                        value={smtpValues.imapUsername}
+                      />
+                    </label>
+                    <label className="flex flex-col gap-2">
+                      <FieldLabel>{"Mailbox Password"}</FieldLabel>
+                      <Input
+                        autoComplete="new-password"
+                        className="rounded-xl border-slate-200 bg-white"
+                        disabled={isBusy}
+                        onChange={(event) => setSmtpValues((current) => ({ ...current, imapPassword: event.target.value }))}
+                        placeholder="Leave blank to reuse mail password"
+                        spellCheck={false}
+                        type="password"
+                        value={smtpValues.imapPassword}
+                      />
+                    </label>
+                  </div>
+                  <label className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3">
+                    <div>
+                      <p className="text-sm font-bold text-slate-800">{"Use Mailbox SSL / TLS"}</p>
+                      <p className="text-xs text-slate-500">{"Port 993 usually uses direct SSL."}</p>
+                    </div>
+                    <input
+                      checked={smtpValues.imapUseSsl}
+                      className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
+                      disabled={isBusy}
+                      onChange={(event) => setSmtpValues((current) => ({ ...current, imapUseSsl: event.target.checked }))}
+                      type="checkbox"
+                    />
+                  </label>
+                </>
+              ) : (
+                <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm leading-6 text-slate-600">
+                  {smtpValues.providerName === "Gmail"
+                    ? "Gmail mailbox sync will use Gmail's standard mailbox server automatically after mailbox access is enabled in Gmail settings."
+                    : "Outlook mailbox sync will use outlook.office365.com automatically with the same mailbox login."}
+                </div>
+              )}
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
+                <label className="flex flex-col gap-2">
+                  <FieldLabel>{"Inbox Folder"}</FieldLabel>
+                  <Input
+                    autoComplete="off"
+                    className="rounded-xl border-slate-200 bg-white"
+                    disabled={isBusy}
+                    onChange={(event) => setSmtpValues((current) => ({ ...current, imapFolder: event.target.value }))}
+                    placeholder="INBOX"
+                    spellCheck={false}
+                    value={smtpValues.imapFolder}
+                  />
+                </label>
+                <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm leading-6 text-slate-600">
+                  {"Incoming email is checked with mailbox sync. Outgoing email is sent with SMTP. They are separate behind the scenes, but you only need one setup here."}
+                </div>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
+                <label className="flex flex-col gap-2">
+                  <FieldLabel>{"Sync Every (Minutes)"}</FieldLabel>
+                  <Input
+                    className="rounded-xl border-slate-200 bg-white"
+                    disabled={isBusy}
+                    min="5"
+                    onChange={(event) => setSmtpValues((current) => ({ ...current, syncIntervalMinutes: event.target.value }))}
+                    type="number"
+                    value={smtpValues.syncIntervalMinutes}
+                  />
+                </label>
+                <label className="flex flex-col gap-2">
+                  <FieldLabel>{"Max Emails Per Sync"}</FieldLabel>
+                  <Input
+                    className="rounded-xl border-slate-200 bg-white"
+                    disabled={isBusy}
+                    min="5"
+                    onChange={(event) => setSmtpValues((current) => ({ ...current, maxMessagesPerSync: event.target.value }))}
+                    type="number"
+                    value={smtpValues.maxMessagesPerSync}
+                  />
+                </label>
+              </div>
+            </div>
+          ) : null}
           <SectionError error={sectionErrors.smtp} />
         </IntegrationCard>
       </div>

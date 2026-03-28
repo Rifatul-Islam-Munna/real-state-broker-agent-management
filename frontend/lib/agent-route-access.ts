@@ -28,6 +28,20 @@ export const agentRouteAccessItems = [
     permission: "lead",
   },
   {
+    description: "Lead timeline, outreach history, scheduled follow-up, and conversation logs.",
+    href: "/agent/lead?view=history",
+    icon: "history",
+    label: "Lead History",
+    permission: "lead",
+  },
+  {
+    description: "Scheduled calls, SMS, and email follow-up for every assigned lead.",
+    href: "/agent/lead?view=schedule",
+    icon: "event",
+    label: "Lead Schedule",
+    permission: "lead",
+  },
+  {
     description: "Customer messages, inbox management, and email workflow.",
     href: "/agent/mail",
     icon: "mail",
@@ -72,3 +86,4 @@ export function getAccessibleAgentNavigation(permissions?: string[] | null) {
 export function getDefaultAgentRoute(permissions?: string[] | null) {
   return getAccessibleAgentNavigation(permissions)[0]?.href ?? "/login"
 }
+

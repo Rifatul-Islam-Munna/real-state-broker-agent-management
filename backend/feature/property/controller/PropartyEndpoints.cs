@@ -2,6 +2,7 @@ using Entities;
 using FastEndpoints;
 using Models;
 using Services;
+using System.Security.Claims;
 
 namespace Endpoints
 {
@@ -174,6 +175,8 @@ namespace Endpoints
 
         public override async Task HandleAsync(Request req, CancellationToken ct)
         {
+            var canSeePrediction = CanSeePrediction(HttpContext.User);
+
             if (req.Id.HasValue)
             {
                 var property = await PropertyService.GetPropertyAsync(req.Id.Value);
@@ -184,7 +187,7 @@ namespace Endpoints
                     return;
                 }
 
-                await Send.OkAsync(property, ct);
+                await Send.OkAsync(canSeePrediction ? property : RedactPrediction(property), ct);
                 return;
             }
 
@@ -198,7 +201,7 @@ namespace Endpoints
                     return;
                 }
 
-                await Send.OkAsync(property, ct);
+                await Send.OkAsync(canSeePrediction ? property : RedactPrediction(property), ct);
                 return;
             }
 
@@ -211,7 +214,39 @@ namespace Endpoints
                 req.Status,
                 req.Agent);
 
-            await Send.OkAsync(result, ct);
+            await Send.OkAsync(canSeePrediction ? result : RedactPrediction(result), ct);
+        }
+
+        private static bool CanSeePrediction(ClaimsPrincipal user)
+        {
+            return user.IsInRole("Admin") || user.IsInRole("Agent");
+        }
+
+        private static PropertyResponse RedactPrediction(PropertyResponse property)
+        {
+            return property with
+            {
+                SellPrediction = new PropertySellPredictionResponse(
+                    0,
+                    false,
+                    0,
+                    0,
+                    0,
+                    "Visible to admin and agent accounts only."
+                )
+            };
+        }
+
+        private static PaginatedResult<PropertyResponse> RedactPrediction(PaginatedResult<PropertyResponse> result)
+        {
+            return new PaginatedResult<PropertyResponse>
+            {
+                Items = result.Items.Select(RedactPrediction).ToList(),
+                TotalCount = result.TotalCount,
+                Page = result.Page,
+                PageSize = result.PageSize,
+                TotalPages = result.TotalPages,
+            };
         }
     }
 

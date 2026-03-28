@@ -97,7 +97,6 @@ export function Section2Section({ property, relatedProperties }: Section2Section
   const [isChatOpen, setIsChatOpen] = useState(false)
   const [activeImageIndex, setActiveImageIndex] = useState(0)
   const remainingGalleryCount = Math.max(gallery.length - previewImages.length, 0)
-  const predictionConfidence = Math.round((property.sellPrediction?.confidence ?? 0) * 100)
 
   function openGallery(index: number) {
     setActiveImageIndex(index)
@@ -389,35 +388,6 @@ export function Section2Section({ property, relatedProperties }: Section2Section
 
         <aside className="w-full lg:w-96">
           <div className="sticky top-8 space-y-6">
-            <div className="border-2 border-accent/20 bg-accent/5 p-8">
-              <p className="text-xs font-bold uppercase tracking-[0.22em] text-accent">
-                {"ML Sell-Time Forecast"}
-              </p>
-              <p className="mt-3 text-4xl font-900 text-primary">
-                {`${property.sellPrediction?.predictedDays ?? 0} days`}
-              </p>
-              <p className="mt-2 text-sm leading-6 text-slate-600">
-                {property.sellPrediction?.basis ?? "Forecast available once enough history exists."}
-              </p>
-              <div className="mt-4 grid grid-cols-2 gap-3 border-t border-primary/10 pt-4">
-                <div>
-                  <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">
-                    {"Confidence"}
-                  </p>
-                  <p className="mt-1 text-sm font-semibold text-slate-900">
-                    {`${predictionConfidence}%`}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">
-                    {"History Used"}
-                  </p>
-                  <p className="mt-1 text-sm font-semibold text-slate-900">
-                    {`${property.sellPrediction?.trainingSampleSize ?? 0} closed listings`}
-                  </p>
-                </div>
-              </div>
-            </div>
             <div className="border-2 border-primary bg-white p-8">
               <h3 className="mb-6 border-b border-primary/10 pb-4 text-center text-lg font-800 uppercase text-primary">
                 {"Inquire About Listing"}

@@ -239,19 +239,29 @@ export type MarketingSettings = {
 }
 
 export type AgencyIntegrationStatus = {
-  hasTwilioConfig: boolean
-  twilioUpdatedAt?: string | null
+  hasCommunicationConfig: boolean
+  communicationUpdatedAt?: string | null
+  communicationProviderName?: string | null
   hasAiProviderConfig: boolean
   aiProviderUpdatedAt?: string | null
+  aiProviderName?: string | null
   hasSmtpConfig: boolean
   smtpUpdatedAt?: string | null
+  smtpProviderName?: string | null
+  mailboxSyncEnabled: boolean
+  mailboxSyncIntervalMinutes?: number | null
   updatedAt?: string | null
 }
 
-export type TwilioIntegrationWriteInput = {
-  accountSid: string
+export type CommunicationProviderWriteInput = {
+  providerName: string
+  accountId: string
   authToken: string
   fromNumber: string
+  baseUrl?: string | null
+  voiceWebhookUrl?: string | null
+  supportsSms: boolean
+  supportsVoice: boolean
 }
 
 export type AiProviderIntegrationWriteInput = {
@@ -262,6 +272,7 @@ export type AiProviderIntegrationWriteInput = {
 }
 
 export type SmtpIntegrationWriteInput = {
+  providerName: string
   host: string
   port: number
   username: string
@@ -269,16 +280,27 @@ export type SmtpIntegrationWriteInput = {
   fromEmail: string
   fromName?: string | null
   useSsl: boolean
+  enableInboxSync?: boolean
+  imapHost?: string | null
+  imapPort?: number
+  imapUsername?: string | null
+  imapPassword?: string | null
+  imapUseSsl?: boolean
+  imapFolder?: string | null
+  syncIntervalMinutes?: number
+  maxMessagesPerSync?: number
 }
 
 export type UpdateAgencyIntegrationSettingsInput = {
-  twilio?: TwilioIntegrationWriteInput
+  communication?: CommunicationProviderWriteInput
   aiProvider?: AiProviderIntegrationWriteInput
   smtp?: SmtpIntegrationWriteInput
-  clearTwilio?: boolean
+  clearCommunication?: boolean
   clearAiProvider?: boolean
   clearSmtp?: boolean
 }
+
+export type TwilioIntegrationWriteInput = CommunicationProviderWriteInput
 
 export type AgencyCommunicationChannel = "Email" | "SMS"
 
@@ -623,6 +645,86 @@ export type LeadItem = {
   linkedDealTitle?: string | null
 }
 
+export type LeadHistoryKind =
+  | "Note"
+  | "Email"
+  | "Sms"
+  | "Call"
+  | "PropertyChat"
+  | "ContactForm"
+  | "MailInbox"
+  | "System"
+
+export type LeadHistoryDirection = "Incoming" | "Outgoing" | "Internal" | "Scheduled" | "System"
+
+export type LeadHistoryStatus =
+  | "Logged"
+  | "Scheduled"
+  | "Sent"
+  | "Received"
+  | "Completed"
+  | "Failed"
+
+export type LeadHistoryEntry = {
+  id: number
+  leadId: number
+  kind: LeadHistoryKind
+  direction: LeadHistoryDirection
+  status: LeadHistoryStatus
+  title: string
+  summary: string
+  body: string
+  provider: string
+  createdBy: string
+  scheduledAt?: string | null
+  occurredAt?: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export type CreateLeadHistoryEntryInput = {
+  leadId: number
+  kind: LeadHistoryKind
+  direction: LeadHistoryDirection
+  status: LeadHistoryStatus
+  title: string
+  summary: string
+  body: string
+  provider?: string | null
+  createdBy?: string | null
+  scheduledAt?: string | null
+  occurredAt?: string | null
+}
+
+export type LeadOutreachDispatchInput = {
+  leadId: number
+  kind: Extract<LeadHistoryKind, "Email" | "Sms" | "Call">
+  title: string
+  message: string
+  createdBy?: string | null
+  scheduledAt?: string | null
+}
+
+export type LeadOutreachScheduleItem = {
+  id: number
+  leadId: number
+  leadName: string
+  leadEmail: string
+  leadPhone: string
+  kind: Extract<LeadHistoryKind, "Email" | "Sms" | "Call">
+  direction: LeadHistoryDirection
+  status: LeadHistoryStatus
+  title: string
+  summary: string
+  body: string
+  provider: string
+  createdBy: string
+  scheduledAt?: string | null
+  occurredAt?: string | null
+  createdAt: string
+  updatedAt: string
+}
+
 export type DealStage =
   | "OfferMade"
   | "OfferAccepted"
@@ -733,4 +835,23 @@ export type MailInboxItem = {
   leadId?: number | null
   createdAt: string
   updatedAt: string
+}
+
+export type MailboxSyncStatus = {
+  isConfigured: boolean
+  syncEnabled: boolean
+  syncIntervalMinutes?: number | null
+  hasAiProviderConfig: boolean
+  isRunning: boolean
+  lastTrigger: string
+  lastStartedAt?: string | null
+  lastCompletedAt?: string | null
+  lastSucceededAt?: string | null
+  nextRunAt?: string | null
+  lastImportedCount: number
+  lastMatchedLeadCount: number
+  lastCreatedLeadCount: number
+  lastSkippedCount: number
+  lastError?: string | null
+  statusMessage: string
 }

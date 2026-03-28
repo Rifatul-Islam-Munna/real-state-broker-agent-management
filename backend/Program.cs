@@ -29,6 +29,9 @@ builder.Host.UseSerilog();
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 builder.Services.AddDataProtection();
+builder.Services.AddHttpClient();
+builder.Services.AddScoped<AgencyIntegrationConnectionValidator>();
+builder.Services.AddSingleton<MailboxSyncCoordinator>();
 
 builder.Services.AddDbContext<AppDbContext>(opts =>
     opts.UseNpgsql(builder.Configuration.GetConnectionString("Default")
@@ -99,6 +102,8 @@ builder.Services.Scan(scan => scan
 builder.Services.Configure<Microsoft.AspNetCore.Http.Json.JsonOptions>(o =>
     o.SerializerOptions.Converters.Add(new JsonStringEnumConverter())
 );
+builder.Services.AddHostedService<MailInboxSyncBackgroundService>();
+builder.Services.AddHostedService<LeadOutreachBackgroundService>();
 
 if (!string.IsNullOrWhiteSpace(minioEndpoint) && !string.IsNullOrWhiteSpace(minioBucketName))
 {
