@@ -20,6 +20,24 @@ namespace Services
         public DateTime? ScheduledAt { get; set; }
     }
 
+    public enum LeadOutreachAudienceType
+    {
+        LeadStage,
+        DealStage
+    }
+
+    public class LeadOutreachBulkDispatchRequest
+    {
+        public LeadOutreachAudienceType AudienceType { get; set; } = LeadOutreachAudienceType.LeadStage;
+        public LeadStage? LeadStage { get; set; }
+        public DealStage? DealStage { get; set; }
+        public LeadHistoryKind Kind { get; set; } = LeadHistoryKind.Email;
+        public string Title { get; set; } = string.Empty;
+        public string Message { get; set; } = string.Empty;
+        public string CreatedBy { get; set; } = string.Empty;
+        public DateTime? ScheduledAt { get; set; }
+    }
+
     public record LeadOutreachScheduleResponse(
         int Id,
         int LeadId,
@@ -40,12 +58,33 @@ namespace Services
         DateTime UpdatedAt
     );
 
+    public record LeadOutreachBulkDispatchResponse(
+        LeadOutreachAudienceType AudienceType,
+        string AudienceLabel,
+        int MatchedCount,
+        int SavedCount,
+        int SkippedCount,
+        int FailedCount,
+        List<string> Failures
+    );
+
     internal sealed record LeadOutreachDeliveryResult(
         LeadHistoryStatus Status,
         string Provider,
         string Summary,
         string? ExternalReference = null,
         string? ErrorMessage = null
+    );
+
+    internal sealed record LeadOutreachAudienceTarget(
+        int LeadId,
+        string LeadName
+    );
+
+    internal sealed record LeadOutreachAudienceResolution(
+        string AudienceLabel,
+        int SkippedCount,
+        List<LeadOutreachAudienceTarget> Targets
     );
 
     public class LeadOutreachService
@@ -156,31 +195,8 @@ namespace Services
             LeadHistoryStatus? status = null,
             CancellationToken ct = default)
         {
-            var query = _db.LeadHistoryEntries
+            var historyQuery = _db.LeadHistoryEntries
                 .AsNoTracking()
-                .Join(
-                    _db.Leads.AsNoTracking(),
-                    history => history.LeadId,
-                    lead => lead.Id,
-                    (history, lead) => new LeadOutreachScheduleResponse(
-                        history.Id,
-                        lead.Id,
-                        lead.Name,
-                        lead.Email,
-                        lead.Phone,
-                        history.Kind,
-                        history.Direction,
-                        history.Status,
-                        history.Title,
-                        history.Summary,
-                        history.Body,
-                        history.Provider,
-                        history.CreatedBy,
-                        history.ScheduledAt,
-                        history.OccurredAt,
-                        history.CreatedAt,
-                        history.UpdatedAt
-                    ))
                 .Where(item =>
                     (item.Kind == LeadHistoryKind.Email ||
                      item.Kind == LeadHistoryKind.Sms ||
@@ -189,24 +205,102 @@ namespace Services
 
             if (leadId.HasValue)
             {
-                query = query.Where(item => item.LeadId == leadId.Value);
+                historyQuery = historyQuery.Where(item => item.LeadId == leadId.Value);
             }
 
             if (kind.HasValue)
             {
-                query = query.Where(item => item.Kind == kind.Value);
+                historyQuery = historyQuery.Where(item => item.Kind == kind.Value);
             }
 
             if (status.HasValue)
             {
-                query = query.Where(item => item.Status == status.Value);
+                historyQuery = historyQuery.Where(item => item.Status == status.Value);
             }
 
-            return await query
-                .OrderBy(item => item.Status == LeadHistoryStatus.Scheduled ? 0 : 1)
-                .ThenBy(item => item.ScheduledAt ?? item.CreatedAt)
-                .ThenBy(item => item.Id)
+            return await historyQuery
+                .Join(
+                    _db.Leads.AsNoTracking(),
+                    history => history.LeadId,
+                    lead => lead.Id,
+                    (history, lead) => new { History = history, Lead = lead })
+                .OrderBy(item => item.History.Status == LeadHistoryStatus.Scheduled ? 0 : 1)
+                .ThenBy(item => item.History.ScheduledAt ?? item.History.CreatedAt)
+                .ThenBy(item => item.History.Id)
+                .Select(item => new LeadOutreachScheduleResponse(
+                    item.History.Id,
+                    item.Lead.Id,
+                    item.Lead.Name ?? string.Empty,
+                    item.Lead.Email ?? string.Empty,
+                    item.Lead.Phone ?? string.Empty,
+                    item.History.Kind,
+                    item.History.Direction,
+                    item.History.Status,
+                    item.History.Title ?? string.Empty,
+                    item.History.Summary ?? string.Empty,
+                    item.History.Body ?? string.Empty,
+                    item.History.Provider ?? string.Empty,
+                    item.History.CreatedBy ?? string.Empty,
+                    item.History.ScheduledAt,
+                    item.History.OccurredAt,
+                    item.History.CreatedAt,
+                    item.History.UpdatedAt
+                ))
                 .ToListAsync(ct);
+        }
+
+        public async Task<LeadOutreachBulkDispatchResponse> DispatchBulkAsync(
+            LeadOutreachBulkDispatchRequest request,
+            CancellationToken ct = default)
+        {
+            ValidateBulkDispatchRequest(request);
+
+            var resolution = await ResolveAudienceAsync(request, ct);
+            if (resolution.Targets.Count == 0)
+            {
+                throw new ArgumentException("No matching leads were found for the selected audience.");
+            }
+
+            var failures = new List<string>();
+            var savedCount = 0;
+
+            foreach (var target in resolution.Targets)
+            {
+                try
+                {
+                    var response = await DispatchAsync(new LeadOutreachDispatchRequest
+                    {
+                        CreatedBy = request.CreatedBy,
+                        Kind = request.Kind,
+                        LeadId = target.LeadId,
+                        Message = request.Message,
+                        ScheduledAt = request.ScheduledAt,
+                        Title = request.Title,
+                    }, ct);
+
+                    if (response.Status == LeadHistoryStatus.Failed)
+                    {
+                        failures.Add($"{target.LeadName}: {response.Summary}");
+                        continue;
+                    }
+
+                    savedCount++;
+                }
+                catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
+                {
+                    failures.Add($"{target.LeadName}: {ex.Message}");
+                }
+            }
+
+            return new LeadOutreachBulkDispatchResponse(
+                request.AudienceType,
+                resolution.AudienceLabel,
+                resolution.Targets.Count,
+                savedCount,
+                resolution.SkippedCount,
+                failures.Count,
+                failures
+            );
         }
 
         public async Task ProcessDueScheduledAsync(CancellationToken ct = default)
@@ -681,6 +775,112 @@ namespace Services
             {
                 throw new ArgumentException("Email subject is required.");
             }
+        }
+
+        private static void ValidateBulkDispatchRequest(LeadOutreachBulkDispatchRequest request)
+        {
+            if (request.AudienceType == LeadOutreachAudienceType.LeadStage && !request.LeadStage.HasValue)
+            {
+                throw new ArgumentException("Choose a lead stage before scheduling bulk outreach.");
+            }
+
+            if (request.AudienceType == LeadOutreachAudienceType.DealStage && !request.DealStage.HasValue)
+            {
+                throw new ArgumentException("Choose a deal stage before scheduling bulk outreach.");
+            }
+
+            ValidateDispatchRequest(new LeadOutreachDispatchRequest
+            {
+                Kind = request.Kind,
+                LeadId = 1,
+                Message = request.Message,
+                ScheduledAt = request.ScheduledAt,
+                Title = request.Title,
+            });
+        }
+
+        private async Task<LeadOutreachAudienceResolution> ResolveAudienceAsync(
+            LeadOutreachBulkDispatchRequest request,
+            CancellationToken ct)
+        {
+            return request.AudienceType switch
+            {
+                LeadOutreachAudienceType.LeadStage => await ResolveLeadStageAudienceAsync(request.LeadStage!.Value, ct),
+                LeadOutreachAudienceType.DealStage => await ResolveDealStageAudienceAsync(request.DealStage!.Value, ct),
+                _ => throw new ArgumentException("Unsupported bulk outreach audience type.")
+            };
+        }
+
+        private async Task<LeadOutreachAudienceResolution> ResolveLeadStageAudienceAsync(
+            LeadStage leadStage,
+            CancellationToken ct)
+        {
+            var targets = await _db.Leads
+                .AsNoTracking()
+                .Where(item => item.Stage == leadStage)
+                .OrderByDescending(item => item.LastActivityAt)
+                .ThenBy(item => item.Id)
+                .Select(item => new LeadOutreachAudienceTarget(
+                    item.Id,
+                    string.IsNullOrWhiteSpace(item.Name) ? $"Lead #{item.Id}" : item.Name))
+                .ToListAsync(ct);
+
+            return new LeadOutreachAudienceResolution(
+                FormatEnumLabel(leadStage),
+                0,
+                targets
+            );
+        }
+
+        private async Task<LeadOutreachAudienceResolution> ResolveDealStageAudienceAsync(
+            DealStage dealStage,
+            CancellationToken ct)
+        {
+            var deals = await _db.DealPipelines
+                .AsNoTracking()
+                .Where(item => item.Stage == dealStage)
+                .OrderByDescending(item => item.UpdatedAt)
+                .ThenBy(item => item.Id)
+                .Select(item => new
+                {
+                    item.Id,
+                    item.SourceLeadId,
+                })
+                .ToListAsync(ct);
+
+            var distinctLeadIds = deals
+                .Where(item => item.SourceLeadId.HasValue)
+                .Select(item => item.SourceLeadId!.Value)
+                .Distinct()
+                .ToList();
+
+            var targets = await _db.Leads
+                .AsNoTracking()
+                .Where(item => distinctLeadIds.Contains(item.Id))
+                .OrderByDescending(item => item.LastActivityAt)
+                .ThenBy(item => item.Id)
+                .Select(item => new LeadOutreachAudienceTarget(
+                    item.Id,
+                    string.IsNullOrWhiteSpace(item.Name) ? $"Lead #{item.Id}" : item.Name))
+                .ToListAsync(ct);
+
+            var skippedCount = deals.Count - targets.Count;
+
+            return new LeadOutreachAudienceResolution(
+                FormatEnumLabel(dealStage),
+                skippedCount,
+                targets
+            );
+        }
+
+        private static string FormatEnumLabel<TEnum>(TEnum value)
+            where TEnum : struct, Enum
+        {
+            var text = value.ToString();
+            return string.Concat(text.Select((character, index) =>
+                index > 0 && char.IsUpper(character) && !char.IsUpper(text[index - 1])
+                    ? $" {character}"
+                    : character.ToString()));
         }
 
         private static MailKit.Security.SecureSocketOptions ResolveSmtpSecureSocketOptions(int port, bool useSsl)

@@ -140,6 +140,11 @@ export const defaultHomePageSettings: HomePageSettings = {
       objectName: null,
     },
   },
+  blog: {
+    eyebrow: "Knowledge Base",
+    title: "Market Insights & News",
+    buttonLabel: "View All Articles",
+  },
   updatedAt: "",
 }
 
@@ -181,6 +186,7 @@ export function cloneHomePageSettings(settings: HomePageSettings) {
       quote: settings.testimonial.quote,
       role: settings.testimonial.role,
     },
+    blog: { ...settings.blog },
     updatedAt: settings.updatedAt,
     whyChooseUs: {
       description: settings.whyChooseUs.description,

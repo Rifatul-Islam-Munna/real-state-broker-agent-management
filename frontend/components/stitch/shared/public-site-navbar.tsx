@@ -7,7 +7,6 @@ import { AppIcon } from "@/components/ui/app-icon"
 import {
   marketInsightsBlogPageMeta,
   publicContactUsPageMeta,
-  sellerListYourPropertyPageMeta,
 } from "@/data/page-metadata/public"
 import { getSessionUser } from "@/lib/auth-actions"
 import { getPortalHomePath } from "@/lib/portal-paths"
@@ -16,15 +15,7 @@ import { getPublicAgencySettings } from "@/lib/public-real-estate-data"
 const navItems = [
   {
     href: "/property-search",
-    label: "Buy",
-  },
-  {
-    href: "/property-search",
-    label: "Rent",
-  },
-  {
-    href: sellerListYourPropertyPageMeta.routePath,
-    label: "Sell",
+    label: "All Property",
   },
   {
     href: "/agents",

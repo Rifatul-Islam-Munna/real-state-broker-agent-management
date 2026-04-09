@@ -2,21 +2,12 @@ import Link from "next/link"
 
 import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { publicContactUsPageMeta } from "@/data/page-metadata/public"
-import { sellerListYourPropertyPageMeta } from "@/data/page-metadata/public"
 import { AppIcon } from "@/components/ui/app-icon"
 
 const navItems = [
   {
     href: "/property-search",
-    label: "Buy",
-  },
-  {
-    href: "/property-search",
-    label: "Rent",
-  },
-  {
-    href: sellerListYourPropertyPageMeta.routePath,
-    label: "Sell",
+    label: "All Property",
   },
   {
     href: "/agents",

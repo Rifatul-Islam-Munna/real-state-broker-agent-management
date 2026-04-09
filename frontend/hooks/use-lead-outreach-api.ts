@@ -6,6 +6,8 @@ import { useQueryWrapper } from "@/api-hooks/react-query-wrapper"
 import { useCommonMutationApi } from "@/api-hooks/use-api-mutation"
 import type {
   AgencyCommunicationTemplateItem,
+  LeadOutreachBulkDispatchInput,
+  LeadOutreachBulkDispatchResult,
   LeadHistoryEntry,
   LeadOutreachDispatchInput,
   LeadOutreachScheduleItem,
@@ -61,6 +63,17 @@ export function useDispatchLeadOutreach() {
     onSuccess: () => void invalidate(),
     successMessage: "Lead outreach saved",
     url: "/lead-outreach",
+  })
+}
+
+export function useDispatchBulkLeadOutreach() {
+  const invalidate = useInvalidate(["lead-history", "lead-outreach-schedule", "lead", "leads", "deals"])
+
+  return useCommonMutationApi<LeadOutreachBulkDispatchResult, LeadOutreachBulkDispatchInput>({
+    method: "POST",
+    onSuccess: () => void invalidate(),
+    successMessage: "Bulk outreach saved",
+    url: "/lead-outreach/bulk",
   })
 }
 

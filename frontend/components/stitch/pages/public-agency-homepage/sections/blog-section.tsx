@@ -4,8 +4,8 @@
 
 import Link from "next/link"
 
+import type { HomePageBlogSection } from "@/@types/real-estate-api"
 import { usePublicBlogPosts } from "@/hooks/use-real-estate-api"
-import { publicBlogHomeSectionContent } from "@/lib/public-blog-content"
 
 function formatBlogDate(value: string) {
   return new Intl.DateTimeFormat("en-US", {
@@ -15,7 +15,11 @@ function formatBlogDate(value: string) {
   }).format(new Date(value))
 }
 
-export function BlogSection() {
+type BlogSectionProps = {
+  content: HomePageBlogSection
+}
+
+export function BlogSection({ content }: BlogSectionProps) {
   const blogPostsQuery = usePublicBlogPosts({
     page: 1,
     pageSize: 6,
@@ -30,17 +34,17 @@ export function BlogSection() {
         <div className="mb-16 flex flex-col gap-5 text-center md:flex-row md:items-end md:justify-between md:text-left">
           <div>
             <span className="text-accent font-bold tracking-widest uppercase text-xs">
-              {publicBlogHomeSectionContent.eyebrow}
+              {content.eyebrow}
             </span>
             <h2 className="text-4xl font-black text-primary mt-2">
-              {publicBlogHomeSectionContent.title}
+              {content.title}
             </h2>
           </div>
           <Link
             className="inline-flex items-center justify-center border-2 border-primary px-6 py-3 text-xs font-black uppercase tracking-[0.22em] text-primary transition-colors hover:bg-primary hover:text-white"
             href="/blog"
           >
-            {publicBlogHomeSectionContent.buttonLabel}
+            {content.buttonLabel}
           </Link>
         </div>
         {isLoading ? (

@@ -152,6 +152,10 @@ export type HomePageTestimonialSection = {
   avatarImage: HomePageImageAsset
 }
 
+export type HomePageBlogSection = HomePageSectionIntro & {
+  buttonLabel: string
+}
+
 export type HomePageSettings = {
   hero: HomePageHeroSection
   featuredListings: HomePageSectionIntro
@@ -160,6 +164,7 @@ export type HomePageSettings = {
   services: HomePageServiceCard[]
   team: HomePageTeamSection
   testimonial: HomePageTestimonialSection
+  blog: HomePageBlogSection
   updatedAt: string
 }
 
@@ -703,6 +708,29 @@ export type LeadOutreachDispatchInput = {
   message: string
   createdBy?: string | null
   scheduledAt?: string | null
+}
+
+export type LeadOutreachAudienceType = "LeadStage" | "DealStage"
+
+export type LeadOutreachBulkDispatchInput = {
+  audienceType: LeadOutreachAudienceType
+  leadStage?: LeadStage | null
+  dealStage?: DealStage | null
+  kind: Extract<LeadHistoryKind, "Email" | "Sms" | "Call">
+  title: string
+  message: string
+  createdBy?: string | null
+  scheduledAt?: string | null
+}
+
+export type LeadOutreachBulkDispatchResult = {
+  audienceType: LeadOutreachAudienceType
+  audienceLabel: string
+  matchedCount: number
+  savedCount: number
+  skippedCount: number
+  failedCount: number
+  failures: string[]
 }
 
 export type LeadOutreachScheduleItem = {

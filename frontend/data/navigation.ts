@@ -5,9 +5,19 @@ export const adminNavigation = [
     icon: "dashboard",
   },
   {
+    href: "/admin/homepage",
+    label: "Homepage",
+    icon: "home",
+  },
+  {
     href: "/admin/property-management",
     label: "Properties",
     icon: "domain",
+  },
+  {
+    href: "/admin/blog",
+    label: "Blog",
+    icon: "article",
   },
   {
     href: "/admin/deal-pipeline-reports",

@@ -361,7 +361,7 @@ export function HomePageManagementPage() {
               {"Live Sections"}
             </p>
             <p className="mt-3 text-2xl font-black text-slate-900">
-              {"7 Editable Blocks"}
+              {"8 Editable Blocks"}
             </p>
           </article>
         </section>
@@ -909,6 +909,44 @@ export function HomePageManagementPage() {
             uploadPath="homepage/testimonial"
             value={formValues.testimonial.avatarImage}
           />
+        </SectionCard>
+
+        <SectionCard
+          description="These controls update the blog section heading and button while the article cards still load from the live blog API."
+          title="Blog Section"
+        >
+          <div className="grid gap-6 xl:grid-cols-3">
+            <Field
+              label="Eyebrow"
+              onChange={(value) =>
+                updateSettings((current) => ({
+                  ...current,
+                  blog: { ...current.blog, eyebrow: value },
+                }))}
+              placeholder="Knowledge Base"
+              value={formValues.blog.eyebrow}
+            />
+            <Field
+              label="Title"
+              onChange={(value) =>
+                updateSettings((current) => ({
+                  ...current,
+                  blog: { ...current.blog, title: value },
+                }))}
+              placeholder="Market Insights & News"
+              value={formValues.blog.title}
+            />
+            <Field
+              label="Button Label"
+              onChange={(value) =>
+                updateSettings((current) => ({
+                  ...current,
+                  blog: { ...current.blog, buttonLabel: value },
+                }))}
+              placeholder="View All Articles"
+              value={formValues.blog.buttonLabel}
+            />
+          </div>
         </SectionCard>
       </main>
     </div>

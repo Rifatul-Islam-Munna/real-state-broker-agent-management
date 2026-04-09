@@ -70,6 +70,39 @@ namespace Endpoints
         }
     }
 
+    public class DispatchBulkLeadOutreachEndpoint : Endpoint<LeadOutreachBulkDispatchRequest, LeadOutreachBulkDispatchResponse>
+    {
+        public required AgentRouteAccessService AgentRouteAccessService { get; set; }
+        public required LeadOutreachService LeadOutreachService { get; set; }
+
+        public override void Configure()
+        {
+            Post("/lead-outreach/bulk");
+            Roles("Admin", "Agent");
+            Summary(s => s.Summary = "Send or schedule lead outreach in bulk by lead or deal stage");
+        }
+
+        public override async Task HandleAsync(LeadOutreachBulkDispatchRequest req, CancellationToken ct)
+        {
+            try
+            {
+                await AgentRouteAccessService.EnsureCanAccessAsync(HttpContext.User, AgentRoutePermissions.Lead, ct);
+                var result = await LeadOutreachService.DispatchBulkAsync(req, ct);
+                await Send.OkAsync(result, ct);
+            }
+            catch (ArgumentException ex)
+            {
+                AddError(ex.Message);
+                await Send.ErrorsAsync(400, ct);
+            }
+            catch (InvalidOperationException ex)
+            {
+                AddError(ex.Message);
+                await Send.ErrorsAsync(404, ct);
+            }
+        }
+    }
+
     public class LeadCallScriptEndpoint : Endpoint<LeadCallScriptEndpoint.Request>
     {
         public class Request

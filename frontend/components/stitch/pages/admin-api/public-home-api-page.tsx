@@ -36,7 +36,7 @@ export async function PublicHomeApiPage() {
       <ServicesSection items={homepageSettings.services} />
       <MeetTheTeamSection agents={publicAgents} intro={homepageSettings.team} />
       <TestimonialsSection content={homepageSettings.testimonial} />
-      <BlogSection />
+      <BlogSection content={homepageSettings.blog} />
       <NewsletterFooterSection profile={publicAgencySettings.profile} />
     </div>
   )
