@@ -252,6 +252,8 @@ namespace Services
                 throw new ArgumentException($"Mailbox folder '{folderName}' was not found.");
             }
 
+            await folder.OpenAsync(FolderAccess.ReadWrite, ct).WaitAsync(DefaultTimeout, ct);
+            await folder.CloseAsync(false, ct).WaitAsync(DefaultTimeout, ct);
             await client.DisconnectAsync(true, ct).WaitAsync(DefaultTimeout, ct);
         }
 

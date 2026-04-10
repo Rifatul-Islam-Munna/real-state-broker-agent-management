@@ -3,7 +3,6 @@
 import Link from "next/link"
 
 import { AppIcon } from "@/components/ui/app-icon"
-import { Input } from "@/components/ui/input"
 import { formatCompactCurrency, formatRelativeTimeLabel } from "@/lib/admin-portal"
 import type { DashboardSummary } from "@/@types/real-estate-api"
 
@@ -121,35 +120,18 @@ export function MainContentSection({
   return (
     <main className="min-h-screen flex-1">
       <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b border-slate-200 bg-white px-8 dark:border-slate-800 dark:bg-slate-900">
-        <div className="flex w-96 items-center gap-4">
-          <div className="relative w-full">
-            <AppIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" name="search" />
-            <Input
-              className="w-full rounded-lg border-none bg-slate-100 py-2 pl-10 pr-4 text-sm focus:ring-2 focus:ring-primary dark:bg-slate-800"
-              placeholder="Search leads, deals, or properties..."
-              readOnly
-              type="text"
-              value=""
-            />
-          </div>
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.24em] text-slate-400 dark:text-slate-500">
+            {portal === "admin" ? "Admin Dashboard" : "Agent Dashboard"}
+          </p>
         </div>
-        <div className="flex items-center gap-4">
-          <button className="relative flex h-10 w-10 items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800" type="button">
-            <AppIcon className="text-slate-600 dark:text-slate-400" name="notifications" />
-            <span className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full border-2 border-white bg-accent" />
-          </button>
-          <button className="flex h-10 w-10 items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800" type="button">
-            <AppIcon className="text-slate-600 dark:text-slate-400" name="help_outline" />
-          </button>
-          <div className="mx-2 h-6 w-[1px] bg-slate-200 dark:bg-slate-800" />
-          <button className="flex items-center gap-2 rounded-lg p-1 pr-2 hover:bg-slate-100 dark:hover:bg-slate-800" type="button">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-xs font-bold text-white">
+        <div className="flex items-center gap-3 rounded-full border border-slate-200 bg-slate-50 px-2 py-1 dark:border-slate-800 dark:bg-slate-800/80">
+          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-xs font-bold text-white">
               {initials}
-            </div>
-            <span className="text-sm font-medium">
-              {currentUserName}
-            </span>
-          </button>
+          </div>
+          <span className="max-w-48 truncate pr-2 text-sm font-medium text-slate-700 dark:text-slate-200">
+            {currentUserName}
+          </span>
         </div>
       </header>
       <div className="space-y-8 p-8">

@@ -104,8 +104,8 @@ namespace Services
                     : !syncEnabled
                         ? "Inbox sync is turned off."
                         : hasAiProviderConfig
-                            ? "Inbox sync is ready."
-                            : "Inbox sync can import mail, but AI extraction is not configured for new sender matching.";
+                            ? "Inbox sync imports unread mail and marks it as read."
+                            : "Inbox sync imports unread mail and marks it as read, but AI extraction is not configured for new sender matching.";
 
                 return new MailboxSyncStatusResponse(
                     isConfigured,
@@ -309,7 +309,7 @@ namespace Services
                 ct);
 
             var folder = await GetFolderAsync(client, mailConfig.ImapFolder, ct);
-            await folder.OpenAsync(FolderAccess.ReadOnly, ct);
+            await folder.OpenAsync(FolderAccess.ReadWrite, ct);
 
             var unseenUids = await folder.SearchAsync(SearchQuery.NotSeen, ct);
             var uidsToProcess = unseenUids
@@ -325,6 +325,7 @@ namespace Services
                     string.IsNullOrWhiteSpace(inboundEmail.Subject) && string.IsNullOrWhiteSpace(inboundEmail.Body))
                 {
                     skippedCount++;
+                    await MarkMessageAsSeenAsync(folder, uid, ct);
                     continue;
                 }
 
@@ -337,6 +338,7 @@ namespace Services
                 if (exists)
                 {
                     skippedCount++;
+                    await MarkMessageAsSeenAsync(folder, uid, ct);
                     continue;
                 }
 
@@ -357,6 +359,7 @@ namespace Services
                     await SaveMailInboxItemAsync(inboundEmail, message, lead.Id, ct);
                     await _db.SaveChangesAsync(ct);
                     importedCount++;
+                    await MarkMessageAsSeenAsync(folder, uid, ct);
                     continue;
                 }
 
@@ -364,6 +367,7 @@ namespace Services
                 {
                     await SaveMailInboxItemAsync(inboundEmail, message, null, ct);
                     importedCount++;
+                    await MarkMessageAsSeenAsync(folder, uid, ct);
                     continue;
                 }
 
@@ -405,6 +409,7 @@ namespace Services
                 await SaveMailInboxItemAsync(inboundEmail, message, createdLead.Id, ct);
                 createdLeadCount++;
                 importedCount++;
+                await MarkMessageAsSeenAsync(folder, uid, ct);
             }
 
             await folder.CloseAsync(false, ct);
@@ -486,6 +491,11 @@ namespace Services
             var body = ExtractBody(message);
 
             return new MailboxInboundEmail(senderEmail, senderName, subject, body);
+        }
+
+        private static async Task MarkMessageAsSeenAsync(IMailFolder folder, UniqueId uid, CancellationToken ct)
+        {
+            await folder.AddFlagsAsync(uid, MessageFlags.Seen, true, ct);
         }
 
         private static string ExtractBody(MimeKit.MimeMessage message)

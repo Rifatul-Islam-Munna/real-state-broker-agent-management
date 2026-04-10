@@ -74,7 +74,7 @@ export function ManagedMailInboxPage() {
         <section className="border-b border-slate-200 bg-white px-4 py-5 dark:border-white/10 dark:bg-background-dark md:px-6">
           <h1 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">{"Mail Inbox"}</h1>
           <p className="mt-2 max-w-2xl text-sm text-slate-500 dark:text-slate-400">
-            {"Inbound email lands here first. Existing senders stay attached to their lead, and new property inquiries can be matched into the CRM automatically."}
+            {"Inbound email lands here first. Sync pulls unread mailbox messages, marks them as read, and can match new property inquiries into the CRM automatically."}
           </p>
           <div className="mt-5 flex flex-col gap-3 md:flex-row">
             <Input

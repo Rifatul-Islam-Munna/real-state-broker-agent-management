@@ -3,19 +3,27 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
+import { PortalBrandLink } from "@/components/stitch/shared/portal-brand-link"
 import { usePortalCurrentUser } from "@/hooks/use-real-estate-api"
 import { cn } from "@/lib/utils"
 import { getAccessibleAgentNavigation } from "@/lib/agent-route-access"
 import {
   Sidebar,
   SidebarContent,
-  SidebarFooter,
   SidebarHeader,
 } from "@/components/ui/sidebar"
 import { agentNavigation } from "@/data/navigation"
 import { AppIcon } from "@/components/ui/app-icon"
 
-export function AgentSidebar() {
+type AgentSidebarProps = {
+  agencyName: string
+  logoUrl?: string
+}
+
+export function AgentSidebar({
+  agencyName,
+  logoUrl,
+}: AgentSidebarProps) {
   const pathname = usePathname()
   const currentUserQuery = usePortalCurrentUser()
   const currentUser = currentUserQuery.data
@@ -27,39 +35,17 @@ export function AgentSidebar() {
         ? getAccessibleAgentNavigation(currentUser.agentRoutePermissions)
         : []
   const homeHref = visibleNavigation[0]?.href ?? "/agent/dashboard"
-  const routeCountLabel =
-    currentUser?.role === "Admin"
-      ? `${agentNavigation.length} Allowed Routes`
-      : `${visibleNavigation.length} Allowed Routes`
 
   return (
     <Sidebar className="border-r border-primary/10">
-      <SidebarHeader className="border-b border-white/10 bg-primary p-6 text-white">
-        <div>
-          <Link href={homeHref} className="flex items-center gap-3">
-            <div className="flex size-12 items-center justify-center rounded-2xl bg-white text-primary">
-              <AppIcon className="text-3xl" name="domain" />
-            </div>
-            <div>
-              <h1 className="text-lg font-black tracking-tight">
-                {"EstateBlue"}
-              </h1>
-              <p className="text-xs uppercase tracking-[0.24em] text-white/70">
-                {"Agent Portal"}
-              </p>
-            </div>
-          </Link>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <div className="inline-flex items-center gap-1 rounded-full bg-white/10 px-3 py-1 text-[11px] font-bold uppercase tracking-wide">
-              <AppIcon className="text-sm" name="verified" />
-              {"Active Agent"}
-            </div>
-            <div className="inline-flex items-center gap-1 rounded-full bg-accent/20 px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-white">
-              <AppIcon className="text-sm" name="tune" />
-              {routeCountLabel}
-            </div>
-          </div>
-        </div>
+      <SidebarHeader className="border-b border-white/10 bg-primary p-4 text-white">
+        <PortalBrandLink
+          agencyName={agencyName}
+          href={homeHref}
+          iconWrapperClassName="bg-white/95 p-2"
+          logoUrl={logoUrl}
+          nameClassName="text-white"
+        />
       </SidebarHeader>
 
       <SidebarContent className="bg-primary p-4 text-white">
@@ -99,22 +85,6 @@ export function AgentSidebar() {
           )}
         </nav>
       </SidebarContent>
-
-      <SidebarFooter className="border-t border-white/10 bg-primary p-4 text-white">
-        <div className="rounded-2xl bg-white/10 p-4">
-          <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-white/60">
-            {"Route Access"}
-          </p>
-          <div className="mt-3 flex items-center gap-2 text-sm font-semibold">
-            <AppIcon className="text-accent" name="verified" />
-            {"Portal navigation is filtered by admin permissions."}
-          </div>
-          <p className="mt-2 flex items-center gap-2 text-xs text-white/75">
-            <AppIcon className="text-sm" name="settings" />
-            {"Only the routes granted by admin stay visible and accessible here."}
-          </p>
-        </div>
-      </SidebarFooter>
     </Sidebar>
   )
 }

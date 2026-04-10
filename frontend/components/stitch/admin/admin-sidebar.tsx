@@ -3,11 +3,13 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
+import { PortalBrandLink } from "@/components/stitch/shared/portal-brand-link"
+import { useAgencySettings } from "@/hooks/use-real-estate-api"
+import { resolvePortalBranding } from "@/lib/portal-branding"
 import { cn } from "@/lib/utils"
 import {
   Sidebar,
   SidebarContent,
-  SidebarFooter,
   SidebarHeader,
 } from "@/components/ui/sidebar"
 import { adminNavigation } from "@/data/navigation"
@@ -15,38 +17,19 @@ import { AppIcon } from "@/components/ui/app-icon"
 
 export function AdminSidebar() {
   const pathname = usePathname()
+  const agencySettingsQuery = useAgencySettings()
+  const { agencyName, logoUrl } = resolvePortalBranding(agencySettingsQuery.data?.profile)
 
   return (
     <Sidebar className="border-r border-primary/10">
-      <SidebarHeader className="border-b border-white/10 bg-primary p-6 text-white">
-        <div>
-          <Link
-            href="/admin/dashboard"
-            className="flex items-center gap-3"
-          >
-            <div className="flex size-12 items-center justify-center rounded-2xl bg-white text-primary">
-              <AppIcon className="text-3xl" name="domain" />
-            </div>
-            <div>
-              <h1 className="text-lg font-black tracking-tight">
-                {"EstateBlue"}
-              </h1>
-              <p className="text-xs uppercase tracking-[0.24em] text-white/70">
-                {"Admin Portal"}
-              </p>
-            </div>
-          </Link>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <div className="inline-flex items-center gap-1 rounded-full bg-white/10 px-3 py-1 text-[11px] font-bold uppercase tracking-wide">
-              <AppIcon className="text-sm" name="verified" />
-              {"Verified Agency"}
-            </div>
-            <div className="inline-flex items-center gap-1 rounded-full bg-accent/20 px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-white">
-              <AppIcon className="text-sm" name="trending_up" />
-              {"Growth +12%"}
-            </div>
-          </div>
-        </div>
+      <SidebarHeader className="border-b border-white/10 bg-primary p-4 text-white">
+        <PortalBrandLink
+          agencyName={agencyName}
+          href="/admin/dashboard"
+          iconWrapperClassName="bg-white/95 p-2"
+          logoUrl={logoUrl}
+          nameClassName="text-white"
+        />
       </SidebarHeader>
 
       <SidebarContent className="bg-primary p-4 text-white">
@@ -78,22 +61,6 @@ export function AdminSidebar() {
           </ul>
         </nav>
       </SidebarContent>
-
-      <SidebarFooter className="border-t border-white/10 bg-primary p-4 text-white">
-        <div className="rounded-2xl bg-white/10 p-4">
-          <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-white/60">
-            {"Agency Health"}
-          </p>
-          <div className="mt-3 flex items-center gap-2 text-sm font-semibold">
-            <AppIcon className="text-accent" name="verified" />
-            {"All systems synced"}
-          </div>
-          <p className="mt-2 flex items-center gap-2 text-xs text-white/75">
-            <AppIcon className="text-sm" name="trending_up" />
-            {"Listings and lead activity are trending up this week."}
-          </p>
-        </div>
-      </SidebarFooter>
     </Sidebar>
   )
 }
