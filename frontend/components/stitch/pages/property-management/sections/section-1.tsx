@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
 import { PagePagination } from "@/components/stitch/shared/page-pagination"
+import type { PropertyStatus } from "@/hooks/use-real-estate-api"
 
 export type PropertyManagementFilter = "all" | "open" | "closed" | "long-open"
 
@@ -25,7 +26,7 @@ export type PropertyManagementListing = {
   listingType: "For Sale" | "For Rent"
   price: string
   agent: string
-  status: "Open" | "Closed"
+  status: PropertyStatus
   daysOnMarket: number
   predictedSellDays: number
   predictionLabel: string
@@ -88,8 +89,16 @@ const quickFilters: Array<{
 ]
 
 function getStatusClasses(listing: PropertyManagementListing) {
-  if (listing.status === "Closed") {
+  if (listing.status === "Closed" || listing.status === "Sold" || listing.status === "Rented") {
     return "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+  }
+
+  if (listing.status === "PendingApproval") {
+    return "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
+  }
+
+  if (listing.status === "Draft" || listing.status === "Unpublished") {
+    return "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
   }
 
   if (listing.daysOnMarket >= 45) {
@@ -100,8 +109,12 @@ function getStatusClasses(listing: PropertyManagementListing) {
 }
 
 function getStatusLabel(listing: PropertyManagementListing) {
-  if (listing.status === "Closed") {
-    return "Closed"
+  if (listing.status === "Closed" || listing.status === "Sold" || listing.status === "Rented") {
+    return listing.status
+  }
+
+  if (listing.status !== "Open" && listing.status !== "Active") {
+    return listing.status.replace(/([A-Z])/g, " $1").trim()
   }
 
   if (listing.daysOnMarket >= 45) {

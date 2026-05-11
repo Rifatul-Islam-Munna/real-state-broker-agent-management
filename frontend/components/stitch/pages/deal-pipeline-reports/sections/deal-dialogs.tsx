@@ -214,15 +214,19 @@ export function DealFormDialog({
     const options = new Map<string, string>()
     agentOptions.forEach((agent) => {
       if (agent.fullName) {
-        options.set(agent.fullName, agent.fullName)
+        options.set(`${agent.id}`, agent.fullName)
       }
     })
-    if (formValues.agent) {
+    if (formValues.agentId && formValues.agent) {
+      options.set(formValues.agentId, formValues.agent)
+    } else if (formValues.agent) {
       options.set(formValues.agent, formValues.agent)
     }
     return Array.from(options.entries())
-  }, [agentOptions, formValues.agent])
-  const selectedAgentLabel = formValues.agent || "Select agent"
+  }, [agentOptions, formValues.agent, formValues.agentId])
+  const selectedAgentLabel = formValues.agentId
+    ? agentOptions.find((agent) => `${agent.id}` === formValues.agentId)?.fullName ?? formValues.agent
+    : formValues.agent || "Select agent"
   const selectedTypeLabel = formValues.type
   const selectedStageLabel = formatDealStage(formValues.stage)
   const selectedLeadLabel =
@@ -283,8 +287,18 @@ export function DealFormDialog({
             {"Assigned Agent"}
             <Select
               modal={false}
-              onValueChange={(value) => updateField("agent", !value || value === emptySelectValue ? "" : value)}
-              value={formValues.agent || emptySelectValue}
+              onValueChange={(value) => {
+                if (!value || value === emptySelectValue) {
+                  updateField("agentId", "")
+                  updateField("agent", "")
+                  return
+                }
+
+                const selectedAgent = agentOptions.find((agent) => `${agent.id}` === value)
+                updateField("agentId", selectedAgent ? `${selectedAgent.id}` : "")
+                updateField("agent", selectedAgent?.fullName ?? value)
+              }}
+              value={formValues.agentId || formValues.agent || emptySelectValue}
             >
               <SelectTrigger className={formSelectClassName}>
                 <SelectValue>
@@ -305,6 +319,33 @@ export function DealFormDialog({
           <div className="flex flex-col gap-2">
             <Input className="rounded-none border-slate-200 dark:border-white/10" onChange={(event) => updateField("deadline", event.target.value)} placeholder="Deadline" value={formValues.deadline} />
             <FieldError error={errors.deadline} />
+          </div>
+          <div className="flex flex-col gap-2">
+            <Input className="rounded-none border-slate-200 dark:border-white/10" onChange={(event) => updateField("expectedClosingDate", event.target.value)} placeholder="Expected closing date" type="date" value={formValues.expectedClosingDate} />
+            <FieldError error={errors.expectedClosingDate} />
+          </div>
+          <label className="flex flex-col gap-2 text-xs font-bold uppercase tracking-wide text-slate-500">
+            {"Commission Status"}
+            <Select
+              modal={false}
+              onValueChange={(value) => updateField("commissionStatus", (value ?? "Estimated") as DealFormValues["commissionStatus"])}
+              value={formValues.commissionStatus}
+            >
+              <SelectTrigger className={formSelectClassName}>
+                <SelectValue>{formValues.commissionStatus}</SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {["NotReady", "Estimated", "ReadyToInvoice", "Invoiced", "Paid"].map((status) => (
+                  <SelectItem key={status} value={status}>
+                    {status.replace(/([A-Z])/g, " $1").trim()}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </label>
+          <div className="flex flex-col gap-2">
+            <Input className="rounded-none border-slate-200 dark:border-white/10" onChange={(event) => updateField("commissionAmount", event.target.value)} placeholder="Commission amount" value={formValues.commissionAmount} />
+            <FieldError error={errors.commissionAmount} />
           </div>
           <label className="flex flex-col gap-2 text-xs font-bold uppercase tracking-wide text-slate-500">
             {"Deal Type"}
@@ -373,6 +414,14 @@ export function DealFormDialog({
           <div className="flex flex-col gap-2 md:col-span-2">
             <Textarea className="min-h-32 rounded-none border-slate-200 dark:border-white/10" onChange={(event) => updateField("note", event.target.value)} placeholder="Deal note" value={formValues.note} />
             <FieldError error={errors.note} />
+          </div>
+          <div className="flex flex-col gap-2 md:col-span-2">
+            <Textarea className="min-h-24 rounded-none border-slate-200 dark:border-white/10" onChange={(event) => updateField("checklistItems", event.target.value)} placeholder="[ ] Document request sent&#10;[x] Viewing completed" value={formValues.checklistItems} />
+            <FieldError error={errors.checklistItems} />
+          </div>
+          <div className="flex flex-col gap-2 md:col-span-2">
+            <Textarea className="min-h-20 rounded-none border-slate-200 dark:border-white/10" onChange={(event) => updateField("commissionPayoutNote", event.target.value)} placeholder="Commission payout note" value={formValues.commissionPayoutNote} />
+            <FieldError error={errors.commissionPayoutNote} />
           </div>
           {submitError ? (
             <p className="text-sm font-semibold text-rose-600 md:col-span-2">{submitError}</p>

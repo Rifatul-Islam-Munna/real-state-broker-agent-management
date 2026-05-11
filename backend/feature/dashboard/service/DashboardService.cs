@@ -77,6 +77,10 @@ namespace Services
             var mailInbox = await db.MailInbox
                 .AsNoTracking()
                 .ToListAsync();
+            var showings = await db.ShowingBookings
+                .AsNoTracking()
+                .Include(item => item.Property)
+                .ToListAsync();
             var agents = await db.Users
                 .AsNoTracking()
                 .Where(user => user.Role == UserRole.Agent && user.DeletedAt == null)
@@ -153,9 +157,14 @@ namespace Services
             var pendingLeadFollowUps = leads.Count(item =>
                     item.Stage == LeadStage.New ||
                     item.Stage == LeadStage.Contacted ||
-                    item.Stage == LeadStage.Visit) +
+                    item.Stage == LeadStage.Visit ||
+                    (item.NextActionDate.HasValue &&
+                     item.NextActionDate.Value < now &&
+                     item.FollowUpStatus != LeadFollowUpStatus.Completed &&
+                     item.FollowUpStatus != LeadFollowUpStatus.NoActionNeeded)) +
                 contactRequests.Count(item => item.Status == ContactRequestStatus.New) +
-                mailInbox.Count(item => item.Status == MailInboxStatus.New);
+                mailInbox.Count(item => item.Status == MailInboxStatus.New) +
+                showings.Count(item => item.Status == ShowingBookingStatus.Scheduled && item.StartAt < now.AddHours(24));
 
             var alerts = new List<DashboardAlertResponse>
             {
@@ -195,6 +204,19 @@ namespace Services
                     item.Timeline,
                     MapVisitStatus(item.Stage)
                 ))
+                .Concat(showings
+                    .Where(item => item.Status == ShowingBookingStatus.Scheduled)
+                    .OrderBy(item => item.StartAt)
+                    .Take(4)
+                    .Select(item => new DashboardVisitResponse(
+                        item.Id,
+                        item.Property?.Title ?? "Showing Booking",
+                        item.ContactName,
+                        item.StartAt,
+                        item.StartAt.ToString("u"),
+                        "Scheduled")))
+                .OrderByDescending(item => item.ActivityAt)
+                .Take(4)
                 .ToList();
 
             var overview = new DashboardOverviewResponse(

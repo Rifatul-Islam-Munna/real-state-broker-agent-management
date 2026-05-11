@@ -20,7 +20,7 @@ namespace Endpoints
         public override async Task HandleAsync(Lead req, CancellationToken ct)
         {
             await AgentRouteAccessService.EnsureCanAccessAsync(HttpContext.User, AgentRoutePermissions.Lead, ct);
-            var result = await LeadService.CreateLeadAsync(req);
+            var result = await LeadService.CreateLeadAsync(req, HttpContext.User.Identity?.Name ?? "CRM");
             await Send.OkAsync(result, ct);
         }
     }
@@ -40,7 +40,7 @@ namespace Endpoints
         public override async Task HandleAsync(Lead req, CancellationToken ct)
         {
             await AgentRouteAccessService.EnsureCanAccessAsync(HttpContext.User, AgentRoutePermissions.Lead, ct);
-            var result = await LeadService.UpdateLeadAsync(req);
+            var result = await LeadService.UpdateLeadAsync(req, HttpContext.User.Identity?.Name ?? "CRM");
 
             if (result is null)
             {

@@ -115,9 +115,9 @@ export const mailInboxKindOptions: MailInboxKind[] = ["Direct", "Newsletter"]
 export function formatLeadPriority(priority: LeadPriority) {
   switch (priority) {
     case "HighPriority":
-      return "High Priority"
+      return "Hot"
     case "FollowUp":
-      return "Follow Up"
+      return "Cold"
     default:
       return "Warm"
   }

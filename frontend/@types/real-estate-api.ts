@@ -307,7 +307,7 @@ export type UpdateAgencyIntegrationSettingsInput = {
 
 export type TwilioIntegrationWriteInput = CommunicationProviderWriteInput
 
-export type AgencyCommunicationChannel = "Email" | "SMS"
+export type AgencyCommunicationChannel = "Email" | "SMS" | "WhatsApp"
 
 export type AgencySocialLinkPlatform =
   | "facebook"
@@ -571,7 +571,7 @@ export type PropertyItem = {
   propertyType: "Residential" | "Commercial"
   listingType: "ForSale" | "ForRent"
   price: string
-  status: "Open" | "Closed"
+  status: PropertyStatus
   location: string
   exactLocation: string
   bedRoom: string
@@ -583,6 +583,7 @@ export type PropertyItem = {
   imageUrls: string[]
   imageObjectNames: string[]
   keyAmenities: string[]
+  documentRepositoryItemIds: number[]
   neighborhoodInsights: NeighborhoodInsight[]
   preQuestions: PropertyPreQuestion[]
   createdAt: string
@@ -593,12 +594,23 @@ export type PropertyItem = {
   agentId?: number | null
 }
 
+export type PropertyStatus =
+  | "Open"
+  | "Closed"
+  | "Draft"
+  | "PendingApproval"
+  | "Active"
+  | "UnderOffer"
+  | "Sold"
+  | "Rented"
+  | "Unpublished"
+
 export type PropertySaveInput = {
   title: string
   propertyType: "Residential" | "Commercial"
   listingType: "ForSale" | "ForRent"
   price: string
-  status: "Open" | "Closed"
+  status: PropertyStatus
   location: string
   exactLocation: string
   bedRoom: string
@@ -610,6 +622,7 @@ export type PropertySaveInput = {
   imageUrls: string[]
   imageObjectNames: string[]
   keyAmenities: string[]
+  documentRepositoryItemIds: number[]
   neighborhoodInsights: NeighborhoodInsight[]
   preQuestions: PropertyPreQuestion[]
   agentId?: number | null
@@ -626,6 +639,7 @@ export type LeadStage =
   | "Canceled"
 
 export type LeadPriority = "HighPriority" | "Warm" | "FollowUp"
+export type LeadFollowUpStatus = "Open" | "Scheduled" | "Completed" | "NoActionNeeded"
 
 export type LeadItem = {
   id: number
@@ -638,10 +652,16 @@ export type LeadItem = {
   stage: LeadStage
   priority: LeadPriority
   agent: string
+  agentId?: number | null
+  assignedAgentName?: string | null
   source: string
   interest: string
   timeline: string
   inBoard: boolean
+  nextActionDate?: string | null
+  nextActionType: string
+  followUpStatus: LeadFollowUpStatus
+  isFollowUpOverdue: boolean
   notes: string[]
   createdAt: string
   updatedAt: string
@@ -772,14 +792,30 @@ export type DealItem = {
   client: string
   value: number
   commissionRate: number
+  commissionAmount: number
+  commissionStatus: DealCommissionStatus
+  commissionPayoutNote: string
   stage: DealStage
   deadline: string
+  expectedClosingDate?: string | null
   note: string
   agent: string
+  agentId?: number | null
+  dealOwnerName?: string | null
   sourceLeadId?: number | null
   sourceLeadName?: string | null
+  checklistItems: DealChecklistItem[]
   createdAt: string
   updatedAt: string
+}
+
+export type DealCommissionStatus = "NotReady" | "Estimated" | "ReadyToInvoice" | "Invoiced" | "Paid"
+
+export type DealChecklistItem = {
+  id?: number
+  title: string
+  isCompleted: boolean
+  sortOrder: number
 }
 
 export type ContactRequestStatus = "New" | "Reviewing" | "Converted"
@@ -882,4 +918,130 @@ export type MailboxSyncStatus = {
   lastSkippedCount: number
   lastError?: string | null
   statusMessage: string
+}
+
+export type WebsiteInquiryItem = {
+  id: string
+  kind: string
+  source: string
+  contactName: string
+  contactEmail: string
+  contactPhone: string
+  propertyTitle: string
+  assignedAgent: string
+  leadId?: number | null
+  status: string
+  summary: string
+  createdAt: string
+}
+
+export type ShowingBookingStatus = "Scheduled" | "Completed" | "Canceled" | "NoShow"
+
+export type ShowingBookingItem = {
+  id: number
+  leadId?: number | null
+  propertyId: number
+  propertyTitle: string
+  agentId?: number | null
+  assignedAgent: string
+  contactName: string
+  contactEmail: string
+  contactPhone: string
+  startAt: string
+  endAt: string
+  status: ShowingBookingStatus
+  notes: string
+  createdAt: string
+  updatedAt: string
+}
+
+export type CreateShowingBookingInput = {
+  propertyId: number
+  contactName: string
+  contactEmail: string
+  contactPhone: string
+  startAt: string
+  endAt?: string | null
+  notes: string
+}
+
+export type UpdateShowingBookingInput = {
+  id: number
+  status: ShowingBookingStatus
+  notes: string
+}
+
+export type ShowingAvailabilitySlot = {
+  startAt: string
+  endAt: string
+  isAvailable: boolean
+}
+
+export type BrokerageApprovalType = "ListingPublish" | "PriceChange"
+export type BrokerageApprovalStatus = "Pending" | "Approved" | "Rejected"
+
+export type BrokerageApprovalItem = {
+  id: number
+  type: BrokerageApprovalType
+  status: BrokerageApprovalStatus
+  propertyId: number
+  propertyTitle: string
+  oldPrice: string
+  requestedPrice: string
+  oldStatus?: PropertyStatus | null
+  requestedStatus?: PropertyStatus | null
+  requestedBy: string
+  reviewedBy: string
+  requestNote: string
+  reviewNote: string
+  createdAt: string
+  updatedAt: string
+}
+
+export type ReviewBrokerageApprovalInput = {
+  approvalId: number
+  status: Extract<BrokerageApprovalStatus, "Approved" | "Rejected">
+  reviewNote: string
+}
+
+export type LeadAssignmentRuleItem = {
+  id: number
+  area: string
+  propertyType?: PropertyItem["propertyType"] | null
+  listingType?: PropertyItem["listingType"] | null
+  agentId: number
+  agentName: string
+  priorityOrder: number
+  isActive: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export type BrokerageSourcePerformanceItem = {
+  source: string
+  leadCount: number
+  dealCount: number
+  dealValue: number
+}
+
+export type BrokerageAgentConversionItem = {
+  agentId?: number | null
+  agentName: string
+  leadCount: number
+  dealCount: number
+  conversionRate: number
+}
+
+export type BrokerageReports = {
+  leadsThisMonth: number
+  conversionByAgent: BrokerageAgentConversionItem[]
+  activeListings: number
+  soldRentedCount: number
+  sourcePerformance: BrokerageSourcePerformanceItem[]
+  overdueFollowUps: number
+  commissionSummary: {
+    estimatedCommission: number
+    paidCommission: number
+    openCommission: number
+  }
 }

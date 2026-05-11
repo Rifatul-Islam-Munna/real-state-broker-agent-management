@@ -35,7 +35,7 @@ function createEmptyPropertyForm(): PropertyFormValues {
     propertyType: "Residential",
     listingType: "ForSale",
     price: "",
-    status: "Open",
+    status: "Draft",
     location: "",
     exactLocation: "",
     bedRoom: "",
@@ -43,6 +43,7 @@ function createEmptyPropertyForm(): PropertyFormValues {
     width: "",
     description: "",
     keyAmenities: [],
+    documentRepositoryItemIds: [],
     neighborhoodInsights: [{ type: "", description: "" }],
     thumbnailUrl: "",
     thumbnailObjectName: "",
@@ -71,6 +72,7 @@ function mapPropertyToFormValues(property: PropertyItem): PropertyFormValues {
     imageUrls: property.imageUrls ?? [],
     imageObjectNames: property.imageObjectNames ?? [],
     keyAmenities: property.keyAmenities ?? [],
+    documentRepositoryItemIds: property.documentRepositoryItemIds ?? [],
     preQuestions: (property.preQuestions ?? []).map((question) => ({
       allowsFileUpload: question.allowsFileUpload ?? false,
       attachmentObjectName: question.attachmentObjectName ?? "",
@@ -103,6 +105,7 @@ function buildPropertyPayload(
     imageObjectNames: values.imageObjectNames ?? [],
     imageUrls: values.imageUrls ?? [],
     keyAmenities: values.keyAmenities ?? [],
+    documentRepositoryItemIds: values.documentRepositoryItemIds ?? [],
     listingType: values.listingType ?? "ForSale",
     location: values.location?.trim() ?? "",
     neighborhoodInsights: (values.neighborhoodInsights ?? [])
@@ -167,12 +170,7 @@ export function PropertyManagementPage() {
     pageSize: PAGE_SIZE,
     propertyType: activeType === "All" ? undefined : activeType,
     search: searchTerm || undefined,
-    status:
-      activeFilter === "open" || activeFilter === "long-open"
-        ? "Open"
-        : activeFilter === "closed"
-          ? "Closed"
-          : undefined,
+    status: undefined,
   })
 
   const createPropertyMutation = useCreateProperty()
@@ -205,7 +203,14 @@ export function PropertyManagementPage() {
           slug: property.slug ?? "",
           status: property.status ?? "Open",
         }))
-        .filter((property) => (activeFilter === "long-open" ? property.daysOnMarket >= 45 : true)),
+        .filter((property) => {
+          if (activeFilter === "open") return ["Open", "Active", "UnderOffer"].includes(property.status)
+          if (activeFilter === "closed") return ["Closed", "Sold", "Rented"].includes(property.status)
+          if (activeFilter === "long-open") {
+            return ["Open", "Active", "UnderOffer"].includes(property.status) && property.daysOnMarket >= 45
+          }
+          return true
+        }),
     [activeFilter, rawProperties],
   )
 
@@ -220,20 +225,20 @@ export function PropertyManagementPage() {
       {
         label: "Open Listings",
         icon: "verified",
-        value: rawProperties.filter((property) => (property.status ?? "Open") === "Open").length,
+        value: rawProperties.filter((property) => ["Open", "Active", "UnderOffer"].includes(property.status ?? "Open")).length,
         detail: "Visible on this page",
       },
       {
         label: "Closed Listings",
         icon: "inventory_2",
-        value: rawProperties.filter((property) => (property.status ?? "Open") === "Closed").length,
+        value: rawProperties.filter((property) => ["Closed", "Sold", "Rented"].includes(property.status ?? "Open")).length,
         detail: "Visible on this page",
       },
       {
         label: "Long Open",
         icon: "trending_up",
         value: rawProperties.filter(
-          (property) => (property.status ?? "Open") === "Open" && getDaysOnMarket(property.createdAt ?? "") >= 45,
+          (property) => ["Open", "Active", "UnderOffer"].includes(property.status ?? "Open") && getDaysOnMarket(property.createdAt ?? "") >= 45,
         ).length,
         detail: "Need follow-up now",
       },

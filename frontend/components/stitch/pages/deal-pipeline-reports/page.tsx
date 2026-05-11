@@ -23,10 +23,27 @@ const PAGE_SIZE = 10
 function buildDealPayload(values: DealFormValues, deal?: DealItem) {
   return {
     agent: values.agent?.trim() ?? "",
+    agentId: values.agentId ? Number(values.agentId) : null,
+    checklistItems: (values.checklistItems ?? "")
+      .split("\n")
+      .map((item, index) => {
+        const trimmed = item.trim()
+        const isCompleted = /^\[[xX]\]/.test(trimmed)
+        return {
+          isCompleted,
+          sortOrder: index + 1,
+          title: trimmed.replace(/^\[[ xX]\]\s*/, ""),
+        }
+      })
+      .filter((item) => item.title.length > 0),
     client: values.client?.trim() ?? "",
+    commissionAmount: parseNumberFromValue(values.commissionAmount ?? ""),
     commissionRate: parseNumberFromValue(values.commissionRate ?? "") || 3,
+    commissionStatus: values.commissionStatus ?? "Estimated",
+    commissionPayoutNote: values.commissionPayoutNote?.trim() ?? "",
     createdAt: deal?.createdAt ?? new Date().toISOString(),
     deadline: values.deadline?.trim() ?? "",
+    expectedClosingDate: values.expectedClosingDate ? new Date(values.expectedClosingDate).toISOString() : null,
     id: deal?.id ?? 0,
     note: values.note?.trim() ?? "",
     sourceLeadId: values.sourceLeadId ? Number(values.sourceLeadId) : null,
@@ -45,12 +62,18 @@ function mapDealToFormValues(deal: DealItem): DealFormValues {
     client: deal.client ?? "",
     value: `${deal.value ?? 0}`,
     commissionRate: `${deal.commissionRate ?? 0}`,
+    commissionAmount: `${deal.commissionAmount ?? ""}`,
+    commissionStatus: deal.commissionStatus ?? "Estimated",
+    commissionPayoutNote: deal.commissionPayoutNote ?? "",
     stage: deal.stage ?? "OfferMade",
     type: deal.type ?? "Residential",
     deadline: deal.deadline ?? "",
+    expectedClosingDate: deal.expectedClosingDate ? deal.expectedClosingDate.slice(0, 10) : "",
     note: deal.note ?? "",
     agent: deal.agent ?? "",
+    agentId: deal.agentId ? `${deal.agentId}` : "",
     sourceLeadId: deal.sourceLeadId ? `${deal.sourceLeadId}` : "",
+    checklistItems: (deal.checklistItems ?? []).map((item) => `${item.isCompleted ? "[x]" : "[ ]"} ${item.title}`).join("\n"),
   }
 }
 

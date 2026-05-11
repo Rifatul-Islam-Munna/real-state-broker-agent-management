@@ -61,6 +61,7 @@ namespace Services
         List<string> KeyAmenities,
         List<NeighborhoodInsight> NeighborhoodInsights,
         List<PropertyPreQuestionResponse> PreQuestions,
+        List<int> DocumentRepositoryItemIds,
         int? AgentId,
         AgentSummary? Agent,
         DateTime CreatedAt,
@@ -79,22 +80,59 @@ namespace Services
     {
         private readonly AppDbContext _db;
         private readonly PropertySalesPredictionService _propertySalesPredictionService;
+        private readonly BrokerageApprovalService _approvalService;
+        private readonly BrokerageAuditService _auditService;
 
-        public PropertyService(AppDbContext db, PropertySalesPredictionService propertySalesPredictionService)
+        public PropertyService(
+            AppDbContext db,
+            PropertySalesPredictionService propertySalesPredictionService,
+            BrokerageApprovalService approvalService,
+            BrokerageAuditService auditService)
         {
             _db = db;
             _propertySalesPredictionService = propertySalesPredictionService;
+            _approvalService = approvalService;
+            _auditService = auditService;
         }
 
-        public async Task<PropertyResponse> CreatePropertyAsync(Property property)
+        public async Task<PropertyResponse> CreatePropertyAsync(
+            Property property,
+            string actor = "CRM",
+            bool isAdmin = true)
         {
             NormalizeProperty(property, isNew: true);
+            var requestedLiveStatus = ResolveRequestedLiveStatus(property.Status);
+            if (!isAdmin && requestedLiveStatus.HasValue)
+            {
+                property.Status = PropertyStatus.PendingApproval;
+            }
+
             await _db.Properties.AddAsync(property);
+            await _db.SaveChangesAsync();
+
+            if (!isAdmin && requestedLiveStatus.HasValue)
+            {
+                await _approvalService.CreateAsync(
+                    BrokerageApprovalType.ListingPublish,
+                    property,
+                    property.Price,
+                    property.Price,
+                    PropertyStatus.Draft,
+                    requestedLiveStatus.Value,
+                    actor,
+                    "Listing publish requested.");
+                await _db.SaveChangesAsync();
+            }
+
+            _auditService.AddLog("Property", property.Id, "Create", null, null, property.Title, actor);
             await _db.SaveChangesAsync();
             return await GetRequiredPropertyResponseAsync(property.Id);
         }
 
-        public async Task<PropertyResponse?> UpdatePropertyAsync(Property property)
+        public async Task<PropertyResponse?> UpdatePropertyAsync(
+            Property property,
+            string actor = "CRM",
+            bool isAdmin = true)
         {
             var existing = await _db.Properties
                 .Include(item => item.NeighborhoodInsights)
@@ -107,11 +145,28 @@ namespace Services
                 return null;
             }
 
+            var oldPrice = existing.Price;
+            var oldStatus = existing.Status;
+            var requestedStatus = property.Status;
+            var requestedPrice = property.Price ?? string.Empty;
+            var needsPriceApproval =
+                !isAdmin &&
+                IsLiveStatus(existing.Status) &&
+                !string.Equals(oldPrice, requestedPrice, StringComparison.Ordinal);
+            var requestedLiveStatus = ResolveRequestedLiveStatus(requestedStatus);
+            var needsPublishApproval =
+                !isAdmin &&
+                requestedLiveStatus.HasValue &&
+                !IsLiveStatus(existing.Status);
+
             existing.Title = property.Title ?? string.Empty;
             existing.PropertyType = property.PropertyType;
             existing.ListingType = property.ListingType;
-            existing.Price = property.Price ?? string.Empty;
-            existing.Status = property.Status;
+            if (!needsPriceApproval)
+            {
+                existing.Price = requestedPrice;
+            }
+            existing.Status = needsPublishApproval ? PropertyStatus.PendingApproval : requestedStatus;
             existing.Location = (property.Location ?? string.Empty).Trim();
             existing.ExactLocation = (property.ExactLocation ?? string.Empty).Trim();
             existing.BedRoom = (property.BedRoom ?? string.Empty).Trim();
@@ -123,15 +178,52 @@ namespace Services
             existing.ImageUrls = NormalizeStringList(property.ImageUrls);
             existing.ImageObjectNames = NormalizeStringList(property.ImageObjectNames);
             existing.KeyAmenities = NormalizeAmenities(property.KeyAmenities);
+            existing.DocumentRepositoryItemIds = NormalizeDocumentIds(property.DocumentRepositoryItemIds);
             existing.AgentId = property.AgentId;
             existing.UpdatedAt = DateTime.UtcNow;
-            existing.ClosedAt = ResolveClosedAt(existing.ClosedAt, property.Status);
+            existing.ClosedAt = ResolveClosedAt(existing.ClosedAt, existing.Status);
 
             _db.NeighborhoodInsights.RemoveRange(existing.NeighborhoodInsights);
             existing.NeighborhoodInsights = NormalizeNeighborhoodInsights(property.NeighborhoodInsights);
 
             _db.PropertyPreQuestions.RemoveRange(existing.PreQuestions);
             existing.PreQuestions = NormalizePreQuestions(property.PreQuestions);
+
+            if (needsPriceApproval)
+            {
+                await _approvalService.CreateAsync(
+                    BrokerageApprovalType.PriceChange,
+                    existing,
+                    oldPrice,
+                    requestedPrice,
+                    oldStatus,
+                    oldStatus,
+                    actor,
+                    "Active listing price change requested.");
+            }
+
+            if (needsPublishApproval && requestedLiveStatus.HasValue)
+            {
+                await _approvalService.CreateAsync(
+                    BrokerageApprovalType.ListingPublish,
+                    existing,
+                    existing.Price,
+                    existing.Price,
+                    oldStatus,
+                    requestedLiveStatus.Value,
+                    actor,
+                    "Listing publish requested.");
+            }
+
+            if (!string.Equals(oldPrice, existing.Price, StringComparison.Ordinal))
+            {
+                _auditService.AddLog("Property", existing.Id, "Update", "price", oldPrice, existing.Price, actor);
+            }
+
+            if (oldStatus != existing.Status)
+            {
+                _auditService.AddLog("Property", existing.Id, "Update", "status", oldStatus.ToString(), existing.Status.ToString(), actor);
+            }
 
             await _db.SaveChangesAsync();
             return await GetRequiredPropertyResponseAsync(existing.Id);
@@ -253,7 +345,10 @@ namespace Services
 
         public async Task<PublicPropertyFiltersResponse> GetPublicPropertyFiltersAsync()
         {
-            var openProperties = _db.Properties.Where(item => item.Status == PropertyStatus.Open);
+            var openProperties = _db.Properties.Where(item =>
+                item.Status == PropertyStatus.Open ||
+                item.Status == PropertyStatus.Active ||
+                item.Status == PropertyStatus.UnderOffer);
 
             var propertyTypes = await openProperties
                 .Select(item => item.PropertyType)
@@ -333,6 +428,7 @@ namespace Services
                         question.AttachmentUrl,
                         question.AttachmentObjectName))
                     .ToList(),
+                item.DocumentRepositoryItemIds,
                 item.AgentId,
                 item.Agent == null ? null : new AgentSummary(
                     item.Agent.Id,
@@ -365,6 +461,7 @@ namespace Services
             property.ImageUrls = NormalizeStringList(property.ImageUrls);
             property.ImageObjectNames = NormalizeStringList(property.ImageObjectNames);
             property.KeyAmenities = NormalizeAmenities(property.KeyAmenities);
+            property.DocumentRepositoryItemIds = NormalizeDocumentIds(property.DocumentRepositoryItemIds);
             property.NeighborhoodInsights = NormalizeNeighborhoodInsights(property.NeighborhoodInsights);
             property.PreQuestions = NormalizePreQuestions(property.PreQuestions);
             property.ClosedAt = ResolveClosedAt(property.ClosedAt, property.Status);
@@ -381,6 +478,8 @@ namespace Services
         private static DateTime? ResolveClosedAt(DateTime? existingClosedAt, PropertyStatus status)
         {
             return status == PropertyStatus.Closed
+                   || status == PropertyStatus.Sold
+                   || status == PropertyStatus.Rented
                 ? existingClosedAt ?? DateTime.UtcNow
                 : null;
         }
@@ -408,6 +507,26 @@ namespace Services
                 .Select(item => item.Trim())
                 .Distinct()
                 .ToList();
+        }
+
+        private static List<int> NormalizeDocumentIds(List<int>? values)
+        {
+            return (values ?? [])
+                .Where(item => item > 0)
+                .Distinct()
+                .ToList();
+        }
+
+        private static bool IsLiveStatus(PropertyStatus status)
+        {
+            return status is PropertyStatus.Open or PropertyStatus.Active or PropertyStatus.UnderOffer;
+        }
+
+        private static PropertyStatus? ResolveRequestedLiveStatus(PropertyStatus status)
+        {
+            return status is PropertyStatus.Open or PropertyStatus.Active or PropertyStatus.UnderOffer
+                ? (status == PropertyStatus.Open ? PropertyStatus.Active : status)
+                : null;
         }
 
         private static List<NeighborhoodInsight> NormalizeNeighborhoodInsights(List<NeighborhoodInsight>? insights)

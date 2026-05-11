@@ -17,10 +17,16 @@ namespace Services
         LeadStage Stage,
         LeadPriority Priority,
         string Agent,
+        int? AgentId,
+        string? AssignedAgentName,
         string Source,
         string Interest,
         string Timeline,
         bool InBoard,
+        DateTime? NextActionDate,
+        string NextActionType,
+        LeadFollowUpStatus FollowUpStatus,
+        bool IsFollowUpOverdue,
         List<string> Notes,
         DateTime CreatedAt,
         DateTime UpdatedAt,
@@ -32,21 +38,30 @@ namespace Services
     public class LeadService
     {
         private readonly AppDbContext _db;
+        private readonly LeadAssignmentService _leadAssignmentService;
+        private readonly BrokerageAuditService _auditService;
 
-        public LeadService(AppDbContext db)
+        public LeadService(
+            AppDbContext db,
+            LeadAssignmentService leadAssignmentService,
+            BrokerageAuditService auditService)
         {
             _db = db;
+            _leadAssignmentService = leadAssignmentService;
+            _auditService = auditService;
         }
 
-        public async Task<LeadResponse> CreateLeadAsync(Lead lead)
+        public async Task<LeadResponse> CreateLeadAsync(Lead lead, string actor = "CRM")
         {
             NormalizeLead(lead, isNew: true);
+            await _leadAssignmentService.ApplyAssignmentAsync(lead);
             await _db.Leads.AddAsync(lead);
+            _auditService.AddLog("Lead", null, "Create", null, null, lead.Name, actor, lead.Source);
             await _db.SaveChangesAsync();
             return await GetRequiredLeadResponseAsync(lead.Id);
         }
 
-        public async Task<LeadResponse?> UpdateLeadAsync(Lead lead)
+        public async Task<LeadResponse?> UpdateLeadAsync(Lead lead, string actor = "CRM")
         {
             var existing = await _db.Leads.FindAsync(lead.Id);
 
@@ -54,6 +69,10 @@ namespace Services
             {
                 return null;
             }
+
+            var oldStage = existing.Stage;
+            var oldAgent = existing.Agent;
+            var oldNextActionDate = existing.NextActionDate;
 
             existing.Name = (lead.Name ?? string.Empty).Trim();
             existing.Email = (lead.Email ?? string.Empty).Trim().ToLowerInvariant();
@@ -64,13 +83,41 @@ namespace Services
             existing.Stage = lead.Stage;
             existing.Priority = lead.Priority;
             existing.Agent = (lead.Agent ?? string.Empty).Trim();
+            existing.AgentId = lead.AgentId;
             existing.Source = (lead.Source ?? string.Empty).Trim();
             existing.Interest = lead.Interest ?? string.Empty;
             existing.Timeline = lead.Timeline ?? string.Empty;
             existing.InBoard = lead.InBoard;
+            existing.NextActionDate = lead.NextActionDate?.ToUniversalTime();
+            existing.NextActionType = (lead.NextActionType ?? string.Empty).Trim();
+            existing.FollowUpStatus = lead.FollowUpStatus;
             existing.Notes = lead.Notes ?? [];
             existing.UpdatedAt = DateTime.UtcNow;
             existing.LastActivityAt = DateTime.UtcNow;
+
+            await _leadAssignmentService.ApplyAssignmentAsync(existing);
+
+            if (oldStage != existing.Stage)
+            {
+                _auditService.AddLog("Lead", existing.Id, "Update", "stage", oldStage.ToString(), existing.Stage.ToString(), actor);
+            }
+
+            if (!string.Equals(oldAgent, existing.Agent, StringComparison.Ordinal))
+            {
+                _auditService.AddLog("Lead", existing.Id, "Update", "agent", oldAgent, existing.Agent, actor);
+            }
+
+            if (oldNextActionDate != existing.NextActionDate)
+            {
+                _auditService.AddLog(
+                    "Lead",
+                    existing.Id,
+                    "Update",
+                    "next_action_date",
+                    oldNextActionDate?.ToString("O"),
+                    existing.NextActionDate?.ToString("O"),
+                    actor);
+            }
 
             await _db.SaveChangesAsync();
             return await GetRequiredLeadResponseAsync(existing.Id);
@@ -93,6 +140,7 @@ namespace Services
         {
             return await _db.Leads
                 .Include(item => item.Deals)
+                .Include(item => item.AssignedAgent)
                 .Where(item => item.Id == id)
                 .Select(MapLead())
                 .FirstOrDefaultAsync();
@@ -104,6 +152,7 @@ namespace Services
 
             return await _db.Leads
                 .Include(item => item.Deals)
+                .Include(item => item.AssignedAgent)
                 .Where(item => item.Email == normalizedEmail)
                 .Select(MapLead())
                 .FirstOrDefaultAsync();
@@ -117,6 +166,7 @@ namespace Services
         {
             var query = _db.Leads
                 .Include(item => item.Deals)
+                .Include(item => item.AssignedAgent)
                 .AsQueryable();
 
             if (!string.IsNullOrWhiteSpace(search))
@@ -126,6 +176,7 @@ namespace Services
                     (item.Name ?? string.Empty).ToLower().Contains(normalizedSearch) ||
                     (item.Email ?? string.Empty).ToLower().Contains(normalizedSearch) ||
                     (item.Property ?? string.Empty).ToLower().Contains(normalizedSearch) ||
+                    (item.Source ?? string.Empty).ToLower().Contains(normalizedSearch) ||
                     (item.Agent ?? string.Empty).ToLower().Contains(normalizedSearch));
             }
 
@@ -171,10 +222,20 @@ namespace Services
                 item.Stage,
                 item.Priority,
                 item.Agent,
+                item.AgentId,
+                item.AssignedAgent != null ? item.AssignedAgent.FullName : null,
                 item.Source,
                 item.Interest,
                 item.Timeline,
                 item.InBoard,
+                item.NextActionDate,
+                item.NextActionType,
+                item.FollowUpStatus,
+                item.NextActionDate != null &&
+                    item.NextActionDate < DateTime.UtcNow &&
+                    (item.FollowUpStatus == LeadFollowUpStatus.Open || item.FollowUpStatus == LeadFollowUpStatus.Scheduled) &&
+                    item.Stage != LeadStage.Deal &&
+                    item.Stage != LeadStage.Canceled,
                 item.Notes,
                 item.CreatedAt,
                 item.UpdatedAt,
@@ -197,7 +258,14 @@ namespace Services
             lead.Phone = (lead.Phone ?? string.Empty).Trim();
             lead.Agent = (lead.Agent ?? string.Empty).Trim();
             lead.Source = (lead.Source ?? string.Empty).Trim();
+            lead.NextActionDate = lead.NextActionDate?.ToUniversalTime();
+            lead.NextActionType = (lead.NextActionType ?? string.Empty).Trim();
             lead.Notes ??= [];
+
+            if (lead.NextActionDate.HasValue && string.IsNullOrWhiteSpace(lead.NextActionType))
+            {
+                lead.NextActionType = "Follow up";
+            }
 
             var now = DateTime.UtcNow;
             lead.UpdatedAt = now;

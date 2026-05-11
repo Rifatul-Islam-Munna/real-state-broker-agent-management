@@ -14,6 +14,11 @@ namespace Data
             public DbSet<Lead> Leads => Set<Lead>();
             public DbSet<LeadHistoryEntry> LeadHistoryEntries => Set<LeadHistoryEntry>();
             public DbSet<DealPipeline> DealPipelines => Set<DealPipeline>();
+            public DbSet<DealChecklistItem> DealChecklistItems => Set<DealChecklistItem>();
+            public DbSet<ShowingBooking> ShowingBookings => Set<ShowingBooking>();
+            public DbSet<LeadAssignmentRule> LeadAssignmentRules => Set<LeadAssignmentRule>();
+            public DbSet<BrokerageApprovalRequest> BrokerageApprovalRequests => Set<BrokerageApprovalRequest>();
+            public DbSet<BrokerageAuditLog> BrokerageAuditLogs => Set<BrokerageAuditLog>();
             public DbSet<ContactRequest> ContactRequests => Set<ContactRequest>();
             public DbSet<MailInboxItem> MailInbox => Set<MailInboxItem>();
             public DbSet<BlogPost> BlogPosts => Set<BlogPost>();
@@ -43,6 +48,46 @@ namespace Data
             .WithMany(u => u.Properties)
             .HasForeignKey(p => p.AgentId)
             .OnDelete(DeleteBehavior.SetNull);
+                  modelBuilder.Entity<Lead>()
+            .HasOne(item => item.AssignedAgent)
+            .WithMany()
+            .HasForeignKey(item => item.AgentId)
+            .OnDelete(DeleteBehavior.SetNull);
+                  modelBuilder.Entity<DealPipeline>()
+            .HasOne(item => item.DealOwner)
+            .WithMany()
+            .HasForeignKey(item => item.AgentId)
+            .OnDelete(DeleteBehavior.SetNull);
+                  modelBuilder.Entity<DealPipeline>()
+            .HasMany(item => item.ChecklistItems)
+            .WithOne(item => item.DealPipeline)
+            .HasForeignKey(item => item.DealPipelineId)
+            .OnDelete(DeleteBehavior.Cascade);
+                  modelBuilder.Entity<ShowingBooking>()
+            .HasOne(item => item.Property)
+            .WithMany()
+            .HasForeignKey(item => item.PropertyId)
+            .OnDelete(DeleteBehavior.Cascade);
+                  modelBuilder.Entity<ShowingBooking>()
+            .HasOne(item => item.Lead)
+            .WithMany()
+            .HasForeignKey(item => item.LeadId)
+            .OnDelete(DeleteBehavior.SetNull);
+                  modelBuilder.Entity<ShowingBooking>()
+            .HasOne(item => item.Agent)
+            .WithMany()
+            .HasForeignKey(item => item.AgentId)
+            .OnDelete(DeleteBehavior.SetNull);
+                  modelBuilder.Entity<LeadAssignmentRule>()
+            .HasOne(item => item.Agent)
+            .WithMany()
+            .HasForeignKey(item => item.AgentId)
+            .OnDelete(DeleteBehavior.Cascade);
+                  modelBuilder.Entity<BrokerageApprovalRequest>()
+            .HasOne(item => item.Property)
+            .WithMany()
+            .HasForeignKey(item => item.PropertyId)
+            .OnDelete(DeleteBehavior.Cascade);
                   modelBuilder.Entity<Property>()
             .HasMany(item => item.PreQuestions)
             .WithOne(item => item.Property)

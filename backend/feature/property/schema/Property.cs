@@ -20,7 +20,14 @@ namespace Entities
     public enum PropertyStatus
     {
         Open,
-        Closed
+        Closed,
+        Draft,
+        PendingApproval,
+        Active,
+        UnderOffer,
+        Sold,
+        Rented,
+        Unpublished
     }
 
     [Table("property")]
@@ -94,6 +101,9 @@ namespace Entities
 
         [Column("key_amenities", TypeName = "jsonb")]
         public List<string> KeyAmenities { get; set; } = new();
+
+        [Column("document_repository_item_ids", TypeName = "jsonb")]
+        public List<int> DocumentRepositoryItemIds { get; set; } = new();
 
         [Column("agent_id")]
         public int? AgentId { get; set; }

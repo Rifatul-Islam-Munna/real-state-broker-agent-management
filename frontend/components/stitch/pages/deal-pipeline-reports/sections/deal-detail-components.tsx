@@ -73,7 +73,7 @@ export function DealKanbanCard({
         </p>
         <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3 text-xs text-slate-500 dark:border-white/10 dark:text-slate-400">
           <span className="font-semibold">{formatDealValue(deal.value)}</span>
-          <span>{displayText(deal.deadline)}</span>
+          <span>{deal.expectedClosingDate ? formatDateTimeLabel(deal.expectedClosingDate) : displayText(deal.deadline)}</span>
         </div>
       </button>
     </article>
@@ -125,11 +125,27 @@ export function DealDetailsPanel({
             <div><p className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">{"Client"}</p><p className="mt-1 text-sm font-semibold text-slate-900 dark:text-white">{displayText(deal.client)}</p></div>
             <div><p className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">{"Agent"}</p><p className="mt-1 text-sm font-semibold text-slate-900 dark:text-white">{displayText(deal.agent, "No agent assigned")}</p></div>
             <div><p className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">{"Value"}</p><p className="mt-1 text-sm font-semibold text-slate-900 dark:text-white">{formatDealValue(deal.value)}</p></div>
-            <div><p className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">{"Commission"}</p><p className="mt-1 text-sm font-semibold text-primary">{formatCommissionLabel(deal.value, deal.commissionRate)}</p></div>
+            <div><p className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">{"Commission"}</p><p className="mt-1 text-sm font-semibold text-primary">{deal.commissionAmount > 0 ? formatDealValue(deal.commissionAmount) : formatCommissionLabel(deal.value, deal.commissionRate)}</p><p className="mt-1 text-xs text-slate-500">{deal.commissionStatus.replace(/([A-Z])/g, " $1").trim()}</p></div>
             <div><p className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">{"Deadline"}</p><p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{displayText(deal.deadline)}</p></div>
+            <div><p className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">{"Expected Closing"}</p><p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{deal.expectedClosingDate ? formatDateTimeLabel(deal.expectedClosingDate) : "Not set"}</p></div>
             <div><p className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">{"Linked Lead"}</p><p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{linkedLeadLabel}</p></div>
           </div>
         </div>
+        {deal.checklistItems?.length ? (
+          <div className="mt-5 border border-slate-200 bg-white p-5 dark:border-white/10 dark:bg-slate-900">
+            <h3 className="text-sm font-bold uppercase tracking-[0.2em] text-slate-500">{"Deal Checklist"}</h3>
+            <div className="mt-4 space-y-3">
+              {deal.checklistItems.map((item) => (
+                <div key={`${deal.id}-check-${item.id ?? item.sortOrder}`} className="flex items-center gap-3 text-sm text-slate-700 dark:text-slate-200">
+                  <span className={cn("flex size-5 items-center justify-center border text-[10px] font-bold", item.isCompleted ? "border-green-200 bg-green-50 text-green-700" : "border-slate-200 text-slate-400")}>
+                    {item.isCompleted ? "x" : ""}
+                  </span>
+                  <span>{item.title}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
         <div className="mt-5 border border-slate-200 bg-white p-5 dark:border-white/10 dark:bg-slate-900">
           <h3 className="text-sm font-bold uppercase tracking-[0.2em] text-slate-500">{"Deal Activity"}</h3>
           <div className="mt-5 space-y-5 border-l-2 border-slate-100 pl-5 dark:border-white/10">

@@ -29,6 +29,7 @@ export type PropertyFormValues = {
   width: string
   description: string
   keyAmenities: string[]
+  documentRepositoryItemIds: number[]
   neighborhoodInsights: NeighborhoodInsightFormValue[]
   thumbnailUrl: string
   thumbnailObjectName: string

@@ -1,5 +1,3 @@
-/* eslint-disable @next/next/no-img-element */
-
 import { AppIcon } from "@/components/ui/app-icon"
 import { Input } from "@/components/ui/input"
 
@@ -54,20 +52,6 @@ export function Section1Section({
             <AppIcon name="person_add" />
             {"Add Lead"}
           </button>
-          <button className="flex h-11 items-center justify-center border border-slate-200 bg-slate-100 px-3 text-slate-600 transition-colors hover:bg-primary/10 hover:text-primary dark:border-white/10 dark:bg-white/5 dark:text-slate-400">
-            <AppIcon name="notifications" />
-          </button>
-          <button className="flex h-11 items-center justify-center border border-slate-200 bg-slate-100 px-3 text-slate-600 transition-colors hover:bg-primary/10 hover:text-primary dark:border-white/10 dark:bg-white/5 dark:text-slate-400">
-            <AppIcon name="settings" />
-          </button>
-          <div className="flex h-11 w-11 items-center justify-center overflow-hidden border border-primary/30 bg-primary/20">
-            <img
-              alt="User profile avatar of a male real estate agent"
-              className="h-full w-full object-cover"
-              data-alt="User profile avatar of a male real estate agent"
-              src="https://lh3.googleusercontent.com/aida-public/AB6AXuDPNrFVPc-l6GkKBpDQu9Hz9BGpVFwT4ddAmTesNIS1yw_LFwMYA-h4AMc3csUO20WtvDbvslGLdFXY5_eALZBf3_ME2-eIdxy0Nfm7wmX3eb9FUAJnDEJy9PrySlkqBCtyPfm4dzu5VC3egZlABi1JN0Y-NXRMv1sfHUpKAwCy9ZnyxeMMj1h7nJ_d7RSdLZYbiKtAWjm08LREh6oYfaxkMuqSaUiAAZQA72ypORCt9JZgMHY24e5VHcErwDk2smzSShOIyY0BX3A"
-            />
-          </div>
         </div>
       </div>
     </header>

@@ -10,6 +10,7 @@ import type { AgentUserOption, LeadItem, LeadStage, PropertyItem } from "@/hooks
 import { getPortalRoutes } from "@/lib/portal-routes"
 import { AppIcon } from "@/components/ui/app-icon"
 import { cn } from "@/lib/utils"
+import { formatLeadPriority } from "@/lib/admin-portal"
 
 import { LeadActions, LeadDetailsPanel, LeadKanbanCard } from "./lead-detail-components"
 import { LeadCancelDialog, LeadFormDialog } from "./lead-dialogs"
@@ -151,10 +152,10 @@ export function Section2Section({
         icon: "partner_exchange",
       },
       {
-        label: "Canceled",
-        value: `${leads.filter((lead) => lead.stage === "Canceled").length}`,
-        detail: "Removed by action modal",
-        icon: "block",
+        label: "Overdue",
+        value: `${leads.filter((lead) => lead.isFollowUpOverdue).length}`,
+        detail: "Need follow-up now",
+        icon: "notification_important",
       },
     ],
     [leads, totalResults],
@@ -261,7 +262,10 @@ export function Section2Section({
                       <button className="text-left" onClick={() => setSelectedLeadId(lead.id)} type="button">
                         <div className="flex flex-wrap items-center gap-2">
                           <h3 className="text-sm font-bold text-slate-900 dark:text-white">{lead.name}</h3>
-                          <span className="border border-slate-200 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-600 dark:border-white/10 dark:text-slate-300">{lead.priority}</span>
+                          <span className="border border-slate-200 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-600 dark:border-white/10 dark:text-slate-300">{formatLeadPriority(lead.priority)}</span>
+                          {lead.isFollowUpOverdue ? (
+                            <span className="border border-rose-200 bg-rose-50 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-rose-700">{"Overdue"}</span>
+                          ) : null}
                           {lead.inBoard ? (
                             <span className="border border-primary/20 bg-primary/5 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-primary">{"On Board"}</span>
                           ) : null}

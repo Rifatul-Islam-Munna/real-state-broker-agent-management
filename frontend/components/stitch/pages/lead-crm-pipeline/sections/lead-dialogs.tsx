@@ -251,16 +251,18 @@ export function LeadFormDialog({
 
     agentOptions.forEach((agent) => {
       if (agent.fullName) {
-        options.set(agent.fullName, agent.fullName)
+        options.set(`${agent.id}`, agent.fullName)
       }
     })
 
-    if (formValues.agent) {
+    if (formValues.agentId && formValues.agent) {
+      options.set(`${formValues.agentId}`, formValues.agent)
+    } else if (formValues.agent) {
       options.set(formValues.agent, formValues.agent)
     }
 
     return Array.from(options.entries())
-  }, [agentOptions, formValues.agent])
+  }, [agentOptions, formValues.agent, formValues.agentId])
 
   const sourceOptions = useMemo(() => {
     const options = new Set<string>(leadFormSelectOptions.sources)
@@ -292,7 +294,9 @@ export function LeadFormDialog({
     return Array.from(options)
   }, [formValues.timeline])
   const selectedPropertyLabel = formValues.property || "Select property"
-  const selectedAgentLabel = formValues.agent || "Select agent"
+  const selectedAgentLabel = formValues.agentId
+    ? agentOptions.find((agent) => agent.id === formValues.agentId)?.fullName ?? formValues.agent
+    : formValues.agent || "Auto assign"
   const selectedSourceLabel = formValues.source || "Select source"
   const selectedInterestLabel = formValues.interest || "Select interest"
   const selectedTimelineLabel = formValues.timeline || "Select timeline"
@@ -398,8 +402,18 @@ export function LeadFormDialog({
             {"Assigned Agent"}
             <Select
               modal={false}
-              onValueChange={(value) => updateField("agent", !value || value === emptySelectValue ? "" : value)}
-              value={formValues.agent || emptySelectValue}
+              onValueChange={(value) => {
+                if (!value || value === emptySelectValue) {
+                  updateField("agentId", null)
+                  updateField("agent", "")
+                  return
+                }
+
+                const selectedAgent = agentOptions.find((agent) => `${agent.id}` === value)
+                updateField("agentId", selectedAgent ? selectedAgent.id : null)
+                updateField("agent", selectedAgent?.fullName ?? value)
+              }}
+              value={formValues.agentId ? `${formValues.agentId}` : formValues.agent || emptySelectValue}
             >
               <SelectTrigger className={formSelectClassName}>
                 <SelectValue>
@@ -407,7 +421,7 @@ export function LeadFormDialog({
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={emptySelectValue}>{"Select agent"}</SelectItem>
+                <SelectItem value={emptySelectValue}>{"Auto assign"}</SelectItem>
                 {agentSelectOptions.map(([value, label]) => (
                   <SelectItem key={value} value={value}>
                     {label}
@@ -502,6 +516,60 @@ export function LeadFormDialog({
                 {leadFormSelectOptions.priorities.map((priority) => (
                   <SelectItem key={priority} value={priority}>
                     {formatLeadPriority(priority)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </label>
+          <label className="flex flex-col gap-2 text-xs font-bold uppercase tracking-wide text-slate-500">
+            {"Next Action"}
+            <Input
+              className="rounded-none border-slate-200 dark:border-white/10"
+              onChange={(event) => updateField("nextActionDate", event.target.value)}
+              type="datetime-local"
+              value={formValues.nextActionDate}
+            />
+            <FieldError error={errors.nextActionDate} />
+          </label>
+          <label className="flex flex-col gap-2 text-xs font-bold uppercase tracking-wide text-slate-500">
+            {"Action Type"}
+            <Select
+              modal={false}
+              onValueChange={(value) => updateField("nextActionType", !value || value === emptySelectValue ? "" : value)}
+              value={formValues.nextActionType || emptySelectValue}
+            >
+              <SelectTrigger className={formSelectClassName}>
+                <SelectValue>
+                  {formValues.nextActionType || "Select action"}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={emptySelectValue}>{"Select action"}</SelectItem>
+                {leadFormSelectOptions.nextActionTypes.map((type) => (
+                  <SelectItem key={type} value={type}>
+                    {type}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <FieldError error={errors.nextActionType} />
+          </label>
+          <label className="flex flex-col gap-2 text-xs font-bold uppercase tracking-wide text-slate-500">
+            {"Follow-Up Status"}
+            <Select
+              modal={false}
+              onValueChange={(value) => updateField("followUpStatus", (value ?? "Open") as LeadFormValues["followUpStatus"])}
+              value={formValues.followUpStatus}
+            >
+              <SelectTrigger className={formSelectClassName}>
+                <SelectValue>
+                  {formValues.followUpStatus.replace(/([A-Z])/g, " $1").trim()}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {leadFormSelectOptions.followUpStatuses.map((status) => (
+                  <SelectItem key={status} value={status}>
+                    {status.replace(/([A-Z])/g, " $1").trim()}
                   </SelectItem>
                 ))}
               </SelectContent>

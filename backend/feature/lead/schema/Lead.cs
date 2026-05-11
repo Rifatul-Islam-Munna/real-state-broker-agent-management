@@ -23,6 +23,14 @@ namespace Entities
         FollowUp
     }
 
+    public enum LeadFollowUpStatus
+    {
+        Open,
+        Scheduled,
+        Completed,
+        NoActionNeeded
+    }
+
     [Table("lead")]
     public class Lead
     {
@@ -61,6 +69,13 @@ namespace Entities
         [Column("agent")]
         public string Agent { get; set; } = string.Empty;
 
+        [Column("agent_id")]
+        public int? AgentId { get; set; }
+
+        [ForeignKey(nameof(AgentId))]
+        [JsonIgnore]
+        public User? AssignedAgent { get; set; }
+
         [Column("source")]
         public string Source { get; set; } = string.Empty;
 
@@ -72,6 +87,23 @@ namespace Entities
 
         [Column("in_board")]
         public bool InBoard { get; set; }
+
+        [Column("next_action_date")]
+        public DateTime? NextActionDate { get; set; }
+
+        [Column("next_action_type")]
+        public string NextActionType { get; set; } = string.Empty;
+
+        [Column("follow_up_status")]
+        public LeadFollowUpStatus FollowUpStatus { get; set; } = LeadFollowUpStatus.Open;
+
+        [NotMapped]
+        public bool IsFollowUpOverdue =>
+            NextActionDate.HasValue &&
+            NextActionDate.Value < DateTime.UtcNow &&
+            FollowUpStatus is LeadFollowUpStatus.Open or LeadFollowUpStatus.Scheduled &&
+            Stage != LeadStage.Deal &&
+            Stage != LeadStage.Canceled;
 
         [Column("notes", TypeName = "jsonb")]
         public List<string> Notes { get; set; } = new();

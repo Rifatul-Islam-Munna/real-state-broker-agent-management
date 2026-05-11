@@ -25,9 +25,12 @@ namespace Endpoints
         public override async Task HandleAsync(Property req, CancellationToken ct)
         {
             await AgentRouteAccessService.EnsureCanAccessAsync(HttpContext.User, AgentRoutePermissions.Properties, ct);
-            var result = await PropertyService.CreatePropertyAsync(req);
+            var result = await PropertyService.CreatePropertyAsync(req, GetActor(HttpContext.User), HttpContext.User.IsInRole("Admin"));
             await Send.OkAsync(result, ct);
         }
+
+        private static string GetActor(ClaimsPrincipal user)
+            => user.FindFirst("fullName")?.Value ?? user.FindFirst(ClaimTypes.Email)?.Value ?? "CRM";
     }
 
     public class UpdatePropertyEndpoint : Endpoint<Property, PropertyResponse>
@@ -49,7 +52,7 @@ namespace Endpoints
         public override async Task HandleAsync(Property req, CancellationToken ct)
         {
             await AgentRouteAccessService.EnsureCanAccessAsync(HttpContext.User, AgentRoutePermissions.Properties, ct);
-            var result = await PropertyService.UpdatePropertyAsync(req);
+            var result = await PropertyService.UpdatePropertyAsync(req, GetActor(HttpContext.User), HttpContext.User.IsInRole("Admin"));
 
             if (result is null)
             {
@@ -59,6 +62,9 @@ namespace Endpoints
 
             await Send.OkAsync(result, ct);
         }
+
+        private static string GetActor(ClaimsPrincipal user)
+            => user.FindFirst("fullName")?.Value ?? user.FindFirst(ClaimTypes.Email)?.Value ?? "CRM";
     }
 
     public class PatchPropertyEndpoint : Endpoint<Property, PropertyResponse>
@@ -80,7 +86,7 @@ namespace Endpoints
         public override async Task HandleAsync(Property req, CancellationToken ct)
         {
             await AgentRouteAccessService.EnsureCanAccessAsync(HttpContext.User, AgentRoutePermissions.Properties, ct);
-            var result = await PropertyService.UpdatePropertyAsync(req);
+            var result = await PropertyService.UpdatePropertyAsync(req, GetActor(HttpContext.User), HttpContext.User.IsInRole("Admin"));
 
             if (result is null)
             {
@@ -90,6 +96,9 @@ namespace Endpoints
 
             await Send.OkAsync(result, ct);
         }
+
+        private static string GetActor(ClaimsPrincipal user)
+            => user.FindFirst("fullName")?.Value ?? user.FindFirst(ClaimTypes.Email)?.Value ?? "CRM";
     }
 
     public class DeletePropertyEndpoint : Endpoint<DeletePropertyEndpoint.Request>

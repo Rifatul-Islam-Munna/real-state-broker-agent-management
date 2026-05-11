@@ -24,10 +24,17 @@ namespace Services
     public class ContactRequestService
     {
         private readonly AppDbContext _db;
+        private readonly LeadAssignmentService _leadAssignmentService;
+        private readonly LeadHistoryService _leadHistoryService;
 
-        public ContactRequestService(AppDbContext db)
+        public ContactRequestService(
+            AppDbContext db,
+            LeadAssignmentService leadAssignmentService,
+            LeadHistoryService leadHistoryService)
         {
             _db = db;
+            _leadAssignmentService = leadAssignmentService;
+            _leadHistoryService = leadHistoryService;
         }
 
         public async Task<ContactRequestResponse> CreateContactRequestAsync(ContactRequest request)
@@ -151,15 +158,28 @@ namespace Services
                     Phone = (contact.Phone ?? string.Empty).Trim(),
                     Priority = LeadPriority.Warm,
                     Property = string.Empty,
-                    Source = "Contact Us",
+                    Source = "Contact Form",
                     Stage = LeadStage.New,
                     Summary = contact.Message ?? string.Empty,
                     Timeline = string.Empty,
+                    NextActionDate = now.AddDays(1),
+                    NextActionType = "First response",
+                    FollowUpStatus = LeadFollowUpStatus.Open,
                     UpdatedAt = now,
                 };
 
+                await _leadAssignmentService.ApplyAssignmentAsync(lead);
                 await _db.Leads.AddAsync(lead);
                 await _db.SaveChangesAsync();
+                await _leadHistoryService.AppendAsync(
+                    lead.Id,
+                    LeadHistoryKind.ContactForm,
+                    LeadHistoryDirection.Incoming,
+                    LeadHistoryStatus.Received,
+                    "Website contact form",
+                    contact.Message ?? string.Empty,
+                    contact.Message ?? string.Empty,
+                    createdBy: "Website");
             }
 
             contact.LeadId = lead.Id;
@@ -169,6 +189,7 @@ namespace Services
 
             return await _db.Leads
                 .Include(item => item.Deals)
+                .Include(item => item.AssignedAgent)
                 .Where(item => item.Id == lead.Id)
                 .Select(item => new LeadResponse(
                     item.Id,
@@ -181,10 +202,20 @@ namespace Services
                     item.Stage,
                     item.Priority,
                     item.Agent,
+                    item.AgentId,
+                    item.AssignedAgent != null ? item.AssignedAgent.FullName : null,
                     item.Source,
                     item.Interest,
                     item.Timeline,
                     item.InBoard,
+                    item.NextActionDate,
+                    item.NextActionType,
+                    item.FollowUpStatus,
+                    item.NextActionDate != null &&
+                        item.NextActionDate < DateTime.UtcNow &&
+                        (item.FollowUpStatus == LeadFollowUpStatus.Open || item.FollowUpStatus == LeadFollowUpStatus.Scheduled) &&
+                        item.Stage != LeadStage.Deal &&
+                        item.Stage != LeadStage.Canceled,
                     item.Notes,
                     item.CreatedAt,
                     item.UpdatedAt,

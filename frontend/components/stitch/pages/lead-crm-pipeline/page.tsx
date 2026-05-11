@@ -28,6 +28,7 @@ const PAGE_SIZE = 10
 function mapLeadValuesToPayload(values: LeadFormValues, lead?: LeadItem) {
   return {
     agent: values.agent?.trim() ?? "",
+    agentId: values.agentId ?? null,
     budget: values.budget?.trim() ?? "",
     email: values.email?.trim() ?? "",
     id: lead?.id ?? 0,
@@ -47,6 +48,10 @@ function mapLeadValuesToPayload(values: LeadFormValues, lead?: LeadItem) {
     stage: (values.stage ?? "New") as LeadStage,
     summary: values.summary?.trim() ?? "",
     timeline: values.timeline?.trim() ?? "",
+    nextActionDate: values.nextActionDate ? new Date(values.nextActionDate).toISOString() : null,
+    nextActionType: values.nextActionType?.trim() ?? "",
+    followUpStatus: values.followUpStatus ?? "Open",
+    isFollowUpOverdue: lead?.isFollowUpOverdue ?? false,
     createdAt: lead?.createdAt ?? new Date().toISOString(),
     lastActivityAt: lead?.lastActivityAt ?? new Date().toISOString(),
     updatedAt: lead?.updatedAt ?? new Date().toISOString(),

@@ -15,17 +15,31 @@ namespace Services
         string Client,
         decimal Value,
         decimal CommissionRate,
+        decimal CommissionAmount,
+        DealCommissionStatus CommissionStatus,
+        string CommissionPayoutNote,
         DealStage Stage,
         string Deadline,
+        DateTime? ExpectedClosingDate,
         string Note,
         string Agent,
+        int? AgentId,
+        string? DealOwnerName,
         int? SourceLeadId,
         string? SourceLeadName,
+        List<DealChecklistItemResponse> ChecklistItems,
         DateTime CreatedAt,
         DateTime UpdatedAt
     );
 
     public record ConvertLeadToDealInput(int LeadId);
+
+    public record DealChecklistItemResponse(
+        int Id,
+        string Title,
+        bool IsCompleted,
+        int SortOrder
+    );
 
     public class DealPipelineService
     {
@@ -39,6 +53,7 @@ namespace Services
         public async Task<DealPipelineResponse> CreateDealAsync(DealPipeline deal)
         {
             NormalizeDeal(deal, isNew: true);
+            await ResolveDealOwnerAsync(deal);
             await _db.DealPipelines.AddAsync(deal);
             await SyncLeadFromDealAsync(deal);
             await _db.SaveChangesAsync();
@@ -47,7 +62,9 @@ namespace Services
 
         public async Task<DealPipelineResponse?> UpdateDealAsync(DealPipeline deal)
         {
-            var existing = await _db.DealPipelines.FindAsync(deal.Id);
+            var existing = await _db.DealPipelines
+                .Include(item => item.ChecklistItems)
+                .FirstOrDefaultAsync(item => item.Id == deal.Id);
 
             if (existing is null)
             {
@@ -59,13 +76,23 @@ namespace Services
             existing.Client = (deal.Client ?? string.Empty).Trim();
             existing.Value = deal.Value;
             existing.CommissionRate = deal.CommissionRate <= 0 ? existing.CommissionRate : deal.CommissionRate;
+            existing.CommissionAmount = deal.CommissionAmount > 0
+                ? deal.CommissionAmount
+                : CalculateCommissionAmount(deal.Value, deal.CommissionRate <= 0 ? existing.CommissionRate : deal.CommissionRate);
+            existing.CommissionStatus = deal.CommissionStatus;
+            existing.CommissionPayoutNote = deal.CommissionPayoutNote ?? string.Empty;
             existing.Stage = deal.Stage;
             existing.Deadline = deal.Deadline ?? string.Empty;
+            existing.ExpectedClosingDate = deal.ExpectedClosingDate?.ToUniversalTime();
             existing.Note = deal.Note ?? string.Empty;
             existing.Agent = (deal.Agent ?? string.Empty).Trim();
+            existing.AgentId = deal.AgentId;
             existing.SourceLeadId = deal.SourceLeadId;
             existing.UpdatedAt = DateTime.UtcNow;
 
+            await ResolveDealOwnerAsync(existing);
+            _db.DealChecklistItems.RemoveRange(existing.ChecklistItems);
+            ReplaceChecklistItems(existing, deal.ChecklistItems);
             await SyncLeadFromDealAsync(existing);
             await _db.SaveChangesAsync();
             return await GetRequiredDealResponseAsync(existing.Id);
@@ -88,6 +115,8 @@ namespace Services
         {
             return await _db.DealPipelines
                 .Include(item => item.SourceLead)
+                .Include(item => item.DealOwner)
+                .Include(item => item.ChecklistItems)
                 .Where(item => item.Id == id)
                 .Select(MapDeal())
                 .FirstOrDefaultAsync();
@@ -101,6 +130,8 @@ namespace Services
         {
             var query = _db.DealPipelines
                 .Include(item => item.SourceLead)
+                .Include(item => item.DealOwner)
+                .Include(item => item.ChecklistItems)
                 .AsQueryable();
 
             if (!string.IsNullOrWhiteSpace(search))
@@ -158,10 +189,13 @@ namespace Services
             var deal = new DealPipeline
             {
                 Agent = lead.Agent,
+                AgentId = lead.AgentId,
                 Client = lead.Name,
                 CommissionRate = type == DealType.Commercial ? 4m : 3m,
+                CommissionStatus = DealCommissionStatus.Estimated,
                 CreatedAt = DateTime.UtcNow,
                 Deadline = "Created from lead",
+                ExpectedClosingDate = DateTime.UtcNow.AddDays(45),
                 Note = $"Converted from lead {lead.Name}.",
                 SourceLeadId = lead.Id,
                 Stage = DealStage.OfferMade,
@@ -170,6 +204,7 @@ namespace Services
                 UpdatedAt = DateTime.UtcNow,
                 Value = ParseBudget(lead.Budget)
             };
+            deal.CommissionAmount = CalculateCommissionAmount(deal.Value, deal.CommissionRate);
 
             await _db.DealPipelines.AddAsync(deal);
             await SyncLeadFromDealAsync(deal);
@@ -199,6 +234,7 @@ namespace Services
             }
 
             lead.Agent = deal.Agent;
+            lead.AgentId = deal.AgentId;
             lead.Budget = deal.Value > 0
                 ? deal.Value.ToString("C0", CultureInfo.GetCultureInfo("en-US"))
                 : lead.Budget;
@@ -219,12 +255,27 @@ namespace Services
                 item.Client,
                 item.Value,
                 item.CommissionRate,
+                item.CommissionAmount,
+                item.CommissionStatus,
+                item.CommissionPayoutNote,
                 item.Stage,
                 item.Deadline,
+                item.ExpectedClosingDate,
                 item.Note,
                 item.Agent,
+                item.AgentId,
+                item.DealOwner != null ? item.DealOwner.FullName : null,
                 item.SourceLeadId,
                 item.SourceLead != null ? item.SourceLead.Name : null,
+                item.ChecklistItems
+                    .OrderBy(checklist => checklist.SortOrder)
+                    .ThenBy(checklist => checklist.Id)
+                    .Select(checklist => new DealChecklistItemResponse(
+                        checklist.Id,
+                        checklist.Title,
+                        checklist.IsCompleted,
+                        checklist.SortOrder))
+                    .ToList(),
                 item.CreatedAt,
                 item.UpdatedAt
             );
@@ -239,12 +290,27 @@ namespace Services
                 item.Client,
                 item.Value,
                 item.CommissionRate,
+                item.CommissionAmount,
+                item.CommissionStatus,
+                item.CommissionPayoutNote,
                 item.Stage,
                 item.Deadline,
+                item.ExpectedClosingDate,
                 item.Note,
                 item.Agent,
+                item.AgentId,
+                item.DealOwner?.FullName,
                 item.SourceLeadId,
                 item.SourceLead?.Name,
+                item.ChecklistItems
+                    .OrderBy(checklist => checklist.SortOrder)
+                    .ThenBy(checklist => checklist.Id)
+                    .Select(checklist => new DealChecklistItemResponse(
+                        checklist.Id,
+                        checklist.Title,
+                        checklist.IsCompleted,
+                        checklist.SortOrder))
+                    .ToList(),
                 item.CreatedAt,
                 item.UpdatedAt
             );
@@ -255,6 +321,12 @@ namespace Services
             deal.Title = (deal.Title ?? string.Empty).Trim();
             deal.Client = (deal.Client ?? string.Empty).Trim();
             deal.Agent = (deal.Agent ?? string.Empty).Trim();
+            deal.ExpectedClosingDate = deal.ExpectedClosingDate?.ToUniversalTime();
+            deal.CommissionPayoutNote = (deal.CommissionPayoutNote ?? string.Empty).Trim();
+            deal.CommissionAmount = deal.CommissionAmount > 0
+                ? deal.CommissionAmount
+                : CalculateCommissionAmount(deal.Value, deal.CommissionRate);
+            ReplaceChecklistItems(deal, deal.ChecklistItems);
 
             var now = DateTime.UtcNow;
             deal.UpdatedAt = now;
@@ -263,6 +335,65 @@ namespace Services
             {
                 deal.CreatedAt = now;
             }
+        }
+
+        private async Task ResolveDealOwnerAsync(DealPipeline deal)
+        {
+            if (deal.AgentId.HasValue)
+            {
+                var agent = await _db.Users.AsNoTracking().FirstOrDefaultAsync(item =>
+                    item.Id == deal.AgentId &&
+                    item.Role == UserRole.Agent &&
+                    item.DeletedAt == null);
+
+                if (agent is not null)
+                {
+                    deal.Agent = agent.FullName;
+                    return;
+                }
+
+                deal.AgentId = null;
+            }
+
+            if (string.IsNullOrWhiteSpace(deal.Agent))
+            {
+                return;
+            }
+
+            var normalizedAgent = deal.Agent.Trim().ToLowerInvariant();
+            var namedAgent = await _db.Users.AsNoTracking().FirstOrDefaultAsync(item =>
+                item.Role == UserRole.Agent &&
+                item.DeletedAt == null &&
+                (((item.FirstName ?? string.Empty) + " " + (item.LastName ?? string.Empty)).ToLower() == normalizedAgent ||
+                 item.Email.ToLower() == normalizedAgent));
+
+            if (namedAgent is not null)
+            {
+                deal.AgentId = namedAgent.Id;
+                deal.Agent = namedAgent.FullName;
+            }
+        }
+
+        private static decimal CalculateCommissionAmount(decimal value, decimal commissionRate)
+        {
+            return value <= 0 || commissionRate <= 0 ? 0 : Math.Round(value * (commissionRate / 100m), 2);
+        }
+
+        private static void ReplaceChecklistItems(DealPipeline deal, List<DealChecklistItem>? source)
+        {
+            var now = DateTime.UtcNow;
+            deal.ChecklistItems = (source ?? [])
+                .Where(item => !string.IsNullOrWhiteSpace(item.Title))
+                .Select((item, index) => new DealChecklistItem
+                {
+                    CreatedAt = item.CreatedAt == default ? now : item.CreatedAt,
+                    IsCompleted = item.IsCompleted,
+                    SortOrder = item.SortOrder <= 0 ? index + 1 : item.SortOrder,
+                    Title = item.Title.Trim(),
+                    UpdatedAt = now,
+                })
+                .OrderBy(item => item.SortOrder)
+                .ToList();
         }
 
         private static decimal ParseBudget(string budget)

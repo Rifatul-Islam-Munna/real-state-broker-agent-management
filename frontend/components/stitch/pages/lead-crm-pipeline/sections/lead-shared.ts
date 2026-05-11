@@ -16,10 +16,14 @@ export type LeadFormValues = {
   stage: LeadStage
   priority: LeadPriority
   agent: string
+  agentId: number | null
   source: string
   interest: string
   timeline: string
   inBoard: boolean
+  nextActionDate: string
+  nextActionType: string
+  followUpStatus: LeadItem["followUpStatus"]
   notes: string
 }
 
@@ -36,9 +40,11 @@ export const leadButtonClass =
 export const leadFormSelectOptions = {
   interests: ["Buy", "Rent", "Sell", "Commercial", "Investment", "Consultation"] as const,
   priorities: leadPriorityOptions,
-  sources: ["Website", "Contact Us", "Phone Call", "Walk In", "Referral", "Campaign", "Mail Signup"] as const,
+  sources: ["Contact Form", "Property Chat", "Schedule Viewing", "Website", "Phone Call", "Walk In", "Referral", "Campaign", "Mail Signup"] as const,
   stages: leadStageOrder,
   timelines: ["Immediate", "This Week", "This Month", "1-3 Months", "3-6 Months", "6+ Months"] as const,
+  followUpStatuses: ["Open", "Scheduled", "Completed", "NoActionNeeded"] as const,
+  nextActionTypes: ["First response", "Call", "Email", "SMS", "Showing", "Document request", "Deal update"] as const,
 }
 
 export function validateLeadForm(values: LeadFormValues) {
@@ -55,10 +61,10 @@ export function validateLeadForm(values: LeadFormValues) {
   }
   if (!values.property.trim()) errors.property = "Select a property."
   if (!values.budget.trim()) errors.budget = "Budget is required."
-  if (!values.agent.trim()) errors.agent = "Assigned agent is required."
   if (!values.source.trim()) errors.source = "Source is required."
   if (!values.interest.trim()) errors.interest = "Interest is required."
   if (!values.timeline.trim()) errors.timeline = "Timeline is required."
+  if (values.nextActionDate && !values.nextActionType.trim()) errors.nextActionType = "Next action type is required."
 
   return errors
 }
@@ -74,10 +80,14 @@ export function defaultLeadFormValues(): LeadFormValues {
     stage: "New",
     priority: "Warm",
     agent: "",
+    agentId: null,
     source: "",
     interest: "",
     timeline: "",
     inBoard: false,
+    nextActionDate: "",
+    nextActionType: "",
+    followUpStatus: "Open",
     notes: "",
   }
 }
@@ -93,10 +103,14 @@ export function mapLeadToFormValues(lead: LeadItem): LeadFormValues {
     stage: lead.stage ?? "New",
     priority: lead.priority ?? "Warm",
     agent: lead.agent ?? "",
+    agentId: lead.agentId ?? null,
     source: lead.source ?? "",
     interest: lead.interest ?? "",
     timeline: lead.timeline ?? "",
     inBoard: lead.inBoard ?? false,
+    nextActionDate: lead.nextActionDate ? lead.nextActionDate.slice(0, 16) : "",
+    nextActionType: lead.nextActionType ?? "",
+    followUpStatus: lead.followUpStatus ?? "Open",
     notes: (lead.notes ?? []).join("\n"),
   }
 }

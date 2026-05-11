@@ -55,7 +55,7 @@ export function PropertyFormFieldsSection({
       : "Assign later"
   const propertyTypeLabel = formValues.propertyType === "Commercial" ? "Commercial" : "Residential"
   const listingTypeLabel = formValues.listingType === "ForRent" ? "For Rent" : "For Sale"
-  const listingStatusLabel = formValues.status === "Closed" ? "Closed" : "Open"
+  const listingStatusLabel = formValues.status.replace(/([A-Z])/g, " $1").trim()
   const amenityOptions = useMemo(() => {
     const mergedAmenities = new Set(
       [...defaultAmenityOptions, ...(formValues.keyAmenities ?? [])]
@@ -291,8 +291,15 @@ export function PropertyFormFieldsSection({
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="Open">{"Open"}</SelectItem>
-                <SelectItem value="Closed">{"Closed"}</SelectItem>
+                <SelectItem value="Draft">{"Draft"}</SelectItem>
+                <SelectItem value="PendingApproval">{"Pending Approval"}</SelectItem>
+                <SelectItem value="Active">{"Active"}</SelectItem>
+                <SelectItem value="UnderOffer">{"Under Offer"}</SelectItem>
+                <SelectItem value="Sold">{"Sold"}</SelectItem>
+                <SelectItem value="Rented">{"Rented"}</SelectItem>
+                <SelectItem value="Unpublished">{"Unpublished"}</SelectItem>
+                <SelectItem value="Open">{"Open (legacy)"}</SelectItem>
+                <SelectItem value="Closed">{"Closed (legacy)"}</SelectItem>
               </SelectContent>
             </Select>
           </div>

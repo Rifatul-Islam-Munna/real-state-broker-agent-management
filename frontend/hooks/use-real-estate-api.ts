@@ -16,8 +16,12 @@ import type {
   BlogPostItem,
   BlogPostSaveInput,
   BlogPostSummary,
+  BrokerageApprovalItem,
+  BrokerageApprovalStatus,
+  BrokerageReports,
   CommunicationProviderWriteInput,
   ContactRequestItem,
+  CreateShowingBookingInput,
   CreateLeadHistoryEntryInput,
   CreatePropertyChatConversationInput,
   CreateAgentUserInput,
@@ -28,6 +32,7 @@ import type {
   DocumentRepositorySummary,
   HomePageSettings,
   LeadItem,
+  LeadAssignmentRuleItem,
   LeadHistoryEntry,
   MailboxSyncStatus,
   MailInboxItem,
@@ -37,12 +42,17 @@ import type {
   PropertyItem,
   PropertyChatConversationItem,
   PropertySaveInput,
+  ReviewBrokerageApprovalInput,
+  ShowingAvailabilitySlot,
+  ShowingBookingItem,
+  UpdateShowingBookingInput,
   SmtpIntegrationWriteInput,
   TwilioIntegrationWriteInput,
   UpdateAgencyIntegrationSettingsInput,
   UpdateDocumentRepositoryInput,
   UpdateAgentRoutePermissionsInput,
   UpdateAgentUserInput,
+  WebsiteInquiryItem,
 } from "@/@types/real-estate-api"
 
 export type {
@@ -58,9 +68,16 @@ export type {
   BlogPostItem,
   BlogPostSaveInput,
   BlogPostSummary,
+  BrokerageAgentConversionItem,
+  BrokerageApprovalItem,
+  BrokerageApprovalStatus,
+  BrokerageApprovalType,
+  BrokerageReports,
+  BrokerageSourcePerformanceItem,
   CommunicationProviderWriteInput,
   ContactRequestItem,
   ContactRequestStatus,
+  CreateShowingBookingInput,
   CreateLeadHistoryEntryInput,
   CreateAgentUserInput,
   DashboardAlert,
@@ -89,6 +106,8 @@ export type {
   HomePageTestimonialSection,
   HomePageWhyChooseUsSection,
   LeadItem,
+  LeadAssignmentRuleItem,
+  LeadFollowUpStatus,
   LeadHistoryDirection,
   LeadHistoryEntry,
   LeadHistoryKind,
@@ -114,6 +133,7 @@ export type {
   PaginatedResult,
   PortalCurrentUser,
   PropertyItem,
+  PropertyStatus,
   PropertyChatAnswerInput,
   PropertyChatConversationItem,
   PropertyChatConversationStatus,
@@ -121,12 +141,18 @@ export type {
   PropertyPreQuestion,
   PropertySaveInput,
   PropertySellPrediction,
+  ReviewBrokerageApprovalInput,
+  ShowingAvailabilitySlot,
+  ShowingBookingItem,
+  ShowingBookingStatus,
   SmtpIntegrationWriteInput,
   TwilioIntegrationWriteInput,
   UpdateAgencyIntegrationSettingsInput,
   UpdateDocumentRepositoryInput,
+  UpdateShowingBookingInput,
   UpdateAgentRoutePermissionsInput,
   UpdateAgentUserInput,
+  WebsiteInquiryItem,
 } from "@/@types/real-estate-api"
 
 type QueryParams = Record<string, string | number | boolean | undefined | null>
@@ -532,6 +558,114 @@ export function useDeleteProperty() {
   })
 }
 
+export function useWebsiteInquiries(params?: QueryParams) {
+  return useQueryWrapper<PaginatedResult<WebsiteInquiryItem>>(
+    ["website-inquiries", params],
+    `/website-inquiries${buildQuery(params)}`,
+    defaultQueryOptions,
+    0,
+    "website-inquiries",
+  )
+}
+
+export function useShowingBookings(params?: QueryParams) {
+  return useQueryWrapper<PaginatedResult<ShowingBookingItem>>(
+    ["showings", params],
+    `/showings${buildQuery(params)}`,
+    defaultQueryOptions,
+    0,
+    "showings",
+  )
+}
+
+export function useShowingAvailability(params?: QueryParams) {
+  return useQueryWrapper<ShowingAvailabilitySlot[]>(
+    ["showing-availability", params],
+    `/showings/availability${buildQuery(params)}`,
+    {
+      ...defaultQueryOptions,
+      enabled: Boolean(params?.propertyId && params?.date),
+      placeholderData: undefined,
+    },
+    0,
+    "showing-availability",
+  )
+}
+
+export function useCreateShowingBooking() {
+  const invalidate = useInvalidate(["showings", "website-inquiries", "leads", "dashboard", "showing-availability"])
+
+  return useCommonMutationApi<ShowingBookingItem, CreateShowingBookingInput>({
+    method: "POST",
+    onSuccess: () => void invalidate(),
+    successMessage: "Showing booked",
+    url: "/showings",
+  })
+}
+
+export function useUpdateShowingBooking() {
+  const invalidate = useInvalidate(["showings", "website-inquiries", "leads", "dashboard"])
+
+  return useCommonMutationApi<ShowingBookingItem, UpdateShowingBookingInput>({
+    method: "PATCH",
+    onSuccess: () => void invalidate(),
+    successMessage: "Showing updated",
+    url: "/showings",
+  })
+}
+
+export function useBrokerageApprovals(params?: QueryParams) {
+  return useQueryWrapper<PaginatedResult<BrokerageApprovalItem>>(
+    ["brokerage-approvals", params],
+    `/brokerage/approvals${buildQuery(params)}`,
+    defaultQueryOptions,
+    0,
+    "brokerage-approvals",
+  )
+}
+
+export function useReviewBrokerageApproval() {
+  const invalidate = useInvalidate(["brokerage-approvals", "properties", "dashboard"])
+
+  return useCommonMutationApi<BrokerageApprovalItem, ReviewBrokerageApprovalInput>({
+    method: "PATCH",
+    onSuccess: () => void invalidate(),
+    successMessage: "Approval reviewed",
+    url: "/brokerage/approvals",
+  })
+}
+
+export function useLeadAssignmentRules() {
+  return useQueryWrapper<LeadAssignmentRuleItem[]>(
+    ["lead-assignment-rules"],
+    "/lead-assignment-rules",
+    defaultQueryOptions,
+    0,
+    "lead-assignment-rules",
+  )
+}
+
+export function useSaveLeadAssignmentRule() {
+  const invalidate = useInvalidate(["lead-assignment-rules"])
+
+  return useCommonMutationApi<LeadAssignmentRuleItem, Partial<LeadAssignmentRuleItem>>({
+    method: "PATCH",
+    onSuccess: () => void invalidate(),
+    successMessage: "Assignment rule saved",
+    url: "/lead-assignment-rules",
+  })
+}
+
+export function useBrokerageReports() {
+  return useQueryWrapper<BrokerageReports>(
+    ["brokerage-reports"],
+    "/reports/brokerage",
+    defaultQueryOptions,
+    0,
+    "brokerage-reports",
+  )
+}
+
 export function useLeads(params?: QueryParams) {
   return useQueryWrapper<PaginatedResult<LeadItem>>(
     ["leads", params],
@@ -561,7 +695,17 @@ export function useCreateLead() {
 
   return useCommonMutationApi<
     LeadItem,
-    Omit<LeadItem, "id" | "createdAt" | "updatedAt" | "lastActivityAt" | "linkedDealId" | "linkedDealTitle">
+    Omit<
+      LeadItem,
+      | "id"
+      | "createdAt"
+      | "updatedAt"
+      | "lastActivityAt"
+      | "linkedDealId"
+      | "linkedDealTitle"
+      | "assignedAgentName"
+      | "isFollowUpOverdue"
+    >
   >({
     method: "POST",
     onSuccess: () => void invalidate(),

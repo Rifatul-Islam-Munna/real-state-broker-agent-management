@@ -220,6 +220,7 @@ namespace Services
                 var lead = new Lead
                 {
                     Agent = property.Agent?.FullName ?? string.Empty,
+                    AgentId = property.AgentId,
                     Budget = (input.Budget ?? string.Empty).Trim(),
                     CreatedAt = now,
                     Email = normalizedEmail,
@@ -235,6 +236,9 @@ namespace Services
                     Stage = qualification.Stage,
                     Summary = summary,
                     Timeline = (input.Timeline ?? string.Empty).Trim(),
+                    NextActionDate = now.AddDays(1),
+                    NextActionType = "Reply to property chat",
+                    FollowUpStatus = LeadFollowUpStatus.Open,
                     UpdatedAt = now,
                 };
 
@@ -245,6 +249,7 @@ namespace Services
             }
 
             existingLead.Agent = property.Agent?.FullName ?? existingLead.Agent;
+            existingLead.AgentId = property.AgentId ?? existingLead.AgentId;
             existingLead.Budget = !string.IsNullOrWhiteSpace(input.Budget) ? input.Budget.Trim() : existingLead.Budget;
             existingLead.InBoard = qualification.InBoard || existingLead.InBoard;
             existingLead.Interest = !string.IsNullOrWhiteSpace(input.Interest) ? input.Interest.Trim() : existingLead.Interest;
@@ -262,6 +267,10 @@ namespace Services
             existingLead.Summary = summary;
             existingLead.Timeline = !string.IsNullOrWhiteSpace(input.Timeline) ? input.Timeline.Trim() : existingLead.Timeline;
             existingLead.UpdatedAt = now;
+            existingLead.NextActionDate ??= now.AddDays(1);
+            existingLead.NextActionType = string.IsNullOrWhiteSpace(existingLead.NextActionType)
+                ? "Reply to property chat"
+                : existingLead.NextActionType;
 
             if (!string.IsNullOrWhiteSpace(note))
             {

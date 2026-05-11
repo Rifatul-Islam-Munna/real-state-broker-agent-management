@@ -11,12 +11,18 @@ export type DealFormValues = {
   client: string
   value: string
   commissionRate: string
+  commissionAmount: string
+  commissionStatus: DealItem["commissionStatus"]
+  commissionPayoutNote: string
   stage: DealStage
   type: DealType
   deadline: string
+  expectedClosingDate: string
   note: string
   agent: string
+  agentId: string
   sourceLeadId: string
+  checklistItems: string
 }
 
 export type DealFormErrors = Partial<Record<keyof DealFormValues | "form", string>>
@@ -52,12 +58,18 @@ export function defaultDealFormValues(): DealFormValues {
     client: "",
     value: "",
     commissionRate: "3",
+    commissionAmount: "",
+    commissionStatus: "Estimated",
+    commissionPayoutNote: "",
     stage: "OfferMade",
     type: "Residential",
     deadline: "",
+    expectedClosingDate: "",
     note: "",
     agent: "",
+    agentId: "",
     sourceLeadId: "",
+    checklistItems: "Client identity verified\nViewing completed\nDocuments collected",
   }
 }
 
@@ -67,12 +79,18 @@ export function mapDealToFormValues(deal: DealItem): DealFormValues {
     client: deal.client ?? "",
     value: `${deal.value ?? 0}`,
     commissionRate: `${deal.commissionRate ?? 0}`,
+    commissionAmount: `${deal.commissionAmount ?? ""}`,
+    commissionStatus: deal.commissionStatus ?? "Estimated",
+    commissionPayoutNote: deal.commissionPayoutNote ?? "",
     stage: deal.stage ?? "OfferMade",
     type: deal.type ?? "Residential",
     deadline: deal.deadline ?? "",
+    expectedClosingDate: deal.expectedClosingDate ? deal.expectedClosingDate.slice(0, 10) : "",
     note: deal.note ?? "",
     agent: deal.agent ?? "",
+    agentId: deal.agentId ? `${deal.agentId}` : "",
     sourceLeadId: deal.sourceLeadId ? `${deal.sourceLeadId}` : "",
+    checklistItems: (deal.checklistItems ?? []).map((item) => `${item.isCompleted ? "[x]" : "[ ]"} ${item.title}`).join("\n"),
   }
 }
 

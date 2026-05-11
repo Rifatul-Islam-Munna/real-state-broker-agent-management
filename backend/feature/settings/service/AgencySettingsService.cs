@@ -9,6 +9,7 @@ namespace Services
     {
         Email,
         SMS,
+        WhatsApp,
     }
 
     public class AgencySettingsImageAsset
@@ -372,6 +373,42 @@ namespace Services
                         Body = "Hello {{client_name}}, this is a reminder that your closing for {{property_address}} is scheduled on {{closing_date}}. Please bring the requested documents and contact {{agent_name}} with any questions.",
                         Channels = [AgencyCommunicationChannel.Email, AgencyCommunicationChannel.SMS],
                         VariableTokens = ["{{client_name}}", "{{property_address}}", "{{closing_date}}", "{{agent_name}}"],
+                    },
+                    new AgencyCommunicationTemplateItem
+                    {
+                        Id = "follow-up-after-visit",
+                        Name = "Follow-Up After Visit",
+                        Subject = "Thanks for visiting {{property_address}}",
+                        Body = "Hi {{client_name}}, thank you for viewing {{property_address}}. What questions can {{agent_name}} answer before your next step?",
+                        Channels = [AgencyCommunicationChannel.Email, AgencyCommunicationChannel.SMS, AgencyCommunicationChannel.WhatsApp],
+                        VariableTokens = ["{{client_name}}", "{{property_address}}", "{{agent_name}}"],
+                    },
+                    new AgencyCommunicationTemplateItem
+                    {
+                        Id = "document-request",
+                        Name = "Document Request",
+                        Subject = "Documents needed for {{property_address}}",
+                        Body = "Hello {{client_name}}, please send {{document_list}} so {{agent_name}} can keep your deal moving for {{property_address}}.",
+                        Channels = [AgencyCommunicationChannel.Email, AgencyCommunicationChannel.SMS],
+                        VariableTokens = ["{{client_name}}", "{{property_address}}", "{{agent_name}}", "{{document_list}}"],
+                    },
+                    new AgencyCommunicationTemplateItem
+                    {
+                        Id = "deal-update",
+                        Name = "Deal Update",
+                        Subject = "Deal update for {{property_address}}",
+                        Body = "Hi {{client_name}}, your deal for {{property_address}} is now at {{deal_stage}}. {{agent_name}} will follow up with the next action.",
+                        Channels = [AgencyCommunicationChannel.Email, AgencyCommunicationChannel.SMS, AgencyCommunicationChannel.WhatsApp],
+                        VariableTokens = ["{{client_name}}", "{{property_address}}", "{{agent_name}}", "{{deal_stage}}"],
+                    },
+                    new AgencyCommunicationTemplateItem
+                    {
+                        Id = "closing-congratulations",
+                        Name = "Closing Congratulations",
+                        Subject = "Congratulations on closing {{property_address}}",
+                        Body = "Congratulations {{client_name}}! Closing for {{property_address}} is complete. {{agency_name}} and {{agent_name}} are grateful to be part of the move.",
+                        Channels = [AgencyCommunicationChannel.Email, AgencyCommunicationChannel.WhatsApp],
+                        VariableTokens = ["{{client_name}}", "{{property_address}}", "{{agent_name}}", "{{agency_name}}"],
                     },
                 ],
             };

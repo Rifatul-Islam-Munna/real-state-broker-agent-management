@@ -155,6 +155,9 @@ namespace Services
                     Stage = LeadStage.New,
                     Summary = mailItem.Message ?? string.Empty,
                     Timeline = string.Empty,
+                    NextActionDate = now.AddDays(2),
+                    NextActionType = "Review inbox lead",
+                    FollowUpStatus = LeadFollowUpStatus.Open,
                     UpdatedAt = now,
                 };
 
@@ -169,6 +172,7 @@ namespace Services
 
             return await _db.Leads
                 .Include(item => item.Deals)
+                .Include(item => item.AssignedAgent)
                 .Where(item => item.Id == lead.Id)
                 .Select(item => new LeadResponse(
                     item.Id,
@@ -181,10 +185,20 @@ namespace Services
                     item.Stage,
                     item.Priority,
                     item.Agent,
+                    item.AgentId,
+                    item.AssignedAgent != null ? item.AssignedAgent.FullName : null,
                     item.Source,
                     item.Interest,
                     item.Timeline,
                     item.InBoard,
+                    item.NextActionDate,
+                    item.NextActionType,
+                    item.FollowUpStatus,
+                    item.NextActionDate != null &&
+                        item.NextActionDate < DateTime.UtcNow &&
+                        (item.FollowUpStatus == LeadFollowUpStatus.Open || item.FollowUpStatus == LeadFollowUpStatus.Scheduled) &&
+                        item.Stage != LeadStage.Deal &&
+                        item.Stage != LeadStage.Canceled,
                     item.Notes,
                     item.CreatedAt,
                     item.UpdatedAt,

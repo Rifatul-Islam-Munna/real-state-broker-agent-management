@@ -595,9 +595,6 @@ export function MainContentSection() {
           </p>
         </div>
         <div className="flex items-center gap-4">
-          <button className="text-primary/60 transition-colors hover:text-primary">
-            <AppIcon name="notifications" />
-          </button>
           <button
             className="rounded border border-primary/20 px-4 py-1.5 text-sm font-semibold text-primary transition-colors hover:bg-primary/5 disabled:cursor-not-allowed disabled:opacity-60"
             disabled={!hasPendingChanges || updateMutation.isPending || isLoading || isLogoUploading}
