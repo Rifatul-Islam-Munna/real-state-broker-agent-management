@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { AgencySettings, AgencyIntegrationSettings } from './entities/settings.entity';
+import { AgencySettings } from './entities/settings.entity';
+import { AgencyIntegrationSettings } from './entities/integration-settings.entity';
 import { SettingsService } from './settings.service';
 import { SettingsController } from './settings.controller';
 

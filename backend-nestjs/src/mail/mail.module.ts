@@ -1,3 +1,4 @@
+import { AiIntelligenceService } from "../common/ai-intelligence.service";
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { MailInboxItem } from './entities/mail.entity';
@@ -8,7 +9,7 @@ import { LeadsModule } from '../leads/leads.module';
 
 @Module({
   imports: [TypeOrmModule.forFeature([MailInboxItem]), LeadsModule],
-  providers: [MailService, MailInboxSyncBackgroundService],
+  providers: [MailService, AiIntelligenceService, MailInboxSyncBackgroundService],
   controllers: [MailController],
 })
 export class MailModule {}

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Query, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Query, UseGuards } from '@nestjs/common';
 import { PropertyChatService } from './property-chat.service';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -17,20 +17,15 @@ export class PropertyChatController {
   @Get()
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Get property chat conversations' })
-  async findAll(
+  async find(
+    @Query('id') id?: number,
     @Query('page') page: number = 1,
     @Query('pageSize') pageSize: number = 20,
     @Query('search') search?: string,
     @Query('propertyId') propertyId?: number,
     @Query('leadId') leadId?: number,
   ) {
+    if (id) return this.chatService.getConversation(id);
     return this.chatService.getConversations(page, pageSize, search, propertyId, leadId);
-  }
-
-  @Get(':id')
-  @UseGuards(JwtAuthGuard)
-  @ApiOperation({ summary: 'Get conversation by ID' })
-  async findOne(@Param('id') id: number) {
-    return this.chatService.getConversation(id);
   }
 }

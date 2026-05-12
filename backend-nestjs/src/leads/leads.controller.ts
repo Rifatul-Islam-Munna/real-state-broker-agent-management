@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Query, UseGuards } from '@nestjs/common';
 import { LeadsService } from './leads.service';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -10,16 +10,16 @@ export class LeadsController {
 
   @Get()
   @UseGuards(JwtAuthGuard)
-  @ApiOperation({ summary: 'Get all leads' })
-  async findAll() {
+  @ApiOperation({ summary: 'Get leads' })
+  async find(
+    @Query('id') id?: number,
+    @Query('page') page: number = 1,
+    @Query('pageSize') pageSize: number = 20,
+    @Query('search') search?: string,
+    @Query('stage') stage?: string,
+  ) {
+    if (id) return this.leadsService.findOne(id);
     return this.leadsService.findAll();
-  }
-
-  @Get(':id')
-  @UseGuards(JwtAuthGuard)
-  @ApiOperation({ summary: 'Get lead by ID' })
-  async findOne(@Param('id') id: number) {
-    return this.leadsService.findOne(id);
   }
 
   @Post()

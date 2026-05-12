@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, IsNull } from 'typeorm';
 import { Property, NeighborhoodInsight, PropertyPreQuestion } from './entities/property.entity';
+import { PredictionService } from '../prediction/prediction.service';
 
 @Injectable()
 export class PropertiesService {
@@ -12,49 +13,62 @@ export class PropertiesService {
     private insightRepository: Repository<NeighborhoodInsight>,
     @InjectRepository(PropertyPreQuestion)
     private questionRepository: Repository<PropertyPreQuestion>,
+    private predictionService: PredictionService,
   ) {}
 
-  async findAll(): Promise<Property[]> {
-    return this.propertyRepository.find({
+  async findAll(): Promise<any[]> {
+    const properties = await this.propertyRepository.find({
       relations: ['neighborhoodInsights', 'preQuestions', 'agent'],
     });
+    return Promise.all(properties.map(p => this.mapProperty(p)));
   }
 
-  async findOne(id: number): Promise<Property> {
+  async findOne(id: number): Promise<any> {
     const property = await this.propertyRepository.findOne({
       where: { id },
       relations: ['neighborhoodInsights', 'preQuestions', 'agent'],
     });
     if (!property) throw new NotFoundException('Property not found');
-    return property;
+    return this.mapProperty(property);
   }
 
-  async findBySlug(slug: string): Promise<Property> {
+  async findBySlug(slug: string): Promise<any> {
     const property = await this.propertyRepository.findOne({
       where: { slug },
       relations: ['neighborhoodInsights', 'preQuestions', 'agent'],
     });
     if (!property) throw new NotFoundException('Property not found');
-    return property;
+    return this.mapProperty(property);
   }
 
-  async create(createDto: any): Promise<Property> {
+  async create(createDto: any): Promise<any> {
     const property = this.propertyRepository.create(createDto as object);
     property.slug = createDto.title.toLowerCase().replace(/ /g, '-').replace(/[^\w-]+/g, '');
-    return this.propertyRepository.save(property);
+    const saved = await this.propertyRepository.save(property);
+    return this.mapProperty(saved);
   }
 
-  async update(id: number, updateDto: any): Promise<Property> {
-    const property = await this.findOne(id);
+  async update(id: number, updateDto: any): Promise<any> {
+    const property = await this.propertyRepository.findOne({ where: { id } });
+    if (!property) throw new NotFoundException('Property not found');
     Object.assign(property, updateDto);
     if (updateDto.title) {
       property.slug = updateDto.title.toLowerCase().replace(/ /g, '-').replace(/[^\w-]+/g, '');
     }
-    return this.propertyRepository.save(property);
+    const saved = await this.propertyRepository.save(property);
+    return this.mapProperty(saved);
   }
 
-  async delete(id: number): Promise<Property> {
-    const property = await this.findOne(id);
-    return this.propertyRepository.remove(property);
+  async delete(id: number): Promise<any> {
+    const property = await this.propertyRepository.findOne({ where: { id } });
+    if (property) return this.propertyRepository.remove(property);
+  }
+
+  private async mapProperty(property: Property) {
+    const prediction = await this.predictionService.predictPropertySales(property);
+    return {
+      ...property,
+      sellPrediction: prediction,
+    };
   }
 }

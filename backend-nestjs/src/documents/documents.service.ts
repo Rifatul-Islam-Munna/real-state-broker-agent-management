@@ -14,7 +14,7 @@ export class DocumentsService {
     return this.documentRepo.find();
   }
 
-  async create(dto: any) {
+  async update(id: number, dto: any) { const doc = await this.documentRepo.findOne({ where: { id } }); if (!doc) throw new Error("Doc not found"); Object.assign(doc, dto); return this.documentRepo.save(doc); } async create(dto: any) {
     const doc = this.documentRepo.create(dto as object);
     return this.documentRepo.save(doc);
   }

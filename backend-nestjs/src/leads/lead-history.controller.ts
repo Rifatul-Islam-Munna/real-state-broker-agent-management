@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Body, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Query, UseGuards } from '@nestjs/common';
 import { LeadsService } from './leads.service';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -20,12 +20,5 @@ export class LeadHistoryController {
   @ApiOperation({ summary: 'Create lead history entry' })
   async createHistory(@Body() dto: any) {
     return this.leadsService.createHistory(dto);
-  }
-
-  @Patch()
-  @UseGuards(JwtAuthGuard)
-  @ApiOperation({ summary: 'Update lead history entry' })
-  async updateHistory(@Body() dto: any) {
-    return dto;
   }
 }

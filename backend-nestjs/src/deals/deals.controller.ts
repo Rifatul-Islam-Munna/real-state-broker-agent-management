@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Query, UseGuards } from '@nestjs/common';
 import { DealsService } from './deals.service';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -10,16 +10,16 @@ export class DealsController {
 
   @Get()
   @UseGuards(JwtAuthGuard)
-  @ApiOperation({ summary: 'Get all deals' })
-  async findAll() {
-    return this.dealsService.findAll();
-  }
-
-  @Get(':id')
-  @UseGuards(JwtAuthGuard)
-  @ApiOperation({ summary: 'Get deal by ID' })
-  async findOne(@Param('id') id: number) {
-    return this.dealsService.findOne(id);
+  @ApiOperation({ summary: 'Get deals' })
+  async find(
+    @Query('id') id?: number,
+    @Query('page') page: number = 1,
+    @Query('pageSize') pageSize: number = 20,
+    @Query('search') search?: string,
+    @Query('stage') stage?: string,
+  ) {
+    if (id) return this.dealsService.findOne(id);
+    return this.dealsService.findAll(); // Should add pagination
   }
 
   @Post()
