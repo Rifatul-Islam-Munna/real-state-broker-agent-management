@@ -28,7 +28,7 @@ export class AuthController {
     return this.authService.register(registerDto);
   }
 
-  @Post('refresh-token')
+  @Post('refresh')
   @ApiOperation({ summary: 'Refresh access token' })
   async refresh(@Body('refreshToken') refreshToken: string) {
     return this.authService.refresh(refreshToken);

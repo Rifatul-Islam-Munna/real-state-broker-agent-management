@@ -9,6 +9,7 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
+import { PropertyChatConversation } from '../../property-chat/entities/property-chat.entity';
 
 export enum PropertyCategory {
   Residential = 'Residential',
@@ -115,6 +116,9 @@ export class Property {
 
   @OneToMany(() => PropertyPreQuestion, (question) => question.property, { cascade: true })
   preQuestions: PropertyPreQuestion[];
+
+  @OneToMany(() => PropertyChatConversation, (chat) => chat.property)
+  chatConversations: PropertyChatConversation[];
 
   @Column({ type: 'timestamp', nullable: true })
   closedAt: Date;

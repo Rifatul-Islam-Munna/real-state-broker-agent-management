@@ -5,6 +5,7 @@ import {
   UseInterceptors,
   Body,
   UseGuards,
+  Delete,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { FileUploadService } from './file-upload.service';
@@ -12,11 +13,11 @@ import { ApiTags, ApiOperation, ApiConsumes, ApiBody } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @ApiTags('FileUpload')
-@Controller('file-upload')
+@Controller('upload')
 export class FileUploadController {
   constructor(private readonly fileUploadService: FileUploadService) {}
 
-  @Post('upload')
+  @Post()
   @UseGuards(JwtAuthGuard)
   @ApiConsumes('multipart/form-data')
   @ApiOperation({ summary: 'Upload a file' })
@@ -40,5 +41,12 @@ export class FileUploadController {
     @Body('folder') folder: string,
   ) {
     return this.fileUploadService.uploadFile(file, folder);
+  }
+
+  @Delete()
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Delete a file' })
+  async deleteFile(@Body('objectName') objectName: string) {
+    return this.fileUploadService.deleteFile(objectName);
   }
 }

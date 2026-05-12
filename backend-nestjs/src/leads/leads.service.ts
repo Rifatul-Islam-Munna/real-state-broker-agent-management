@@ -1,13 +1,16 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Lead } from './entities/lead.entity';
+import { LeadHistoryEntry } from './entities/lead-history.entity';
 
 @Injectable()
 export class LeadsService {
   constructor(
     @InjectRepository(Lead)
     private leadsRepository: Repository<Lead>,
+    @InjectRepository(LeadHistoryEntry)
+    private historyRepository: Repository<LeadHistoryEntry>,
   ) {}
 
   async findAll(): Promise<Lead[]> {
@@ -40,5 +43,13 @@ export class LeadsService {
     const lead = await this.findOne(id);
     return this.leadsRepository.remove(lead);
   }
+
+  async getHistory(leadId: number) {
+    return this.historyRepository.find({ where: { leadId }, order: { createdAt: 'DESC' } });
+  }
+
+  async createHistory(dto: any) {
+    const entry = this.historyRepository.create(dto as object);
+    return this.historyRepository.save(entry);
+  }
 }
-import { NotFoundException } from '@nestjs/common';

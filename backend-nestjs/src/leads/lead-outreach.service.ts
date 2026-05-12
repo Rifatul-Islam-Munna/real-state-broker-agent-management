@@ -1,12 +1,27 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { Cron, CronExpression } from '@nestjs/schedule';
+import { Injectable } from '@nestjs/common';
 
 @Injectable()
-export class LeadOutreachBackgroundService {
-  private readonly logger = new Logger(LeadOutreachBackgroundService.name);
+export class LeadOutreachService {
+  async getTemplates() {
+    return [
+      { id: 1, name: 'Welcome Email', body: 'Hello {name}, welcome to Elite Estates!' },
+      { id: 2, name: 'Follow-up Call', body: 'Just calling to follow up on your interest in {property}.' },
+    ];
+  }
 
-  @Cron(CronExpression.EVERY_HOUR)
-  handleCron() {
-    this.logger.debug('Running Lead Outreach Background Service');
+  async getSchedule() {
+    return [];
+  }
+
+  async getCallScript() {
+    return { script: 'Hello, this is {agentName} from Elite Estates...' };
+  }
+
+  async sendOutreach(dto: any) {
+    return { success: true };
+  }
+
+  async sendBulkOutreach(dto: any) {
+    return { success: true, count: dto.leadIds?.length || 0 };
   }
 }

@@ -1,13 +1,4 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Put,
-  Delete,
-  Body,
-  Param,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
 import { LeadsService } from './leads.service';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -38,17 +29,17 @@ export class LeadsController {
     return this.leadsService.create(createDto);
   }
 
-  @Put(':id')
+  @Patch()
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Update lead' })
-  async update(@Param('id') id: number, @Body() updateDto: any) {
-    return this.leadsService.update(id, updateDto);
+  async update(@Body() updateDto: any) {
+    return this.leadsService.update(updateDto.id, updateDto);
   }
 
-  @Delete(':id')
+  @Delete()
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Delete lead' })
-  async delete(@Param('id') id: number) {
+  async delete(@Query('id') id: number) {
     return this.leadsService.delete(id);
   }
 }
