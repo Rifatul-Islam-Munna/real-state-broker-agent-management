@@ -7,11 +7,25 @@ import { LeadOutreachService } from './lead-outreach.service';
 import { LeadsController } from './leads.controller';
 import { LeadHistoryController } from './lead-history.controller';
 import { LeadOutreachController } from './lead-outreach.controller';
+import { LeadQualificationPredictionService } from './lead-qualification-prediction.service';
+import { MailboxLeadIntelligenceService } from './mailbox-lead-intelligence.service';
+import { LeadOutreachBackgroundService } from './lead-outreach-background.service';
 
 @Module({
   imports: [TypeOrmModule.forFeature([Lead, LeadHistoryEntry])],
-  providers: [LeadsService, LeadOutreachService],
+  providers: [
+    LeadsService,
+    LeadOutreachService,
+    LeadQualificationPredictionService,
+    MailboxLeadIntelligenceService,
+    LeadOutreachBackgroundService,
+  ],
   controllers: [LeadsController, LeadHistoryController, LeadOutreachController],
-  exports: [LeadsService],
+  exports: [
+    LeadsService,
+    LeadQualificationPredictionService,
+    MailboxLeadIntelligenceService,
+    LeadOutreachBackgroundService,
+  ],
 })
 export class LeadsModule {}

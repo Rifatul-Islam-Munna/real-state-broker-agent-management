@@ -6,8 +6,10 @@ import {
   UpdateDateColumn,
   ManyToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { Property } from '../../properties/entities/property.entity';
+import { Lead } from '../../leads/entities/lead.entity';
 
 export enum ShowingBookingStatus {
   Scheduled = 'Scheduled',
@@ -16,7 +18,30 @@ export enum ShowingBookingStatus {
   NoShow = 'NoShow',
 }
 
+export enum AssignmentRuleType {
+  Agent = 'agent',
+  Area = 'area',
+  Workload = 'workload',
+}
+
+export enum ApprovalType {
+  ListingApproval = 'ListingApproval',
+  PriceChange = 'PriceChange',
+  DealCommission = 'DealCommission',
+}
+
+export enum ApprovalStatus {
+  Pending = 'Pending',
+  Approved = 'Approved',
+  Rejected = 'Rejected',
+}
+
 @Entity('showing_booking')
+@Index(['leadId'])
+@Index(['propertyId'])
+@Index(['agentId'])
+@Index(['status'])
+@Index(['startAt'])
 export class ShowingBooking {
   @PrimaryGeneratedColumn()
   id: number;
@@ -24,10 +49,14 @@ export class ShowingBooking {
   @Column({ nullable: true })
   leadId: number;
 
+  @ManyToOne(() => Lead, { onDelete: 'CASCADE', eager: false })
+  @JoinColumn({ name: 'lead_id' })
+  lead?: Lead;
+
   @Column()
   propertyId: number;
 
-  @ManyToOne(() => Property, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Property, { onDelete: 'CASCADE', eager: false })
   @JoinColumn({ name: 'property_id' })
   property: Property;
 
@@ -67,9 +96,21 @@ export class ShowingBooking {
 }
 
 @Entity('lead_assignment_rule')
+@Index(['agentId'])
+@Index(['area'])
+@Index(['isActive'])
 export class LeadAssignmentRule {
   @PrimaryGeneratedColumn()
   id: number;
+
+  @Column()
+  agencyId: number;
+
+  @Column({
+    type: 'enum',
+    enum: AssignmentRuleType,
+  })
+  type: AssignmentRuleType;
 
   @Column({ default: '' })
   area: string;
@@ -80,7 +121,7 @@ export class LeadAssignmentRule {
   @Column({ nullable: true })
   listingType: string;
 
-  @Column()
+  @Column({ nullable: true })
   agentId: number;
 
   @Column({ default: 100 })
@@ -97,22 +138,36 @@ export class LeadAssignmentRule {
 }
 
 @Entity('brokerage_approval_request')
+@Index(['propertyId'])
+@Index(['status'])
+@Index(['type'])
+@Index(['createdAt'])
 export class BrokerageApprovalRequest {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column()
-  type: string;
+  @Column({
+    type: 'enum',
+    enum: ApprovalType,
+  })
+  type: ApprovalType;
 
-  @Column({ default: 'Pending' })
-  status: string;
+  @Column({
+    type: 'enum',
+    enum: ApprovalStatus,
+    default: ApprovalStatus.Pending,
+  })
+  status: ApprovalStatus;
 
   @Column()
   propertyId: number;
 
-  @ManyToOne(() => Property, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Property, { onDelete: 'CASCADE', eager: false })
   @JoinColumn({ name: 'property_id' })
   property: Property;
+
+  @Column({ nullable: true })
+  dealId: number;
 
   @Column({ default: '' })
   oldPrice: string;
@@ -129,8 +184,14 @@ export class BrokerageApprovalRequest {
   @Column({ default: '' })
   requestedBy: string;
 
+  @Column({ nullable: true })
+  requestedByUserId: number;
+
   @Column({ default: '' })
   reviewedBy: string;
+
+  @Column({ nullable: true })
+  reviewedByUserId: number;
 
   @Column({ type: 'text', default: '' })
   requestNote: string;
