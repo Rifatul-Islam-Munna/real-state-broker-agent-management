@@ -85,6 +85,27 @@ namespace Entities
         [Column("description")]
         public string Description { get; set; } = string.Empty;
 
+        [Required]
+        [Column("owner_name")]
+        public string OwnerName { get; set; } = string.Empty;
+
+        [Required]
+        [Column("owner_email")]
+        public string OwnerEmail { get; set; } = string.Empty;
+
+        [Required]
+        [Column("owner_phone")]
+        public string OwnerPhone { get; set; } = string.Empty;
+
+        [Column("owner_company")]
+        public string? OwnerCompany { get; set; }
+
+        [Column("owner_address")]
+        public string? OwnerAddress { get; set; }
+
+        [Column("owner_notes")]
+        public string? OwnerNotes { get; set; }
+
         [Column("thumbnail_url")]
         public string? ThumbnailUrl { get; set; }
 

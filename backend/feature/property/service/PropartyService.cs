@@ -54,6 +54,12 @@ namespace Services
         string BathRoom,
         string Width,
         string Description,
+        string OwnerName,
+        string OwnerEmail,
+        string OwnerPhone,
+        string? OwnerCompany,
+        string? OwnerAddress,
+        string? OwnerNotes,
         string? ThumbnailUrl,
         string? ThumbnailObjectName,
         List<string> ImageUrls,
@@ -173,6 +179,12 @@ namespace Services
             existing.BathRoom = (property.BathRoom ?? string.Empty).Trim();
             existing.Width = (property.Width ?? string.Empty).Trim();
             existing.Description = (property.Description ?? string.Empty).Trim();
+            existing.OwnerName = (property.OwnerName ?? string.Empty).Trim();
+            existing.OwnerEmail = (property.OwnerEmail ?? string.Empty).Trim();
+            existing.OwnerPhone = (property.OwnerPhone ?? string.Empty).Trim();
+            existing.OwnerCompany = NormalizeOptionalString(property.OwnerCompany);
+            existing.OwnerAddress = NormalizeOptionalString(property.OwnerAddress);
+            existing.OwnerNotes = NormalizeOptionalString(property.OwnerNotes);
             existing.ThumbnailUrl = NormalizeOptionalString(property.ThumbnailUrl);
             existing.ThumbnailObjectName = NormalizeOptionalString(property.ThumbnailObjectName);
             existing.ImageUrls = NormalizeStringList(property.ImageUrls);
@@ -401,6 +413,12 @@ namespace Services
                 item.BathRoom,
                 item.Width,
                 item.Description,
+                item.OwnerName,
+                item.OwnerEmail,
+                item.OwnerPhone,
+                item.OwnerCompany,
+                item.OwnerAddress,
+                item.OwnerNotes,
                 item.ThumbnailUrl,
                 item.ThumbnailObjectName,
                 item.ImageUrls,
@@ -456,6 +474,12 @@ namespace Services
             property.BathRoom = (property.BathRoom ?? string.Empty).Trim();
             property.Width = (property.Width ?? string.Empty).Trim();
             property.Description = (property.Description ?? string.Empty).Trim();
+            property.OwnerName = (property.OwnerName ?? string.Empty).Trim();
+            property.OwnerEmail = (property.OwnerEmail ?? string.Empty).Trim();
+            property.OwnerPhone = (property.OwnerPhone ?? string.Empty).Trim();
+            property.OwnerCompany = NormalizeOptionalString(property.OwnerCompany);
+            property.OwnerAddress = NormalizeOptionalString(property.OwnerAddress);
+            property.OwnerNotes = NormalizeOptionalString(property.OwnerNotes);
             property.ThumbnailUrl = NormalizeOptionalString(property.ThumbnailUrl);
             property.ThumbnailObjectName = NormalizeOptionalString(property.ThumbnailObjectName);
             property.ImageUrls = NormalizeStringList(property.ImageUrls);

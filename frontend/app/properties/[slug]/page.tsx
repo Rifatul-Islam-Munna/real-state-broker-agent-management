@@ -2,6 +2,7 @@ import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 
 import { PublicPropertyDetailPage } from "@/components/stitch/pages/public-property-detail/page"
+import { markdownToPlainText } from "@/components/ui/simple-markdown"
 import { getPropertyBySlug, getSimilarProperties } from "@/lib/public-real-estate-data"
 
 type PageProps = {
@@ -16,15 +17,17 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     return {}
   }
 
+  const plainDescription = markdownToPlainText(property.description || "")
+
   return {
     title: `${property.title} | EstateBlue`,
-    description: property.description || `${property.title} in ${property.location || property.exactLocation}`,
+    description: plainDescription || `${property.title} in ${property.location || property.exactLocation}`,
     alternates: {
       canonical: `/properties/${property.slug}`,
     },
     openGraph: {
       title: `${property.title} | EstateBlue`,
-      description: property.description || property.location || property.exactLocation,
+      description: plainDescription || property.location || property.exactLocation,
       images: property.thumbnailUrl ? [{ url: property.thumbnailUrl }] : undefined,
       type: "website",
       url: `/properties/${property.slug}`,

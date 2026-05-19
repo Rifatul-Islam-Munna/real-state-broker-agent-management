@@ -28,6 +28,12 @@ export type PropertyFormValues = {
   bathRoom: string
   width: string
   description: string
+  ownerName: string
+  ownerEmail: string
+  ownerPhone: string
+  ownerCompany: string
+  ownerAddress: string
+  ownerNotes: string
   keyAmenities: string[]
   documentRepositoryItemIds: number[]
   neighborhoodInsights: NeighborhoodInsightFormValue[]

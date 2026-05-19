@@ -1,4 +1,6 @@
 import "./globals.css"
+import "@uiw/react-md-editor/markdown-editor.css"
+import "@uiw/react-markdown-preview/markdown.css"
 import { ThemeProvider } from "@/components/theme-provider"
 import { Toaster } from "@/components/ui/sileo"
 import QueryClint from "@/lib/QueryClint"

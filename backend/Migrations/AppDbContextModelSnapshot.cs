@@ -742,6 +742,196 @@ namespace backend.Migrations
                     b.ToTable("lead", (string)null);
                 });
 
+            modelBuilder.Entity("Entities.LeadCampaignImportBatch", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("BatchName")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("batch_name");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("created_by");
+
+                    b.PrimitiveCollection<string>("CsvColumns")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("csv_columns");
+
+                    b.Property<int>("FailedCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("failed_count");
+
+                    b.PrimitiveCollection<int>("FollowUpKinds")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("follow_up_kinds");
+
+                    b.Property<int>("ImportedCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("imported_count");
+
+                    b.PrimitiveCollection<int>("InitialKinds")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("initial_kinds");
+
+                    b.Property<Dictionary<string, string>>("LeadFieldMappings")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("lead_field_mappings");
+
+                    b.Property<int>("ScheduledCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("scheduled_count");
+
+                    b.Property<int>("SentCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("sent_count");
+
+                    b.Property<int>("SkippedCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("skipped_count");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer")
+                        .HasColumnName("status");
+
+                    b.Property<string>("TemplateName")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("template_name");
+
+                    b.Property<int>("TotalRows")
+                        .HasColumnType("integer")
+                        .HasColumnName("total_rows");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Dictionary<string, string>>("VariableMappings")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("variable_mappings");
+
+                    b.HasKey("Id")
+                        .HasName("pk_lead_campaign_import_batch");
+
+                    b.ToTable("lead_campaign_import_batch", (string)null);
+                });
+
+            modelBuilder.Entity("Entities.LeadCampaignImportItem", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("BatchId")
+                        .HasColumnType("integer")
+                        .HasColumnName("batch_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<int?>("FollowUpHistoryEntryId")
+                        .HasColumnType("integer")
+                        .HasColumnName("follow_up_history_entry_id");
+
+                    b.Property<string>("LeadEmail")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("lead_email");
+
+                    b.Property<int?>("LeadId")
+                        .HasColumnType("integer")
+                        .HasColumnName("lead_id");
+
+                    b.Property<string>("LeadName")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("lead_name");
+
+                    b.Property<string>("LeadPhone")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("lead_phone");
+
+                    b.Property<int?>("FollowUpStatus")
+                        .HasColumnType("integer")
+                        .HasColumnName("follow_up_status");
+
+                    b.Property<int?>("InitialHistoryEntryId")
+                        .HasColumnType("integer")
+                        .HasColumnName("initial_history_entry_id");
+
+                    b.Property<int>("InitialStatus")
+                        .HasColumnType("integer")
+                        .HasColumnName("initial_status");
+
+                    b.Property<Dictionary<string, string>>("RawData")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("raw_data");
+
+                    b.Property<string>("RenderedFollowUpMessage")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("rendered_follow_up_message");
+
+                    b.Property<string>("RenderedFollowUpTitle")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("rendered_follow_up_title");
+
+                    b.Property<string>("RenderedInitialMessage")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("rendered_initial_message");
+
+                    b.Property<string>("RenderedInitialTitle")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("rendered_initial_title");
+
+                    b.Property<int>("RowNumber")
+                        .HasColumnType("integer")
+                        .HasColumnName("row_number");
+
+                    b.Property<string>("SkipReason")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("skip_reason");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_lead_campaign_import_item");
+
+                    b.HasIndex("BatchId")
+                        .HasDatabaseName("ix_lead_campaign_import_item_batch_id");
+
+                    b.HasIndex("LeadId")
+                        .HasDatabaseName("ix_lead_campaign_import_item_lead_id");
+
+                    b.ToTable("lead_campaign_import_item", (string)null);
+                });
+
             modelBuilder.Entity("Entities.LeadAssignmentRule", b =>
                 {
                     b.Property<int>("Id")
@@ -1018,6 +1208,33 @@ namespace backend.Migrations
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("description");
+
+                    b.Property<string>("OwnerAddress")
+                        .HasColumnType("text")
+                        .HasColumnName("owner_address");
+
+                    b.Property<string>("OwnerCompany")
+                        .HasColumnType("text")
+                        .HasColumnName("owner_company");
+
+                    b.Property<string>("OwnerEmail")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("owner_email");
+
+                    b.Property<string>("OwnerName")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("owner_name");
+
+                    b.Property<string>("OwnerNotes")
+                        .HasColumnType("text")
+                        .HasColumnName("owner_notes");
+
+                    b.Property<string>("OwnerPhone")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("owner_phone");
 
                     b.PrimitiveCollection<string>("DocumentRepositoryItemIds")
                         .IsRequired()
@@ -1606,6 +1823,26 @@ namespace backend.Migrations
                     b.Navigation("Agent");
                 });
 
+            modelBuilder.Entity("Entities.LeadCampaignImportItem", b =>
+                {
+                    b.HasOne("Entities.LeadCampaignImportBatch", "Batch")
+                        .WithMany("Items")
+                        .HasForeignKey("BatchId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_lead_campaign_import_item_lead_campaign_import_batch_batch_id");
+
+                    b.HasOne("Entities.Lead", "Lead")
+                        .WithMany()
+                        .HasForeignKey("LeadId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_lead_campaign_import_item_lead_lead_id");
+
+                    b.Navigation("Batch");
+
+                    b.Navigation("Lead");
+                });
+
             modelBuilder.Entity("Entities.LeadHistoryEntry", b =>
                 {
                     b.HasOne("Entities.Lead", "Lead")
@@ -1727,6 +1964,11 @@ namespace backend.Migrations
             modelBuilder.Entity("Entities.DealPipeline", b =>
                 {
                     b.Navigation("ChecklistItems");
+                });
+
+            modelBuilder.Entity("Entities.LeadCampaignImportBatch", b =>
+                {
+                    b.Navigation("Items");
                 });
 
             modelBuilder.Entity("Entities.Lead", b =>

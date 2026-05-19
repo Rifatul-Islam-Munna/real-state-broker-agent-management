@@ -12,6 +12,8 @@ namespace Data
             public DbSet<PropertyChatMessage> PropertyChatMessages => Set<PropertyChatMessage>();
             public DbSet<NeighborhoodInsight> NeighborhoodInsights => Set<NeighborhoodInsight>();
             public DbSet<Lead> Leads => Set<Lead>();
+            public DbSet<LeadCampaignImportBatch> LeadCampaignImportBatches => Set<LeadCampaignImportBatch>();
+            public DbSet<LeadCampaignImportItem> LeadCampaignImportItems => Set<LeadCampaignImportItem>();
             public DbSet<LeadHistoryEntry> LeadHistoryEntries => Set<LeadHistoryEntry>();
             public DbSet<DealPipeline> DealPipelines => Set<DealPipeline>();
             public DbSet<DealChecklistItem> DealChecklistItems => Set<DealChecklistItem>();
@@ -108,6 +110,16 @@ namespace Data
             .WithMany()
             .HasForeignKey(item => item.LeadId)
             .OnDelete(DeleteBehavior.Cascade);
+                  modelBuilder.Entity<LeadCampaignImportBatch>()
+            .HasMany(item => item.Items)
+            .WithOne(item => item.Batch)
+            .HasForeignKey(item => item.BatchId)
+            .OnDelete(DeleteBehavior.Cascade);
+                  modelBuilder.Entity<LeadCampaignImportItem>()
+            .HasOne(item => item.Lead)
+            .WithMany()
+            .HasForeignKey(item => item.LeadId)
+            .OnDelete(DeleteBehavior.SetNull);
                   modelBuilder.Entity<PropertyChatConversation>()
             .HasOne(item => item.Lead)
             .WithMany()

@@ -1,5 +1,6 @@
 import { type ChangeEvent, useMemo, useState } from "react"
 
+import MDEditor from "@uiw/react-md-editor"
 import { AppIcon } from "@/components/ui/app-icon"
 import { Input } from "@/components/ui/input"
 import {
@@ -9,6 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { SimpleMarkdown } from "@/components/ui/simple-markdown"
 import { Textarea } from "@/components/ui/textarea"
 import type { AgentUserOption, PropertyItem } from "@/@types/real-estate-api"
 import { uploadPropertyAsset } from "@/lib/upload-client"
@@ -195,6 +197,83 @@ export function PropertyFormFieldsSection({
               value={formValues.title}
             />
             <FieldError error={errors.title} />
+          </div>
+          <div className="flex flex-col gap-2">
+            <label className="text-sm font-bold text-slate-700 dark:text-slate-300">
+              {"Owner Name"}
+            </label>
+            <Input
+              className="form-input rounded-xl border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800 focus:ring-primary"
+              onChange={(event) => updateField("ownerName", event.target.value)}
+              placeholder="e.g. Sarah Khan"
+              type="text"
+              value={formValues.ownerName}
+            />
+            <FieldError error={errors.ownerName} />
+          </div>
+          <div className="flex flex-col gap-2">
+            <label className="text-sm font-bold text-slate-700 dark:text-slate-300">
+              {"Owner Email"}
+            </label>
+            <Input
+              className="form-input rounded-xl border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800 focus:ring-primary"
+              onChange={(event) => updateField("ownerEmail", event.target.value)}
+              placeholder="owner@email.com"
+              type="email"
+              value={formValues.ownerEmail}
+            />
+            <FieldError error={errors.ownerEmail} />
+          </div>
+          <div className="flex flex-col gap-2">
+            <label className="text-sm font-bold text-slate-700 dark:text-slate-300">
+              {"Owner Phone"}
+            </label>
+            <Input
+              className="form-input rounded-xl border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800 focus:ring-primary"
+              onChange={(event) => updateField("ownerPhone", event.target.value)}
+              placeholder="+1 555 123 4567"
+              type="text"
+              value={formValues.ownerPhone}
+            />
+            <FieldError error={errors.ownerPhone} />
+          </div>
+          <div className="flex flex-col gap-2">
+            <label className="text-sm font-bold text-slate-700 dark:text-slate-300">
+              {"Owner Company"}
+            </label>
+            <Input
+              className="form-input rounded-xl border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800 focus:ring-primary"
+              onChange={(event) => updateField("ownerCompany", event.target.value)}
+              placeholder="Optional"
+              type="text"
+              value={formValues.ownerCompany}
+            />
+            <FieldError error={errors.ownerCompany} />
+          </div>
+          <div className="flex flex-col gap-2 md:col-span-2">
+            <label className="text-sm font-bold text-slate-700 dark:text-slate-300">
+              {"Owner Address"}
+            </label>
+            <Input
+              className="form-input rounded-xl border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800 focus:ring-primary"
+              onChange={(event) => updateField("ownerAddress", event.target.value)}
+              placeholder="Optional mailing or office address"
+              type="text"
+              value={formValues.ownerAddress}
+            />
+            <FieldError error={errors.ownerAddress} />
+          </div>
+          <div className="flex flex-col gap-2 md:col-span-2">
+            <label className="text-sm font-bold text-slate-700 dark:text-slate-300">
+              {"Owner Notes"}
+            </label>
+            <Textarea
+              className="form-input min-h-24 rounded-xl border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800 focus:ring-primary"
+              onChange={(event) => updateField("ownerNotes", event.target.value)}
+              placeholder="Optional notes about seller / owner preferences"
+              value={formValues.ownerNotes}
+            />
+            <FieldError error={errors.ownerNotes} />
           </div>
           <div className="flex flex-col gap-2">
             <label className="text-sm font-bold text-slate-700 dark:text-slate-300">
@@ -388,12 +467,32 @@ export function PropertyFormFieldsSection({
           <AppIcon className="text-primary" name="description" />
           {" Property Description "}
         </h4>
-        <Textarea
-          className="form-textarea min-h-36 w-full rounded-xl border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800 focus:ring-primary"
-          onChange={(event) => updateField("description", event.target.value)}
-          placeholder="Write a compelling description of the property..."
-          value={formValues.description}
-        />
+        <div className="space-y-4">
+          <div data-color-mode="light">
+            <MDEditor
+              height={420}
+              onChange={(value) => updateField("description", value ?? "")}
+              preview="live"
+              textareaProps={{
+                placeholder: "Write property description in markdown...",
+              }}
+              value={formValues.description}
+            />
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-900">
+            <p className="mb-3 text-xs font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+              {"Stored In DB As Markdown"}
+            </p>
+            <p className="text-sm leading-7 text-slate-500 dark:text-slate-400">
+              {"This markdown is saved directly in property description field, then rendered on public property page with proper spacing, lists, headings, links, and formatting."}
+            </p>
+            {formValues.description.trim() ? (
+              <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/50">
+                <SimpleMarkdown className="space-y-4" value={formValues.description} />
+              </div>
+            ) : null}
+          </div>
+        </div>
         <FieldError error={errors.description} />
       </section>
 

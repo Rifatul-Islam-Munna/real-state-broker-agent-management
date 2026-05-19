@@ -10,6 +10,7 @@ import type { PropertyItem } from "@/@types/real-estate-api"
 import { AppIcon } from "@/components/ui/app-icon"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
+import { SimpleMarkdown } from "@/components/ui/simple-markdown"
 import {
   Select,
   SelectContent,
@@ -259,9 +260,13 @@ export function Section2Section({ property, relatedProperties }: Section2Section
             <h3 className="mb-4 border-l-4 border-accent pl-4 text-xl font-800 uppercase tracking-tight">
               {"Property Description"}
             </h3>
-            <p className="text-lg leading-relaxed text-slate-600">
-              {property.description || "Property description coming soon."}
-            </p>
+            {property.description ? (
+              <SimpleMarkdown className="space-y-5 text-lg" value={property.description} />
+            ) : (
+              <p className="text-lg leading-relaxed text-slate-600">
+                {"Property description coming soon."}
+              </p>
+            )}
             {property.exactLocation ? (
               <p className="mt-4 leading-relaxed text-slate-600">
                 {`Exact location: ${property.exactLocation}`}

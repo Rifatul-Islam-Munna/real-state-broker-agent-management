@@ -336,6 +336,16 @@ namespace Services
                         continue;
                     }
 
+                    var skipReplyReason = await BuildSkipReasonForInboundReplyAsync(entry.Lead, now, ct);
+                    if (!string.IsNullOrWhiteSpace(skipReplyReason))
+                    {
+                        entry.Status = LeadHistoryStatus.Completed;
+                        entry.Summary = skipReplyReason;
+                        entry.OccurredAt = now;
+                        entry.UpdatedAt = now;
+                        continue;
+                    }
+
                     LeadOutreachDeliveryResult delivery;
                     try
                     {
@@ -731,6 +741,90 @@ namespace Services
             }
 
             await _db.SaveChangesAsync(ct);
+        }
+
+        private async Task<string?> BuildSkipReasonForInboundReplyAsync(Lead lead, DateTime now, CancellationToken ct)
+        {
+            var normalizedEmail = NormalizeOptional(lead.Email)?.ToLowerInvariant();
+            var normalizedPhone = NormalizeOptional(lead.Phone);
+
+            var hasInboundHistory = await _db.LeadHistoryEntries
+                .AsNoTracking()
+                .AnyAsync(item =>
+                    item.LeadId == lead.Id &&
+                    item.Direction == LeadHistoryDirection.Incoming &&
+                    (item.Kind == LeadHistoryKind.Email ||
+                     item.Kind == LeadHistoryKind.Sms ||
+                     item.Kind == LeadHistoryKind.Call) &&
+                    (item.OccurredAt ?? item.CreatedAt) <= now, ct);
+
+            if (hasInboundHistory)
+            {
+                return "Skipped scheduled outreach because this lead already replied.";
+            }
+
+            if (!string.IsNullOrWhiteSpace(normalizedEmail))
+            {
+                var hasMailReply = await _db.MailInbox
+                    .AsNoTracking()
+                    .AnyAsync(item =>
+                        item.Email == normalizedEmail &&
+                        item.CreatedAt <= now, ct);
+
+                if (hasMailReply)
+                {
+                    return $"Skipped scheduled outreach because reply already arrived from {normalizedEmail}.";
+                }
+
+                var hasContactReply = await _db.ContactRequests
+                    .AsNoTracking()
+                    .AnyAsync(item =>
+                        item.Email == normalizedEmail &&
+                        item.CreatedAt <= now, ct);
+
+                if (hasContactReply)
+                {
+                    return $"Skipped scheduled outreach because inbound contact already exists for {normalizedEmail}.";
+                }
+
+                var hasChatReply = await _db.PropertyChatConversations
+                    .AsNoTracking()
+                    .AnyAsync(item =>
+                        item.ContactEmail == normalizedEmail &&
+                        item.CreatedAt <= now, ct);
+
+                if (hasChatReply)
+                {
+                    return $"Skipped scheduled outreach because property chat already exists for {normalizedEmail}.";
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(normalizedPhone))
+            {
+                var hasPhoneContactReply = await _db.ContactRequests
+                    .AsNoTracking()
+                    .AnyAsync(item =>
+                        item.Phone == normalizedPhone &&
+                        item.CreatedAt <= now, ct);
+
+                if (hasPhoneContactReply)
+                {
+                    return $"Skipped scheduled outreach because inbound contact already exists for {normalizedPhone}.";
+                }
+
+                var hasPhoneChatReply = await _db.PropertyChatConversations
+                    .AsNoTracking()
+                    .AnyAsync(item =>
+                        item.ContactPhone == normalizedPhone &&
+                        item.CreatedAt <= now, ct);
+
+                if (hasPhoneChatReply)
+                {
+                    return $"Skipped scheduled outreach because property chat already exists for {normalizedPhone}.";
+                }
+            }
+
+            return null;
         }
 
         private async Task<string> ResolveProviderNameAsync(LeadHistoryKind kind, CancellationToken ct)

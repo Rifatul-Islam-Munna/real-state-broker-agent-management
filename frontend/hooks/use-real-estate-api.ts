@@ -7,6 +7,7 @@ import { useCommonMutationApi } from "@/api-hooks/use-api-mutation"
 import type {
   AgencyCommunicationChannel,
   AgencyCommunicationTemplateItem,
+  AgencyCommunicationTemplateSaveInput,
   AgencyIntegrationStatus,
   AgencyProfileSettings,
   AgencySettings,
@@ -33,6 +34,8 @@ import type {
   HomePageSettings,
   LeadItem,
   LeadAssignmentRuleItem,
+  LeadCampaignImportBatch,
+  LeadCampaignImportInput,
   LeadHistoryEntry,
   MailboxSyncStatus,
   MailInboxItem,
@@ -58,6 +61,7 @@ import type {
 export type {
   AgencyCommunicationChannel,
   AgencyCommunicationTemplateItem,
+  AgencyCommunicationTemplateSaveInput,
   AgencyIntegrationStatus,
   AgencyProfileSettings,
   AgencySettings,
@@ -107,11 +111,16 @@ export type {
   HomePageWhyChooseUsSection,
   LeadItem,
   LeadAssignmentRuleItem,
+  LeadCampaignImportBatch,
+  LeadCampaignImportItem,
+  LeadCampaignImportItemStatus,
+  LeadCampaignImportStatus,
   LeadFollowUpStatus,
   LeadHistoryDirection,
   LeadHistoryEntry,
   LeadHistoryKind,
   LeadHistoryStatus,
+  LeadCampaignImportInput,
   MailboxSyncStatus,
   LeadPriority,
   LeadStage,
@@ -733,6 +742,52 @@ export function useDeleteLead() {
     onSuccess: () => void invalidate(),
     successMessage: "Lead deleted",
     url: "/leads",
+  })
+}
+
+export function useLeadCampaignImports(params?: QueryParams) {
+  return useQueryWrapper<LeadCampaignImportBatch[]>(
+    ["lead-campaign-imports", params],
+    `/lead-campaign-imports${buildQuery(params)}`,
+    {
+      ...defaultQueryOptions,
+      placeholderData: undefined,
+    },
+    0,
+    "lead-campaign-imports",
+  )
+}
+
+export function useCreateLeadCampaignImport() {
+  const invalidate = useInvalidate(["lead-campaign-imports", "lead-history", "lead-outreach-schedule", "lead", "leads"])
+
+  return useCommonMutationApi<LeadCampaignImportBatch, LeadCampaignImportInput>({
+    method: "POST",
+    onSuccess: () => void invalidate(),
+    successMessage: "Lead import saved",
+    url: "/lead-campaign-imports",
+  })
+}
+
+export function useSaveLeadOutreachTemplate() {
+  const invalidate = useInvalidate(["lead-outreach-templates", "agency-settings"])
+
+  return useCommonMutationApi<AgencyCommunicationTemplateItem, AgencyCommunicationTemplateSaveInput>({
+    method: "POST",
+    onSuccess: () => void invalidate(),
+    successMessage: "Template saved",
+    url: "/lead-outreach/templates",
+  })
+}
+
+export function useDeleteLeadOutreachTemplate() {
+  const invalidate = useInvalidate(["lead-outreach-templates", "agency-settings"])
+
+  return useCommonMutationApi<unknown, { id: string }>({
+    method: "DELETE",
+    onSuccess: () => void invalidate(),
+    successMessage: "Template deleted",
+    url: "/lead-outreach/templates",
   })
 }
 

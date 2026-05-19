@@ -151,6 +151,78 @@ namespace Services
             return MapResponse(payload, record.UpdatedAt);
         }
 
+        public async Task<List<AgencyCommunicationTemplateItem>> GetCommunicationTemplatesAsync(CancellationToken ct = default)
+        {
+            var settings = await GetAdminSettingsAsync();
+            return settings.CommunicationTemplates;
+        }
+
+        public async Task<AgencyCommunicationTemplateItem> SaveCommunicationTemplateAsync(
+            AgencyCommunicationTemplateItem request,
+            CancellationToken ct = default)
+        {
+            var now = DateTime.UtcNow;
+            var record = await _db.AgencySettings.FirstOrDefaultAsync(item => item.Id == SettingsRecordId, ct);
+            var payload = record is null ? CreateDefaultPayload() : ReadPayload(record.ContentJson);
+            var template = NormalizeTemplateItem(request, payload.CommunicationTemplates.FirstOrDefault());
+            var existingIndex = payload.CommunicationTemplates.FindIndex(item =>
+                string.Equals(item.Id, template.Id, StringComparison.OrdinalIgnoreCase));
+
+            if (existingIndex >= 0)
+            {
+                payload.CommunicationTemplates[existingIndex] = template;
+            }
+            else
+            {
+                payload.CommunicationTemplates.Insert(0, template);
+            }
+
+            if (record is null)
+            {
+                record = new AgencySettingsRecord
+                {
+                    Id = SettingsRecordId,
+                    CreatedAt = now,
+                };
+                await _db.AgencySettings.AddAsync(record, ct);
+            }
+
+            record.ContentJson = JsonSerializer.Serialize(NormalizePayload(payload), JsonOptions);
+            record.UpdatedAt = now;
+            await _db.SaveChangesAsync(ct);
+
+            return template;
+        }
+
+        public async Task<bool> DeleteCommunicationTemplateAsync(string id, CancellationToken ct = default)
+        {
+            var normalizedId = NormalizeLooseText(id);
+            if (normalizedId.Length == 0)
+            {
+                return false;
+            }
+
+            var record = await _db.AgencySettings.FirstOrDefaultAsync(item => item.Id == SettingsRecordId, ct);
+            if (record is null)
+            {
+                return false;
+            }
+
+            var payload = ReadPayload(record.ContentJson);
+            var removedCount = payload.CommunicationTemplates.RemoveAll(item =>
+                string.Equals(item.Id, normalizedId, StringComparison.OrdinalIgnoreCase));
+
+            if (removedCount == 0)
+            {
+                return false;
+            }
+
+            record.ContentJson = JsonSerializer.Serialize(NormalizePayload(payload), JsonOptions);
+            record.UpdatedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync(ct);
+            return true;
+        }
+
         private static AgencySettingsResponse MapResponse(AgencySettingsPayload payload, DateTime updatedAt)
         {
             return new AgencySettingsResponse
@@ -293,6 +365,32 @@ namespace Services
                     };
                 })
                 .ToList();
+        }
+
+        private static AgencyCommunicationTemplateItem NormalizeTemplateItem(
+            AgencyCommunicationTemplateItem? input,
+            AgencyCommunicationTemplateItem? fallback)
+        {
+            var templateFallback = fallback ?? CreateDefaultPayload().CommunicationTemplates[0];
+            var channels = (input?.Channels ?? [])
+                .Where(channel => Enum.IsDefined(channel))
+                .Distinct()
+                .ToList();
+            var variableTokens = (input?.VariableTokens ?? [])
+                .Select(token => (token ?? string.Empty).Trim())
+                .Where(token => token.Length > 0)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            return new AgencyCommunicationTemplateItem
+            {
+                Id = NormalizeText(input?.Id, Guid.NewGuid().ToString("N")),
+                Name = NormalizeText(input?.Name, templateFallback.Name),
+                Subject = NormalizeLooseText(input?.Subject),
+                Body = NormalizeText(input?.Body, templateFallback.Body),
+                Channels = channels.Count > 0 ? channels : [AgencyCommunicationChannel.Email],
+                VariableTokens = variableTokens,
+            };
         }
 
         private static string NormalizeText(string? value, string fallback)

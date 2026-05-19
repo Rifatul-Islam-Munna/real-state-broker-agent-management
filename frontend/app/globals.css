@@ -184,6 +184,38 @@
   display: none;
 }
 
+[data-color-mode="light"] {
+  --md-editor-bg-color: #f7f5f1;
+  --md-editor-text-color: #1a2332;
+}
+
+.wmde-markdown,
+.wmde-markdown-var {
+  background-color: transparent !important;
+  color: var(--color-foreground) !important;
+}
+
+.wmde-markdown {
+  font-family: var(--font-sans) !important;
+}
+
+.wmde-markdown h1,
+.wmde-markdown h2,
+.wmde-markdown h3,
+.wmde-markdown h4,
+.wmde-markdown h5,
+.wmde-markdown h6 {
+  font-family: var(--font-display) !important;
+}
+
+.wmde-markdown blockquote {
+  border-left-color: var(--color-accent) !important;
+}
+
+.wmde-markdown pre {
+  border-radius: 1rem;
+}
+
 @utility font-800 {
   font-weight: 800;
 }

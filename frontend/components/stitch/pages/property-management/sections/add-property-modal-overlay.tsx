@@ -31,6 +31,9 @@ function validatePropertyForm(values: PropertyFormValues, options: { galleryCoun
   const errors: PropertyFormErrors = {}
 
   if (!values.title.trim()) errors.title = "Listing title is required."
+  if (!values.ownerName.trim()) errors.ownerName = "Owner name is required."
+  if (!values.ownerEmail.trim()) errors.ownerEmail = "Owner email is required."
+  if (!values.ownerPhone.trim()) errors.ownerPhone = "Owner phone is required."
   if (!values.price.trim()) errors.price = "Price is required."
   if (!values.location.trim()) errors.location = "Location is required."
   if (!values.exactLocation.trim()) errors.exactLocation = "Street address is required."

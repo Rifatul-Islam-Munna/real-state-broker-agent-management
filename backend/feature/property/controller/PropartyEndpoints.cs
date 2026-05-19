@@ -25,12 +25,32 @@ namespace Endpoints
         public override async Task HandleAsync(Property req, CancellationToken ct)
         {
             await AgentRouteAccessService.EnsureCanAccessAsync(HttpContext.User, AgentRoutePermissions.Properties, ct);
+            if (!await ValidateOwnerFields(req, ct))
+            {
+                return;
+            }
             var result = await PropertyService.CreatePropertyAsync(req, GetActor(HttpContext.User), HttpContext.User.IsInRole("Admin"));
             await Send.OkAsync(result, ct);
         }
 
         private static string GetActor(ClaimsPrincipal user)
             => user.FindFirst("fullName")?.Value ?? user.FindFirst(ClaimTypes.Email)?.Value ?? "CRM";
+
+        private async Task<bool> ValidateOwnerFields(Property req, CancellationToken ct)
+        {
+            if (!string.IsNullOrWhiteSpace(req.OwnerName) &&
+                !string.IsNullOrWhiteSpace(req.OwnerEmail) &&
+                !string.IsNullOrWhiteSpace(req.OwnerPhone))
+            {
+                return true;
+            }
+
+            AddError(r => r.OwnerName, "Owner name is required.");
+            AddError(r => r.OwnerEmail, "Owner email is required.");
+            AddError(r => r.OwnerPhone, "Owner phone is required.");
+            await Send.ErrorsAsync(cancellation: ct);
+            return false;
+        }
     }
 
     public class UpdatePropertyEndpoint : Endpoint<Property, PropertyResponse>
@@ -52,6 +72,10 @@ namespace Endpoints
         public override async Task HandleAsync(Property req, CancellationToken ct)
         {
             await AgentRouteAccessService.EnsureCanAccessAsync(HttpContext.User, AgentRoutePermissions.Properties, ct);
+            if (!await ValidateOwnerFields(req, ct))
+            {
+                return;
+            }
             var result = await PropertyService.UpdatePropertyAsync(req, GetActor(HttpContext.User), HttpContext.User.IsInRole("Admin"));
 
             if (result is null)
@@ -65,6 +89,22 @@ namespace Endpoints
 
         private static string GetActor(ClaimsPrincipal user)
             => user.FindFirst("fullName")?.Value ?? user.FindFirst(ClaimTypes.Email)?.Value ?? "CRM";
+
+        private async Task<bool> ValidateOwnerFields(Property req, CancellationToken ct)
+        {
+            if (!string.IsNullOrWhiteSpace(req.OwnerName) &&
+                !string.IsNullOrWhiteSpace(req.OwnerEmail) &&
+                !string.IsNullOrWhiteSpace(req.OwnerPhone))
+            {
+                return true;
+            }
+
+            AddError(r => r.OwnerName, "Owner name is required.");
+            AddError(r => r.OwnerEmail, "Owner email is required.");
+            AddError(r => r.OwnerPhone, "Owner phone is required.");
+            await Send.ErrorsAsync(cancellation: ct);
+            return false;
+        }
     }
 
     public class PatchPropertyEndpoint : Endpoint<Property, PropertyResponse>
@@ -86,6 +126,10 @@ namespace Endpoints
         public override async Task HandleAsync(Property req, CancellationToken ct)
         {
             await AgentRouteAccessService.EnsureCanAccessAsync(HttpContext.User, AgentRoutePermissions.Properties, ct);
+            if (!await ValidateOwnerFields(req, ct))
+            {
+                return;
+            }
             var result = await PropertyService.UpdatePropertyAsync(req, GetActor(HttpContext.User), HttpContext.User.IsInRole("Admin"));
 
             if (result is null)
@@ -99,6 +143,22 @@ namespace Endpoints
 
         private static string GetActor(ClaimsPrincipal user)
             => user.FindFirst("fullName")?.Value ?? user.FindFirst(ClaimTypes.Email)?.Value ?? "CRM";
+
+        private async Task<bool> ValidateOwnerFields(Property req, CancellationToken ct)
+        {
+            if (!string.IsNullOrWhiteSpace(req.OwnerName) &&
+                !string.IsNullOrWhiteSpace(req.OwnerEmail) &&
+                !string.IsNullOrWhiteSpace(req.OwnerPhone))
+            {
+                return true;
+            }
+
+            AddError(r => r.OwnerName, "Owner name is required.");
+            AddError(r => r.OwnerEmail, "Owner email is required.");
+            AddError(r => r.OwnerPhone, "Owner phone is required.");
+            await Send.ErrorsAsync(cancellation: ct);
+            return false;
+        }
     }
 
     public class DeletePropertyEndpoint : Endpoint<DeletePropertyEndpoint.Request>
@@ -184,7 +244,7 @@ namespace Endpoints
 
         public override async Task HandleAsync(Request req, CancellationToken ct)
         {
-            var canSeePrediction = CanSeePrediction(HttpContext.User);
+            var canSeePrivateFields = CanSeePrivateFields(HttpContext.User);
 
             if (req.Id.HasValue)
             {
@@ -196,7 +256,7 @@ namespace Endpoints
                     return;
                 }
 
-                await Send.OkAsync(canSeePrediction ? property : RedactPrediction(property), ct);
+                await Send.OkAsync(canSeePrivateFields ? property : RedactPrivateFields(property), ct);
                 return;
             }
 
@@ -210,7 +270,7 @@ namespace Endpoints
                     return;
                 }
 
-                await Send.OkAsync(canSeePrediction ? property : RedactPrediction(property), ct);
+                await Send.OkAsync(canSeePrivateFields ? property : RedactPrivateFields(property), ct);
                 return;
             }
 
@@ -223,18 +283,24 @@ namespace Endpoints
                 req.Status,
                 req.Agent);
 
-            await Send.OkAsync(canSeePrediction ? result : RedactPrediction(result), ct);
+            await Send.OkAsync(canSeePrivateFields ? result : RedactPrivateFields(result), ct);
         }
 
-        private static bool CanSeePrediction(ClaimsPrincipal user)
+        private static bool CanSeePrivateFields(ClaimsPrincipal user)
         {
             return user.IsInRole("Admin") || user.IsInRole("Agent");
         }
 
-        private static PropertyResponse RedactPrediction(PropertyResponse property)
+        private static PropertyResponse RedactPrivateFields(PropertyResponse property)
         {
             return property with
             {
+                OwnerName = string.Empty,
+                OwnerEmail = string.Empty,
+                OwnerPhone = string.Empty,
+                OwnerCompany = null,
+                OwnerAddress = null,
+                OwnerNotes = null,
                 SellPrediction = new PropertySellPredictionResponse(
                     0,
                     false,
@@ -246,11 +312,11 @@ namespace Endpoints
             };
         }
 
-        private static PaginatedResult<PropertyResponse> RedactPrediction(PaginatedResult<PropertyResponse> result)
+        private static PaginatedResult<PropertyResponse> RedactPrivateFields(PaginatedResult<PropertyResponse> result)
         {
             return new PaginatedResult<PropertyResponse>
             {
-                Items = result.Items.Select(RedactPrediction).ToList(),
+                Items = result.Items.Select(RedactPrivateFields).ToList(),
                 TotalCount = result.TotalCount,
                 Page = result.Page,
                 PageSize = result.PageSize,

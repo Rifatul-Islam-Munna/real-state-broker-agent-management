@@ -342,6 +342,8 @@ export type AgencyCommunicationTemplateItem = {
   variableTokens: string[]
 }
 
+export type AgencyCommunicationTemplateSaveInput = AgencyCommunicationTemplateItem
+
 export type AgencySettings = {
   profile: AgencyProfileSettings
   communicationTemplates: AgencyCommunicationTemplateItem[]
@@ -578,6 +580,12 @@ export type PropertyItem = {
   bathRoom: string
   width: string
   description: string
+  ownerName: string
+  ownerEmail: string
+  ownerPhone: string
+  ownerCompany?: string | null
+  ownerAddress?: string | null
+  ownerNotes?: string | null
   thumbnailUrl?: string | null
   thumbnailObjectName?: string | null
   imageUrls: string[]
@@ -617,6 +625,12 @@ export type PropertySaveInput = {
   bathRoom: string
   width: string
   description: string
+  ownerName: string
+  ownerEmail: string
+  ownerPhone: string
+  ownerCompany?: string | null
+  ownerAddress?: string | null
+  ownerNotes?: string | null
   thumbnailUrl?: string | null
   thumbnailObjectName?: string | null
   imageUrls: string[]
@@ -771,6 +785,62 @@ export type LeadOutreachScheduleItem = {
   occurredAt?: string | null
   createdAt: string
   updatedAt: string
+}
+
+export type LeadCampaignImportStatus = "Completed" | "CompletedWithSkips" | "Failed"
+export type LeadCampaignImportItemStatus = "Imported" | "Sent" | "Scheduled" | "Skipped" | "Failed"
+
+export type LeadCampaignImportItem = {
+  id: number
+  rowNumber: number
+  leadId?: number | null
+  leadName: string
+  leadEmail: string
+  leadPhone: string
+  initialStatus: LeadCampaignImportItemStatus
+  followUpStatus?: LeadCampaignImportItemStatus | null
+  skipReason: string
+  initialHistoryEntryId?: number | null
+  followUpHistoryEntryId?: number | null
+  createdAt: string
+}
+
+export type LeadCampaignImportBatch = {
+  id: number
+  batchName: string
+  templateName: string
+  initialKinds: Array<Extract<LeadHistoryKind, "Email" | "Sms" | "Call">>
+  followUpKinds: Array<Extract<LeadHistoryKind, "Email" | "Sms" | "Call">>
+  totalRows: number
+  importedCount: number
+  sentCount: number
+  scheduledCount: number
+  skippedCount: number
+  failedCount: number
+  status: LeadCampaignImportStatus
+  createdBy: string
+  createdAt: string
+  updatedAt: string
+  items: LeadCampaignImportItem[]
+}
+
+export type LeadCampaignImportInput = {
+  batchName: string
+  templateId?: string | null
+  templateName: string
+  leadFieldMappings: Record<string, string>
+  variableMappings: Record<string, string>
+  rows: Array<Record<string, string>>
+  initialKinds: Array<Extract<LeadHistoryKind, "Email" | "Sms" | "Call">>
+  initialTitle: string
+  initialMessage: string
+  initialScheduledAt?: string | null
+  enableFollowUp: boolean
+  followUpKinds: Array<Extract<LeadHistoryKind, "Email" | "Sms" | "Call">>
+  followUpTitle: string
+  followUpMessage: string
+  followUpScheduledAt?: string | null
+  createdBy?: string | null
 }
 
 export type DealStage =
