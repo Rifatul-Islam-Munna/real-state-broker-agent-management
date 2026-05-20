@@ -20,6 +20,9 @@ namespace Services
         int? AgentId,
         string? AssignedAgentName,
         string Source,
+        string ShowingAgentName,
+        string ShowingAgentEmail,
+        string ShowingAgentPhone,
         string Interest,
         string Timeline,
         bool InBoard,
@@ -85,6 +88,9 @@ namespace Services
             existing.Agent = (lead.Agent ?? string.Empty).Trim();
             existing.AgentId = lead.AgentId;
             existing.Source = (lead.Source ?? string.Empty).Trim();
+            existing.ShowingAgentName = (lead.ShowingAgentName ?? string.Empty).Trim();
+            existing.ShowingAgentEmail = (lead.ShowingAgentEmail ?? string.Empty).Trim().ToLowerInvariant();
+            existing.ShowingAgentPhone = (lead.ShowingAgentPhone ?? string.Empty).Trim();
             existing.Interest = lead.Interest ?? string.Empty;
             existing.Timeline = lead.Timeline ?? string.Empty;
             existing.InBoard = lead.InBoard;
@@ -225,6 +231,9 @@ namespace Services
                 item.AgentId,
                 item.AssignedAgent != null ? item.AssignedAgent.FullName : null,
                 item.Source,
+                item.ShowingAgentName,
+                item.ShowingAgentEmail,
+                item.ShowingAgentPhone,
                 item.Interest,
                 item.Timeline,
                 item.InBoard,
@@ -258,6 +267,9 @@ namespace Services
             lead.Phone = (lead.Phone ?? string.Empty).Trim();
             lead.Agent = (lead.Agent ?? string.Empty).Trim();
             lead.Source = (lead.Source ?? string.Empty).Trim();
+            lead.ShowingAgentName = (lead.ShowingAgentName ?? string.Empty).Trim();
+            lead.ShowingAgentEmail = (lead.ShowingAgentEmail ?? string.Empty).Trim().ToLowerInvariant();
+            lead.ShowingAgentPhone = (lead.ShowingAgentPhone ?? string.Empty).Trim();
             lead.NextActionDate = lead.NextActionDate?.ToUniversalTime();
             lead.NextActionType = (lead.NextActionType ?? string.Empty).Trim();
             lead.Notes ??= [];

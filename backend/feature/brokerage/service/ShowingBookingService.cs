@@ -12,7 +12,10 @@ namespace Services
         string ContactPhone,
         DateTime StartAt,
         DateTime? EndAt,
-        string Notes
+        string Notes,
+        string ShowingAgentName = "",
+        string ShowingAgentEmail = "",
+        string ShowingAgentPhone = ""
     );
 
     public record UpdateShowingBookingRequest(
@@ -35,6 +38,11 @@ namespace Services
         DateTime EndAt,
         ShowingBookingStatus Status,
         string Notes,
+        string ShowingAgentName,
+        string ShowingAgentEmail,
+        string ShowingAgentPhone,
+        DateTime? FeedbackRequestedAt,
+        DateTime? FeedbackReceivedAt,
         DateTime CreatedAt,
         DateTime UpdatedAt
     );
@@ -49,7 +57,8 @@ namespace Services
         AppDbContext db,
         LeadAssignmentService leadAssignmentService,
         LeadHistoryService leadHistoryService,
-        BrokerageAuditService auditService)
+        BrokerageAuditService auditService,
+        PropertyFeedbackService propertyFeedbackService)
     {
         private static readonly TimeSpan[] DefaultSlotTimes =
         [
@@ -112,6 +121,9 @@ namespace Services
                     Priority = LeadPriority.HighPriority,
                     Property = property.Title,
                     Source = "Schedule Viewing",
+                    ShowingAgentName = string.IsNullOrWhiteSpace(request.ShowingAgentName) ? (property.Agent?.FullName ?? string.Empty) : request.ShowingAgentName.Trim(),
+                    ShowingAgentEmail = string.IsNullOrWhiteSpace(request.ShowingAgentEmail) ? (property.Agent?.Email ?? string.Empty) : request.ShowingAgentEmail.Trim().ToLowerInvariant(),
+                    ShowingAgentPhone = string.IsNullOrWhiteSpace(request.ShowingAgentPhone) ? (property.Agent?.Phone ?? string.Empty) : request.ShowingAgentPhone.Trim(),
                     Stage = LeadStage.Visit,
                     Summary = $"Viewing requested for {property.Title}.",
                     Timeline = startAt.ToString("u"),
@@ -137,6 +149,9 @@ namespace Services
                 lead.Phone = string.IsNullOrWhiteSpace(normalizedPhone) ? lead.Phone : normalizedPhone;
                 lead.Property = property.Title;
                 lead.Source = "Schedule Viewing";
+                lead.ShowingAgentName = string.IsNullOrWhiteSpace(request.ShowingAgentName) ? (property.Agent?.FullName ?? lead.ShowingAgentName) : request.ShowingAgentName.Trim();
+                lead.ShowingAgentEmail = string.IsNullOrWhiteSpace(request.ShowingAgentEmail) ? (property.Agent?.Email ?? lead.ShowingAgentEmail) : request.ShowingAgentEmail.Trim().ToLowerInvariant();
+                lead.ShowingAgentPhone = string.IsNullOrWhiteSpace(request.ShowingAgentPhone) ? (property.Agent?.Phone ?? lead.ShowingAgentPhone) : request.ShowingAgentPhone.Trim();
                 lead.Stage = LeadStage.Visit;
                 lead.UpdatedAt = now;
                 await db.SaveChangesAsync(ct);
@@ -155,12 +170,33 @@ namespace Services
                 PropertyId = property.Id,
                 StartAt = startAt,
                 Status = ShowingBookingStatus.Scheduled,
+                ShowingAgentName = string.IsNullOrWhiteSpace(request.ShowingAgentName) ? (property.Agent?.FullName ?? string.Empty) : request.ShowingAgentName.Trim(),
+                ShowingAgentEmail = string.IsNullOrWhiteSpace(request.ShowingAgentEmail) ? (property.Agent?.Email ?? string.Empty) : request.ShowingAgentEmail.Trim().ToLowerInvariant(),
+                ShowingAgentPhone = string.IsNullOrWhiteSpace(request.ShowingAgentPhone) ? (property.Agent?.Phone ?? string.Empty) : request.ShowingAgentPhone.Trim(),
                 UpdatedAt = now,
             };
 
             await db.ShowingBookings.AddAsync(booking, ct);
             auditService.AddLog("ShowingBooking", null, "Create", null, null, property.Title, "Website", request.Notes);
             await db.SaveChangesAsync(ct);
+
+            if (!string.IsNullOrWhiteSpace(booking.ShowingAgentEmail) || !string.IsNullOrWhiteSpace(booking.ShowingAgentPhone))
+            {
+                await propertyFeedbackService.CreateFeedbackRequestAsync(new CreateShowingFeedbackRequestInput
+                {
+                    ShowingBookingId = booking.Id,
+                    PropertyId = property.Id,
+                    LeadId = lead.Id,
+                    RecipientType = ShowingFeedbackRequestRecipientType.ShowingAgent,
+                    RecipientName = booking.ShowingAgentName,
+                    RecipientEmail = booking.ShowingAgentEmail,
+                    RecipientPhone = booking.ShowingAgentPhone,
+                    Subject = $"Showing feedback for {property.Title}",
+                    Message = $"Hello {booking.ShowingAgentName}, please share showing feedback for {property.Title} scheduled on {startAt:u}.",
+                    ScheduledAt = endAt.AddHours(2),
+                    CreatedBy = "Website",
+                }, ct);
+            }
 
             await leadHistoryService.AppendAsync(
                 lead.Id,
@@ -226,6 +262,11 @@ namespace Services
                     item.EndAt,
                     item.Status,
                     item.Notes,
+                    item.ShowingAgentName,
+                    item.ShowingAgentEmail,
+                    item.ShowingAgentPhone,
+                    item.FeedbackRequestedAt,
+                    item.FeedbackReceivedAt,
                     item.CreatedAt,
                     item.UpdatedAt))
                 .ToListAsync(ct);
@@ -306,6 +347,11 @@ namespace Services
                     item.EndAt,
                     item.Status,
                     item.Notes,
+                    item.ShowingAgentName,
+                    item.ShowingAgentEmail,
+                    item.ShowingAgentPhone,
+                    item.FeedbackRequestedAt,
+                    item.FeedbackReceivedAt,
                     item.CreatedAt,
                     item.UpdatedAt))
                 .FirstOrDefaultAsync(ct)

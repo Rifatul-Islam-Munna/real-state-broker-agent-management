@@ -50,6 +50,16 @@ const adminNavigation = [
     icon: "event",
   },
   {
+    href: "/admin/property-feedback",
+    label: "Property Feedback",
+    icon: "rate_review",
+  },
+  {
+    href: "/admin/owner-report-center",
+    label: "Owner Reports",
+    icon: "assessment",
+  },
+  {
     href: "/admin/contact-inbox",
     label: "Contact Us",
     icon: "contact_phone",

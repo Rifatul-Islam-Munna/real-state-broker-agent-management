@@ -454,6 +454,34 @@ export function LeadFormDialog({
             </Select>
             <FieldError error={errors.source} />
           </label>
+          <div className="flex flex-col gap-2">
+            <Input
+              className="rounded-none border-slate-200 dark:border-white/10"
+              onChange={(event) => updateField("showingAgentName", event.target.value)}
+              placeholder="Showing broker / agent name"
+              value={formValues.showingAgentName}
+            />
+            <FieldError error={errors.showingAgentName} />
+          </div>
+          <div className="flex flex-col gap-2">
+            <Input
+              className="rounded-none border-slate-200 dark:border-white/10"
+              onChange={(event) => updateField("showingAgentEmail", event.target.value)}
+              placeholder="Showing broker email"
+              type="email"
+              value={formValues.showingAgentEmail}
+            />
+            <FieldError error={errors.showingAgentEmail} />
+          </div>
+          <div className="flex flex-col gap-2">
+            <Input
+              className="rounded-none border-slate-200 dark:border-white/10"
+              onChange={(event) => updateField("showingAgentPhone", event.target.value)}
+              placeholder="Showing broker phone"
+              value={formValues.showingAgentPhone}
+            />
+            <FieldError error={errors.showingAgentPhone} />
+          </div>
           <label className="flex flex-col gap-2 text-xs font-bold uppercase tracking-wide text-slate-500">
             {"Interest"}
             <Select

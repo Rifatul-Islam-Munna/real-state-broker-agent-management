@@ -22,6 +22,7 @@ import type {
   BrokerageReports,
   CommunicationProviderWriteInput,
   ContactRequestItem,
+  CreateShowingFeedbackRequestInput,
   CreateShowingBookingInput,
   CreateLeadHistoryEntryInput,
   CreatePropertyChatConversationInput,
@@ -43,12 +44,24 @@ import type {
   PaginatedResult,
   PortalCurrentUser,
   PropertyItem,
+  PropertyFeedbackAutomationSettings,
+  PropertyFeedbackImportInput,
+  PropertyFeedbackImportResult,
+  PropertyOwnerReportWorkspace,
+  PropertyOwnerReportDispatchItem,
+  PropertyOwnerReportPropertySummary,
+  PropertyShowingImportInput,
+  PropertyVisitFeedbackItem,
   PropertyChatConversationItem,
   PropertySaveInput,
   ReviewBrokerageApprovalInput,
+  SavePropertyVisitFeedbackInput,
+  SendPropertyOwnerReportsInput,
   ShowingAvailabilitySlot,
+  ShowingFeedbackRequestItem,
   ShowingBookingItem,
   UpdateShowingBookingInput,
+  UpdatePropertyFeedbackAutomationSettingsInput,
   SmtpIntegrationWriteInput,
   TwilioIntegrationWriteInput,
   UpdateAgencyIntegrationSettingsInput,
@@ -81,6 +94,7 @@ export type {
   CommunicationProviderWriteInput,
   ContactRequestItem,
   ContactRequestStatus,
+  CreateShowingFeedbackRequestInput,
   CreateShowingBookingInput,
   CreateLeadHistoryEntryInput,
   CreateAgentUserInput,
@@ -142,6 +156,14 @@ export type {
   PaginatedResult,
   PortalCurrentUser,
   PropertyItem,
+  PropertyFeedbackAutomationSettings,
+  PropertyFeedbackImportInput,
+  PropertyFeedbackImportResult,
+  PropertyOwnerReportWorkspace,
+  PropertyOwnerReportDispatchItem,
+  PropertyOwnerReportPropertySummary,
+  PropertyShowingImportInput,
+  PropertyVisitFeedbackItem,
   PropertyStatus,
   PropertyChatAnswerInput,
   PropertyChatConversationItem,
@@ -151,7 +173,10 @@ export type {
   PropertySaveInput,
   PropertySellPrediction,
   ReviewBrokerageApprovalInput,
+  SavePropertyVisitFeedbackInput,
+  SendPropertyOwnerReportsInput,
   ShowingAvailabilitySlot,
+  ShowingFeedbackRequestItem,
   ShowingBookingItem,
   ShowingBookingStatus,
   SmtpIntegrationWriteInput,
@@ -159,6 +184,7 @@ export type {
   UpdateAgencyIntegrationSettingsInput,
   UpdateDocumentRepositoryInput,
   UpdateShowingBookingInput,
+  UpdatePropertyFeedbackAutomationSettingsInput,
   UpdateAgentRoutePermissionsInput,
   UpdateAgentUserInput,
   WebsiteInquiryItem,
@@ -620,6 +646,124 @@ export function useUpdateShowingBooking() {
     onSuccess: () => void invalidate(),
     successMessage: "Showing updated",
     url: "/showings",
+  })
+}
+
+export function usePropertyFeedbackSettings() {
+  return useQueryWrapper<PropertyFeedbackAutomationSettings>(
+    ["property-feedback-settings"],
+    "/property-feedback/settings",
+    {
+      ...defaultQueryOptions,
+      placeholderData: undefined,
+    },
+    0,
+    "property-feedback-settings",
+  )
+}
+
+export function useUpdatePropertyFeedbackSettings() {
+  const invalidate = useInvalidate(["property-feedback-settings"])
+
+  return useCommonMutationApi<PropertyFeedbackAutomationSettings, UpdatePropertyFeedbackAutomationSettingsInput>({
+    method: "PATCH",
+    onSuccess: () => void invalidate(),
+    successMessage: "Feedback settings updated",
+    url: "/property-feedback/settings",
+  })
+}
+
+export function useShowingFeedbackRequests() {
+  return useQueryWrapper<ShowingFeedbackRequestItem[]>(
+    ["showing-feedback-requests"],
+    "/property-feedback/requests",
+    {
+      ...defaultQueryOptions,
+      placeholderData: undefined,
+    },
+    0,
+    "showing-feedback-requests",
+  )
+}
+
+export function useCreateShowingFeedbackRequest() {
+  const invalidate = useInvalidate(["showing-feedback-requests", "showings"])
+
+  return useCommonMutationApi<ShowingFeedbackRequestItem, CreateShowingFeedbackRequestInput>({
+    method: "POST",
+    onSuccess: () => void invalidate(),
+    successMessage: "Feedback request scheduled",
+    url: "/property-feedback/requests",
+  })
+}
+
+export function usePropertyVisitFeedbackEntries(params?: QueryParams) {
+  return useQueryWrapper<PropertyVisitFeedbackItem[]>(
+    ["property-visit-feedback", params],
+    `/property-feedback/entries${buildQuery(params)}`,
+    {
+      ...defaultQueryOptions,
+      placeholderData: undefined,
+    },
+    0,
+    "property-visit-feedback",
+  )
+}
+
+export function useSavePropertyVisitFeedback() {
+  const invalidate = useInvalidate(["property-visit-feedback", "showing-feedback-requests", "showings", "property-owner-reports"])
+
+  return useCommonMutationApi<PropertyVisitFeedbackItem, SavePropertyVisitFeedbackInput>({
+    method: "POST",
+    onSuccess: () => void invalidate(),
+    successMessage: "Feedback saved",
+    url: "/property-feedback/entries",
+  })
+}
+
+export function useImportPropertyFeedback() {
+  const invalidate = useInvalidate(["property-visit-feedback", "property-owner-reports"])
+
+  return useCommonMutationApi<PropertyFeedbackImportResult, PropertyFeedbackImportInput>({
+    method: "POST",
+    onSuccess: () => void invalidate(),
+    successMessage: "Feedback import finished",
+    url: "/property-feedback/import-feedback",
+  })
+}
+
+export function useImportPropertyShowings() {
+  const invalidate = useInvalidate(["showings", "showing-feedback-requests", "leads"])
+
+  return useCommonMutationApi<PropertyFeedbackImportResult, PropertyShowingImportInput>({
+    method: "POST",
+    onSuccess: () => void invalidate(),
+    successMessage: "Showing import finished",
+    url: "/property-feedback/import-showings",
+  })
+}
+
+export function usePropertyOwnerReports() {
+  return useQueryWrapper<PropertyOwnerReportWorkspace>(
+    ["property-owner-reports"],
+    "/property-feedback/owner-reports",
+    {
+      ...defaultQueryOptions,
+      placeholderData: undefined,
+    },
+    0,
+    "property-owner-reports",
+  )
+}
+
+export function useSendPropertyOwnerReports() {
+  const invalidate = useInvalidate(["property-owner-reports"])
+
+  return useCommonMutationApi<PropertyFeedbackImportResult, SendPropertyOwnerReportsInput>({
+    method: "POST",
+    onSuccess: () => void invalidate(),
+    successMessage: "Owner reports processed",
+    url: "/property-feedback/owner-reports/send",
   })
 }
 

@@ -18,6 +18,10 @@ namespace Data
             public DbSet<DealPipeline> DealPipelines => Set<DealPipeline>();
             public DbSet<DealChecklistItem> DealChecklistItems => Set<DealChecklistItem>();
             public DbSet<ShowingBooking> ShowingBookings => Set<ShowingBooking>();
+            public DbSet<PropertyFeedbackAutomationSettings> PropertyFeedbackAutomationSettings => Set<PropertyFeedbackAutomationSettings>();
+            public DbSet<ShowingFeedbackRequest> ShowingFeedbackRequests => Set<ShowingFeedbackRequest>();
+            public DbSet<PropertyVisitFeedback> PropertyVisitFeedbackItems => Set<PropertyVisitFeedback>();
+            public DbSet<PropertyOwnerReportDispatch> PropertyOwnerReportDispatches => Set<PropertyOwnerReportDispatch>();
             public DbSet<LeadAssignmentRule> LeadAssignmentRules => Set<LeadAssignmentRule>();
             public DbSet<BrokerageApprovalRequest> BrokerageApprovalRequests => Set<BrokerageApprovalRequest>();
             public DbSet<BrokerageAuditLog> BrokerageAuditLogs => Set<BrokerageAuditLog>();
@@ -80,6 +84,46 @@ namespace Data
             .WithMany()
             .HasForeignKey(item => item.AgentId)
             .OnDelete(DeleteBehavior.SetNull);
+                  modelBuilder.Entity<ShowingFeedbackRequest>()
+            .HasOne(item => item.ShowingBooking)
+            .WithMany()
+            .HasForeignKey(item => item.ShowingBookingId)
+            .OnDelete(DeleteBehavior.SetNull);
+                  modelBuilder.Entity<ShowingFeedbackRequest>()
+            .HasOne(item => item.Property)
+            .WithMany()
+            .HasForeignKey(item => item.PropertyId)
+            .OnDelete(DeleteBehavior.Cascade);
+                  modelBuilder.Entity<ShowingFeedbackRequest>()
+            .HasOne(item => item.Lead)
+            .WithMany()
+            .HasForeignKey(item => item.LeadId)
+            .OnDelete(DeleteBehavior.SetNull);
+                  modelBuilder.Entity<PropertyVisitFeedback>()
+            .HasOne(item => item.Property)
+            .WithMany()
+            .HasForeignKey(item => item.PropertyId)
+            .OnDelete(DeleteBehavior.Cascade);
+                  modelBuilder.Entity<PropertyVisitFeedback>()
+            .HasOne(item => item.ShowingBooking)
+            .WithMany()
+            .HasForeignKey(item => item.ShowingBookingId)
+            .OnDelete(DeleteBehavior.SetNull);
+                  modelBuilder.Entity<PropertyVisitFeedback>()
+            .HasOne(item => item.Lead)
+            .WithMany()
+            .HasForeignKey(item => item.LeadId)
+            .OnDelete(DeleteBehavior.SetNull);
+                  modelBuilder.Entity<PropertyVisitFeedback>()
+            .HasOne(item => item.FeedbackRequest)
+            .WithMany()
+            .HasForeignKey(item => item.FeedbackRequestId)
+            .OnDelete(DeleteBehavior.SetNull);
+                  modelBuilder.Entity<PropertyOwnerReportDispatch>()
+            .HasOne(item => item.Property)
+            .WithMany()
+            .HasForeignKey(item => item.PropertyId)
+            .OnDelete(DeleteBehavior.Cascade);
                   modelBuilder.Entity<LeadAssignmentRule>()
             .HasOne(item => item.Agent)
             .WithMany()

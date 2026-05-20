@@ -18,6 +18,9 @@ export type LeadFormValues = {
   agent: string
   agentId: number | null
   source: string
+  showingAgentName: string
+  showingAgentEmail: string
+  showingAgentPhone: string
   interest: string
   timeline: string
   inBoard: boolean
@@ -62,6 +65,9 @@ export function validateLeadForm(values: LeadFormValues) {
   if (!values.property.trim()) errors.property = "Select a property."
   if (!values.budget.trim()) errors.budget = "Budget is required."
   if (!values.source.trim()) errors.source = "Source is required."
+  if (values.showingAgentEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.showingAgentEmail.trim())) {
+    errors.showingAgentEmail = "Enter a valid showing agent email."
+  }
   if (!values.interest.trim()) errors.interest = "Interest is required."
   if (!values.timeline.trim()) errors.timeline = "Timeline is required."
   if (values.nextActionDate && !values.nextActionType.trim()) errors.nextActionType = "Next action type is required."
@@ -82,6 +88,9 @@ export function defaultLeadFormValues(): LeadFormValues {
     agent: "",
     agentId: null,
     source: "",
+    showingAgentName: "",
+    showingAgentEmail: "",
+    showingAgentPhone: "",
     interest: "",
     timeline: "",
     inBoard: false,
@@ -105,6 +114,9 @@ export function mapLeadToFormValues(lead: LeadItem): LeadFormValues {
     agent: lead.agent ?? "",
     agentId: lead.agentId ?? null,
     source: lead.source ?? "",
+    showingAgentName: lead.showingAgentName ?? "",
+    showingAgentEmail: lead.showingAgentEmail ?? "",
+    showingAgentPhone: lead.showingAgentPhone ?? "",
     interest: lead.interest ?? "",
     timeline: lead.timeline ?? "",
     inBoard: lead.inBoard ?? false,

@@ -79,6 +79,15 @@ namespace Entities
         [Column("source")]
         public string Source { get; set; } = string.Empty;
 
+        [Column("showing_agent_name")]
+        public string ShowingAgentName { get; set; } = string.Empty;
+
+        [Column("showing_agent_email")]
+        public string ShowingAgentEmail { get; set; } = string.Empty;
+
+        [Column("showing_agent_phone")]
+        public string ShowingAgentPhone { get; set; } = string.Empty;
+
         [Column("interest")]
         public string Interest { get; set; } = string.Empty;
 

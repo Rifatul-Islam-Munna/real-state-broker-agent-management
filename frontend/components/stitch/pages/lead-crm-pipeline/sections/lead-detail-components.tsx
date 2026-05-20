@@ -211,6 +211,8 @@ export function LeadDetailsPanel({
             <div><p className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">{"Phone"}</p><p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{displayText(lead.phone)}</p></div>
             <div><p className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">{"Source"}</p><p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{sourceLabel}</p></div>
             <div><p className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">{"Interest"}</p><p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{displayText(lead.interest)}</p></div>
+            <div><p className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">{"Showing Broker"}</p><p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{displayText(lead.showingAgentName)}</p></div>
+            <div><p className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">{"Broker Contact"}</p><p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{`${displayText(lead.showingAgentEmail)} / ${displayText(lead.showingAgentPhone)}`}</p></div>
           </div>
         </div>
         <div className="mt-5 border border-slate-200 bg-white p-5 dark:border-white/10 dark:bg-slate-900">

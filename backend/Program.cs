@@ -104,6 +104,7 @@ builder.Services.Configure<Microsoft.AspNetCore.Http.Json.JsonOptions>(o =>
 );
 builder.Services.AddHostedService<MailInboxSyncBackgroundService>();
 builder.Services.AddHostedService<LeadOutreachBackgroundService>();
+builder.Services.AddHostedService<PropertyFeedbackBackgroundService>();
 
 if (!string.IsNullOrWhiteSpace(minioEndpoint) && !string.IsNullOrWhiteSpace(minioBucketName))
 {
@@ -125,6 +126,13 @@ else
 }
 
 var app = builder.Build();
+
+if (app.Environment.IsDevelopment())
+{
+    using var scope = app.Services.CreateScope();
+    var migrationService = scope.ServiceProvider.GetRequiredService<DatabaseMigrationService>();
+    await migrationService.ApplyMigrationsAsync();
+}
 
 app.UseExceptionHandler();
 app.UseAuthentication();

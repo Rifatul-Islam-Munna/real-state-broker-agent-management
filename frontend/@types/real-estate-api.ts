@@ -669,6 +669,9 @@ export type LeadItem = {
   agentId?: number | null
   assignedAgentName?: string | null
   source: string
+  showingAgentName: string
+  showingAgentEmail: string
+  showingAgentPhone: string
   interest: string
   timeline: string
   inBoard: boolean
@@ -1021,6 +1024,11 @@ export type ShowingBookingItem = {
   endAt: string
   status: ShowingBookingStatus
   notes: string
+  showingAgentName: string
+  showingAgentEmail: string
+  showingAgentPhone: string
+  feedbackRequestedAt?: string | null
+  feedbackReceivedAt?: string | null
   createdAt: string
   updatedAt: string
 }
@@ -1033,6 +1041,9 @@ export type CreateShowingBookingInput = {
   startAt: string
   endAt?: string | null
   notes: string
+  showingAgentName?: string | null
+  showingAgentEmail?: string | null
+  showingAgentPhone?: string | null
 }
 
 export type UpdateShowingBookingInput = {
@@ -1045,6 +1056,188 @@ export type ShowingAvailabilitySlot = {
   startAt: string
   endAt: string
   isAvailable: boolean
+}
+
+export type FeedbackAutomationFrequency = "Weekly" | "Monthly"
+export type ShowingFeedbackRequestRecipientType = "Visitor" | "ShowingAgent"
+export type ShowingFeedbackRequestStatus = "Pending" | "Sent" | "Replied" | "Skipped" | "Failed"
+export type PropertyFeedbackSentiment = "Unknown" | "Positive" | "Mixed" | "Negative"
+export type PropertyVisitFeedbackSource = "MailboxAi" | "ManualEntry" | "CsvImport" | "SmsReply"
+export type PropertyOwnerReportDispatchStatus = "Sent" | "Skipped" | "Failed"
+
+export type PropertyFeedbackAutomationSettings = {
+  ownerReportEnabled: boolean
+  ownerReportFrequency: FeedbackAutomationFrequency
+  ownerReportDayOfWeek: number
+  ownerReportDayOfMonth: number
+  ownerReportSendHourUtc: number
+  ownerReportChannels: AgencyCommunicationChannel[]
+  ownerReportSubject: string
+  ownerReportBody: string
+  feedbackRequestEnabled: boolean
+  feedbackRequestDelayHours: number
+  feedbackRequestFollowUpDelayHours: number
+  feedbackRequestMaxFollowUps: number
+  feedbackRequestChannels: AgencyCommunicationChannel[]
+  feedbackRequestSubject: string
+  feedbackRequestBody: string
+  autoCaptureMailFeedback: boolean
+  lastOwnerReportRunAt?: string | null
+  updatedAt: string
+}
+
+export type UpdatePropertyFeedbackAutomationSettingsInput = Omit<
+  PropertyFeedbackAutomationSettings,
+  "lastOwnerReportRunAt" | "updatedAt"
+>
+
+export type ShowingFeedbackRequestItem = {
+  id: number
+  showingBookingId?: number | null
+  propertyId: number
+  propertyTitle: string
+  leadId?: number | null
+  leadName: string
+  recipientType: ShowingFeedbackRequestRecipientType
+  recipientName: string
+  recipientEmail: string
+  recipientPhone: string
+  channels: AgencyCommunicationChannel[]
+  subject: string
+  message: string
+  status: ShowingFeedbackRequestStatus
+  scheduledAt: string
+  lastSentAt?: string | null
+  nextFollowUpAt?: string | null
+  followUpCount: number
+  maxFollowUps: number
+  replyReceivedAt?: string | null
+  replySummary: string
+  skipReason: string
+  createdBy: string
+  createdAt: string
+  updatedAt: string
+}
+
+export type CreateShowingFeedbackRequestInput = {
+  showingBookingId?: number | null
+  propertyId: number
+  leadId?: number | null
+  recipientType: ShowingFeedbackRequestRecipientType
+  recipientName: string
+  recipientEmail?: string | null
+  recipientPhone?: string | null
+  channels: AgencyCommunicationChannel[]
+  subject: string
+  message: string
+  scheduledAt?: string | null
+  createdBy?: string | null
+}
+
+export type PropertyVisitFeedbackItem = {
+  id: number
+  propertyId: number
+  propertyTitle: string
+  showingBookingId?: number | null
+  leadId?: number | null
+  leadName: string
+  feedbackRequestId?: number | null
+  source: PropertyVisitFeedbackSource
+  contactName: string
+  contactEmail: string
+  contactPhone: string
+  feedbackAt: string
+  sentiment: PropertyFeedbackSentiment
+  summary: string
+  feedbackText: string
+  issues: string[]
+  createdBy: string
+  createdAt: string
+  updatedAt: string
+}
+
+export type SavePropertyVisitFeedbackInput = {
+  propertyId: number
+  showingBookingId?: number | null
+  leadId?: number | null
+  feedbackRequestId?: number | null
+  source?: PropertyVisitFeedbackSource
+  contactName: string
+  contactEmail?: string | null
+  contactPhone?: string | null
+  feedbackAt?: string | null
+  sentiment: PropertyFeedbackSentiment
+  summary: string
+  feedbackText: string
+  issues: string[]
+  createdBy?: string | null
+}
+
+export type PropertyFeedbackImportInput = {
+  batchName: string
+  fieldMappings: Record<string, string>
+  rows: Array<Record<string, string>>
+  createdBy?: string | null
+}
+
+export type PropertyShowingImportInput = {
+  batchName: string
+  fieldMappings: Record<string, string>
+  rows: Array<Record<string, string>>
+  scheduleFeedbackRequest: boolean
+  createdBy?: string | null
+}
+
+export type PropertyFeedbackImportResult = {
+  batchName: string
+  totalRows: number
+  savedCount: number
+  skippedCount: number
+  failedCount: number
+  failures: string[]
+}
+
+export type PropertyOwnerReportPropertySummary = {
+  propertyId: number
+  propertyTitle: string
+  ownerName: string
+  ownerEmail: string
+  ownerPhone: string
+  negativeCount: number
+  mixedCount: number
+  positiveCount: number
+  latestFeedbackAt?: string | null
+  topIssues: string[]
+  lastSentAt?: string | null
+  lastReportSummary: string
+}
+
+export type PropertyOwnerReportDispatchItem = {
+  id: number
+  propertyId: number
+  propertyTitle: string
+  periodStart: string
+  periodEnd: string
+  channels: AgencyCommunicationChannel[]
+  status: PropertyOwnerReportDispatchStatus
+  summary: string
+  createdBy: string
+  sentAt?: string | null
+  createdAt: string
+}
+
+export type PropertyOwnerReportWorkspace = {
+  summaries: PropertyOwnerReportPropertySummary[]
+  dispatches: PropertyOwnerReportDispatchItem[]
+}
+
+export type SendPropertyOwnerReportsInput = {
+  propertyId?: number | null
+  propertyIds?: number[]
+  channels?: AgencyCommunicationChannel[]
+  subject?: string | null
+  body?: string | null
+  createdBy?: string | null
 }
 
 export type BrokerageApprovalType = "ListingPublish" | "PriceChange"

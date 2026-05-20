@@ -76,6 +76,21 @@ namespace Entities
         [Column("notes")]
         public string Notes { get; set; } = string.Empty;
 
+        [Column("showing_agent_name")]
+        public string ShowingAgentName { get; set; } = string.Empty;
+
+        [Column("showing_agent_email")]
+        public string ShowingAgentEmail { get; set; } = string.Empty;
+
+        [Column("showing_agent_phone")]
+        public string ShowingAgentPhone { get; set; } = string.Empty;
+
+        [Column("feedback_requested_at")]
+        public DateTime? FeedbackRequestedAt { get; set; }
+
+        [Column("feedback_received_at")]
+        public DateTime? FeedbackReceivedAt { get; set; }
+
         [Column("created_at")]
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 

@@ -208,19 +208,22 @@ namespace Services
         private readonly LeadQualificationPredictionService _leadQualificationPredictionService;
         private readonly MailboxLeadIntelligenceService _mailboxLeadIntelligenceService;
         private readonly MailboxSyncCoordinator _mailboxSyncCoordinator;
+        private readonly PropertyFeedbackService _propertyFeedbackService;
 
         public MailInboxSyncService(
             AppDbContext db,
             AgencyIntegrationWorkspaceService agencyIntegrationWorkspaceService,
             LeadQualificationPredictionService leadQualificationPredictionService,
             MailboxLeadIntelligenceService mailboxLeadIntelligenceService,
-            MailboxSyncCoordinator mailboxSyncCoordinator)
+            MailboxSyncCoordinator mailboxSyncCoordinator,
+            PropertyFeedbackService propertyFeedbackService)
         {
             _db = db;
             _agencyIntegrationWorkspaceService = agencyIntegrationWorkspaceService;
             _leadQualificationPredictionService = leadQualificationPredictionService;
             _mailboxLeadIntelligenceService = mailboxLeadIntelligenceService;
             _mailboxSyncCoordinator = mailboxSyncCoordinator;
+            _propertyFeedbackService = propertyFeedbackService;
         }
 
         public async Task<MailboxSyncStatusResponse> GetStatusAsync(CancellationToken ct = default)
@@ -346,6 +349,11 @@ namespace Services
                     aiConfig,
                     inboundEmail,
                     propertyTitles,
+                    ct);
+                await _propertyFeedbackService.TryCaptureMailboxFeedbackAsync(
+                    inboundEmail,
+                    aiConfig,
+                    NormalizeReceivedAt(message.Date),
                     ct);
                 var matchedProperty = MatchProperty(propertyCandidates, analysis.PropertyName, inboundEmail);
                 var lead = await _db.Leads.FirstOrDefaultAsync(

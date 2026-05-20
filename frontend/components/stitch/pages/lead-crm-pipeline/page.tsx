@@ -45,6 +45,9 @@ function mapLeadValuesToPayload(values: LeadFormValues, lead?: LeadItem) {
     priority: (values.priority ?? "Warm") as LeadPriority,
     property: values.property?.trim() ?? "",
     source: values.source?.trim() ?? "",
+    showingAgentName: values.showingAgentName?.trim() ?? "",
+    showingAgentEmail: values.showingAgentEmail?.trim() ?? "",
+    showingAgentPhone: values.showingAgentPhone?.trim() ?? "",
     stage: (values.stage ?? "New") as LeadStage,
     summary: values.summary?.trim() ?? "",
     timeline: values.timeline?.trim() ?? "",
@@ -266,12 +269,26 @@ export function LeadCrmPipelinePage() {
                 {"Open the dedicated lead timeline page to pick any lead and review the full call, SMS, email, and chat history."}
               </p>
             </div>
-            <a
-              className="inline-flex items-center justify-center border border-primary bg-primary px-4 py-2 text-xs font-bold uppercase tracking-wide text-white"
-              href={portalRoutes.leadHistory}
-            >
-              {"Open Lead History"}
-            </a>
+            <div className="flex flex-wrap items-center gap-2">
+              <a
+                className="inline-flex items-center justify-center border border-slate-200 bg-white px-4 py-2 text-xs font-bold uppercase tracking-wide text-slate-700"
+                href={portalRoutes.kind === "agent" ? "/agent/property-feedback" : "/admin/property-feedback"}
+              >
+                {"Property Feedback"}
+              </a>
+              <a
+                className="inline-flex items-center justify-center border border-slate-200 bg-white px-4 py-2 text-xs font-bold uppercase tracking-wide text-slate-700"
+                href={portalRoutes.kind === "agent" ? "/agent/owner-report-center" : "/admin/owner-report-center"}
+              >
+                {"Owner Reports"}
+              </a>
+              <a
+                className="inline-flex items-center justify-center border border-primary bg-primary px-4 py-2 text-xs font-bold uppercase tracking-wide text-white"
+                href={portalRoutes.leadHistory}
+              >
+                {"Open Lead History"}
+              </a>
+            </div>
           </div>
         </div>
         <Section1Section
@@ -323,10 +340,17 @@ function mapLeadValuesToForm(lead: LeadItem): LeadFormValues {
     stage: lead.stage ?? "New",
     priority: lead.priority ?? "Warm",
     agent: lead.agent ?? "",
+    agentId: lead.agentId ?? null,
     source: lead.source ?? "",
+    showingAgentName: lead.showingAgentName ?? "",
+    showingAgentEmail: lead.showingAgentEmail ?? "",
+    showingAgentPhone: lead.showingAgentPhone ?? "",
     interest: lead.interest ?? "",
     timeline: lead.timeline ?? "",
     inBoard: lead.inBoard ?? false,
+    nextActionDate: lead.nextActionDate ? lead.nextActionDate.slice(0, 16) : "",
+    nextActionType: lead.nextActionType ?? "",
+    followUpStatus: lead.followUpStatus ?? "Open",
     notes: (lead.notes ?? []).join("\n"),
   }
 }

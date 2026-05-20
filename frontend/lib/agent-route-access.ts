@@ -42,6 +42,20 @@ export const agentRouteAccessItems = [
     permission: "lead",
   },
   {
+    description: "Showing feedback, broker follow-up, and manual CSV imports.",
+    href: "/agent/property-feedback",
+    icon: "rate_review",
+    label: "Property Feedback",
+    permission: "lead",
+  },
+  {
+    description: "Weekly or monthly owner report center built from showing objections.",
+    href: "/agent/owner-report-center",
+    icon: "assessment",
+    label: "Owner Reports",
+    permission: "lead",
+  },
+  {
     description: "Customer messages, inbox management, and email workflow.",
     href: "/agent/mail",
     icon: "mail",
