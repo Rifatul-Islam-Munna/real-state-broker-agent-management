@@ -22,9 +22,7 @@ export function RequestsTab({
   isSaving,
   leads,
   onChange,
-  onDeleteTemplate,
   onSave,
-  onSaveTemplate,
   properties,
   requests,
   showings,
@@ -35,9 +33,7 @@ export function RequestsTab({
   isSaving: boolean
   leads: LeadItem[]
   onChange: (next: CreateShowingFeedbackRequestInput) => void
-  onDeleteTemplate: (templateId: string) => Promise<void>
   onSave: () => void
-  onSaveTemplate: (template: AgencyCommunicationTemplateItem) => Promise<void>
   properties: PropertyItem[]
   requests: ShowingFeedbackRequestItem[]
   showings: ShowingBookingItem[]
@@ -147,48 +143,9 @@ export function RequestsTab({
                 </button>
               ))}
             </div>
-            <div className="flex flex-wrap gap-2">
-              <button
-                className="rounded-full border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700"
-                onClick={() =>
-                  void onSaveTemplate({
-                    id: templateId || `feedback-request-${form.subject.trim().toLowerCase().replace(/\s+/g, "-") || "template"}`,
-                    name: form.subject.trim() || "Feedback request template",
-                    subject: form.subject,
-                    body: form.message,
-                    followUpSubject: form.followUpSubject || form.subject,
-                    followUpBody: form.followUpMessage || form.message,
-                    channels: form.channels,
-                    variableTokens: [
-                      "{{property_title}}",
-                      "{{property_address}}",
-                      "{{showing_date}}",
-                      "{{showing_end}}",
-                      "{{showing_time}}",
-                      "{{recipient_name}}",
-                      "{{client_name}}",
-                      "{{broker_name}}",
-                      "{{broker_email}}",
-                      "{{broker_phone}}",
-                      "{{visitor_name}}",
-                      "{{assigned_agent}}",
-                      "{{issue_list}}",
-                    ],
-                  })
-                }
-                type="button"
-              >
-                {"Save template"}
-              </button>
-              <button
-                className="rounded-full border border-rose-200 px-4 py-2 text-sm font-bold text-rose-700 disabled:opacity-60"
-                disabled={!templateId}
-                onClick={() => void onDeleteTemplate(templateId)}
-                type="button"
-              >
-                {"Delete template"}
-              </button>
-            </div>
+            <p className="text-xs font-semibold text-slate-500">
+              {"Template save/delete moved to Template Vault so this screen stays send-only."}
+            </p>
           </div>
           <div className="mt-4 grid gap-4 md:grid-cols-2">
             <SelectField

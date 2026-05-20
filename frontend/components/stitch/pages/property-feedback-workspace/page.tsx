@@ -127,6 +127,14 @@ const hourOptions = Array.from({ length: 24 }, (_, hour) => ({
   label: `${String(hour).padStart(2, "0")}:00`,
 }))
 
+function hourLabel(value?: number | null) {
+  if (value === null || value === undefined) {
+    return "Any time"
+  }
+
+  return hourOptions.find((option) => option.value === String(value))?.label ?? "Any time"
+}
+
 export function PropertyFeedbackWorkspacePage() {
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -514,7 +522,7 @@ export function PropertyFeedbackWorkspacePage() {
                   }
                   value={resolvedSettings.feedbackRequestSendWindowStartHourUtc === null || resolvedSettings.feedbackRequestSendWindowStartHourUtc === undefined ? emptyTimeValue : String(resolvedSettings.feedbackRequestSendWindowStartHourUtc)}
                 >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger><SelectValue>{hourLabel(resolvedSettings.feedbackRequestSendWindowStartHourUtc)}</SelectValue></SelectTrigger>
                   <SelectContent>
                     <SelectItem value={emptyTimeValue}>{"Any time"}</SelectItem>
                     {hourOptions.map((option) => (
@@ -534,7 +542,7 @@ export function PropertyFeedbackWorkspacePage() {
                   }
                   value={resolvedSettings.feedbackRequestSendWindowEndHourUtc === null || resolvedSettings.feedbackRequestSendWindowEndHourUtc === undefined ? emptyTimeValue : String(resolvedSettings.feedbackRequestSendWindowEndHourUtc)}
                 >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger><SelectValue>{hourLabel(resolvedSettings.feedbackRequestSendWindowEndHourUtc)}</SelectValue></SelectTrigger>
                   <SelectContent>
                     <SelectItem value={emptyTimeValue}>{"Any time"}</SelectItem>
                     {hourOptions.map((option) => (
@@ -646,9 +654,7 @@ export function PropertyFeedbackWorkspacePage() {
             isSaving={createRequestMutation.isPending}
             leads={leads}
             onChange={setRequestForm}
-            onDeleteTemplate={(templateId) => deleteTemplateMutation.mutateAsync({ id: templateId }).then(() => undefined)}
             onSave={handleSaveRequest}
-            onSaveTemplate={(template) => saveTemplateMutation.mutateAsync(template).then(() => undefined)}
             properties={properties}
             requests={requests}
             showings={showings}

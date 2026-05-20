@@ -498,6 +498,40 @@ export function PropertyFormFieldsSection({
 
       <section>
         <h4 className="mb-6 flex items-center gap-2 text-lg font-bold text-slate-900 dark:text-white">
+          <AppIcon className="text-primary" name="lock" />
+          {" Internal Admin / Agent Notes "}
+        </h4>
+        <div className="space-y-4">
+          <div data-color-mode="light">
+            <MDEditor
+              height={320}
+              onChange={(value) => updateField("internalDetailsMarkdown", value ?? "")}
+              preview="live"
+              textareaProps={{
+                placeholder: "Write private markdown notes for admin and agents only...",
+              }}
+              value={formValues.internalDetailsMarkdown}
+            />
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-900">
+            <p className="mb-3 text-xs font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+              {"Private Field"}
+            </p>
+            <p className="text-sm leading-7 text-slate-500 dark:text-slate-400">
+              {"Saved as markdown for internal team use only. Public property page and anonymous property API response will not show this field."}
+            </p>
+            {formValues.internalDetailsMarkdown.trim() ? (
+              <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/50">
+                <SimpleMarkdown className="space-y-4" value={formValues.internalDetailsMarkdown} />
+              </div>
+            ) : null}
+          </div>
+        </div>
+        <FieldError error={errors.internalDetailsMarkdown} />
+      </section>
+
+      <section>
+        <h4 className="mb-6 flex items-center gap-2 text-lg font-bold text-slate-900 dark:text-white">
           <AppIcon className="text-primary" name="checklist" />
           {" Amenities "}
         </h4>

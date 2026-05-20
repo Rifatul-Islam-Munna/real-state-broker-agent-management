@@ -262,6 +262,9 @@ export type CommunicationProviderWriteInput = {
   providerName: string
   accountId: string
   authToken: string
+  clientSecret?: string | null
+  jwtToken?: string | null
+  extensionId?: string | null
   fromNumber: string
   baseUrl?: string | null
   voiceWebhookUrl?: string | null
@@ -588,6 +591,7 @@ export type PropertyItem = {
   ownerCompany?: string | null
   ownerAddress?: string | null
   ownerNotes?: string | null
+  internalDetailsMarkdown?: string | null
   thumbnailUrl?: string | null
   thumbnailObjectName?: string | null
   imageUrls: string[]
@@ -633,6 +637,7 @@ export type PropertySaveInput = {
   ownerCompany?: string | null
   ownerAddress?: string | null
   ownerNotes?: string | null
+  internalDetailsMarkdown?: string | null
   thumbnailUrl?: string | null
   thumbnailObjectName?: string | null
   imageUrls: string[]

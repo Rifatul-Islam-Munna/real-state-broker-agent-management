@@ -11,9 +11,12 @@ import { formatDateTimeLabel } from "@/lib/admin-portal"
 type SectionKey = "aiProvider" | "communication" | "smtp"
 
 type CommunicationFormValues = {
-  providerName: "Custom" | "Plivo" | "Twilio"
+  providerName: "Custom" | "Plivo" | "RingCentral" | "Twilio"
   accountId: string
   authToken: string
+  clientSecret: string
+  jwtToken: string
+  extensionId: string
   fromNumber: string
   baseUrl: string
   voiceWebhookUrl: string
@@ -69,6 +72,9 @@ const blankCommunicationForm = (): CommunicationFormValues => ({
   providerName: "Twilio",
   accountId: "",
   authToken: "",
+  clientSecret: "",
+  jwtToken: "",
+  extensionId: "~",
   fromNumber: "",
   baseUrl: "",
   voiceWebhookUrl: "",
@@ -251,6 +257,8 @@ function applyCommunicationPreset(
   const nextBaseUrl =
     providerName === "Plivo"
       ? "https://api.plivo.com"
+      : providerName === "RingCentral"
+        ? "https://platform.ringcentral.com"
       : providerName === "Twilio"
         ? "https://api.twilio.com"
         : current.baseUrl
@@ -330,8 +338,11 @@ function buildCommunicationPayload(values: CommunicationFormValues): UpdateAgenc
       accountId: trimValue(values.accountId),
       authToken: trimValue(values.authToken),
       baseUrl: trimValue(values.baseUrl) || undefined,
+      clientSecret: trimValue(values.clientSecret) || undefined,
+      extensionId: trimValue(values.extensionId) || undefined,
       voiceWebhookUrl: trimValue(values.voiceWebhookUrl) || undefined,
       fromNumber: trimValue(values.fromNumber),
+      jwtToken: trimValue(values.jwtToken) || undefined,
       providerName: values.providerName,
       supportsSms: values.supportsSms,
       supportsVoice: values.supportsVoice,
@@ -425,7 +436,11 @@ export function SecureIntegrationsSection() {
 
   const canSaveCommunication =
     trimValue(communicationValues.accountId).length > 0 &&
-    trimValue(communicationValues.authToken).length > 0 &&
+    (
+      communicationValues.providerName === "RingCentral"
+        ? trimValue(communicationValues.clientSecret).length > 0 && trimValue(communicationValues.jwtToken).length > 0
+        : trimValue(communicationValues.authToken).length > 0
+    ) &&
     trimValue(communicationValues.fromNumber).length > 0 &&
     (communicationValues.providerName !== "Custom" || trimValue(communicationValues.baseUrl).length > 0)
 
@@ -487,7 +502,7 @@ export function SecureIntegrationsSection() {
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         <IntegrationCard
           configured={status?.hasCommunicationConfig ?? false}
-          description="Use Twilio, Plivo, or a custom provider for lead SMS, call triggers, reminders, and scheduled outreach."
+          description="Use Twilio, Plivo, RingCentral, or a custom provider for lead SMS, call triggers, reminders, and scheduled outreach."
           iconContainerClassName="bg-red-50"
           iconClassName="text-red-600"
           iconName="phone_in_talk"
@@ -514,36 +529,92 @@ export function SecureIntegrationsSection() {
               options={[
                 { label: "Twilio", value: "Twilio" },
                 { label: "Plivo", value: "Plivo" },
+                { label: "RingCentral", value: "RingCentral" },
                 { label: "Custom", value: "Custom" },
               ]}
               value={communicationValues.providerName}
             />
           </label>
           <label className="flex flex-col gap-2">
-            <FieldLabel>{communicationValues.providerName === "Plivo" ? "Auth ID" : "Account ID"}</FieldLabel>
+            <FieldLabel>
+              {communicationValues.providerName === "Plivo"
+                ? "Auth ID"
+                : communicationValues.providerName === "RingCentral"
+                  ? "Client ID"
+                  : "Account ID"}
+            </FieldLabel>
             <Input
               autoComplete="off"
               className="rounded-xl border-slate-200 bg-slate-50"
               disabled={isBusy}
               onChange={(event) => setCommunicationValues((current) => ({ ...current, accountId: event.target.value }))}
-              placeholder={communicationValues.providerName === "Plivo" ? "MA..." : "AC..."}
+              placeholder={
+                communicationValues.providerName === "Plivo"
+                  ? "MA..."
+                  : communicationValues.providerName === "RingCentral"
+                    ? "RingCentral app client id"
+                    : "AC..."
+              }
               spellCheck={false}
               value={communicationValues.accountId}
             />
           </label>
-          <label className="flex flex-col gap-2">
-            <FieldLabel>{"Auth Token"}</FieldLabel>
-            <Input
-              autoComplete="new-password"
-              className="rounded-xl border-slate-200 bg-slate-50"
-              disabled={isBusy}
-              onChange={(event) => setCommunicationValues((current) => ({ ...current, authToken: event.target.value }))}
-              placeholder={`Enter a new ${communicationValues.providerName} auth token`}
-              spellCheck={false}
-              type="password"
-              value={communicationValues.authToken}
-            />
-          </label>
+          {communicationValues.providerName === "RingCentral" ? (
+            <>
+              <label className="flex flex-col gap-2">
+                <FieldLabel>{"Client Secret"}</FieldLabel>
+                <Input
+                  autoComplete="new-password"
+                  className="rounded-xl border-slate-200 bg-slate-50"
+                  disabled={isBusy}
+                  onChange={(event) => setCommunicationValues((current) => ({ ...current, clientSecret: event.target.value }))}
+                  placeholder="RingCentral app client secret"
+                  spellCheck={false}
+                  type="password"
+                  value={communicationValues.clientSecret}
+                />
+              </label>
+              <label className="flex flex-col gap-2">
+                <FieldLabel>{"JWT Token"}</FieldLabel>
+                <Input
+                  autoComplete="new-password"
+                  className="rounded-xl border-slate-200 bg-slate-50"
+                  disabled={isBusy}
+                  onChange={(event) => setCommunicationValues((current) => ({ ...current, jwtToken: event.target.value }))}
+                  placeholder="Paste RingCentral JWT credential"
+                  spellCheck={false}
+                  type="password"
+                  value={communicationValues.jwtToken}
+                />
+              </label>
+              <label className="flex flex-col gap-2">
+                <FieldLabel>{"Extension ID"}</FieldLabel>
+                <Input
+                  autoComplete="off"
+                  className="rounded-xl border-slate-200 bg-slate-50"
+                  disabled={isBusy}
+                  onChange={(event) => setCommunicationValues((current) => ({ ...current, extensionId: event.target.value }))}
+                  placeholder="Use ~ for current extension"
+                  spellCheck={false}
+                  value={communicationValues.extensionId}
+                />
+              </label>
+            </>
+          ) : (
+            <label className="flex flex-col gap-2">
+              <FieldLabel>{"Auth Token"}</FieldLabel>
+              <Input
+                autoComplete="new-password"
+                className="rounded-xl border-slate-200 bg-slate-50"
+                disabled={isBusy}
+                onChange={(event) => setCommunicationValues((current) => ({ ...current, authToken: event.target.value }))}
+                placeholder={`Enter a new ${communicationValues.providerName} auth token`}
+                spellCheck={false}
+                type="password"
+                value={communicationValues.authToken}
+              />
+            </label>
+          )}
           <label className="flex flex-col gap-2">
             <FieldLabel>{"From Number"}</FieldLabel>
             <Input
@@ -562,7 +633,13 @@ export function SecureIntegrationsSection() {
               className="rounded-xl border-slate-200 bg-slate-50"
               disabled={isBusy}
               onChange={(event) => setCommunicationValues((current) => ({ ...current, baseUrl: event.target.value }))}
-              placeholder={communicationValues.providerName === "Custom" ? "https://api.your-provider.com" : "Optional override"}
+              placeholder={
+                communicationValues.providerName === "Custom"
+                  ? "https://api.your-provider.com"
+                  : communicationValues.providerName === "RingCentral"
+                    ? "https://platform.ringcentral.com"
+                    : "Optional override"
+              }
               spellCheck={false}
               type="url"
               value={communicationValues.baseUrl}
@@ -581,7 +658,11 @@ export function SecureIntegrationsSection() {
               value={communicationValues.voiceWebhookUrl}
             />
             <p className="text-xs text-slate-500">
-              {"Twilio can speak inline without this, but Plivo voice calls need a public callback URL that points to your lead outreach call-script endpoint."}
+              {communicationValues.providerName === "Plivo"
+                ? "Plivo voice calls need a public callback URL that points to your lead outreach call-script endpoint."
+                : communicationValues.providerName === "RingCentral"
+                  ? "RingCentral voice uses RingOut directly, so this webhook is optional there."
+                  : "Twilio can speak inline without this, but custom providers may still use your own voice callback flow."}
             </p>
           </label>
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">

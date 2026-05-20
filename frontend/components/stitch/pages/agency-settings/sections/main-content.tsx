@@ -3,8 +3,6 @@
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react"
 
 import type {
-  AgencyCommunicationChannel,
-  AgencyCommunicationTemplateItem,
   AgencySettings,
   AgentUserOption,
 } from "@/@types/real-estate-api"
@@ -105,12 +103,6 @@ function SectionCard({
       {children}
     </section>
   )
-}
-
-function channelBadgeClass(channel: AgencyCommunicationChannel) {
-  return channel === "Email"
-    ? "bg-accent/10 text-accent border-accent/20"
-    : "bg-secondary/10 text-secondary border-secondary/20"
 }
 
 function displayText(value?: string | null, fallback = "Not set") {
@@ -386,7 +378,6 @@ export function MainContentSection() {
 
   const [formValues, setFormValues] = useState<AgencySettings>(() => cloneAgencySettings(defaultAgencySettings))
   const [savedValues, setSavedValues] = useState<AgencySettings>(() => cloneAgencySettings(defaultAgencySettings))
-  const [selectedTemplateId, setSelectedTemplateId] = useState(defaultAgencySettings.communicationTemplates[0]?.id ?? "")
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [isLogoUploading, setIsLogoUploading] = useState(false)
   const [logoError, setLogoError] = useState<string | null>(null)
@@ -400,11 +391,6 @@ export function MainContentSection() {
     const nextValues = cloneAgencySettings(agencySettingsQuery.data)
     setFormValues(nextValues)
     setSavedValues(cloneAgencySettings(nextValues))
-    setSelectedTemplateId((current) =>
-      nextValues.communicationTemplates.some((item) => item.id === current)
-        ? current
-        : (nextValues.communicationTemplates[0]?.id ?? ""),
-    )
   }, [agencySettingsQuery.data])
 
   const hasPendingChanges = useMemo(
@@ -412,12 +398,6 @@ export function MainContentSection() {
     [formValues, savedValues],
   )
 
-  const selectedTemplateIndex = useMemo(
-    () => formValues.communicationTemplates.findIndex((item) => item.id === selectedTemplateId),
-    [formValues.communicationTemplates, selectedTemplateId],
-  )
-
-  const selectedTemplate = selectedTemplateIndex >= 0 ? formValues.communicationTemplates[selectedTemplateIndex] : null
   const agentUsers = useMemo(
     () =>
       [...(agentUsersQuery.data ?? [])].sort(
@@ -433,19 +413,6 @@ export function MainContentSection() {
   function updateSettings(update: (current: AgencySettings) => AgencySettings) {
     setFormValues((current) => update(current))
     setSubmitError(null)
-  }
-
-  function updateTemplate(update: (current: AgencyCommunicationTemplateItem) => AgencyCommunicationTemplateItem) {
-    if (selectedTemplateIndex < 0) {
-      return
-    }
-
-    updateSettings((current) => ({
-      ...current,
-      communicationTemplates: current.communicationTemplates.map((item, index) =>
-        index === selectedTemplateIndex ? update(item) : item,
-      ),
-    }))
   }
 
   async function handleLogoSelection(file: File) {
@@ -504,10 +471,6 @@ export function MainContentSection() {
     const nextValues = cloneAgencySettings(response.data)
     setFormValues(nextValues)
     setSavedValues(cloneAgencySettings(nextValues))
-
-    if (!nextValues.communicationTemplates.some((item) => item.id === selectedTemplateId)) {
-      setSelectedTemplateId(nextValues.communicationTemplates[0]?.id ?? "")
-    }
 
     const nextObjectNames = new Set(collectAgencyAssetObjectNames(nextValues))
     const removedObjectNames = Array.from(previousObjectNames).filter((item) => !nextObjectNames.has(item))
@@ -889,110 +852,6 @@ export function MainContentSection() {
                   {"Agency name, logo, office locations, contact email, contact phone, and social links now save through the backend and feed the public site branding blocks."}
                 </p>
               </div>
-            </div>
-          </div>
-        </SectionCard>
-
-        <SectionCard icon="mail" title="Communication Templates">
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-            <div className="border-2 border-secondary/10 bg-white p-4 lg:col-span-1">
-              <h4 className="mb-3 border-b border-secondary/10 pb-2 text-sm font-bold">{"Available Templates"}</h4>
-              <ul className="space-y-1">
-                {formValues.communicationTemplates.map((template) => {
-                  const isActive = template.id === selectedTemplateId
-
-                  return (
-                    <li key={template.id}>
-                      <button
-                        className={`w-full rounded p-2 text-left text-sm font-semibold transition-colors ${
-                          isActive ? "bg-primary/5 text-primary" : "hover:bg-secondary/5"
-                        }`}
-                        onClick={() => setSelectedTemplateId(template.id)}
-                        type="button"
-                      >
-                        {template.name}
-                      </button>
-                    </li>
-                  )
-                })}
-              </ul>
-            </div>
-            <div className="space-y-4 border-2 border-secondary/10 bg-white p-6 lg:col-span-2">
-              {selectedTemplate ? (
-                <>
-                  <div className="mb-2 flex items-center justify-between">
-                    <h4 className="text-sm font-bold uppercase text-primary">
-                      {`Edit: ${selectedTemplate.name}`}
-                    </h4>
-                    <div className="flex gap-2">
-                      {selectedTemplate.channels.map((channel) => (
-                        <span
-                          key={channel}
-                          className={`rounded-full border px-2 py-1 text-[10px] font-bold uppercase ${channelBadgeClass(channel)}`}
-                        >
-                          {channel}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <label className="flex items-center gap-2 rounded border border-secondary/10 bg-slate-50 px-3 py-3 text-xs font-bold uppercase tracking-[0.16em] text-primary/70">
-                      <input
-                        checked={selectedTemplate.channels.includes("Email")}
-                        className="form-checkbox rounded border-slate-300 text-primary focus:ring-primary"
-                        onChange={(event) =>
-                          updateTemplate((current) => ({
-                            ...current,
-                            channels: event.target.checked
-                              ? Array.from(new Set([...current.channels, "Email"]))
-                              : current.channels.filter((channel) => channel !== "Email"),
-                          }))}
-                        type="checkbox"
-                      />
-                      {"Email Enabled"}
-                    </label>
-                    <label className="flex items-center gap-2 rounded border border-secondary/10 bg-slate-50 px-3 py-3 text-xs font-bold uppercase tracking-[0.16em] text-primary/70">
-                      <input
-                        checked={selectedTemplate.channels.includes("SMS")}
-                        className="form-checkbox rounded border-slate-300 text-primary focus:ring-primary"
-                        onChange={(event) =>
-                          updateTemplate((current) => ({
-                            ...current,
-                            channels: event.target.checked
-                              ? Array.from(new Set([...current.channels, "SMS"]))
-                              : current.channels.filter((channel) => channel !== "SMS"),
-                          }))}
-                        type="checkbox"
-                      />
-                      {"SMS Enabled"}
-                    </label>
-                  </div>
-                  <Input
-                    className="mb-4 w-full border-2 border-secondary/20 px-3 py-2 font-bold outline-none focus:border-primary"
-                    onChange={(event) => updateTemplate((current) => ({ ...current, subject: event.target.value }))}
-                    type="text"
-                    value={selectedTemplate.subject}
-                  />
-                  <Textarea
-                    className="w-full resize-none border-2 border-secondary/20 px-3 py-2 outline-none focus:border-primary"
-                    onChange={(event) => updateTemplate((current) => ({ ...current, body: event.target.value }))}
-                    rows={6}
-                    value={selectedTemplate.body}
-                  />
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {selectedTemplate.variableTokens.map((token) => (
-                      <span
-                        key={token}
-                        className="cursor-default bg-secondary/10 px-2 py-1 font-mono text-[10px] text-primary hover:bg-secondary/20"
-                      >
-                        {token}
-                      </span>
-                    ))}
-                  </div>
-                </>
-              ) : (
-                <p className="text-sm font-semibold text-primary/60">{"No template selected."}</p>
-              )}
             </div>
           </div>
         </SectionCard>

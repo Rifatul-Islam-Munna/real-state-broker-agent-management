@@ -13,6 +13,14 @@ const hourOptions = Array.from({ length: 24 }, (_, hour) => ({
   label: `${String(hour).padStart(2, "0")}:00`,
 }))
 
+function hourLabel(value?: number | null) {
+  if (value === null || value === undefined) {
+    return "Any time"
+  }
+
+  return hourOptions.find((option) => option.value === String(value))?.label ?? "Any time"
+}
+
 export function FeedbackSettingsCard({
   isSaving,
   onChange,
@@ -90,7 +98,7 @@ export function FeedbackSettingsCard({
                 }
                 value={settings.feedbackRequestSendWindowStartHourUtc === null || settings.feedbackRequestSendWindowStartHourUtc === undefined ? emptyValue : String(settings.feedbackRequestSendWindowStartHourUtc)}
               >
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger><SelectValue>{hourLabel(settings.feedbackRequestSendWindowStartHourUtc)}</SelectValue></SelectTrigger>
                 <SelectContent>
                   <SelectItem value={emptyValue}>{"Any time"}</SelectItem>
                   {hourOptions.map((option) => (
@@ -110,7 +118,7 @@ export function FeedbackSettingsCard({
                 }
                 value={settings.feedbackRequestSendWindowEndHourUtc === null || settings.feedbackRequestSendWindowEndHourUtc === undefined ? emptyValue : String(settings.feedbackRequestSendWindowEndHourUtc)}
               >
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger><SelectValue>{hourLabel(settings.feedbackRequestSendWindowEndHourUtc)}</SelectValue></SelectTrigger>
                 <SelectContent>
                   <SelectItem value={emptyValue}>{"Any time"}</SelectItem>
                   {hourOptions.map((option) => (

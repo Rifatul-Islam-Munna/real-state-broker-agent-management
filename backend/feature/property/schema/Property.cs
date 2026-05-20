@@ -106,6 +106,9 @@ namespace Entities
         [Column("owner_notes")]
         public string? OwnerNotes { get; set; }
 
+        [Column("internal_details_markdown")]
+        public string? InternalDetailsMarkdown { get; set; }
+
         [Column("thumbnail_url")]
         public string? ThumbnailUrl { get; set; }
 

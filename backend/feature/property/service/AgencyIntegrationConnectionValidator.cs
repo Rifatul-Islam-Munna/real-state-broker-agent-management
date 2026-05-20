@@ -2,6 +2,7 @@ using System.Net.Http.Headers;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Text;
+using System.Text.Json;
 using MailKit;
 using MailKit.Net.Imap;
 using MailKit.Security;
@@ -23,6 +24,17 @@ namespace Services
         {
             var providerName = NormalizeProviderName(request.ProviderName, "Twilio");
 
+            if (string.IsNullOrWhiteSpace(request.FromNumber))
+            {
+                throw new ArgumentException("A from number is required for calls and SMS.");
+            }
+
+            if (providerName.Equals("RingCentral", StringComparison.OrdinalIgnoreCase))
+            {
+                await ValidateRingCentralCommunicationAsync(request, ct);
+                return;
+            }
+
             if (string.IsNullOrWhiteSpace(request.AccountId))
             {
                 throw new ArgumentException($"{providerName} account id is required.");
@@ -31,11 +43,6 @@ namespace Services
             if (string.IsNullOrWhiteSpace(request.AuthToken))
             {
                 throw new ArgumentException($"{providerName} auth token is required.");
-            }
-
-            if (string.IsNullOrWhiteSpace(request.FromNumber))
-            {
-                throw new ArgumentException("A from number is required for calls and SMS.");
             }
 
             var validationUrl = providerName.ToLowerInvariant() switch
@@ -54,6 +61,36 @@ namespace Services
                 Convert.ToBase64String(Encoding.ASCII.GetBytes($"{request.AccountId.Trim()}:{request.AuthToken.Trim()}")));
 
             await EnsureSuccessAsync(client, message, $"{providerName} connection test", ct);
+        }
+
+        private async Task ValidateRingCentralCommunicationAsync(CommunicationProviderWriteRequest request, CancellationToken ct)
+        {
+            if (string.IsNullOrWhiteSpace(request.AccountId))
+            {
+                throw new ArgumentException("RingCentral client id is required.");
+            }
+
+            if (string.IsNullOrWhiteSpace(request.ClientSecret))
+            {
+                throw new ArgumentException("RingCentral client secret is required.");
+            }
+
+            if (string.IsNullOrWhiteSpace(request.JwtToken))
+            {
+                throw new ArgumentException("RingCentral JWT token is required.");
+            }
+
+            var accessToken = await GetRingCentralAccessTokenAsync(request, ct);
+            var extensionId = string.IsNullOrWhiteSpace(request.ExtensionId) ? "~" : request.ExtensionId.Trim();
+            var validationUrl = BuildUrl(request.BaseUrl, "https://platform.ringcentral.com", $"/restapi/v1.0/account/~/extension/{Uri.EscapeDataString(extensionId)}/phone-number");
+
+            using var client = _httpClientFactory.CreateClient(nameof(AgencyIntegrationConnectionValidator));
+            client.Timeout = DefaultTimeout;
+
+            using var message = new HttpRequestMessage(HttpMethod.Get, validationUrl);
+            message.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+            await EnsureSuccessAsync(client, message, "RingCentral connection test", ct);
         }
 
         public async Task ValidateAiProviderAsync(AiWorkspaceWriteRequest request, CancellationToken ct = default)
@@ -323,6 +360,48 @@ namespace Services
                 var detail = string.IsNullOrWhiteSpace(body) ? response.ReasonPhrase : body;
                 throw new ArgumentException($"{actionName} failed with {(int)response.StatusCode}: {detail}");
             }
+        }
+
+        private async Task<string> GetRingCentralAccessTokenAsync(CommunicationProviderWriteRequest request, CancellationToken ct)
+        {
+            using var client = _httpClientFactory.CreateClient(nameof(AgencyIntegrationConnectionValidator));
+            client.Timeout = DefaultTimeout;
+
+            using var tokenRequest = new HttpRequestMessage(
+                HttpMethod.Post,
+                BuildUrl(request.BaseUrl, "https://platform.ringcentral.com", "/restapi/oauth/token"))
+            {
+                Content = new FormUrlEncodedContent(new Dictionary<string, string>
+                {
+                    ["grant_type"] = "urn:ietf:params:oauth:grant-type:jwt-bearer",
+                    ["assertion"] = request.JwtToken.Trim(),
+                }),
+            };
+
+            tokenRequest.Headers.Authorization = new AuthenticationHeaderValue(
+                "Basic",
+                Convert.ToBase64String(Encoding.ASCII.GetBytes($"{request.AccountId.Trim()}:{request.ClientSecret.Trim()}")));
+
+            using var tokenResponse = await client.SendAsync(tokenRequest, ct);
+            var tokenPayload = await tokenResponse.Content.ReadAsStringAsync(ct);
+            if (!tokenResponse.IsSuccessStatusCode)
+            {
+                throw new ArgumentException($"RingCentral token request failed with {(int)tokenResponse.StatusCode}: {tokenPayload}");
+            }
+
+            using var document = JsonDocument.Parse(tokenPayload);
+            if (!document.RootElement.TryGetProperty("access_token", out var accessTokenElement))
+            {
+                throw new ArgumentException("RingCentral token response did not include an access token.");
+            }
+
+            var accessToken = accessTokenElement.GetString();
+            if (string.IsNullOrWhiteSpace(accessToken))
+            {
+                throw new ArgumentException("RingCentral access token was empty.");
+            }
+
+            return accessToken.Trim();
         }
 
         private static string NormalizeProviderName(string? value, string fallback)

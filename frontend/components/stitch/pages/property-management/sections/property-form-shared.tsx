@@ -34,6 +34,7 @@ export type PropertyFormValues = {
   ownerCompany: string
   ownerAddress: string
   ownerNotes: string
+  internalDetailsMarkdown: string
   keyAmenities: string[]
   documentRepositoryItemIds: number[]
   neighborhoodInsights: NeighborhoodInsightFormValue[]

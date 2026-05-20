@@ -60,6 +60,7 @@ namespace Services
         string? OwnerCompany,
         string? OwnerAddress,
         string? OwnerNotes,
+        string? InternalDetailsMarkdown,
         string? ThumbnailUrl,
         string? ThumbnailObjectName,
         List<string> ImageUrls,
@@ -185,6 +186,7 @@ namespace Services
             existing.OwnerCompany = NormalizeOptionalString(property.OwnerCompany);
             existing.OwnerAddress = NormalizeOptionalString(property.OwnerAddress);
             existing.OwnerNotes = NormalizeOptionalString(property.OwnerNotes);
+            existing.InternalDetailsMarkdown = NormalizeOptionalMarkdown(property.InternalDetailsMarkdown);
             existing.ThumbnailUrl = NormalizeOptionalString(property.ThumbnailUrl);
             existing.ThumbnailObjectName = NormalizeOptionalString(property.ThumbnailObjectName);
             existing.ImageUrls = NormalizeStringList(property.ImageUrls);
@@ -419,6 +421,7 @@ namespace Services
                 item.OwnerCompany,
                 item.OwnerAddress,
                 item.OwnerNotes,
+                item.InternalDetailsMarkdown,
                 item.ThumbnailUrl,
                 item.ThumbnailObjectName,
                 item.ImageUrls,
@@ -480,6 +483,7 @@ namespace Services
             property.OwnerCompany = NormalizeOptionalString(property.OwnerCompany);
             property.OwnerAddress = NormalizeOptionalString(property.OwnerAddress);
             property.OwnerNotes = NormalizeOptionalString(property.OwnerNotes);
+            property.InternalDetailsMarkdown = NormalizeOptionalMarkdown(property.InternalDetailsMarkdown);
             property.ThumbnailUrl = NormalizeOptionalString(property.ThumbnailUrl);
             property.ThumbnailObjectName = NormalizeOptionalString(property.ThumbnailObjectName);
             property.ImageUrls = NormalizeStringList(property.ImageUrls);
@@ -522,6 +526,12 @@ namespace Services
             return string.IsNullOrWhiteSpace(value)
                 ? null
                 : value.Trim();
+        }
+
+        private static string? NormalizeOptionalMarkdown(string? value)
+        {
+            var normalized = value?.Trim() ?? string.Empty;
+            return normalized.Length == 0 ? null : normalized;
         }
 
         private static List<string> NormalizeStringList(List<string>? values)

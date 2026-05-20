@@ -301,6 +301,7 @@ namespace Endpoints
                 OwnerCompany = null,
                 OwnerAddress = null,
                 OwnerNotes = null,
+                InternalDetailsMarkdown = null,
                 SellPrediction = new PropertySellPredictionResponse(
                     0,
                     false,

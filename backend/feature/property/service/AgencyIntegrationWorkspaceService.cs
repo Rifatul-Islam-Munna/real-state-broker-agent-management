@@ -11,6 +11,9 @@ namespace Services
         public string ProviderName { get; set; } = "Twilio";
         public string AccountId { get; set; } = string.Empty;
         public string AuthToken { get; set; } = string.Empty;
+        public string ClientSecret { get; set; } = string.Empty;
+        public string JwtToken { get; set; } = string.Empty;
+        public string ExtensionId { get; set; } = "~";
         public string FromNumber { get; set; } = string.Empty;
         public string? BaseUrl { get; set; }
         public string? VoiceWebhookUrl { get; set; }
@@ -252,8 +255,11 @@ namespace Services
             {
                 AccountId = (request.AccountId ?? string.Empty).Trim(),
                 AuthToken = (request.AuthToken ?? string.Empty).Trim(),
+                ClientSecret = (request.ClientSecret ?? string.Empty).Trim(),
                 BaseUrl = NormalizeOptional(request.BaseUrl),
+                ExtensionId = NormalizeOptional(request.ExtensionId) ?? "~",
                 FromNumber = (request.FromNumber ?? string.Empty).Trim(),
+                JwtToken = (request.JwtToken ?? string.Empty).Trim(),
                 ProviderName = NormalizeOptional(request.ProviderName) ?? "Twilio",
                 VoiceWebhookUrl = NormalizeOptional(request.VoiceWebhookUrl),
                 SupportsSms = request.SupportsSms,

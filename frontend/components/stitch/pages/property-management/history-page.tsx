@@ -5,6 +5,7 @@ import { useMemo, useState } from "react"
 import { usePathname, useSearchParams } from "next/navigation"
 
 import { AppIcon } from "@/components/ui/app-icon"
+import { SimpleMarkdown } from "@/components/ui/simple-markdown"
 import {
   useLeads,
   useProperties,
@@ -106,6 +107,14 @@ export function PropertyHistoryPage() {
                     <p>{`Owner phone: ${property.ownerPhone || "Missing"}`}</p>
                     <p>{`Agent: ${property.agent?.fullName || "Unassigned"}`}</p>
                   </div>
+                  {property.internalDetailsMarkdown ? (
+                    <div className="mt-4 rounded-[1rem] border border-slate-200 bg-white p-4">
+                      <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500">{"Internal markdown"}</p>
+                      <div className="mt-3 text-sm text-slate-700">
+                        <SimpleMarkdown className="space-y-4" value={property.internalDetailsMarkdown} />
+                      </div>
+                    </div>
+                  ) : null}
                 </article>
 
                 <article className="rounded-[1.35rem] border border-slate-200 bg-[#f7f5f1]/65 p-4">

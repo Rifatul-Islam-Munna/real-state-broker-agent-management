@@ -1308,6 +1308,9 @@ namespace Services
 
             switch (providerName.ToLowerInvariant())
             {
+                case "ringcentral":
+                    await SendRingCentralSmsAsync(communicationConfig, targetPhone, message, ct);
+                    break;
                 case "plivo":
                     await SendPlivoSmsAsync(communicationConfig, targetPhone, message, ct);
                     break;
@@ -1387,6 +1390,43 @@ namespace Services
             await SendProviderRequestAsync(config, HttpMethod.Post, $"{baseUrl.TrimEnd('/')}/messages", content, ct);
         }
 
+        private async Task SendRingCentralSmsAsync(
+            CommunicationProviderWriteRequest config,
+            string targetPhone,
+            string message,
+            CancellationToken ct)
+        {
+            var accessToken = await GetRingCentralAccessTokenAsync(config, ct);
+            var extensionId = NormalizeLooseText(config.ExtensionId);
+            if (string.IsNullOrWhiteSpace(extensionId))
+            {
+                extensionId = "~";
+            }
+
+            using var content = JsonContent.Create(new
+            {
+                from = new
+                {
+                    phoneNumber = config.FromNumber.Trim(),
+                },
+                to = new[]
+                {
+                    new
+                    {
+                        phoneNumber = targetPhone,
+                    },
+                },
+                text = message,
+            });
+
+            await SendRingCentralRequestAsync(
+                accessToken,
+                HttpMethod.Post,
+                BuildProviderUrl(config, $"/restapi/v1.0/account/~/extension/{Uri.EscapeDataString(extensionId)}/sms"),
+                content,
+                ct);
+        }
+
         private async Task SendProviderRequestAsync(
             CommunicationProviderWriteRequest config,
             HttpMethod method,
@@ -1410,6 +1450,84 @@ namespace Services
 
             var detail = await response.Content.ReadAsStringAsync(ct);
             throw new ArgumentException($"Communication provider returned {(int)response.StatusCode}: {(string.IsNullOrWhiteSpace(detail) ? response.ReasonPhrase : detail)}");
+        }
+
+        private async Task SendRingCentralRequestAsync(
+            string accessToken,
+            HttpMethod method,
+            string url,
+            HttpContent content,
+            CancellationToken ct)
+        {
+            using var client = _httpClientFactory.CreateClient(nameof(PropertyFeedbackService));
+            client.Timeout = TimeSpan.FromSeconds(20);
+
+            using var request = new HttpRequestMessage(method, url) { Content = content };
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+            using var response = await client.SendAsync(request, ct);
+            if (response.IsSuccessStatusCode)
+            {
+                return;
+            }
+
+            var detail = await response.Content.ReadAsStringAsync(ct);
+            throw new ArgumentException($"RingCentral returned {(int)response.StatusCode}: {(string.IsNullOrWhiteSpace(detail) ? response.ReasonPhrase : detail)}");
+        }
+
+        private async Task<string> GetRingCentralAccessTokenAsync(CommunicationProviderWriteRequest config, CancellationToken ct)
+        {
+            if (string.IsNullOrWhiteSpace(config.AccountId))
+            {
+                throw new ArgumentException("RingCentral client id is required.");
+            }
+
+            if (string.IsNullOrWhiteSpace(config.ClientSecret))
+            {
+                throw new ArgumentException("RingCentral client secret is required.");
+            }
+
+            if (string.IsNullOrWhiteSpace(config.JwtToken))
+            {
+                throw new ArgumentException("RingCentral JWT token is required.");
+            }
+
+            using var client = _httpClientFactory.CreateClient(nameof(PropertyFeedbackService));
+            client.Timeout = TimeSpan.FromSeconds(20);
+
+            using var request = new HttpRequestMessage(HttpMethod.Post, BuildProviderUrl(config, "/restapi/oauth/token"))
+            {
+                Content = new FormUrlEncodedContent(new Dictionary<string, string>
+                {
+                    ["grant_type"] = "urn:ietf:params:oauth:grant-type:jwt-bearer",
+                    ["assertion"] = config.JwtToken.Trim(),
+                }),
+            };
+
+            request.Headers.Authorization = new AuthenticationHeaderValue(
+                "Basic",
+                Convert.ToBase64String(Encoding.ASCII.GetBytes($"{config.AccountId.Trim()}:{config.ClientSecret.Trim()}")));
+
+            using var response = await client.SendAsync(request, ct);
+            var payload = await response.Content.ReadAsStringAsync(ct);
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new ArgumentException($"RingCentral token request failed with {(int)response.StatusCode}: {payload}");
+            }
+
+            using var document = JsonDocument.Parse(payload);
+            if (!document.RootElement.TryGetProperty("access_token", out var accessTokenElement))
+            {
+                throw new ArgumentException("RingCentral token response did not include an access token.");
+            }
+
+            var accessToken = accessTokenElement.GetString();
+            if (string.IsNullOrWhiteSpace(accessToken))
+            {
+                throw new ArgumentException("RingCentral access token was empty.");
+            }
+
+            return accessToken.Trim();
         }
 
         private async Task<string?> BuildReplySkipReasonAsync(ShowingFeedbackRequest request, CancellationToken ct)
@@ -1923,11 +2041,13 @@ namespace Services
             var fallbackBaseUrl = NormalizeText(config.ProviderName, "Twilio").ToLowerInvariant() switch
             {
                 "plivo" => "https://api.plivo.com",
+                "ringcentral" => "https://platform.ringcentral.com",
                 "custom" => baseUrl,
                 _ => "https://api.twilio.com",
             };
 
-            return $"{fallbackBaseUrl.TrimEnd('/')}{path}";
+            var root = string.IsNullOrWhiteSpace(baseUrl) ? fallbackBaseUrl : baseUrl;
+            return $"{root.TrimEnd('/')}{path}";
         }
 
         private sealed class FeedbackAnalysisResponse
