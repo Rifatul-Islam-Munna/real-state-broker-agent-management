@@ -42,6 +42,8 @@ namespace Services
         public string Name { get; set; } = string.Empty;
         public string Subject { get; set; } = string.Empty;
         public string Body { get; set; } = string.Empty;
+        public string FollowUpSubject { get; set; } = string.Empty;
+        public string FollowUpBody { get; set; } = string.Empty;
         public List<AgencyCommunicationChannel> Channels { get; set; } = [];
         public List<string> VariableTokens { get; set; } = [];
     }

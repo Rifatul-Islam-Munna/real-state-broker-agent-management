@@ -26,6 +26,8 @@ namespace Services
         public int FeedbackRequestDelayHours { get; set; } = 2;
         public int FeedbackRequestFollowUpDelayHours { get; set; } = 24;
         public int FeedbackRequestMaxFollowUps { get; set; } = 2;
+        public int? FeedbackRequestSendWindowStartHourUtc { get; set; }
+        public int? FeedbackRequestSendWindowEndHourUtc { get; set; }
         public List<AgencyCommunicationChannel> FeedbackRequestChannels { get; set; } = [];
         public string FeedbackRequestSubject { get; set; } = string.Empty;
         public string FeedbackRequestBody { get; set; } = string.Empty;
@@ -45,6 +47,8 @@ namespace Services
         int FeedbackRequestDelayHours,
         int FeedbackRequestFollowUpDelayHours,
         int FeedbackRequestMaxFollowUps,
+        int? FeedbackRequestSendWindowStartHourUtc,
+        int? FeedbackRequestSendWindowEndHourUtc,
         List<AgencyCommunicationChannel> FeedbackRequestChannels,
         string FeedbackRequestSubject,
         string FeedbackRequestBody,
@@ -65,6 +69,8 @@ namespace Services
         public List<AgencyCommunicationChannel> Channels { get; set; } = [];
         public string Subject { get; set; } = string.Empty;
         public string Message { get; set; } = string.Empty;
+        public string FollowUpSubject { get; set; } = string.Empty;
+        public string FollowUpMessage { get; set; } = string.Empty;
         public DateTime? ScheduledAt { get; set; }
         public string CreatedBy { get; set; } = string.Empty;
     }
@@ -83,6 +89,8 @@ namespace Services
         List<AgencyCommunicationChannel> Channels,
         string Subject,
         string Message,
+        string FollowUpSubject,
+        string FollowUpMessage,
         ShowingFeedbackRequestStatus Status,
         DateTime ScheduledAt,
         DateTime? LastSentAt,
@@ -265,6 +273,8 @@ namespace Services
             settings.FeedbackRequestDelayHours = Math.Clamp(request.FeedbackRequestDelayHours, 1, 120);
             settings.FeedbackRequestFollowUpDelayHours = Math.Clamp(request.FeedbackRequestFollowUpDelayHours, 1, 240);
             settings.FeedbackRequestMaxFollowUps = Math.Clamp(request.FeedbackRequestMaxFollowUps, 0, 5);
+            settings.FeedbackRequestSendWindowStartHourUtc = NormalizeHourWindowValue(request.FeedbackRequestSendWindowStartHourUtc);
+            settings.FeedbackRequestSendWindowEndHourUtc = NormalizeHourWindowValue(request.FeedbackRequestSendWindowEndHourUtc);
             settings.FeedbackRequestChannels = NormalizeChannels(request.FeedbackRequestChannels, [AgencyCommunicationChannel.Email]);
             settings.FeedbackRequestSubject = NormalizeText(request.FeedbackRequestSubject, DefaultSettings().FeedbackRequestSubject);
             settings.FeedbackRequestBody = NormalizeText(request.FeedbackRequestBody, DefaultSettings().FeedbackRequestBody);
@@ -317,6 +327,7 @@ namespace Services
             var settings = await GetOrCreateSettingsEntityAsync(ct, persistIfMissing: true);
             var now = DateTime.UtcNow;
             var scheduledAt = input.ScheduledAt?.ToUniversalTime() ?? now.AddHours(settings.FeedbackRequestDelayHours);
+            scheduledAt = AlignToFeedbackSendWindow(settings, scheduledAt);
             var request = new ShowingFeedbackRequest
             {
                 ShowingBookingId = input.ShowingBookingId,
@@ -329,6 +340,8 @@ namespace Services
                 Channels = NormalizeChannels(input.Channels, settings.FeedbackRequestChannels),
                 Subject = NormalizeText(input.Subject, ApplyTokens(settings.FeedbackRequestSubject, property, null, input.RecipientName, scheduledAt, [])),
                 Message = NormalizeText(input.Message, ApplyTokens(settings.FeedbackRequestBody, property, null, input.RecipientName, scheduledAt, [])),
+                FollowUpSubject = NormalizeText(input.FollowUpSubject, ApplyTokens(settings.FeedbackRequestSubject, property, null, input.RecipientName, scheduledAt, [])),
+                FollowUpMessage = NormalizeText(input.FollowUpMessage, ApplyTokens(settings.FeedbackRequestBody, property, null, input.RecipientName, scheduledAt, [])),
                 Status = ShowingFeedbackRequestStatus.Pending,
                 ScheduledAt = scheduledAt,
                 NextFollowUpAt = scheduledAt,
@@ -619,7 +632,7 @@ namespace Services
             var settings = await GetOrCreateSettingsEntityAsync(ct, persistIfMissing: true);
             var now = DateTime.UtcNow;
 
-            if (settings.FeedbackRequestEnabled)
+            if (settings.FeedbackRequestEnabled && IsWithinFeedbackSendWindow(settings, now))
             {
                 var dueRequests = await _db.ShowingFeedbackRequests
                     .Include(item => item.Property)
@@ -655,8 +668,8 @@ namespace Services
                         request.Channels,
                         request.RecipientEmail,
                         request.RecipientPhone,
-                        request.Subject,
-                        request.Message,
+                        request.FollowUpCount <= 0 ? request.Subject : request.FollowUpSubject,
+                        request.FollowUpCount <= 0 ? request.Message : request.FollowUpMessage,
                         ct);
 
                     request.Status = delivery.Success ? ShowingFeedbackRequestStatus.Sent : ShowingFeedbackRequestStatus.Failed;
@@ -665,7 +678,7 @@ namespace Services
                     request.FollowUpCount += 1;
                     request.UpdatedAt = now;
                     request.NextFollowUpAt = delivery.Success && request.FollowUpCount <= request.MaxFollowUps
-                        ? now.AddHours(settings.FeedbackRequestFollowUpDelayHours)
+                        ? AlignToFeedbackSendWindow(settings, now.AddHours(settings.FeedbackRequestFollowUpDelayHours))
                         : null;
 
                     if (request.ShowingBookingId.HasValue)
@@ -982,6 +995,8 @@ namespace Services
                 settings.FeedbackRequestDelayHours,
                 settings.FeedbackRequestFollowUpDelayHours,
                 settings.FeedbackRequestMaxFollowUps,
+                settings.FeedbackRequestSendWindowStartHourUtc,
+                settings.FeedbackRequestSendWindowEndHourUtc,
                 settings.FeedbackRequestChannels,
                 settings.FeedbackRequestSubject,
                 settings.FeedbackRequestBody,
@@ -1006,6 +1021,8 @@ namespace Services
                 item.Channels,
                 item.Subject,
                 item.Message,
+                item.FollowUpSubject,
+                item.FollowUpMessage,
                 item.Status,
                 item.ScheduledAt,
                 item.LastSentAt,
@@ -1793,6 +1810,8 @@ namespace Services
                 FeedbackRequestDelayHours = 2,
                 FeedbackRequestFollowUpDelayHours = 24,
                 FeedbackRequestMaxFollowUps = 2,
+                FeedbackRequestSendWindowStartHourUtc = null,
+                FeedbackRequestSendWindowEndHourUtc = null,
                 FeedbackRequestChannels = [AgencyCommunicationChannel.Email, AgencyCommunicationChannel.SMS],
                 FeedbackRequestSubject = "Showing feedback for {{property_title}}",
                 FeedbackRequestBody = "Hello {{recipient_name}}, please share visit feedback for {{property_title}} shown on {{showing_time}}. Reply with objections, price concerns, location issues, condition notes, and next-step readiness.",
@@ -1800,6 +1819,56 @@ namespace Services
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow,
             };
+        }
+
+        private static int? NormalizeHourWindowValue(int? value)
+        {
+            return value.HasValue ? Math.Clamp(value.Value, 0, 23) : null;
+        }
+
+        private static bool IsWithinFeedbackSendWindow(PropertyFeedbackAutomationSettings settings, DateTime utcNow)
+        {
+            if (!settings.FeedbackRequestSendWindowStartHourUtc.HasValue || !settings.FeedbackRequestSendWindowEndHourUtc.HasValue)
+            {
+                return true;
+            }
+
+            var startHour = settings.FeedbackRequestSendWindowStartHourUtc.Value;
+            var endHour = settings.FeedbackRequestSendWindowEndHourUtc.Value;
+            if (startHour == endHour)
+            {
+                return true;
+            }
+
+            var hour = utcNow.Hour;
+            return startHour < endHour
+                ? hour >= startHour && hour < endHour
+                : hour >= startHour || hour < endHour;
+        }
+
+        private static DateTime AlignToFeedbackSendWindow(PropertyFeedbackAutomationSettings settings, DateTime scheduledAtUtc)
+        {
+            if (!settings.FeedbackRequestSendWindowStartHourUtc.HasValue || !settings.FeedbackRequestSendWindowEndHourUtc.HasValue)
+            {
+                return scheduledAtUtc;
+            }
+
+            if (IsWithinFeedbackSendWindow(settings, scheduledAtUtc))
+            {
+                return scheduledAtUtc;
+            }
+
+            var startHour = settings.FeedbackRequestSendWindowStartHourUtc.Value;
+            var candidate = new DateTime(
+                scheduledAtUtc.Year,
+                scheduledAtUtc.Month,
+                scheduledAtUtc.Day,
+                startHour,
+                0,
+                0,
+                DateTimeKind.Utc);
+
+            return candidate <= scheduledAtUtc ? candidate.AddDays(1) : candidate;
         }
 
         private static MailKit.Security.SecureSocketOptions ResolveSmtpSecureSocketOptions(int port, bool useSsl)

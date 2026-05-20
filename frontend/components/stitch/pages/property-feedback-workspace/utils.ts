@@ -1,6 +1,8 @@
 export const feedbackTabItems = [
+  { value: "campaign", label: "Campaign Studio" },
+  { value: "templates", label: "Template Vault" },
   { value: "manual", label: "Manual Feedback" },
-  { value: "imports", label: "CSV Imports" },
+  { value: "imports", label: "Lead CRM Imports" },
   { value: "requests", label: "Reply Queue" },
 ] as const
 
@@ -74,4 +76,23 @@ export function autoMap(columns: string[], aliases: Record<string, string[]>) {
   })
 
   return mapped
+}
+
+export function hourToTimeValue(hour?: number | null) {
+  if (hour === null || hour === undefined || Number.isNaN(hour)) {
+    return ""
+  }
+
+  const normalized = Math.max(0, Math.min(23, hour))
+  return `${String(normalized).padStart(2, "0")}:00`
+}
+
+export function timeValueToHour(value: string) {
+  if (!value) {
+    return null
+  }
+
+  const [hours] = value.split(":")
+  const parsed = Number(hours)
+  return Number.isFinite(parsed) ? Math.max(0, Math.min(23, parsed)) : null
 }

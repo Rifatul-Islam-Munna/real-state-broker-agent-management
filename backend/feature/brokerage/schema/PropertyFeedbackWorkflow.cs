@@ -94,6 +94,12 @@ namespace Entities
         [Column("feedback_request_max_follow_ups")]
         public int FeedbackRequestMaxFollowUps { get; set; } = 2;
 
+        [Column("feedback_request_send_window_start_hour_utc")]
+        public int? FeedbackRequestSendWindowStartHourUtc { get; set; }
+
+        [Column("feedback_request_send_window_end_hour_utc")]
+        public int? FeedbackRequestSendWindowEndHourUtc { get; set; }
+
         [Column("feedback_request_channels", TypeName = "jsonb")]
         public List<AgencyCommunicationChannel> FeedbackRequestChannels { get; set; } = [AgencyCommunicationChannel.Email, AgencyCommunicationChannel.SMS];
 
@@ -166,6 +172,12 @@ namespace Entities
 
         [Column("message")]
         public string Message { get; set; } = string.Empty;
+
+        [Column("follow_up_subject")]
+        public string FollowUpSubject { get; set; } = string.Empty;
+
+        [Column("follow_up_message")]
+        public string FollowUpMessage { get; set; } = string.Empty;
 
         [Column("status")]
         public ShowingFeedbackRequestStatus Status { get; set; } = ShowingFeedbackRequestStatus.Pending;

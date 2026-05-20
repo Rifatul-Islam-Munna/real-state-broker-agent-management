@@ -22,6 +22,7 @@ import { LeadOutreachSchedulePage } from "@/components/stitch/pages/lead-history
 
 import { type LeadFormValues, Section1Section, Section2Section } from "./sections"
 import type { LeadOutreachComposerValues, LeadOutreachMode } from "./sections/lead-outreach-types"
+import { ShowingImportDialog } from "./sections/showing-import-dialog"
 
 const PAGE_SIZE = 10
 
@@ -63,6 +64,7 @@ function mapLeadValuesToPayload(values: LeadFormValues, lead?: LeadItem) {
 
 export function LeadCrmPipelinePage() {
   const [createDialogVersion, setCreateDialogVersion] = useState(0)
+  const [showingImportOpen, setShowingImportOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
   const [page, setPage] = useState(1)
   const [localLeads, setLocalLeads] = useState<LeadItem[]>([])
@@ -278,6 +280,16 @@ export function LeadCrmPipelinePage() {
               </a>
               <a
                 className="inline-flex items-center justify-center border border-slate-200 bg-white px-4 py-2 text-xs font-bold uppercase tracking-wide text-slate-700"
+                href="#"
+                onClick={(event) => {
+                  event.preventDefault()
+                  setShowingImportOpen(true)
+                }}
+              >
+                {"Showing Import"}
+              </a>
+              <a
+                className="inline-flex items-center justify-center border border-slate-200 bg-white px-4 py-2 text-xs font-bold uppercase tracking-wide text-slate-700"
                 href={portalRoutes.kind === "agent" ? "/agent/owner-report-center" : "/admin/owner-report-center"}
               >
                 {"Owner Reports"}
@@ -325,6 +337,11 @@ export function LeadCrmPipelinePage() {
           totalResults={leadsQuery.data?.totalCount ?? displayedLeads.length}
         />
       </div>
+      <ShowingImportDialog
+        createdBy={portalRoutes.kind === "agent" ? "Agent" : "Admin"}
+        onOpenChange={setShowingImportOpen}
+        open={showingImportOpen}
+      />
     </div>
   )
 }

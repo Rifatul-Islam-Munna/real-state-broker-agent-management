@@ -8,6 +8,10 @@ import { Textarea } from "@/components/ui/textarea"
 import type { PropertyFeedbackAutomationSettings } from "@/hooks/use-real-estate-api"
 
 const emptyValue = "__empty__"
+const hourOptions = Array.from({ length: 24 }, (_, hour) => ({
+  value: String(hour),
+  label: `${String(hour).padStart(2, "0")}:00`,
+}))
 
 export function FeedbackSettingsCard({
   isSaving,
@@ -47,6 +51,76 @@ export function FeedbackSettingsCard({
         >
           {isSaving ? "Saving..." : "Save Settings"}
         </button>
+      </div>
+
+      <div className="mt-5 grid gap-5 xl:grid-cols-[0.9fr_1.1fr]">
+        <article className="rounded-[1.5rem] border border-[#1b5e8a]/15 bg-[linear-gradient(180deg,rgba(27,94,138,0.08),rgba(255,255,255,0.96))] p-5">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-[#1b5e8a]/70">{"AI feedback capture"}</p>
+              <h3 className="mt-2 text-lg font-black tracking-tight text-slate-900">{"Email feedback AI"}</h3>
+              <p className="mt-2 text-sm leading-6 text-slate-600">
+                {"Turn mailbox AI parsing on or off before email replies get saved into property feedback."}
+              </p>
+            </div>
+            <Switch
+              checked={settings.autoCaptureMailFeedback}
+              onCheckedChange={(checked) => onChange({ ...settings, autoCaptureMailFeedback: checked })}
+            />
+          </div>
+        </article>
+
+        <article className="rounded-[1.5rem] border border-[#c18b2f]/18 bg-[linear-gradient(180deg,rgba(193,139,47,0.08),rgba(255,255,255,0.96))] p-5">
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-[#8b6722]/80">{"SMS cost control"}</p>
+            <h3 className="mt-2 text-lg font-black tracking-tight text-slate-900">{"Broker send window"}</h3>
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              {"Choose when broker Email/SMS can go out. Leave blank for all-day sending."}
+            </p>
+          </div>
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <label className="space-y-2 text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
+              <span>{"Start hour UTC"}</span>
+              <Select
+                onValueChange={(value) =>
+                  onChange({
+                    ...settings,
+                    feedbackRequestSendWindowStartHourUtc: value === emptyValue ? null : Number(value),
+                  })
+                }
+                value={settings.feedbackRequestSendWindowStartHourUtc === null || settings.feedbackRequestSendWindowStartHourUtc === undefined ? emptyValue : String(settings.feedbackRequestSendWindowStartHourUtc)}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={emptyValue}>{"Any time"}</SelectItem>
+                  {hourOptions.map((option) => (
+                    <SelectItem key={`feedback-window-start-${option.value}`} value={option.value}>{option.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </label>
+            <label className="space-y-2 text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
+              <span>{"End hour UTC"}</span>
+              <Select
+                onValueChange={(value) =>
+                  onChange({
+                    ...settings,
+                    feedbackRequestSendWindowEndHourUtc: value === emptyValue ? null : Number(value),
+                  })
+                }
+                value={settings.feedbackRequestSendWindowEndHourUtc === null || settings.feedbackRequestSendWindowEndHourUtc === undefined ? emptyValue : String(settings.feedbackRequestSendWindowEndHourUtc)}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={emptyValue}>{"Any time"}</SelectItem>
+                  {hourOptions.map((option) => (
+                    <SelectItem key={`feedback-window-end-${option.value}`} value={option.value}>{option.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </label>
+          </div>
+        </article>
       </div>
 
       <div className="mt-5 grid gap-5 xl:grid-cols-2">

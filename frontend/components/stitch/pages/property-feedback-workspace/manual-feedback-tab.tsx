@@ -57,6 +57,9 @@ export function ManualFeedbackTab({
     })
     .slice(0, 120)
     .map((item) => ({ value: String(item.id), label: `${item.name} | ${item.email}` }))
+  const selectedPropertyLabel = propertyOptions.find((item) => item.value === String(form.propertyId))?.label ?? "Select property"
+  const selectedShowingLabel = showingOptions.find((item) => item.value === String(form.showingBookingId))?.label ?? "Optional showing record"
+  const selectedLeadLabel = leadOptions.find((item) => item.value === String(form.leadId))?.label ?? "Lead from showing"
 
   return (
     <div className="grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
@@ -64,9 +67,9 @@ export function ManualFeedbackTab({
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-[#1b5e8a]/70">{"Manual entry"}</p>
-            <h3 className="mt-2 text-xl font-bold tracking-tight text-slate-900">{"Save showing feedback by hand"}</h3>
+            <h3 className="mt-2 text-xl font-bold tracking-tight text-slate-900">{"Save feedback manually"}</h3>
             <p className="mt-2 text-sm leading-6 text-slate-600">
-              {"Pick showing first. Lead dropdown then shows only lead attached to that showing."}
+              {"Pick property, then showing. Lead list stays tied to selected showing so names stay clean."}
             </p>
           </div>
           <button
@@ -86,7 +89,7 @@ export function ManualFeedbackTab({
               onValueChange={(value) => onChange({ ...form, propertyId: value === empty ? 0 : Number(value), showingBookingId: null, leadId: null })}
               value={form.propertyId ? String(form.propertyId) : empty}
             >
-              <SelectTrigger><SelectValue placeholder="Select property" /></SelectTrigger>
+              <SelectTrigger><SelectValue>{selectedPropertyLabel}</SelectValue></SelectTrigger>
               <SelectContent>
                 <SelectItem value={empty}>{"Select property"}</SelectItem>
                 {propertyOptions.map((item) => (
@@ -118,7 +121,7 @@ export function ManualFeedbackTab({
               }}
               value={form.showingBookingId ? String(form.showingBookingId) : empty}
             >
-              <SelectTrigger><SelectValue placeholder="Optional showing record" /></SelectTrigger>
+              <SelectTrigger><SelectValue>{selectedShowingLabel}</SelectValue></SelectTrigger>
               <SelectContent>
                 <SelectItem value={empty}>{"Optional showing record"}</SelectItem>
                 {showingOptions.map((item) => (
@@ -134,7 +137,7 @@ export function ManualFeedbackTab({
               onValueChange={(value) => onChange({ ...form, leadId: value === empty ? null : Number(value) })}
               value={form.leadId ? String(form.leadId) : empty}
             >
-              <SelectTrigger><SelectValue placeholder="Lead from showing" /></SelectTrigger>
+              <SelectTrigger><SelectValue>{selectedLeadLabel}</SelectValue></SelectTrigger>
               <SelectContent>
                 <SelectItem value={empty}>{"Lead from showing"}</SelectItem>
                 {leadOptions.map((item) => (

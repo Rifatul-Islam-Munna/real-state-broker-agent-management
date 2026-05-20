@@ -54,6 +54,8 @@ const feedbackFields = [
   ["issues", "Issue tags"],
 ] as const
 
+const fieldLabelMap = new Map<string, string>([...showingFields, ...feedbackFields].map(([value, label]) => [value, label]))
+
 export function ImportsTab({
   feedbackBatchName,
   feedbackHeaders,
@@ -87,8 +89,8 @@ export function ImportsTab({
         onMappingChange={onShowingMappingChange}
         onUpload={onShowingUpload}
         rows={showingRows}
-        title="Showing import"
-        description="Upload historical or fresh showing rows, map broker details, create showings, queue feedback requests."
+        title="Lead CRM showing import"
+        description="Upload showing rows from CSV, map broker details, create showings, then queue feedback follow-up."
       />
       <ImportCard
         batchName={feedbackBatchName}
@@ -182,7 +184,9 @@ function ImportCard({
           <label className="space-y-2 text-xs font-bold uppercase tracking-[0.16em] text-slate-500" key={key}>
             <span>{label}</span>
             <Select onValueChange={(value) => onMappingChange(key, value === empty ? "" : value)} value={mappings[key] || empty}>
-              <SelectTrigger><SelectValue placeholder="Skip column" /></SelectTrigger>
+              <SelectTrigger>
+                <SelectValue>{mappings[key] || fieldLabelMap.get(key) || "Skip column"}</SelectValue>
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value={empty}>{"Skip column"}</SelectItem>
                 {headers.map((header) => (

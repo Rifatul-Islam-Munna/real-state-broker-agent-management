@@ -338,6 +338,8 @@ export type AgencyCommunicationTemplateItem = {
   name: string
   subject: string
   body: string
+  followUpSubject?: string
+  followUpBody?: string
   channels: AgencyCommunicationChannel[]
   variableTokens: string[]
 }
@@ -1078,6 +1080,8 @@ export type PropertyFeedbackAutomationSettings = {
   feedbackRequestDelayHours: number
   feedbackRequestFollowUpDelayHours: number
   feedbackRequestMaxFollowUps: number
+  feedbackRequestSendWindowStartHourUtc?: number | null
+  feedbackRequestSendWindowEndHourUtc?: number | null
   feedbackRequestChannels: AgencyCommunicationChannel[]
   feedbackRequestSubject: string
   feedbackRequestBody: string
@@ -1105,6 +1109,8 @@ export type ShowingFeedbackRequestItem = {
   channels: AgencyCommunicationChannel[]
   subject: string
   message: string
+  followUpSubject: string
+  followUpMessage: string
   status: ShowingFeedbackRequestStatus
   scheduledAt: string
   lastSentAt?: string | null
@@ -1130,6 +1136,8 @@ export type CreateShowingFeedbackRequestInput = {
   channels: AgencyCommunicationChannel[]
   subject: string
   message: string
+  followUpSubject?: string | null
+  followUpMessage?: string | null
   scheduledAt?: string | null
   createdBy?: string | null
 }
