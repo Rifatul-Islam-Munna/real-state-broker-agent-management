@@ -1243,8 +1243,13 @@ export type SendPropertyOwnerReportsInput = {
   propertyId?: number | null
   propertyIds?: number[]
   channels?: AgencyCommunicationChannel[]
+  ownerName?: string | null
+  ownerEmail?: string | null
+  ownerPhone?: string | null
   subject?: string | null
   body?: string | null
+  manualFeedback?: string | null
+  customHint?: string | null
   createdBy?: string | null
 }
 

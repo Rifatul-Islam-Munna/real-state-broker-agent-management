@@ -210,8 +210,13 @@ namespace Services
         public int? PropertyId { get; set; }
         public List<int> PropertyIds { get; set; } = [];
         public List<AgencyCommunicationChannel> Channels { get; set; } = [];
+        public string OwnerName { get; set; } = string.Empty;
+        public string OwnerEmail { get; set; } = string.Empty;
+        public string OwnerPhone { get; set; } = string.Empty;
         public string Subject { get; set; } = string.Empty;
         public string Body { get; set; } = string.Empty;
+        public string ManualFeedback { get; set; } = string.Empty;
+        public string CustomHint { get; set; } = string.Empty;
         public string CreatedBy { get; set; } = string.Empty;
     }
 
@@ -621,8 +626,13 @@ namespace Services
                 input.PropertyId,
                 input.PropertyIds,
                 NormalizeChannels(input.Channels, []),
+                NormalizeLooseText(input.OwnerName),
+                NormalizeLooseText(input.OwnerEmail),
+                NormalizeLooseText(input.OwnerPhone),
                 NormalizeLooseText(input.Subject),
                 NormalizeLooseText(input.Body),
+                NormalizeLooseText(input.ManualFeedback),
+                NormalizeLooseText(input.CustomHint),
                 NormalizeText(input.CreatedBy, "Admin"),
                 ct);
         }
@@ -695,7 +705,7 @@ namespace Services
 
             if (settings.OwnerReportEnabled && IsOwnerReportDue(settings, now))
             {
-                await SendOwnerReportsCoreAsync(null, [], [], string.Empty, string.Empty, "System", ct);
+                await SendOwnerReportsCoreAsync(null, [], [], string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, "System", ct);
                 settings.LastOwnerReportRunAt = now;
                 settings.UpdatedAt = now;
             }
@@ -802,8 +812,13 @@ namespace Services
             int? propertyId,
             List<int>? propertyIds,
             List<AgencyCommunicationChannel>? channelsOverride,
+            string ownerNameOverride,
+            string ownerEmailOverride,
+            string ownerPhoneOverride,
             string subjectOverride,
             string bodyOverride,
+            string manualFeedback,
+            string customHint,
             string createdBy,
             CancellationToken ct)
         {
@@ -834,7 +849,11 @@ namespace Services
                     continue;
                 }
 
-                if (string.IsNullOrWhiteSpace(summary.OwnerEmail) && string.IsNullOrWhiteSpace(summary.OwnerPhone))
+                var ownerName = string.IsNullOrWhiteSpace(ownerNameOverride) ? summary.OwnerName : ownerNameOverride;
+                var ownerEmail = string.IsNullOrWhiteSpace(ownerEmailOverride) ? summary.OwnerEmail : ownerEmailOverride;
+                var ownerPhone = string.IsNullOrWhiteSpace(ownerPhoneOverride) ? summary.OwnerPhone : ownerPhoneOverride;
+
+                if (string.IsNullOrWhiteSpace(ownerEmail) && string.IsNullOrWhiteSpace(ownerPhone))
                 {
                     skippedCount++;
                     await SaveOwnerDispatchAsync(summary.PropertyId, periodStart, periodEnd, finalChannels,
@@ -853,9 +872,15 @@ namespace Services
                 var summaryText = BuildOwnerFeedbackSummary(recentFeedback, topIssues);
                 var bodyTemplate = string.IsNullOrWhiteSpace(bodyOverride) ? settings.OwnerReportBody : bodyOverride;
                 var subjectTemplate = string.IsNullOrWhiteSpace(subjectOverride) ? settings.OwnerReportSubject : subjectOverride;
-                var body = ApplyOwnerReportTokens(bodyTemplate, property, summaryText, topIssues, settings.OwnerReportFrequency);
-                var subject = ApplyOwnerReportTokens(subjectTemplate, property, summaryText, topIssues, settings.OwnerReportFrequency);
-                var delivery = await DeliverChannelsAsync(finalChannels, summary.OwnerEmail, summary.OwnerPhone, subject, body, ct);
+                var body = ApplyOwnerReportTokens(bodyTemplate, property, summaryText, topIssues, settings.OwnerReportFrequency)
+                    .Replace("{{owner_name}}", NormalizeText(ownerName, "Owner"), StringComparison.Ordinal)
+                    .Replace("{{manual_feedback}}", string.IsNullOrWhiteSpace(manualFeedback) ? "No manual feedback attached." : manualFeedback, StringComparison.Ordinal)
+                    .Replace("{{custom_hint}}", string.IsNullOrWhiteSpace(customHint) ? "No custom hint provided." : customHint, StringComparison.Ordinal);
+                var subject = ApplyOwnerReportTokens(subjectTemplate, property, summaryText, topIssues, settings.OwnerReportFrequency)
+                    .Replace("{{owner_name}}", NormalizeText(ownerName, "Owner"), StringComparison.Ordinal)
+                    .Replace("{{manual_feedback}}", string.IsNullOrWhiteSpace(manualFeedback) ? "No manual feedback attached." : manualFeedback, StringComparison.Ordinal)
+                    .Replace("{{custom_hint}}", string.IsNullOrWhiteSpace(customHint) ? "No custom hint provided." : customHint, StringComparison.Ordinal);
+                var delivery = await DeliverChannelsAsync(finalChannels, ownerEmail, ownerPhone, subject, body, ct);
                 var status = delivery.Success ? PropertyOwnerReportDispatchStatus.Sent : PropertyOwnerReportDispatchStatus.Failed;
                 await SaveOwnerDispatchAsync(summary.PropertyId, periodStart, periodEnd, finalChannels, status, delivery.Summary, subject, body, createdBy, delivery.Success ? DateTime.UtcNow : null, ct);
 
@@ -911,6 +936,10 @@ namespace Services
         private async Task<List<PropertyOwnerReportPropertySummaryResponse>> BuildOwnerSummariesAsync(CancellationToken ct)
         {
             var periodStart = DateTime.UtcNow.AddDays(-30);
+            var properties = await _db.Properties
+                .AsNoTracking()
+                .OrderBy(item => item.Title)
+                .ToListAsync(ct);
             var feedback = await _db.PropertyVisitFeedbackItems
                 .AsNoTracking()
                 .Include(item => item.Property)
@@ -927,11 +956,16 @@ namespace Services
                 })
                 .ToDictionaryAsync(item => item.PropertyId, ct);
 
-            return feedback
+            var feedbackMap = feedback
                 .GroupBy(item => item.PropertyId)
-                .Select(group =>
+                .ToDictionary(group => group.Key, group => group.ToList());
+
+            return properties
+                .Select(property =>
                 {
-                    var property = group.First().Property!;
+                    var group = feedbackMap.TryGetValue(property.Id, out var matchedFeedback)
+                        ? matchedFeedback
+                        : [];
                     var issues = group
                         .SelectMany(item => item.Issues ?? [])
                         .Where(item => !string.IsNullOrWhiteSpace(item))
@@ -941,10 +975,10 @@ namespace Services
                         .Take(5)
                         .Select(item => item.Key)
                         .ToList();
-                    var lastDispatch = lastDispatchMap.TryGetValue(group.Key, out var value) ? value : null;
+                    var lastDispatch = lastDispatchMap.TryGetValue(property.Id, out var value) ? value : null;
 
                     return new PropertyOwnerReportPropertySummaryResponse(
-                        group.Key,
+                        property.Id,
                         property.Title,
                         property.OwnerName,
                         property.OwnerEmail,

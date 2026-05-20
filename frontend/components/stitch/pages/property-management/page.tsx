@@ -1,6 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
+import { usePathname, useRouter } from "next/navigation"
 
 import {
   type AgentUserOption,
@@ -174,6 +175,8 @@ function getDaysOnMarket(createdAt: string) {
 }
 
 export function PropertyManagementPage() {
+  const pathname = usePathname()
+  const router = useRouter()
   const [activeFilter, setActiveFilter] = useState<PropertyManagementFilter>("all")
   const [activeType, setActiveType] = useState<"All" | "Residential" | "Commercial">("All")
   const [activeAgent, setActiveAgent] = useState("")
@@ -339,6 +342,10 @@ export function PropertyManagementPage() {
 
           setSubmitError(null)
           setModalState({ mode: "edit", property })
+        }}
+        onHistoryClick={(propertyId) => {
+          const basePath = pathname.startsWith("/agent") ? "/agent/properties/history" : "/admin/property-management/history"
+          router.push(`${basePath}?propertyId=${propertyId}`)
         }}
         onFilterChange={(filter) => {
           setActiveFilter(filter)

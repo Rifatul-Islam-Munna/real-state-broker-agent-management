@@ -50,6 +50,7 @@ type Section1SectionProps = {
   onAddPropertyClick: () => void
   onAgentChange: (agent: string) => void
   onEditPropertyClick: (propertyId: number) => void
+  onHistoryClick: (propertyId: number) => void
   onFilterChange: (filter: PropertyManagementFilter) => void
   onPageChange: (page: number) => void
   onSearchChange: (value: string) => void
@@ -138,6 +139,7 @@ export function Section1Section({
   onAddPropertyClick,
   onAgentChange,
   onEditPropertyClick,
+  onHistoryClick,
   onFilterChange,
   onPageChange,
   onSearchChange,
@@ -389,6 +391,13 @@ export function Section1Section({
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex justify-end gap-2">
+                          <button
+                            className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-primary dark:hover:bg-slate-800"
+                            onClick={() => onHistoryClick(listing.id)}
+                            type="button"
+                          >
+                            <AppIcon name="history" />
+                          </button>
                           <button
                             className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-primary dark:hover:bg-slate-800"
                             onClick={() => onEditPropertyClick(listing.id)}
