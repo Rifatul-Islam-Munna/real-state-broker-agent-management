@@ -55,14 +55,14 @@ function initialsFromName(name: string) {
 function portalLinks(portal: "admin" | "agent") {
   return portal === "admin"
     ? {
-        deals: "/admin/deal-pipeline-reports",
-        leads: "/admin/lead-crm-pipeline",
-        team: "/admin/agent-team-management",
+        deals: "/dashboard/deals",
+        leads: "/dashboard/leads",
+        team: "/dashboard/team",
       }
     : {
-        deals: "/agent/deal-pipeline",
-        leads: "/agent/lead",
-        team: "/agent/settings",
+        deals: "/dashboard/deals",
+        leads: "/dashboard/leads",
+        team: "/dashboard",
       }
 }
 

@@ -7,7 +7,7 @@ export default async function RegisterPage() {
   const user = await getSessionUser()
 
   if (user) {
-    redirect(user.role === "Agent" ? "/agent/dashboard" : "/admin/dashboard")
+    redirect("/dashboard")
   }
 
   return (

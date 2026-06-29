@@ -41,7 +41,7 @@ export function PublicPrimaryNavbar() {
         <div className="hidden items-center gap-4 md:flex">
           <Link
             className="border-2 border-primary px-4 py-2 text-sm font-bold text-primary"
-            href="/admin"
+            href="/dashboard"
           >
             {"Sign In"}
           </Link>
@@ -96,7 +96,7 @@ export function PublicPrimaryNavbar() {
                     render={
                       <Link
                         className="border-2 border-primary px-4 py-3 text-center text-sm font-bold text-primary"
-                        href="/admin"
+                        href="/dashboard"
                       />
                     }
                   >

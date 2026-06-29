@@ -141,7 +141,7 @@ export function MailInboxApiPage() {
                   </div>
                   <div className="flex flex-wrap gap-2 xl:justify-end">
                     {item.leadId ? (
-                      <Link className="border border-primary bg-primary px-4 py-2 text-xs font-bold uppercase tracking-wide text-white" href="/admin/lead-crm-pipeline">
+                      <Link className="border border-primary bg-primary px-4 py-2 text-xs font-bold uppercase tracking-wide text-white" href="/dashboard/leads">
                         {"Open Lead CRM"}
                       </Link>
                     ) : (

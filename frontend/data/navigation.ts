@@ -1,66 +1,66 @@
 export const adminNavigation = [
   {
-    href: "/admin/dashboard",
+    href: "/dashboard",
     label: "Dashboard",
     icon: "dashboard",
   },
   {
-    href: "/admin/homepage",
+    href: "/dashboard/homepage",
     label: "Homepage",
     icon: "home",
   },
   {
-    href: "/admin/property-management",
+    href: "/dashboard/properties",
     label: "Properties",
     icon: "domain",
   },
   {
-    href: "/admin/blog",
+    href: "/dashboard/blog",
     label: "Blog",
     icon: "article",
   },
   {
-    href: "/admin/deal-pipeline-reports",
+    href: "/dashboard/deals",
     label: "Deal Pipeline",
     icon: "partner_exchange",
   },
   {
-    href: "/admin/lead-crm-pipeline",
+    href: "/dashboard/leads",
     label: "Lead CRM",
     icon: "group",
   },
   {
-    href: "/admin/contact-inbox",
+    href: "/dashboard/contact-inbox",
     label: "Contact Us",
     icon: "contact_phone",
   },
   {
-    href: "/admin/mail-inbox",
+    href: "/dashboard/mail",
     label: "Mail",
     icon: "mail",
   },
   {
-    href: "/admin/marketing-tools-campaigns",
+    href: "/dashboard/marketing",
     label: "Marketing",
     icon: "campaign",
   },
   {
-    href: "/admin/document-management",
+    href: "/dashboard/documents",
     label: "Documents",
     icon: "description",
   },
   {
-    href: "/admin/agent-team-management",
+    href: "/dashboard/team",
     label: "Teams",
     icon: "badge",
   },
   {
-    href: "/admin/reports-analytics",
+    href: "/dashboard/reports",
     label: "Reports",
     icon: "trending_up",
   },
   {
-    href: "/admin/agency-settings",
+    href: "/dashboard/settings",
     label: "Settings",
     icon: "settings",
   },
@@ -68,32 +68,32 @@ export const adminNavigation = [
 
 export const agentNavigation = [
   {
-    href: "/agent/dashboard",
+    href: "/dashboard",
     label: "Dashboard",
     icon: "dashboard",
   },
   {
-    href: "/agent/properties",
+    href: "/dashboard/properties",
     label: "Property",
     icon: "domain",
   },
   {
-    href: "/agent/deal-pipeline",
+    href: "/dashboard/deals",
     label: "Deal Pipeline",
     icon: "partner_exchange",
   },
   {
-    href: "/agent/lead",
+    href: "/dashboard/leads",
     label: "Lead",
     icon: "group",
   },
   {
-    href: "/agent/mail",
+    href: "/dashboard/mail",
     label: "Mail",
     icon: "mail",
   },
   {
-    href: "/agent/settings",
+    href: "/dashboard/settings",
     label: "Settings",
     icon: "settings",
   },

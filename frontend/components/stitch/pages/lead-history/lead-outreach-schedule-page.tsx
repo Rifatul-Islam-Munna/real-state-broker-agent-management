@@ -48,9 +48,7 @@ function displayText(value?: string | null, fallback = "Not set") {
 }
 
 function buildHistoryHref(pathname: string, leadId: number) {
-  return pathname.startsWith("/agent")
-    ? `/agent/lead?view=history&leadId=${leadId}`
-    : `/admin/lead-history?leadId=${leadId}`
+  return `/dashboard/lead-history?leadId=${leadId}`
 }
 
 function formatRecipientCount(count: number) {
@@ -180,7 +178,7 @@ export function LeadOutreachSchedulePage() {
     setSubmitError(null)
     setSubmitFeedback(null)
 
-    const createdBy = pathname.startsWith("/agent") ? "Agent" : "Admin"
+    const createdBy = pathname.startsWith("/dashboard") ? "Dashboard" : "Admin"
 
     if (composer.audienceType === "SingleLead") {
       const response = await dispatchMutation.mutateAsync({
@@ -270,13 +268,13 @@ export function LeadOutreachSchedulePage() {
         <div className="flex flex-wrap gap-3">
           <Link
             className="inline-flex border border-slate-200 px-4 py-2 text-xs font-bold uppercase tracking-wide text-slate-700"
-            href={pathname.startsWith("/agent") ? "/agent/mail" : "/admin/mail-monitor"}
+            href="/dashboard/mail-monitor"
           >
             {"Open Mail"}
           </Link>
           <Link
             className="inline-flex border border-primary bg-primary px-4 py-2 text-xs font-bold uppercase tracking-wide text-white"
-            href={pathname.startsWith("/agent") ? "/agent/lead" : "/admin/lead-crm-pipeline"}
+            href="/dashboard/leads"
           >
             {"Back To Lead CRM"}
           </Link>

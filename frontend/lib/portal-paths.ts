@@ -1,4 +1,4 @@
-import { type AgentRoutePermission, getDefaultAgentRoute, hasAgentRoutePermission } from "@/lib/agent-route-access"
+import { canOpenDashboardRoute, getDashboardHomePath } from "@/lib/dashboard-routes"
 
 type PortalUserLike = {
   role: string
@@ -6,7 +6,7 @@ type PortalUserLike = {
 }
 
 export function getPortalPathByRole(role: string, agentRoutePermissions?: string[]) {
-  return role === "Agent" ? getDefaultAgentRoute(agentRoutePermissions) : "/admin/dashboard"
+  return getDashboardHomePath(role, agentRoutePermissions)
 }
 
 export function getPortalHomePath(user: PortalUserLike) {
@@ -30,16 +30,12 @@ export async function resolvePostAuthRedirect(
     return getPortalPathByRole(role, agentRoutePermissions)
   }
 
-  if (role === "Agent" && normalized.startsWith("/admin")) {
+  if (normalized.startsWith("/admin") || normalized.startsWith("/agent")) {
     return getPortalPathByRole(role, agentRoutePermissions)
   }
 
-  if (role === "Agent" && normalized.startsWith("/agent")) {
-    const requiredPermission = normalized.replace(/^\/agent\/?/, "").split("/")[0] as AgentRoutePermission
-
-    if (!hasAgentRoutePermission(agentRoutePermissions, requiredPermission)) {
-      return getPortalPathByRole(role, agentRoutePermissions)
-    }
+  if (normalized.startsWith("/dashboard") && !canOpenDashboardRoute(normalized, role, agentRoutePermissions)) {
+    return getPortalPathByRole(role, agentRoutePermissions)
   }
 
   return normalized
