@@ -32,40 +32,31 @@ export class BrokerageAuditLog {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({
-    type: 'enum',
-    enum: AuditEntityType,
-  })
+  @Column({ type: 'text' })
   entityType: AuditEntityType;
 
-  @Column()
-  entityId: number;
+  @Column({ nullable: true })
+  entityId: number | null;
 
-  @Column({
-    type: 'enum',
-    enum: AuditAction,
-  })
+  @Column({ type: 'text' })
   action: AuditAction;
 
-  @Column({ nullable: true })
+  @Column({ type: 'text' })
   fieldName: string;
 
-  @Column({ type: 'text', nullable: true })
+  @Column({ type: 'text' })
   oldValue: string;
 
-  @Column({ type: 'text', nullable: true })
+  @Column({ type: 'text' })
   newValue: string;
 
-  @Column()
+  @Column({ type: 'text' })
   actor: string;
 
-  @Column({ nullable: true })
-  actorUserId: number;
-
-  @Column({ type: 'text', nullable: true })
+  @Column({ type: 'text' })
   note: string;
 
-  @CreateDateColumn()
+  @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;
 }
 
@@ -90,10 +81,7 @@ export class WebsiteInquiry {
   @Column({ nullable: true })
   phone: string;
 
-  @Column({
-    type: 'enum',
-    enum: ['ContactForm', 'PropertyChat', 'ScheduleViewing'],
-  })
+  @Column({ type: 'text' })
   source: 'ContactForm' | 'PropertyChat' | 'ScheduleViewing';
 
   @Column({ type: 'text', nullable: true })

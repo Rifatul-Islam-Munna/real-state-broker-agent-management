@@ -2,7 +2,6 @@ import { PredictionModule } from "./prediction/prediction.module";
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
@@ -35,7 +34,7 @@ import { HomepageModule } from './homepage/homepage.module';
         type: 'postgres',
         url: configService.get<string>('DATABASE_URL'),
         autoLoadEntities: true,
-        synchronize: true,
+        synchronize: configService.get<string>('TYPEORM_SYNCHRONIZE') === 'true',
         namingStrategy: new SnakeNamingStrategy(),
         logging: true,
       }),
@@ -60,7 +59,7 @@ import { HomepageModule } from './homepage/homepage.module';
     MarketingModule,
     HomepageModule, PredictionModule,
   ],
-  controllers: [AppController],
+  controllers: [],
   providers: [AppService],
 })
 export class AppModule {}

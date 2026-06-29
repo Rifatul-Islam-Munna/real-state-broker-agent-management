@@ -2,7 +2,8 @@ import { Controller, Get, Post, Patch, Delete, Body, UseGuards, Query, Param } f
 import { BrokerageService } from './brokerage.service';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { ShowingBookingStatus, ApprovalStatus, ApprovalType, AssignmentRuleType, AuditEntityType, AuditAction } from './entities/brokerage.entity';
+import { ShowingBookingStatus, ApprovalStatus, ApprovalType, AssignmentRuleType } from './entities/brokerage.entity';
+import { AuditAction, AuditEntityType } from './entities/audit-log.entity';
 
 @ApiTags('Brokerage')
 @Controller('brokerage')

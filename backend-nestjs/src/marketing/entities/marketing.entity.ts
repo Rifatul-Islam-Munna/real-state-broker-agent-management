@@ -1,28 +1,16 @@
-import {
-  Entity,
-  PrimaryGeneratedColumn,
-  Column,
-  CreateDateColumn,
-  UpdateDateColumn,
-} from 'typeorm';
+import { Column, CreateDateColumn, Entity, PrimaryColumn, UpdateDateColumn } from 'typeorm';
 
 @Entity('marketing_settings')
 export class MarketingSettings {
-  @PrimaryGeneratedColumn()
+  @PrimaryColumn({ type: 'int' })
   id: number;
 
-  @Column({ default: true })
-  enableEmailMarketing: boolean;
+  @Column({ type: 'text' })
+  contentJson: string = '{}';
 
-  @Column({ default: false })
-  enableSmsMarketing: boolean;
-
-  @Column({ nullable: true })
-  mailchimpApiKey: string;
-
-  @CreateDateColumn()
+  @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ type: 'timestamptz' })
   updatedAt: Date;
 }

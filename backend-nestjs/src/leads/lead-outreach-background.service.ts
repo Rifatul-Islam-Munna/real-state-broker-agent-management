@@ -29,7 +29,7 @@ export class LeadOutreachBackgroundService {
       const overdueLeads = await this.leadRepo.find({
         where: {
           nextActionDate: LessThan(now),
-          status: 'Open',
+          followUpStatus: 'Open' as any,
         },
       });
 
@@ -103,10 +103,10 @@ export class LeadOutreachBackgroundService {
 
     lead.nextActionDate = nextActionDate;
     lead.nextActionType = nextActionType || 'FollowUp';
-    lead.followUpStatus = 'Pending';
+    lead.followUpStatus = 'Scheduled' as any;
 
     if (note) {
-      lead.notes = (lead.notes || '') + `\n\n[Follow-up set] ${note}`;
+      lead.notes = [...(lead.notes ?? []), `[Follow-up set] ${note}`];
     }
 
     return this.leadRepo.save(lead);
@@ -123,8 +123,7 @@ export class LeadOutreachBackgroundService {
     return this.leadRepo.find({
       where: {
         nextActionDate: LessThan(tomorrow),
-        followUpStatus: 'Pending',
-        status: 'Open',
+        followUpStatus: 'Scheduled' as any,
       },
       take: 50,
     });
@@ -214,14 +213,14 @@ export class LeadOutreachBackgroundService {
     }
 
     lead.followUpStatus = 'Completed';
-    lead.notes = (lead.notes || '') + `\n\n[Outreach sent via ${channel}] ${new Date().toISOString()}`;
+    lead.notes = [...(lead.notes ?? []), `[Outreach sent via ${channel}] ${new Date().toISOString()}`];
 
     // Set next follow-up automatically (7 days if no response)
     const nextAction = new Date();
     nextAction.setDate(nextAction.getDate() + 7);
     lead.nextActionDate = nextAction;
     lead.nextActionType = 'FollowUpIfNoResponse';
-    lead.followUpStatus = 'Pending';
+    lead.followUpStatus = 'Scheduled' as any;
 
     return this.leadRepo.save(lead);
   }
@@ -236,8 +235,8 @@ export class LeadOutreachBackgroundService {
       throw new Error('Lead not found');
     }
 
-    lead.isOverdue = true;
-    lead.notes = (lead.notes || '') + `\n\n[Marked overdue] ${new Date().toISOString()}`;
+    lead.followUpStatus = 'Open' as any;
+    lead.notes = [...(lead.notes ?? []), `[Marked overdue] ${new Date().toISOString()}`];
 
     return this.leadRepo.save(lead);
   }
@@ -246,13 +245,11 @@ export class LeadOutreachBackgroundService {
    * Get overdue leads
    */
   async getOverdueLeads(agencyId?: number): Promise<Lead[]> {
-    const query = this.leadRepo.createQueryBuilder('lead').where('lead.isOverdue = :isOverdue', { isOverdue: true });
+    const query = this.leadRepo.createQueryBuilder('lead')
+      .where('lead.next_action_date < :now', { now: new Date() })
+      .andWhere('lead.follow_up_status IN (0, 1)');
 
-    if (agencyId) {
-      query.andWhere('lead.agencyId = :agencyId', { agencyId });
-    }
-
-    return query.orderBy('lead.nextActionDate', 'ASC').getMany();
+    return query.orderBy('lead.next_action_date', 'ASC').getMany();
   }
 
   /**

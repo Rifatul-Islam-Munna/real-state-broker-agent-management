@@ -10,9 +10,14 @@ import { LeadOutreachController } from './lead-outreach.controller';
 import { LeadQualificationPredictionService } from './lead-qualification-prediction.service';
 import { MailboxLeadIntelligenceService } from './mailbox-lead-intelligence.service';
 import { LeadOutreachBackgroundService } from './lead-outreach-background.service';
+import { DealPipeline } from '../deals/entities/deal-pipeline.entity';
+import { SettingsModule } from '../settings/settings.module';
+import { MailInboxItem } from '../mail/entities/mail.entity';
+import { ContactRequest } from '../contact/entities/contact.entity';
+import { BrokerageModule } from '../brokerage/brokerage.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Lead, LeadHistoryEntry])],
+  imports: [TypeOrmModule.forFeature([Lead, LeadHistoryEntry, DealPipeline, MailInboxItem, ContactRequest]), SettingsModule, BrokerageModule],
   providers: [
     LeadsService,
     LeadOutreachService,

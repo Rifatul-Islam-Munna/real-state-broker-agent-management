@@ -4,13 +4,12 @@ import {
   UploadedFile,
   UseInterceptors,
   Body,
-  UseGuards,
   Delete,
+  Query,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { FileUploadService } from './file-upload.service';
 import { ApiTags, ApiOperation, ApiConsumes, ApiBody } from '@nestjs/swagger';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @ApiTags('FileUpload')
 @Controller('upload')
@@ -18,7 +17,6 @@ export class FileUploadController {
   constructor(private readonly fileUploadService: FileUploadService) {}
 
   @Post()
-  @UseGuards(JwtAuthGuard)
   @ApiConsumes('multipart/form-data')
   @ApiOperation({ summary: 'Upload a file' })
   @ApiBody({
@@ -44,9 +42,8 @@ export class FileUploadController {
   }
 
   @Delete()
-  @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Delete a file' })
-  async deleteFile(@Body('objectName') objectName: string) {
-    return this.fileUploadService.deleteFile(objectName);
+  async deleteFile(@Query('ObjectName') objectName: string, @Query('objectName') lowerObjectName?: string) {
+    return this.fileUploadService.deleteFile(objectName || lowerObjectName);
   }
 }

@@ -1,4 +1,4 @@
-import { Injectable, InternalServerErrorException, OnModuleInit } from '@nestjs/common';
+import { BadRequestException, Injectable, ServiceUnavailableException, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as Minio from 'minio';
 
@@ -29,7 +29,11 @@ export class FileUploadService implements OnModuleInit {
     }
   }
 
-  async uploadFile(file: Express.Multer.File, folder: string = 'uploads') {
+  async uploadFile(file: Express.Multer.File, folder: string = 'general') {
+    if (!file?.buffer?.length) {
+      throw new BadRequestException('No file was provided.');
+    }
+    folder = (folder || 'general').trim() || 'general';
     const fileName = `${folder}/${Date.now()}-${file.originalname}`;
     try {
       await this.minioClient.putObject(
@@ -44,19 +48,25 @@ export class FileUploadService implements OnModuleInit {
 
       const baseUrl = this.configService.get<string>('MINIO_PUBLIC_BASE_URL') || 'http://localhost:9000';
       return {
-        url: `${baseUrl}/${this.bucketName}/${fileName}`,
         objectName: fileName,
+        url: `${baseUrl}/${this.bucketName}/${fileName}`,
+        sizeBytes: file.size,
+        mimeType: file.mimetype,
       };
     } catch (err) {
-      throw new InternalServerErrorException('Error uploading file to MinIO');
+      throw new ServiceUnavailableException('File upload is not configured or unavailable.');
     }
   }
 
   async deleteFile(objectName: string) {
+    if (!objectName?.trim()) {
+      throw new BadRequestException('Object name is required.');
+    }
     try {
-      await this.minioClient.removeObject(this.bucketName, objectName);
+      await this.minioClient.removeObject(this.bucketName, objectName.trim());
+      return { message: 'File deleted' };
     } catch (err) {
-      console.error('Error deleting object from MinIO', err);
+      throw new ServiceUnavailableException('File upload is not configured or unavailable.');
     }
   }
 }

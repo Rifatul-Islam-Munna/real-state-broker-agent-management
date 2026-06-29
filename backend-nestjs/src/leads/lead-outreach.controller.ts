@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Query, UseGuards, Res, NotFoundException } from '@nestjs/common';
 import { LeadOutreachService } from './lead-outreach.service';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -18,15 +18,28 @@ export class LeadOutreachController {
   @Get('schedule')
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Get outreach schedule' })
-  async getSchedule() {
-    return this.outreachService.getSchedule();
+  async getSchedule(
+    @Query('leadId') leadId?: number,
+    @Query('kind') kind?: string,
+    @Query('status') status?: string,
+  ) {
+    return this.outreachService.getSchedule(leadId, kind, status);
   }
 
   @Get('call-script')
-  @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Get call script' })
-  async getCallScript() {
-    return this.outreachService.getCallScript();
+  async getCallScript(
+    @Query('historyEntryId') historyEntryId: number | undefined,
+    @Query('provider') provider: string | undefined,
+    @Query('message') message: string | undefined,
+    @Query('title') title: string | undefined,
+    @Res() res: any,
+  ) {
+    const xml = await this.outreachService.getCallScript(historyEntryId, provider, message, title);
+    if (!xml) {
+      throw new NotFoundException();
+    }
+    return res.type('application/xml; charset=utf-8').send(xml);
   }
 
   @Post()

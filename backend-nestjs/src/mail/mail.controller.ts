@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Delete, Body, Query, UseGuards, Patch } from '@nestjs/common';
+import { Controller, Get, Post, Delete, Body, Query, UseGuards, Patch, HttpCode } from '@nestjs/common';
 import { MailService } from './mail.service';
 import { MailInboxSyncBackgroundService } from './mail-sync.service';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
@@ -23,7 +23,7 @@ export class MailController {
     @Query('status') status?: string,
   ) {
     if (id) return this.mailService.findOne(id);
-    return this.mailService.findAll();
+    return this.mailService.findAll(page, pageSize, search, status);
   }
 
   @Get('sync-status')
@@ -48,7 +48,6 @@ export class MailController {
   }
 
   @Post()
-  @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Create mail item' })
   async create(@Body() dto: any) {
       return this.mailService.create(dto);
@@ -63,8 +62,9 @@ export class MailController {
 
   @Delete()
   @UseGuards(JwtAuthGuard)
+  @HttpCode(204)
   @ApiOperation({ summary: 'Delete mail item' })
   async delete(@Query('id') id: number) {
-    return this.mailService.delete(id);
+    await this.mailService.delete(id);
   }
 }

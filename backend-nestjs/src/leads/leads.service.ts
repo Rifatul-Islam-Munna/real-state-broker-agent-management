@@ -1,8 +1,14 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Lead } from './entities/lead.entity';
+import { Lead, leadStages } from './entities/lead.entity';
+import { numericEnumValue } from '../common/numeric-enum';
 import { LeadHistoryEntry } from './entities/lead-history.entity';
+import { paginated, toInt } from '../common/api-contract';
+import { MailInboxItem } from '../mail/entities/mail.entity';
+import { ContactRequest } from '../contact/entities/contact.entity';
+import { BrokerageService } from '../brokerage/brokerage.service';
+import { AuditAction, AuditEntityType } from '../brokerage/entities/audit-log.entity';
 
 @Injectable()
 export class LeadsService {
@@ -11,45 +17,169 @@ export class LeadsService {
     private leadsRepository: Repository<Lead>,
     @InjectRepository(LeadHistoryEntry)
     private historyRepository: Repository<LeadHistoryEntry>,
+    @InjectRepository(MailInboxItem)
+    private mailRepository: Repository<MailInboxItem>,
+    @InjectRepository(ContactRequest)
+    private contactRepository: Repository<ContactRequest>,
+    private brokerageService: BrokerageService,
   ) {}
 
-  async findAll(): Promise<Lead[]> {
-    return this.leadsRepository.find({
-      relations: ['assignedAgent', 'deals'],
-    });
+  async findAll(page = 1, pageSize = 20, search?: string, stage?: string): Promise<any> {
+    page = toInt(page, 1);
+    pageSize = toInt(pageSize, 20);
+    const qb = this.leadsRepository.createQueryBuilder('lead')
+      .leftJoinAndSelect('lead.assignedAgent', 'assignedAgent')
+      .leftJoinAndSelect('lead.deals', 'deals');
+
+    if (search) {
+      qb.andWhere('(lead.name ILIKE :search OR lead.email ILIKE :search OR lead.property_name ILIKE :search OR lead.source ILIKE :search OR lead.agent ILIKE :search)', { search: `%${search}%` });
+    }
+    if (stage) qb.andWhere('lead.stage = :stage', { stage: numericEnumValue(leadStages, stage) });
+
+    const [rows, total] = await qb
+      .orderBy('lead.last_activity_at', 'DESC')
+      .skip((page - 1) * pageSize)
+      .take(pageSize)
+      .getManyAndCount();
+
+    return paginated(rows.map((lead) => this.mapLead(lead)), total, page, pageSize);
   }
 
-  async findOne(id: number): Promise<Lead> {
+  async findOne(id: number): Promise<any> {
     const lead = await this.leadsRepository.findOne({
       where: { id },
       relations: ['assignedAgent', 'deals'],
     });
     if (!lead) throw new NotFoundException('Lead not found');
-    return lead;
+    return this.mapLead(lead);
   }
 
-  async create(createDto: any): Promise<Lead> {
-    const lead = this.leadsRepository.create(createDto as object);
-    return this.leadsRepository.save(lead);
+  async create(createDto: any, actor = 'CRM', autoAssign = true): Promise<any> {
+    const lead = this.leadsRepository.create(this.normalizeLead(createDto) as object);
+    if (autoAssign) {
+      const assignedAgentId = await this.brokerageService.autoAssignLead(lead);
+      if (assignedAgentId) lead.agentId = assignedAgentId;
+    }
+    const saved = await this.leadsRepository.save(lead);
+    if (autoAssign) await this.brokerageService.logAudit({ entityType: AuditEntityType.Lead, entityId: saved.id, action: AuditAction.Create, newValue: saved.name, actor, note: saved.source });
+    return this.findOne(saved.id);
   }
 
-  async update(id: number, updateDto: any): Promise<Lead> {
-    const lead = await this.findOne(id);
-    Object.assign(lead, updateDto);
-    return this.leadsRepository.save(lead);
+  async update(id: number, updateDto: any, actor = 'CRM'): Promise<any> {
+    const lead = await this.leadsRepository.findOne({ where: { id } });
+    if (!lead) throw new NotFoundException('Lead not found');
+    const oldStage = lead.stage;
+    const oldAgent = lead.agent;
+    const oldNextActionDate = lead.nextActionDate;
+    Object.assign(lead, this.normalizeLead(updateDto));
+    const assignedAgentId = await this.brokerageService.autoAssignLead(lead);
+    if (assignedAgentId) lead.agentId = assignedAgentId;
+    const saved = await this.leadsRepository.save(lead);
+    if (oldStage !== saved.stage) await this.brokerageService.logAudit({ entityType: AuditEntityType.Lead, entityId: saved.id, action: AuditAction.Update, fieldName: 'stage', oldValue: oldStage, newValue: saved.stage, actor });
+    if (oldAgent !== saved.agent) await this.brokerageService.logAudit({ entityType: AuditEntityType.Lead, entityId: saved.id, action: AuditAction.Update, fieldName: 'agent', oldValue: oldAgent, newValue: saved.agent, actor });
+    if (Number(oldNextActionDate) !== Number(saved.nextActionDate)) await this.brokerageService.logAudit({ entityType: AuditEntityType.Lead, entityId: saved.id, action: AuditAction.Update, fieldName: 'next_action_date', oldValue: oldNextActionDate?.toISOString() ?? '', newValue: saved.nextActionDate?.toISOString() ?? '', actor });
+    return this.findOne(saved.id);
   }
 
   async delete(id: number): Promise<Lead> {
-    const lead = await this.findOne(id);
+    const lead = await this.leadsRepository.findOne({ where: { id } });
+    if (!lead) throw new NotFoundException('Lead not found');
     return this.leadsRepository.remove(lead);
   }
 
+  async findByEmail(email: string): Promise<any | null> {
+    const lead = await this.leadsRepository.createQueryBuilder('lead').leftJoinAndSelect('lead.assignedAgent', 'assignedAgent').leftJoinAndSelect('lead.deals', 'deals').where('LOWER(lead.email) = :email', { email: `${email ?? ''}`.trim().toLowerCase() }).getOne();
+    return lead ? this.mapLead(lead) : null;
+  }
+
   async getHistory(leadId: number) {
-    return this.historyRepository.find({ where: { leadId }, order: { createdAt: 'DESC' } });
+    const [stored, mail, contacts] = await Promise.all([
+      this.historyRepository.find({ where: { leadId } }),
+      this.mailRepository.find({ where: { leadId } }),
+      this.contactRepository.find({ where: { leadId } }),
+    ]);
+    return [
+      ...stored.map((item) => this.mapHistory(item)),
+      ...mail.map((item) => ({ id: -item.id, leadId, kind: 'MailInbox', direction: 'Incoming', status: String(item.status) === 'Replied' ? 'Completed' : 'Received', title: item.subject || 'Incoming email', summary: item.subject || 'Inbound email linked to this lead.', body: item.message, provider: 'Mail Inbox', createdBy: item.name || item.email, scheduledAt: null, occurredAt: item.createdAt, createdAt: item.createdAt, updatedAt: item.updatedAt })),
+      ...contacts.map((item) => ({ id: -(100000 + item.id), leadId, kind: 'ContactForm', direction: 'Incoming', status: 'Received', title: item.inquiryType || 'Contact form inquiry', summary: item.message || 'Contact form inquiry linked to this lead.', body: item.message, provider: 'Contact Form', createdBy: item.name || item.email, scheduledAt: null, occurredAt: item.createdAt, createdAt: item.createdAt, updatedAt: item.updatedAt })),
+    ].sort((a, b) => Number(new Date(b.scheduledAt ?? b.occurredAt ?? b.createdAt)) - Number(new Date(a.scheduledAt ?? a.occurredAt ?? a.createdAt)) || Math.abs(b.id) - Math.abs(a.id));
   }
 
   async createHistory(dto: any) {
-    const entry = this.historyRepository.create(dto as object);
-    return this.historyRepository.save(entry);
+    if (!dto.leadId) throw new BadRequestException('Lead id is required.');
+    if (![dto.title, dto.summary, dto.body].some((value) => `${value ?? ''}`.trim())) throw new BadRequestException('Add a title, summary, or body for the history item.');
+    const lead = await this.leadsRepository.findOne({ where: { id: dto.leadId } });
+    if (!lead) throw new NotFoundException('Lead was not found.');
+    const body = `${dto.body ?? ''}`.trim();
+    const title = `${dto.title ?? dto.summary ?? ''}`.trim() || this.historyTitle(dto.kind);
+    const summary = `${dto.summary ?? ''}`.trim() || (body ? body.length > 220 ? `${body.slice(0, 217)}...` : body : title);
+    const entry = this.historyRepository.create({ ...dto, kind: dto.kind ?? 'Note', direction: dto.direction ?? 'Internal', status: dto.status ?? 'Logged', title, summary, body, provider: `${dto.provider ?? ''}`.trim(), createdBy: `${dto.createdBy ?? ''}`.trim() || 'Admin' });
+    const saved = await this.historyRepository.save(entry);
+    lead.lastActivityAt = new Date();
+    await this.leadsRepository.save(lead);
+    return this.mapHistory(saved);
+  }
+
+  private mapHistory(item: LeadHistoryEntry) { return { id: item.id, leadId: item.leadId, kind: item.kind, direction: item.direction, status: item.status, title: item.title, summary: item.summary, body: item.body, provider: item.provider, createdBy: item.createdBy, scheduledAt: item.scheduledAt ?? null, occurredAt: item.occurredAt ?? null, createdAt: item.createdAt, updatedAt: item.updatedAt }; }
+  private historyTitle(kind: string) { return ({ Email: 'Email activity', Sms: 'SMS activity', Call: 'Call activity', PropertyChat: 'Property chat activity', ContactForm: 'Contact form activity', MailInbox: 'Mail inbox activity', System: 'System activity' } as any)[kind] ?? 'Lead note'; }
+
+  private normalizeLead(dto: any) {
+    const nextActionDate = dto.nextActionDate ? new Date(dto.nextActionDate) : null;
+    return {
+      ...dto,
+      name: `${dto.name ?? ''}`.trim(),
+      email: `${dto.email ?? ''}`.trim().toLowerCase(),
+      phone: `${dto.phone ?? ''}`.trim(),
+      summary: `${dto.summary ?? ''}`,
+      property: `${dto.property ?? ''}`,
+      budget: `${dto.budget ?? ''}`,
+      agent: `${dto.agent ?? ''}`.trim(),
+      source: `${dto.source ?? ''}`.trim(),
+      interest: `${dto.interest ?? ''}`,
+      timeline: `${dto.timeline ?? ''}`,
+      nextActionDate,
+      nextActionType: `${dto.nextActionType ?? ''}`.trim() || (nextActionDate ? 'Follow up' : ''),
+      notes: Array.isArray(dto.notes) ? dto.notes : [],
+      lastActivityAt: new Date(),
+    };
+  }
+
+  private mapLead(lead: Lead) {
+    const deals = [...(lead.deals ?? [])].sort((a, b) => Number(new Date(b.createdAt)) - Number(new Date(a.createdAt)));
+    const linkedDeal = deals[0];
+    const nextActionDate = lead.nextActionDate ? new Date(lead.nextActionDate) : null;
+    const overdue = !!nextActionDate
+      && nextActionDate < new Date()
+      && ['Open', 'Scheduled'].includes(String(lead.followUpStatus))
+      && !['Deal', 'Canceled'].includes(String(lead.stage));
+
+    return {
+      id: lead.id,
+      name: lead.name,
+      email: lead.email,
+      phone: lead.phone,
+      summary: lead.summary,
+      property: lead.property,
+      budget: lead.budget,
+      stage: lead.stage,
+      priority: lead.priority,
+      agent: lead.agent,
+      agentId: lead.agentId ?? null,
+      assignedAgentName: lead.assignedAgent ? `${lead.assignedAgent.firstName ?? ''} ${lead.assignedAgent.lastName ?? ''}`.trim() : null,
+      source: lead.source,
+      interest: lead.interest,
+      timeline: lead.timeline,
+      inBoard: lead.inBoard,
+      nextActionDate: lead.nextActionDate ?? null,
+      nextActionType: lead.nextActionType,
+      followUpStatus: lead.followUpStatus,
+      isFollowUpOverdue: overdue,
+      notes: lead.notes ?? [],
+      createdAt: lead.createdAt,
+      updatedAt: lead.updatedAt,
+      lastActivityAt: lead.lastActivityAt,
+      linkedDealId: linkedDeal?.id ?? null,
+      linkedDealTitle: linkedDeal?.title ?? null,
+    };
   }
 }

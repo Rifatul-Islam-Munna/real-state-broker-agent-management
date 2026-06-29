@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Body, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Query, UseGuards, HttpCode } from '@nestjs/common';
 import { DealsService } from './deals.service';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -19,7 +19,7 @@ export class DealsController {
     @Query('stage') stage?: string,
   ) {
     if (id) return this.dealsService.findOne(id);
-    return this.dealsService.findAll(); // Should add pagination
+    return this.dealsService.findAll(page, pageSize, search, stage);
   }
 
   @Post()
@@ -45,8 +45,9 @@ export class DealsController {
 
   @Delete()
   @UseGuards(JwtAuthGuard)
+  @HttpCode(204)
   @ApiOperation({ summary: 'Delete deal' })
   async delete(@Query('id') id: number) {
-    return this.dealsService.delete(id);
+    await this.dealsService.delete(id);
   }
 }

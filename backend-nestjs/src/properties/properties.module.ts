@@ -4,11 +4,13 @@ import { Property, NeighborhoodInsight, PropertyPreQuestion } from './entities/p
 import { PropertiesService } from './properties.service';
 import { PropertiesController } from './properties.controller';
 import { PredictionModule } from '../prediction/prediction.module';
+import { BrokerageModule } from '../brokerage/brokerage.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Property, NeighborhoodInsight, PropertyPreQuestion]),
     PredictionModule,
+    BrokerageModule,
   ],
   providers: [PropertiesService],
   controllers: [PropertiesController],

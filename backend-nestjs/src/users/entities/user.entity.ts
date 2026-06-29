@@ -9,6 +9,9 @@ import {
 } from 'typeorm';
 import { UserRole } from '../enums/user-role.enum';
 import { Property } from '../../properties/entities/property.entity';
+import { numericEnumTransformer } from '../../common/numeric-enum';
+
+const userRoles = Object.values(UserRole);
 
 @Entity('users')
 @Index(['email'], { unique: true })
@@ -35,12 +38,8 @@ export class User {
   @Column({ nullable: true })
   avatarUrl: string;
 
-  @Column({
-    type: 'enum',
-    enum: UserRole,
-    default: UserRole.Client,
-  })
-  role: UserRole;
+  @Column({ type: 'int', transformer: numericEnumTransformer(userRoles, UserRole.Client) })
+  role: UserRole = UserRole.Client;
 
   @Column({ default: true })
   isActive: boolean;

@@ -1,4 +1,4 @@
-import { Controller, Get, Patch, Body, UseGuards, Delete, Post, Query } from '@nestjs/common';
+import { Controller, Get, Patch, Body, UseGuards, Delete, Post, Query, HttpCode } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -12,7 +12,7 @@ export class UsersController {
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Get agents' })
   async getAgents(@Query('includeInactive') includeInactive: boolean) {
-    return this.usersService.getAgents(includeInactive);
+    return this.usersService.getAgents(String(includeInactive) === 'true');
   }
 
   @Post()
@@ -31,15 +31,16 @@ export class UsersController {
 
   @Delete()
   @UseGuards(JwtAuthGuard)
+  @HttpCode(204)
   @ApiOperation({ summary: 'Delete agent' })
   async deleteAgent(@Query('id') id: number) {
-    return this.usersService.deleteAgent(id);
+    await this.usersService.deleteAgent(id);
   }
 
   @Patch('permissions')
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Update agent permissions' })
   async updatePermissions(@Body() dto: any) {
-      return dto;
+      return this.usersService.updateAgentPermissions(dto);
   }
 }

@@ -47,14 +47,14 @@ export class LeadQualificationPredictionService {
     }
 
     // Notes/engagement indicator: +20 points
-    if (lead.notes && lead.notes.length > 20) {
+    if ((lead.notes ?? []).join('\n').length > 20) {
       score += 20;
       factors.hasNotes = true;
       factors.engagementLevel = 'high';
     }
 
     // Property type interest: +10 points
-    if (lead.propertyType) {
+    if (lead.property) {
       score += 10;
     }
 
@@ -65,7 +65,7 @@ export class LeadQualificationPredictionService {
     }
 
     // Priority weighting
-    if (lead.priority === 'Hot') {
+    if (lead.priority === 'HighPriority') {
       score += 15;
     } else if (lead.priority === 'Warm') {
       score += 5;
@@ -95,10 +95,7 @@ export class LeadQualificationPredictionService {
    * Get high-value leads (score > 70)
    */
   async getHighValueLeads(agencyId?: number): Promise<Lead[]> {
-    const leads = await this.leadRepo.find({
-      where: agencyId ? { agencyId } : {},
-      take: 100,
-    });
+    const leads = await this.leadRepo.find({ take: 100 });
 
     const scored = await Promise.all(
       leads.map((lead) => this.scoreLeadQualification(lead.id)),

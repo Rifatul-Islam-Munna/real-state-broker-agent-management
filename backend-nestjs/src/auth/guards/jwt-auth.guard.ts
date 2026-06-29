@@ -1,5 +1,54 @@
-import { Injectable } from '@nestjs/common';
+import { ExecutionContext, ForbiddenException, Injectable } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 
 @Injectable()
-export class JwtAuthGuard extends AuthGuard('jwt') {}
+export class JwtAuthGuard extends AuthGuard('jwt') {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
+    const activated = await (super.canActivate(context) as Promise<boolean> | boolean);
+    if (!activated) return false;
+
+    const request = context.switchToHttp().getRequest();
+    const user = request.user;
+    if (!user) return false;
+
+    const role = String(user.role);
+    const path = this.cleanPath(request.path ?? request.url ?? '');
+    const method = String(request.method ?? 'GET').toUpperCase();
+    if (!['Admin', 'Agent'].includes(role) && path !== '/auth/me') {
+      throw new ForbiddenException('You do not have access to this area.');
+    }
+    if (this.isAdminOnly(path, method) && role !== 'Admin') {
+      throw new ForbiddenException('Administrator access is required.');
+    }
+    if (role !== 'Agent') return true;
+
+    const permission = this.permissionForPath(path);
+    if (!permission) return true;
+    if ((user.agentRoutePermissions ?? []).includes(permission)) return true;
+
+    throw new ForbiddenException('You do not have access to this area.');
+  }
+
+  private permissionForPath(path: string): string | null {
+    if (path.startsWith('/properties')) return 'properties';
+    if (path.startsWith('/leads') || path.startsWith('/lead-history') || path.startsWith('/lead-outreach') || path.startsWith('/showings') || path.startsWith('/website-inquiries')) return 'lead';
+    if (path.startsWith('/deals')) return 'deal-pipeline';
+    if (path.startsWith('/mail-inbox')) return 'mail';
+    if (path.startsWith('/dashboard') || path.startsWith('/reports')) return 'dashboard';
+    if (path.startsWith('/agency-settings') || path.startsWith('/settings') || path.startsWith('/homepage-settings') || path.startsWith('/marketing-settings')) return 'settings';
+    return null;
+  }
+
+  private isAdminOnly(path: string, method: string) {
+    if (path.startsWith('/agency-settings') || path.startsWith('/settings/integrations') || path.startsWith('/homepage-settings') || path.startsWith('/marketing-settings')) return true;
+    if (path.startsWith('/brokerage/approvals') || path.startsWith('/lead-assignment-rules')) return true;
+    if (path.startsWith('/documents')) return true;
+    if (path === '/blogs/admin' || (path.startsWith('/blogs') && method !== 'GET')) return true;
+    if (path.startsWith('/users/agents') && method !== 'GET') return true;
+    return false;
+  }
+
+  private cleanPath(path: string) {
+    return path.split('?')[0].replace(/^\/api\/?/, '/');
+  }
+}

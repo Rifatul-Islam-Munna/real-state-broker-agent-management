@@ -6,46 +6,50 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 
+export enum DocumentAccessLevel { AdminOnly = 'AdminOnly', AgentAccess = 'AgentAccess', Public = 'Public' }
+const accessValues = Object.values(DocumentAccessLevel);
+export const documentAccessDb = (value: string | number) => typeof value === 'number' ? value : Math.max(0, accessValues.indexOf(value as DocumentAccessLevel));
+
 @Entity('document_repository_item')
 export class DocumentRepositoryItem {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column()
+  @Column({ type: 'text' })
   title: string;
 
-  @Column()
+  @Column({ type: 'text' })
   fileName: string;
 
-  @Column()
+  @Column({ type: 'text' })
   fileUrl: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'text', nullable: true })
   fileObjectName: string;
 
-  @Column()
+  @Column({ type: 'text' })
   mimeType: string;
 
   @Column({ type: 'bigint' })
   sizeBytes: number;
 
-  @Column({ default: '' })
+  @Column({ type: 'text' })
   category: string;
 
-  @Column({ default: '' })
+  @Column({ type: 'text' })
   folder: string;
 
-  @Column({ type: 'text', default: '' })
+  @Column({ type: 'text' })
   description: string;
 
-  @Column({ default: 'v1.0' })
+  @Column({ type: 'text' })
   versionLabel: string;
 
   @Column({ type: 'jsonb', default: [] })
   tags: string[];
 
-  @Column({ default: 'AdminOnly' })
-  accessLevel: string;
+  @Column({ type: 'int', transformer: { to: documentAccessDb, from: (value: number) => accessValues[value] ?? DocumentAccessLevel.AdminOnly } })
+  accessLevel: string = DocumentAccessLevel.AdminOnly;
 
   @Column({ default: false })
   isTemplate: boolean;
@@ -53,9 +57,9 @@ export class DocumentRepositoryItem {
   @Column({ default: false })
   requiresSignature: boolean;
 
-  @CreateDateColumn()
+  @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ type: 'timestamptz' })
   updatedAt: Date;
 }

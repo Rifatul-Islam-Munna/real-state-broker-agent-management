@@ -10,6 +10,9 @@ import {
 } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 import { DealPipeline } from '../../deals/entities/deal-pipeline.entity';
+import { ContactRequest } from '../../contact/entities/contact.entity';
+import { MailInboxItem } from '../../mail/entities/mail.entity';
+import { numericEnumTransformer } from '../../common/numeric-enum';
 
 export enum LeadStage {
   New = 'New',
@@ -35,6 +38,10 @@ export enum LeadFollowUpStatus {
   NoActionNeeded = 'NoActionNeeded',
 }
 
+export const leadStages = Object.values(LeadStage);
+export const leadPriorities = Object.values(LeadPriority);
+export const leadFollowUpStatuses = Object.values(LeadFollowUpStatus);
+
 @Entity('lead')
 export class Lead {
   @PrimaryGeneratedColumn()
@@ -58,19 +65,11 @@ export class Lead {
   @Column({ default: '' })
   budget: string;
 
-  @Column({
-    type: 'enum',
-    enum: LeadStage,
-    default: LeadStage.New,
-  })
-  stage: LeadStage;
+  @Column({ type: 'int', transformer: numericEnumTransformer(leadStages, LeadStage.New) })
+  stage: LeadStage = LeadStage.New;
 
-  @Column({
-    type: 'enum',
-    enum: LeadPriority,
-    default: LeadPriority.Warm,
-  })
-  priority: LeadPriority;
+  @Column({ type: 'int', transformer: numericEnumTransformer(leadPriorities, LeadPriority.Warm) })
+  priority: LeadPriority = LeadPriority.Warm;
 
   @Column({ default: '' })
   agent: string;
@@ -100,12 +99,8 @@ export class Lead {
   @Column({ default: '' })
   nextActionType: string;
 
-  @Column({
-    type: 'enum',
-    enum: LeadFollowUpStatus,
-    default: LeadFollowUpStatus.Open,
-  })
-  followUpStatus: LeadFollowUpStatus;
+  @Column({ type: 'int', transformer: numericEnumTransformer(leadFollowUpStatuses, LeadFollowUpStatus.Open) })
+  followUpStatus: LeadFollowUpStatus = LeadFollowUpStatus.Open;
 
   @Column({ type: 'jsonb', default: [] })
   notes: string[];
@@ -121,4 +116,10 @@ export class Lead {
 
   @OneToMany(() => DealPipeline, (deal) => deal.sourceLead)
   deals: DealPipeline[];
+
+  @OneToMany(() => ContactRequest, (request) => request.lead)
+  contactRequests: ContactRequest[];
+
+  @OneToMany(() => MailInboxItem, (item) => item.lead)
+  mailInboxItems: MailInboxItem[];
 }

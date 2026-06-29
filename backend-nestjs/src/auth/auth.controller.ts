@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Get, UseGuards, Request, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Controller, Post, Body, Get, UseGuards, Request, NotFoundException, HttpCode } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
@@ -17,18 +17,20 @@ export class AuthController {
   async login(@Body() loginDto: any) {
     const user = await this.authService.validateUser(loginDto.email, loginDto.password);
     if (!user) {
-      return { success: false, message: 'Invalid email or password' };
+      throw new BadRequestException('Invalid email or password');
     }
     return this.authService.login(user);
   }
 
   @Post('register')
+  @HttpCode(201)
   @ApiOperation({ summary: 'Register a new user' })
   async register(@Body() registerDto: any) {
     return this.authService.register(registerDto);
   }
 
   @Post('refresh')
+  @HttpCode(200)
   @ApiOperation({ summary: 'Refresh access token' })
   async refresh(@Body('refreshToken') refreshToken: string) {
     return this.authService.refresh(refreshToken);
@@ -42,10 +44,6 @@ export class AuthController {
     if (!user) {
       throw new NotFoundException('User not found');
     }
-    const { passwordHash, refreshToken, refreshTokenExpiry, ...result } = user as any;
-    return {
-      ...result,
-      agentRoutePermissions: user.role === 'Agent' ? (user.hasCustomAgentRoutePermissions ? user.agentRoutePermissions : ['dashboard', 'properties', 'deal-pipeline', 'lead', 'mail', 'settings']) : [],
-    };
+    return this.usersService.mapUser(user);
   }
 }

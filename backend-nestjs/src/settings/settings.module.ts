@@ -9,5 +9,6 @@ import { SettingsController } from './settings.controller';
   imports: [TypeOrmModule.forFeature([AgencySettings, AgencyIntegrationSettings])],
   providers: [SettingsService],
   controllers: [SettingsController],
+  exports: [SettingsService],
 })
 export class SettingsModule {}

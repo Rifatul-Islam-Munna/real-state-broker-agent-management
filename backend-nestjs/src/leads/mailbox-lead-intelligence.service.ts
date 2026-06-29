@@ -44,11 +44,10 @@ export class MailboxLeadIntelligenceService {
     subject: string;
     body: string;
     receivedAt: Date;
-    agencyId: number;
   }): Promise<Lead> {
     // Check if lead exists by email
     let lead = await this.leadRepo.findOne({
-      where: { email: emailData.senderEmail, agencyId: emailData.agencyId },
+      where: { email: emailData.senderEmail },
     });
 
     const leadInfo = await this.extractLeadFromEmail(emailData);
@@ -56,30 +55,29 @@ export class MailboxLeadIntelligenceService {
     if (!lead) {
       // Create new lead
       lead = this.leadRepo.create({
-        firstName: this.getFirstName(leadInfo.name),
-        lastName: this.getLastName(leadInfo.name),
+        name: leadInfo.name,
         email: leadInfo.email,
-        phone: leadInfo.phone,
+        phone: leadInfo.phone ?? '',
         source: 'MailInbox',
-        propertyType: leadInfo.interest,
-        status: 'New',
-        priority: 'Warm',
-        agencyId: emailData.agencyId,
-        notes: `Email received: ${emailData.subject}\n\n${emailData.body.substring(0, 500)}`,
-        lastContactDate: emailData.receivedAt,
+        interest: leadInfo.interest ?? '',
+        stage: 'New' as any,
+        priority: 'Warm' as any,
+        notes: [`Email received: ${emailData.subject}\n\n${emailData.body.substring(0, 500)}`],
+        lastActivityAt: emailData.receivedAt,
       });
     } else {
       // Update existing lead
-      lead.lastContactDate = emailData.receivedAt;
+      lead.lastActivityAt = emailData.receivedAt;
       if (leadInfo.phone && !lead.phone) {
         lead.phone = leadInfo.phone;
       }
-      if (leadInfo.interest && !lead.propertyType) {
-        lead.propertyType = leadInfo.interest;
+      if (leadInfo.interest && !lead.interest) {
+        lead.interest = leadInfo.interest;
       }
-      lead.notes =
-        (lead.notes || '') +
-        `\n\n[${emailData.receivedAt.toISOString()}] New email: ${emailData.subject}`;
+      lead.notes = [
+        ...(lead.notes ?? []),
+        `[${emailData.receivedAt.toISOString()}] New email: ${emailData.subject}`,
+      ];
     }
 
     return this.leadRepo.save(lead);
@@ -152,13 +150,14 @@ export class MailboxLeadIntelligenceService {
     }
 
     // Count emails from notes (rough estimate)
-    const emailCount = (lead.notes?.match(/Email received:/g) || []).length;
+    const noteText = (lead.notes ?? []).join('\n');
+    const emailCount = (noteText.match(/Email received:/g) || []).length;
 
     return {
       leadId,
       emailCount,
-      lastEmailDate: lead.lastContactDate,
-      sentiment: this.analyzeSentiment(lead.notes || ''),
+      lastEmailDate: lead.lastActivityAt,
+      sentiment: this.analyzeSentiment(noteText),
     };
   }
 

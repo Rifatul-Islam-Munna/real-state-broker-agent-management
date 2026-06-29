@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { UsersService } from '../users/users.service';
 import * as bcrypt from 'bcrypt';
@@ -14,6 +14,9 @@ export class AuthService {
 
   async validateUser(email: string, pass: string): Promise<any> {
     const user = await this.usersService.findOneByEmail(email);
+    if (user && !user.isActive) {
+      throw new BadRequestException('Account is deactivated');
+    }
     if (user && (await bcrypt.compare(pass, user.passwordHash))) {
       const { passwordHash, ...result } = user;
       return result;
@@ -51,9 +54,17 @@ export class AuthService {
   }
 
   async register(registerDto: any) {
+    const email = String(registerDto.email ?? '').toLowerCase().trim();
+    if (await this.usersService.existsByEmail(email)) {
+      throw new BadRequestException('Email already exists');
+    }
+    if (registerDto.phone && await this.usersService.existsByPhone(registerDto.phone)) {
+      throw new BadRequestException('Phone already exists');
+    }
     const hashedPassword = await bcrypt.hash(registerDto.password, 10);
     const user = await this.usersService.create({
       ...registerDto,
+      email,
       passwordHash: hashedPassword,
     });
     return this.login(user);

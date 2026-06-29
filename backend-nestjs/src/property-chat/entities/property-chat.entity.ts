@@ -10,6 +10,22 @@ import {
 } from 'typeorm';
 import { Property } from '../../properties/entities/property.entity';
 import { Lead } from '../../leads/entities/lead.entity';
+import { numericEnumTransformer } from '../../common/numeric-enum';
+
+export enum PropertyChatConversationStatus {
+  New = 'New',
+  LeadCreated = 'LeadCreated',
+  NeedsReview = 'NeedsReview',
+}
+
+export enum PropertyChatSenderRole {
+  System = 'System',
+  Visitor = 'Visitor',
+  Agent = 'Agent',
+}
+
+const conversationStatuses = Object.values(PropertyChatConversationStatus);
+const senderRoles = Object.values(PropertyChatSenderRole);
 
 @Entity('property_chat_conversation')
 export class PropertyChatConversation {
@@ -30,11 +46,41 @@ export class PropertyChatConversation {
   @JoinColumn({ name: 'lead_id' })
   lead: Lead;
 
-  @Column({ type: 'text', nullable: true })
+  @Column({ type: 'text', default: '' })
   summary: string;
 
-  @Column({ default: 'Active' })
-  status: string;
+  @Column({ default: '' })
+  contactName: string;
+
+  @Column({ default: '' })
+  contactEmail: string;
+
+  @Column({ default: '' })
+  contactPhone: string;
+
+  @Column({ default: '' })
+  propertyTitle: string;
+
+  @Column({ default: '' })
+  assignedAgent: string;
+
+  @Column({ default: '' })
+  budget: string;
+
+  @Column({ default: '' })
+  timeline: string;
+
+  @Column({ default: '' })
+  interest: string;
+
+  @Column({ type: 'float', default: 0 })
+  qualificationScore: number;
+
+  @Column({ default: false })
+  autoQualified: boolean;
+
+  @Column({ type: 'int', transformer: numericEnumTransformer(conversationStatuses, PropertyChatConversationStatus.New) })
+  status: PropertyChatConversationStatus = PropertyChatConversationStatus.New;
 
   @OneToMany(() => PropertyChatMessage, (message) => message.conversation, { cascade: true })
   messages: PropertyChatMessage[];
@@ -58,11 +104,17 @@ export class PropertyChatMessage {
   @JoinColumn({ name: 'conversation_id' })
   conversation: PropertyChatConversation;
 
-  @Column({ type: 'text' })
-  content: string;
+  @Column({ type: 'text', default: '' })
+  message: string;
 
-  @Column()
-  role: string; // 'user' or 'assistant'
+  @Column({ type: 'int', transformer: numericEnumTransformer(senderRoles, PropertyChatSenderRole.Visitor) })
+  senderRole: PropertyChatSenderRole = PropertyChatSenderRole.Visitor;
+
+  @Column({ nullable: true })
+  attachmentUrl: string;
+
+  @Column({ nullable: true })
+  attachmentObjectName: string;
 
   @CreateDateColumn()
   createdAt: Date;

@@ -1,31 +1,16 @@
-import {
-  Entity,
-  PrimaryGeneratedColumn,
-  Column,
-  CreateDateColumn,
-  UpdateDateColumn,
-} from 'typeorm';
+import { Column, CreateDateColumn, Entity, PrimaryColumn, UpdateDateColumn } from 'typeorm';
 
-@Entity('homepage_settings')
+@Entity('home_page_settings')
 export class HomePageSettings {
-  @PrimaryGeneratedColumn()
+  @PrimaryColumn({ type: 'int' })
   id: number;
 
-  @Column({ default: 'Welcome to Elite Estates' })
-  heroTitle: string;
+  @Column({ type: 'text' })
+  contentJson: string = '{}';
 
-  @Column({ type: 'text', nullable: true })
-  heroSubtitle: string;
-
-  @Column({ nullable: true })
-  heroImageUrl: string;
-
-  @Column({ type: 'jsonb', default: [] })
-  featuredPropertyIds: number[];
-
-  @CreateDateColumn()
+  @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ type: 'timestamptz' })
   updatedAt: Date;
 }

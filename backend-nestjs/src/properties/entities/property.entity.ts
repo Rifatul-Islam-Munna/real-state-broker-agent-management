@@ -10,6 +10,7 @@ import {
 } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 import { PropertyChatConversation } from '../../property-chat/entities/property-chat.entity';
+import { numericEnumTransformer } from '../../common/numeric-enum';
 
 export enum PropertyCategory {
   Residential = 'Residential',
@@ -32,6 +33,9 @@ export enum PropertyStatus {
   Rented = 'Rented',
   Unpublished = 'Unpublished',
 }
+export const propertyCategories = Object.values(PropertyCategory);
+export const propertyListingTypes = Object.values(PropertyListingType);
+export const propertyStatuses = Object.values(PropertyStatus);
 
 @Entity('property')
 export class Property {
@@ -44,29 +48,17 @@ export class Property {
   @Column()
   title: string;
 
-  @Column({
-    type: 'enum',
-    enum: PropertyCategory,
-    default: PropertyCategory.Residential,
-  })
-  propertyType: PropertyCategory;
+  @Column({ type: 'int', transformer: numericEnumTransformer(propertyCategories, PropertyCategory.Residential) })
+  propertyType: PropertyCategory = PropertyCategory.Residential;
 
-  @Column({
-    type: 'enum',
-    enum: PropertyListingType,
-    default: PropertyListingType.ForSale,
-  })
-  listingType: PropertyListingType;
+  @Column({ type: 'int', transformer: numericEnumTransformer(propertyListingTypes, PropertyListingType.ForSale) })
+  listingType: PropertyListingType = PropertyListingType.ForSale;
 
   @Column()
   price: string;
 
-  @Column({
-    type: 'enum',
-    enum: PropertyStatus,
-    default: PropertyStatus.Open,
-  })
-  status: PropertyStatus;
+  @Column({ type: 'int', transformer: numericEnumTransformer(propertyStatuses, PropertyStatus.Open) })
+  status: PropertyStatus = PropertyStatus.Open;
 
   @Column()
   location: string;
@@ -155,7 +147,25 @@ export class PropertyPreQuestion {
   id: number;
 
   @Column()
-  question: string;
+  prompt: string;
+
+  @Column({ default: '' })
+  helperText: string;
+
+  @Column({ default: true })
+  isRequired: boolean;
+
+  @Column({ default: 0 })
+  sortOrder: number;
+
+  @Column({ default: false })
+  allowsFileUpload: boolean;
+
+  @Column({ nullable: true })
+  attachmentUrl: string;
+
+  @Column({ nullable: true })
+  attachmentObjectName: string;
 
   @Column()
   propertyId: number;
@@ -163,4 +173,10 @@ export class PropertyPreQuestion {
   @ManyToOne(() => Property, (property) => property.preQuestions, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'property_id' })
   property: Property;
+
+  @CreateDateColumn()
+  createdAt: Date;
+
+  @UpdateDateColumn()
+  updatedAt: Date;
 }

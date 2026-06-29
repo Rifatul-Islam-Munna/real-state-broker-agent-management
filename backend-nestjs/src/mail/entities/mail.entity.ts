@@ -9,42 +9,83 @@ import {
 } from 'typeorm';
 import { Lead } from '../../leads/entities/lead.entity';
 
-@Entity('mail_inbox_item')
+export enum MailInboxStatus {
+  New = 'New',
+  Replied = 'Replied',
+  Converted = 'Converted',
+}
+
+export enum MailInboxKind {
+  Newsletter = 'Newsletter',
+  Direct = 'Direct',
+}
+
+const statusDbValues: Record<MailInboxStatus, number> = {
+  [MailInboxStatus.New]: 0,
+  [MailInboxStatus.Replied]: 1,
+  [MailInboxStatus.Converted]: 2,
+};
+
+const kindDbValues: Record<MailInboxKind, number> = {
+  [MailInboxKind.Newsletter]: 0,
+  [MailInboxKind.Direct]: 1,
+};
+
+export function mailInboxStatusDbValue(value: MailInboxStatus | string | number) {
+  if (typeof value === 'number') return value;
+  return statusDbValues[value as MailInboxStatus] ?? statusDbValues[MailInboxStatus.New];
+}
+
+function mailInboxKindDbValue(value: MailInboxKind | string | number) {
+  if (typeof value === 'number') return value;
+  return kindDbValues[value as MailInboxKind] ?? kindDbValues[MailInboxKind.Direct];
+}
+
+@Entity('mail_inbox')
 export class MailInboxItem {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column()
-  messageId: string;
+  @Column({ type: 'text' })
+  email: string;
 
-  @Column()
+  @Column({ type: 'text' })
+  name: string;
+
+  @Column({ type: 'text' })
   subject: string;
 
   @Column({ type: 'text' })
-  body: string;
+  message: string;
 
-  @Column()
-  fromAddress: string;
+  @Column({
+    type: 'int',
+    transformer: {
+      to: mailInboxKindDbValue,
+      from: (value: number) => value === 0 ? MailInboxKind.Newsletter : MailInboxKind.Direct,
+    },
+  })
+  kind: MailInboxKind = MailInboxKind.Direct;
 
-  @Column()
-  fromName: string;
-
-  @Column({ type: 'timestamp' })
-  receivedAt: Date;
-
-  @Column({ default: false })
-  isRead: boolean;
+  @Column({
+    type: 'int',
+    transformer: {
+      to: mailInboxStatusDbValue,
+      from: (value: number) => [MailInboxStatus.New, MailInboxStatus.Replied, MailInboxStatus.Converted][value] ?? MailInboxStatus.New,
+    },
+  })
+  status: MailInboxStatus = MailInboxStatus.New;
 
   @Column({ nullable: true })
-  leadId: number;
+  leadId: number | null;
 
-  @ManyToOne(() => Lead, { onDelete: 'SET NULL' })
+  @ManyToOne(() => Lead, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'lead_id' })
-  lead: Lead;
+  lead: Lead | null;
 
-  @CreateDateColumn()
+  @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ type: 'timestamptz' })
   updatedAt: Date;
 }

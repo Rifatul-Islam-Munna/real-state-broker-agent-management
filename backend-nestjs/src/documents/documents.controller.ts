@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Delete, Body, Query, UseGuards, Patch } from '@nestjs/common';
+import { Controller, Get, Post, Delete, Body, Query, UseGuards, Patch, HttpCode } from '@nestjs/common';
 import { DocumentsService } from './documents.service';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -15,8 +15,12 @@ export class DocumentsController {
       @Query('page') page: number = 1,
       @Query('pageSize') pageSize: number = 20,
       @Query('search') search?: string,
+      @Query('accessLevel') accessLevel?: string,
+      @Query('category') category?: string,
+      @Query('isTemplate') isTemplate?: string,
+      @Query('requiresSignature') requiresSignature?: string,
   ) {
-    return this.documentsService.findAll();
+    return this.documentsService.findAll(page, pageSize, search, accessLevel, category, isTemplate === undefined ? undefined : isTemplate === 'true', requiresSignature === undefined ? undefined : requiresSignature === 'true');
   }
 
   @Get('summary')
@@ -42,8 +46,9 @@ export class DocumentsController {
 
   @Delete()
   @UseGuards(JwtAuthGuard)
+  @HttpCode(204)
   @ApiOperation({ summary: 'Delete a document' })
   async delete(@Query('id') id: number) {
-    return this.documentsService.delete(id);
+    await this.documentsService.delete(id);
   }
 }

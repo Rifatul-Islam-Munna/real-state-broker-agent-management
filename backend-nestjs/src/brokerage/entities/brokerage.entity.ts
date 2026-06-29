@@ -10,6 +10,9 @@ import {
 } from 'typeorm';
 import { Property } from '../../properties/entities/property.entity';
 import { Lead } from '../../leads/entities/lead.entity';
+import { User } from '../../users/entities/user.entity';
+import { numericEnumTransformer } from '../../common/numeric-enum';
+import { PropertyCategory, PropertyListingType, PropertyStatus, propertyCategories, propertyListingTypes, propertyStatuses } from '../../properties/entities/property.entity';
 
 export enum ShowingBookingStatus {
   Scheduled = 'Scheduled',
@@ -25,9 +28,8 @@ export enum AssignmentRuleType {
 }
 
 export enum ApprovalType {
-  ListingApproval = 'ListingApproval',
+  ListingPublish = 'ListingPublish',
   PriceChange = 'PriceChange',
-  DealCommission = 'DealCommission',
 }
 
 export enum ApprovalStatus {
@@ -35,6 +37,10 @@ export enum ApprovalStatus {
   Approved = 'Approved',
   Rejected = 'Rejected',
 }
+export const showingStatuses = Object.values(ShowingBookingStatus);
+export const approvalTypes = Object.values(ApprovalType);
+export const approvalStatuses = Object.values(ApprovalStatus);
+const nullableEnum = (values: readonly string[]) => ({ to: (value: string | number | null) => value === null || value === undefined || value === '' ? null : typeof value === 'number' ? value : values.indexOf(value), from: (value: number | null) => value === null ? null : values[value] });
 
 @Entity('showing_booking')
 @Index(['leadId'])
@@ -49,7 +55,7 @@ export class ShowingBooking {
   @Column({ nullable: true })
   leadId: number;
 
-  @ManyToOne(() => Lead, { onDelete: 'CASCADE', eager: false })
+  @ManyToOne(() => Lead, { onDelete: 'SET NULL', eager: false })
   @JoinColumn({ name: 'lead_id' })
   lead?: Lead;
 
@@ -63,6 +69,10 @@ export class ShowingBooking {
   @Column({ nullable: true })
   agentId: number;
 
+  @ManyToOne(() => User, { onDelete: 'SET NULL', eager: false })
+  @JoinColumn({ name: 'agent_id' })
+  agent?: User;
+
   @Column({ default: '' })
   contactName: string;
 
@@ -72,26 +82,22 @@ export class ShowingBooking {
   @Column({ default: '' })
   contactPhone: string;
 
-  @Column({ type: 'timestamp' })
+  @Column({ type: 'timestamptz' })
   startAt: Date;
 
-  @Column({ type: 'timestamp' })
+  @Column({ type: 'timestamptz' })
   endAt: Date;
 
-  @Column({
-    type: 'enum',
-    enum: ShowingBookingStatus,
-    default: ShowingBookingStatus.Scheduled,
-  })
-  status: ShowingBookingStatus;
+  @Column({ type: 'int', transformer: numericEnumTransformer(showingStatuses, ShowingBookingStatus.Scheduled) })
+  status: ShowingBookingStatus = ShowingBookingStatus.Scheduled;
 
   @Column({ type: 'text', default: '' })
   notes: string;
 
-  @CreateDateColumn()
+  @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ type: 'timestamptz' })
   updatedAt: Date;
 }
 
@@ -103,26 +109,21 @@ export class LeadAssignmentRule {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column()
-  agencyId: number;
-
-  @Column({
-    type: 'enum',
-    enum: AssignmentRuleType,
-  })
-  type: AssignmentRuleType;
-
   @Column({ default: '' })
   area: string;
 
-  @Column({ nullable: true })
-  propertyType: string;
+  @Column({ type: 'int', nullable: true, transformer: nullableEnum(propertyCategories) })
+  propertyType: PropertyCategory | null;
 
-  @Column({ nullable: true })
-  listingType: string;
+  @Column({ type: 'int', nullable: true, transformer: nullableEnum(propertyListingTypes) })
+  listingType: PropertyListingType | null;
 
-  @Column({ nullable: true })
+  @Column()
   agentId: number;
+
+  @ManyToOne(() => User, { onDelete: 'CASCADE', eager: false })
+  @JoinColumn({ name: 'agent_id' })
+  agent?: User;
 
   @Column({ default: 100 })
   priorityOrder: number;
@@ -130,10 +131,10 @@ export class LeadAssignmentRule {
   @Column({ default: true })
   isActive: boolean;
 
-  @CreateDateColumn()
+  @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ type: 'timestamptz' })
   updatedAt: Date;
 }
 
@@ -146,18 +147,11 @@ export class BrokerageApprovalRequest {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({
-    type: 'enum',
-    enum: ApprovalType,
-  })
+  @Column({ type: 'int', transformer: numericEnumTransformer(approvalTypes, ApprovalType.ListingPublish) })
   type: ApprovalType;
 
-  @Column({
-    type: 'enum',
-    enum: ApprovalStatus,
-    default: ApprovalStatus.Pending,
-  })
-  status: ApprovalStatus;
+  @Column({ type: 'int', transformer: numericEnumTransformer(approvalStatuses, ApprovalStatus.Pending) })
+  status: ApprovalStatus = ApprovalStatus.Pending;
 
   @Column()
   propertyId: number;
@@ -166,32 +160,23 @@ export class BrokerageApprovalRequest {
   @JoinColumn({ name: 'property_id' })
   property: Property;
 
-  @Column({ nullable: true })
-  dealId: number;
-
   @Column({ default: '' })
   oldPrice: string;
 
   @Column({ default: '' })
   requestedPrice: string;
 
-  @Column({ nullable: true })
-  oldStatus: string;
+  @Column({ type: 'int', nullable: true, transformer: nullableEnum(propertyStatuses) })
+  oldStatus: PropertyStatus | null;
 
-  @Column({ nullable: true })
-  requestedStatus: string;
+  @Column({ type: 'int', nullable: true, transformer: nullableEnum(propertyStatuses) })
+  requestedStatus: PropertyStatus | null;
 
   @Column({ default: '' })
   requestedBy: string;
 
-  @Column({ nullable: true })
-  requestedByUserId: number;
-
   @Column({ default: '' })
   reviewedBy: string;
-
-  @Column({ nullable: true })
-  reviewedByUserId: number;
 
   @Column({ type: 'text', default: '' })
   requestNote: string;
@@ -199,9 +184,9 @@ export class BrokerageApprovalRequest {
   @Column({ type: 'text', default: '' })
   reviewNote: string;
 
-  @CreateDateColumn()
+  @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ type: 'timestamptz' })
   updatedAt: Date;
 }

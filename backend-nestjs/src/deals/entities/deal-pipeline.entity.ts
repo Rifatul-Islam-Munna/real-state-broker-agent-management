@@ -10,6 +10,7 @@ import {
 } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 import { Lead } from '../../leads/entities/lead.entity';
+import { numericEnumTransformer } from '../../common/numeric-enum';
 
 export enum DealStage {
   OfferMade = 'OfferMade',
@@ -36,6 +37,10 @@ export enum DealCommissionStatus {
   Paid = 'Paid',
 }
 
+export const dealStages = Object.values(DealStage);
+export const dealTypes = Object.values(DealType);
+export const dealCommissionStatuses = Object.values(DealCommissionStatus);
+
 @Entity('deal_pipeline')
 export class DealPipeline {
   @PrimaryGeneratedColumn()
@@ -44,12 +49,8 @@ export class DealPipeline {
   @Column()
   title: string;
 
-  @Column({
-    type: 'enum',
-    enum: DealType,
-    default: DealType.Residential,
-  })
-  type: DealType;
+  @Column({ type: 'int', transformer: numericEnumTransformer(dealTypes, DealType.Residential) })
+  type: DealType = DealType.Residential;
 
   @Column()
   client: string;
@@ -63,22 +64,14 @@ export class DealPipeline {
   @Column({ type: 'decimal', precision: 18, scale: 2, default: 0 })
   commissionAmount: number;
 
-  @Column({
-    type: 'enum',
-    enum: DealCommissionStatus,
-    default: DealCommissionStatus.Estimated,
-  })
-  commissionStatus: DealCommissionStatus;
+  @Column({ type: 'int', transformer: numericEnumTransformer(dealCommissionStatuses, DealCommissionStatus.Estimated) })
+  commissionStatus: DealCommissionStatus = DealCommissionStatus.Estimated;
 
   @Column({ default: '' })
   commissionPayoutNote: string;
 
-  @Column({
-    type: 'enum',
-    enum: DealStage,
-    default: DealStage.OfferMade,
-  })
-  stage: DealStage;
+  @Column({ type: 'int', transformer: numericEnumTransformer(dealStages, DealStage.OfferMade) })
+  stage: DealStage = DealStage.OfferMade;
 
   @Column({ default: '' })
   deadline: string;

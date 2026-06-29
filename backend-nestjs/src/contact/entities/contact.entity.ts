@@ -9,39 +9,43 @@ import {
 } from 'typeorm';
 import { Lead } from '../../leads/entities/lead.entity';
 
+export enum ContactRequestStatus { New = 'New', Reviewing = 'Reviewing', Converted = 'Converted' }
+const statusValues = Object.values(ContactRequestStatus);
+export const contactStatusDb = (value: string | number) => typeof value === 'number' ? value : Math.max(0, statusValues.indexOf(value as ContactRequestStatus));
+
 @Entity('contact_request')
 export class ContactRequest {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column()
+  @Column({ type: 'text' })
   name: string;
 
-  @Column()
+  @Column({ type: 'text' })
   email: string;
 
-  @Column({ nullable: true })
-  phone: string;
+  @Column({ type: 'text' })
+  phone: string = '';
 
   @Column({ type: 'text' })
   message: string;
 
-  @Column({ nullable: true })
-  propertyId: number;
+  @Column({ type: 'text' })
+  inquiryType: string = '';
 
-  @Column({ default: 'New' })
-  status: string;
+  @Column({ type: 'int', transformer: { to: contactStatusDb, from: (value: number) => statusValues[value] ?? ContactRequestStatus.New } })
+  status: string = ContactRequestStatus.New;
 
   @Column({ nullable: true })
-  leadId: number;
+  leadId: number | null;
 
   @ManyToOne(() => Lead, { onDelete: 'SET NULL' })
   @JoinColumn({ name: 'lead_id' })
-  lead: Lead;
+  lead: Lead | null;
 
-  @CreateDateColumn()
+  @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ type: 'timestamptz' })
   updatedAt: Date;
 }
