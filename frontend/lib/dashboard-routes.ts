@@ -16,7 +16,7 @@ export const dashboardRoutes: readonly DashboardRoute[] = [
   { href: "/dashboard/deals", label: "Deal Pipeline", icon: "partner_exchange", permission: "deal-pipeline" },
   { href: "/dashboard/leads", label: "Lead CRM", icon: "group", permission: "lead" },
   { href: "/dashboard/lead-history", label: "Lead History", icon: "history", permission: "lead" },
-  { href: "/dashboard/lead-schedule", label: "Lead Schedule", icon: "event", permission: "lead" },
+  { href: "/dashboard/lead-schedule", label: "Lead Activity", icon: "event_note", permission: "lead" },
   { href: "/dashboard/contact-inbox", label: "Contact Us", icon: "contact_phone", permission: "lead" },
   { href: "/dashboard/property-chat-inbox", label: "Property Chat", icon: "textsms", permission: "lead" },
   { href: "/dashboard/text-messages", label: "Text Messages", icon: "sms", permission: "lead" },

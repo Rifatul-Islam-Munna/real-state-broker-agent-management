@@ -13,6 +13,7 @@ export const defaultAgencySettings: AgencySettings = {
     officeLocations: [""],
     contactEmail: "",
     contactPhone: "",
+    defaultPhoneCountry: "US",
     socialLinks: createDefaultAgencySocialLinks(),
   },
   communicationTemplates: [
@@ -69,6 +70,7 @@ export function cloneAgencySettings(settings: AgencySettings): AgencySettings {
       ...defaultAgencySettings.profile,
       ...profile,
       contactPhone: profile.contactPhone ?? "",
+      defaultPhoneCountry: profile.defaultPhoneCountry ?? "US",
       logo: {
         objectName: profile.logo?.objectName ?? null,
         url: profile.logo?.url ?? "",

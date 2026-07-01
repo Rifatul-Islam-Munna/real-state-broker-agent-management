@@ -3,8 +3,8 @@ import { buildPageMetadata } from "@/lib/build-page-metadata"
 import { requireDashboardAccess } from "@/lib/dashboard-auth"
 
 export const metadata = buildPageMetadata({
-  title: "Lead Schedule | EstateBlue",
-  description: "Scheduled calls, SMS, and email follow-up timeline for leads.",
+  title: "Lead Activity | EstateBlue",
+  description: "Table of sent, scheduled, failed, and received email, SMS, and call activity for leads.",
   routePath: "/dashboard/lead-schedule",
 })
 

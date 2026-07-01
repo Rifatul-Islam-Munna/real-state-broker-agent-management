@@ -373,6 +373,7 @@ export type AgencyProfileSettings = {
   officeLocations: string[]
   contactEmail: string
   contactPhone: string
+  defaultPhoneCountry: string
   socialLinks: AgencySocialLink[]
 }
 

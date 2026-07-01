@@ -9,6 +9,8 @@ import { MailInboxItem } from '../mail/entities/mail.entity';
 import { ContactRequest } from '../contact/entities/contact.entity';
 import { BrokerageService } from '../brokerage/brokerage.service';
 import { AuditAction, AuditEntityType } from '../brokerage/entities/audit-log.entity';
+import { SettingsService } from '../settings/settings.service';
+import { normalizePhoneNumber } from '../common/phone-normalizer';
 
 @Injectable()
 export class LeadsService {
@@ -22,6 +24,7 @@ export class LeadsService {
     @InjectRepository(ContactRequest)
     private contactRepository: Repository<ContactRequest>,
     private brokerageService: BrokerageService,
+    private settingsService: SettingsService,
   ) {}
 
   async findAll(page = 1, pageSize = 20, search?: string, stage?: string): Promise<any> {
@@ -55,7 +58,7 @@ export class LeadsService {
   }
 
   async create(createDto: any, actor = 'CRM', autoAssign = true): Promise<any> {
-    const lead = this.leadsRepository.create(this.normalizeLead(createDto) as object);
+    const lead = this.leadsRepository.create((await this.normalizeLead(createDto)) as object);
     if (autoAssign) {
       const assignedAgentId = await this.brokerageService.autoAssignLead(lead);
       if (assignedAgentId) lead.agentId = assignedAgentId;
@@ -71,7 +74,7 @@ export class LeadsService {
     const oldStage = lead.stage;
     const oldAgent = lead.agent;
     const oldNextActionDate = lead.nextActionDate;
-    Object.assign(lead, this.normalizeLead(updateDto));
+    Object.assign(lead, await this.normalizeLead(updateDto));
     const assignedAgentId = await this.brokerageService.autoAssignLead(lead);
     if (assignedAgentId) lead.agentId = assignedAgentId;
     const saved = await this.leadsRepository.save(lead);
@@ -123,13 +126,15 @@ export class LeadsService {
   private mapHistory(item: LeadHistoryEntry) { return { id: item.id, leadId: item.leadId, kind: item.kind, direction: item.direction, status: item.status, title: item.title, summary: item.summary, body: item.body, provider: item.provider, createdBy: item.createdBy, scheduledAt: item.scheduledAt ?? null, occurredAt: item.occurredAt ?? null, createdAt: item.createdAt, updatedAt: item.updatedAt }; }
   private historyTitle(kind: string) { return ({ Email: 'Email activity', Sms: 'SMS activity', Call: 'Call activity', PropertyChat: 'Property chat activity', ContactForm: 'Contact form activity', MailInbox: 'Mail inbox activity', System: 'System activity' } as any)[kind] ?? 'Lead note'; }
 
-  private normalizeLead(dto: any) {
+  private async normalizeLead(dto: any) {
     const nextActionDate = dto.nextActionDate ? new Date(dto.nextActionDate) : null;
+    const settings = await this.settingsService.getAdminSettings();
+    const defaultPhoneCountry = settings.profile?.defaultPhoneCountry ?? 'US';
     return {
       ...dto,
       name: `${dto.name ?? ''}`.trim(),
       email: `${dto.email ?? ''}`.trim().toLowerCase(),
-      phone: `${dto.phone ?? ''}`.trim(),
+      phone: normalizePhoneNumber(dto.phone, defaultPhoneCountry),
       summary: `${dto.summary ?? ''}`,
       property: `${dto.property ?? ''}`,
       budget: `${dto.budget ?? ''}`,

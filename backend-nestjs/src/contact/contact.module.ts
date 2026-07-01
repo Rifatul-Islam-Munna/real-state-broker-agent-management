@@ -4,9 +4,10 @@ import { ContactRequest } from './entities/contact.entity';
 import { ContactService } from './contact.service';
 import { ContactController } from './contact.controller';
 import { LeadsModule } from '../leads/leads.module';
+import { SettingsModule } from '../settings/settings.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([ContactRequest]), LeadsModule],
+  imports: [TypeOrmModule.forFeature([ContactRequest]), LeadsModule, SettingsModule],
   providers: [ContactService],
   controllers: [ContactController],
 })

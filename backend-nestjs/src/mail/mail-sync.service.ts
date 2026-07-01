@@ -6,10 +6,12 @@ import { simpleParser } from 'mailparser';
 import { DataSource, Repository } from 'typeorm';
 import { AgencyIntegrationSettings } from '../settings/entities/integration-settings.entity';
 import { Lead, LeadFollowUpStatus, LeadPriority, LeadStage } from '../leads/entities/lead.entity';
-import { LeadHistoryEntry } from '../leads/entities/lead-history.entity';
+import { LeadHistoryEntry, leadHistoryKindDb, leadHistoryStatusDb } from '../leads/entities/lead-history.entity';
 import { MailboxLeadIntelligenceService } from '../leads/mailbox-lead-intelligence.service';
 import { Property } from '../properties/entities/property.entity';
 import { MailInboxItem, MailInboxKind, MailInboxStatus } from './entities/mail.entity';
+import { SettingsService } from '../settings/settings.service';
+import { normalizePhoneNumber } from '../common/phone-normalizer';
 
 interface MailProviderConfig {
   providerName: string;
@@ -88,6 +90,7 @@ export class MailInboxSyncBackgroundService {
     private propertyRepo: Repository<Property>,
     private dataSource: DataSource,
     private leadIntelligence: MailboxLeadIntelligenceService,
+    private settingsService: SettingsService,
   ) {}
 
   @Cron(CronExpression.EVERY_5_MINUTES)
@@ -263,6 +266,9 @@ export class MailInboxSyncBackgroundService {
       receivedAt: inbound.receivedAt,
     });
     const extracted = await this.extractLeadInfo(inbound, aiConfig, fallback);
+    const agencySettings = await this.settingsService.getAdminSettings();
+    const defaultPhoneCountry = agencySettings.profile?.defaultPhoneCountry ?? 'US';
+    extracted.phone = normalizePhoneNumber(extracted.phone, defaultPhoneCountry);
     const matchedProperty = this.matchProperty(properties, inbound, extracted);
     const combined = `${inbound.subject}\n${inbound.body}`.toLowerCase();
     const isPropertyInquiry = !!matchedProperty || extracted.shouldCreateLead === true || this.isPropertyInquiry(combined);
@@ -358,9 +364,24 @@ export class MailInboxSyncBackgroundService {
           createdBy: inbound.senderName || inbound.senderEmail,
           occurredAt: inbound.receivedAt,
         }));
+        await this.cancelScheduledFollowUps(historyRepo, lead.id, inbound.receivedAt);
       }
       return { skipped: false, matchedLead, createdLead };
     });
+  }
+
+  private async cancelScheduledFollowUps(historyRepo: Repository<LeadHistoryEntry>, leadId: number, repliedAt: Date) {
+    await historyRepo.createQueryBuilder()
+      .update(LeadHistoryEntry)
+      .set({
+        occurredAt: repliedAt,
+        status: 'Failed',
+        summary: 'Automatic follow-up canceled because lead replied by email.',
+      })
+      .where('lead_id = :leadId', { leadId })
+      .andWhere('status = :status', { status: leadHistoryStatusDb('Scheduled') })
+      .andWhere('kind IN (:...kinds)', { kinds: ['Email', 'Sms'].map(leadHistoryKindDb) })
+      .execute();
   }
 
   private readMailConfig(payload?: string | null): MailProviderConfig | null {

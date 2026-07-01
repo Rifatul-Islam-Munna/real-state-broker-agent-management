@@ -1,3 +1,5 @@
+import Link from "next/link"
+
 import { AppIcon } from "@/components/ui/app-icon"
 import { Input } from "@/components/ui/input"
 
@@ -44,6 +46,13 @@ export function Section1Section({
           </label>
         </div>
         <div className="flex flex-wrap items-center gap-3">
+          <Link
+            className="flex h-11 items-center justify-center gap-2 border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 transition-colors hover:border-primary hover:text-primary dark:border-white/10 dark:bg-white/5 dark:text-slate-200"
+            href="/dashboard/lead-schedule"
+          >
+            <AppIcon name="event_note" />
+            {"Lead Activity"}
+          </Link>
           <button
             className="flex h-11 items-center justify-center gap-2 border border-primary bg-primary px-4 text-sm font-bold text-white"
             onClick={onAddLeadClick}

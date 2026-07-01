@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AgencySettings } from './entities/settings.entity';
 import { AgencyIntegrationSettings } from './entities/integration-settings.entity';
+import { normalizePhoneCountry, normalizePhoneNumber } from '../common/phone-normalizer';
 
 @Injectable()
 export class SettingsService {
@@ -46,6 +47,7 @@ export class SettingsService {
         officeLocations: profile.officeLocations,
         contactEmail: profile.contactEmail,
         contactPhone: profile.contactPhone,
+        defaultPhoneCountry: profile.defaultPhoneCountry,
         socialLinks: profile.socialLinks,
       },
       updatedAt: settings.updatedAt,
@@ -237,7 +239,8 @@ export class SettingsService {
         },
         officeLocations: this.stringList(profile.officeLocations, fallback.profile.officeLocations),
         contactEmail: this.text(profile.contactEmail, fallback.profile.contactEmail),
-        contactPhone: this.loose(profile.contactPhone, fallback.profile.contactPhone),
+        defaultPhoneCountry: normalizePhoneCountry(profile.defaultPhoneCountry ?? fallback.profile.defaultPhoneCountry),
+        contactPhone: normalizePhoneNumber(this.loose(profile.contactPhone, fallback.profile.contactPhone), profile.defaultPhoneCountry ?? fallback.profile.defaultPhoneCountry),
         socialLinks: ['facebook', 'instagram', 'linkedin', 'x', 'youtube', 'tiktok'].map((platform) => ({
           platform,
           url: this.loose((profile.socialLinks ?? []).find((item: any) => (item?.platform ?? '').toLowerCase() === platform)?.url),
@@ -293,6 +296,7 @@ export class SettingsService {
         officeLocations: [],
         contactEmail: '',
         contactPhone: '',
+        defaultPhoneCountry: 'US',
         socialLinks: ['facebook', 'instagram', 'linkedin', 'x', 'youtube', 'tiktok'].map((platform) => ({ platform, url: '' })),
       },
       communicationTemplates: [

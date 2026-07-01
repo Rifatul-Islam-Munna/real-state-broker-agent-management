@@ -98,6 +98,9 @@ export class LeadOutreachBackgroundService {
   }
 
   private async sendScheduledHistoryItem(item: LeadHistoryEntry): Promise<void> {
+    const current = await this.historyRepo.findOne({ where: { id: item.id }, relations: ['lead'] });
+    if (!current || current.status !== 'Scheduled') return;
+    item = current;
     const now = new Date();
     if (item.kind === 'Sms' && item.lead?.inBoard) {
       item.status = 'Failed' as any;

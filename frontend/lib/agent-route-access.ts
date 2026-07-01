@@ -35,10 +35,10 @@ export const agentRouteAccessItems = [
     permission: "lead",
   },
   {
-    description: "Scheduled calls, SMS, and email follow-up for every assigned lead.",
+    description: "Table of sent, scheduled, failed, and received outreach for every assigned lead.",
     href: "/dashboard/lead-schedule",
-    icon: "event",
-    label: "Lead Schedule",
+    icon: "event_note",
+    label: "Lead Activity",
     permission: "lead",
   },
   {

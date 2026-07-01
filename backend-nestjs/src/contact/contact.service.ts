@@ -4,6 +4,8 @@ import { DeepPartial, Repository } from 'typeorm';
 import { ContactRequest, contactStatusDb } from './entities/contact.entity';
 import { LeadsService } from '../leads/leads.service';
 import { paginated, toInt } from '../common/api-contract';
+import { SettingsService } from '../settings/settings.service';
+import { normalizePhoneNumber } from '../common/phone-normalizer';
 
 @Injectable()
 export class ContactService {
@@ -11,10 +13,11 @@ export class ContactService {
     @InjectRepository(ContactRequest)
     private contactRepo: Repository<ContactRequest>,
     private leadsService: LeadsService,
+    private settingsService: SettingsService,
   ) {}
 
   async create(dto: any) {
-    const request = this.contactRepo.create({ ...this.normalizeRequest(dto), status: 'New', leadId: null } as DeepPartial<ContactRequest>);
+    const request = this.contactRepo.create({ ...(await this.normalizeRequest(dto)), status: 'New', leadId: null } as DeepPartial<ContactRequest>);
     return this.mapContact(await this.contactRepo.save(request));
   }
 
@@ -57,15 +60,16 @@ export class ContactService {
   async update(dto: any) {
     const request = await this.contactRepo.findOne({ where: { id: dto.id } });
     if (!request) throw new NotFoundException('Contact request not found');
-    Object.assign(request, { ...this.normalizeRequest(dto), status: dto.status ?? request.status });
+    Object.assign(request, { ...(await this.normalizeRequest(dto)), status: dto.status ?? request.status });
     return this.mapContact(await this.contactRepo.save(request));
   }
 
-  private normalizeRequest(dto: any) {
+  private async normalizeRequest(dto: any) {
+    const settings = await this.settingsService.getAdminSettings();
     return {
       name: `${dto.name ?? ''}`.trim(),
       email: `${dto.email ?? ''}`.trim().toLowerCase(),
-      phone: `${dto.phone ?? ''}`.trim(),
+      phone: normalizePhoneNumber(dto.phone, settings.profile?.defaultPhoneCountry ?? 'US'),
       message: `${dto.message ?? ''}`,
       inquiryType: `${dto.inquiryType ?? ''}`.trim(),
       propertyId: dto.propertyId ? Number(dto.propertyId) : null,

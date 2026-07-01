@@ -11,6 +11,8 @@ import { paginated, toInt } from '../common/api-contract';
 import { Lead } from '../leads/entities/lead.entity';
 import { LeadHistoryEntry } from '../leads/entities/lead-history.entity';
 import { Property } from '../properties/entities/property.entity';
+import { SettingsService } from '../settings/settings.service';
+import { normalizePhoneNumber } from '../common/phone-normalizer';
 
 @Injectable()
 export class PropertyChatService {
@@ -25,6 +27,7 @@ export class PropertyChatService {
     private historyRepo: Repository<LeadHistoryEntry>,
     @InjectRepository(Property)
     private propertyRepo: Repository<Property>,
+    private settingsService: SettingsService,
   ) {}
 
   async createConversation(dto: any) {
@@ -32,15 +35,17 @@ export class PropertyChatService {
     if (!property) throw new NotFoundException('Property was not found.');
     const summary = this.buildSummary(dto);
     const contactEmail = (dto.contactEmail ?? '').trim().toLowerCase();
+    const settings = await this.settingsService.getAdminSettings();
+    const contactPhone = normalizePhoneNumber(dto.contactPhone, settings.profile?.defaultPhoneCountry ?? 'US');
     let lead: Lead | null = null;
-    const hasMinimumLeadData = !!dto.contactName?.trim() && (!!contactEmail || !!dto.contactPhone?.trim());
+    const hasMinimumLeadData = !!dto.contactName?.trim() && (!!contactEmail || !!contactPhone);
     if (hasMinimumLeadData) {
       lead = contactEmail ? await this.leadRepo.findOne({ where: { email: contactEmail } }) : null;
       if (!lead) {
         lead = this.leadRepo.create({
           name: dto.contactName.trim(),
           email: contactEmail,
-          phone: (dto.contactPhone ?? '').trim(),
+          phone: contactPhone,
           agent: property.agent ? `${property.agent.firstName ?? ''} ${property.agent.lastName ?? ''}`.trim() : '',
           agentId: property.agentId,
           budget: (dto.budget ?? '').trim(),
@@ -61,6 +66,7 @@ export class PropertyChatService {
       } else {
         lead.agent = property.agent ? `${property.agent.firstName ?? ''} ${property.agent.lastName ?? ''}`.trim() : lead.agent;
         lead.agentId = property.agentId ?? lead.agentId;
+        lead.phone = contactPhone || lead.phone;
         lead.budget = dto.budget?.trim() || lead.budget;
         lead.property = property.title;
         lead.source = 'Property Chat';
@@ -89,6 +95,7 @@ export class PropertyChatService {
       propertyTitle: property.title,
       assignedAgent: property.agent ? `${property.agent.firstName ?? ''} ${property.agent.lastName ?? ''}`.trim() : '',
       contactEmail,
+      contactPhone,
       leadId: lead?.id ?? null,
       autoQualified: !!lead,
       qualificationScore: lead ? 0.75 : 0,

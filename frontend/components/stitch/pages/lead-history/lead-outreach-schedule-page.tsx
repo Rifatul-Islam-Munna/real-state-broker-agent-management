@@ -277,10 +277,10 @@ export function LeadOutreachSchedulePage() {
     <main className="mx-auto max-w-7xl px-4 py-8 md:px-8">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-slate-400">{"Lead Schedule"}</p>
-          <h1 className="mt-2 text-3xl font-black text-slate-900">{"Scheduled Calls, SMS & Email"}</h1>
+          <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-slate-400">{"Lead Activity"}</p>
+          <h1 className="mt-2 text-3xl font-black text-slate-900">{"Lead Email, SMS & Call Table"}</h1>
           <p className="mt-2 text-sm text-slate-500">
-            {"Track what is scheduled, what has already gone out, and what failed for each lead from one page."}
+            {"Track every sent, scheduled, failed, and received lead outreach item from one searchable table."}
           </p>
         </div>
         <div className="flex flex-wrap gap-3">

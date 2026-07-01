@@ -53,6 +53,28 @@ type AgentEditorFormValues = {
 
 type AgentEditorFormErrors = Partial<Record<keyof AgentEditorFormValues | "form", string>>
 const templateSequenceOptions = ["Direct", "FollowUp1", "FollowUp2", "FollowUp3"] as const
+const phoneCountryOptions = [
+  ["US", "United States (+1)"],
+  ["CA", "Canada (+1)"],
+  ["GB", "United Kingdom (+44)"],
+  ["BD", "Bangladesh (+880)"],
+  ["IN", "India (+91)"],
+  ["PK", "Pakistan (+92)"],
+  ["AE", "United Arab Emirates (+971)"],
+  ["SA", "Saudi Arabia (+966)"],
+  ["AU", "Australia (+61)"],
+  ["DE", "Germany (+49)"],
+  ["FR", "France (+33)"],
+  ["ES", "Spain (+34)"],
+  ["IT", "Italy (+39)"],
+  ["NL", "Netherlands (+31)"],
+  ["BR", "Brazil (+55)"],
+  ["MX", "Mexico (+52)"],
+  ["NG", "Nigeria (+234)"],
+  ["ZA", "South Africa (+27)"],
+  ["SG", "Singapore (+65)"],
+  ["MY", "Malaysia (+60)"],
+] as const
 
 const initialAgentEditorValues: AgentEditorFormValues = {
   accessMode: "full",
@@ -491,6 +513,7 @@ export function MainContentSection() {
       profile: {
         ...formValues.profile,
         contactPhone: (formValues.profile.contactPhone ?? "").trim(),
+        defaultPhoneCountry: (formValues.profile.defaultPhoneCountry ?? "US").trim().toUpperCase(),
         officeLocations: (formValues.profile.officeLocations ?? []).map((item) => (item ?? "").trim()).filter(Boolean),
         socialLinks: (formValues.profile.socialLinks ?? []).map((item) => ({
           ...item,
@@ -837,6 +860,34 @@ export function MainContentSection() {
                 />
               </div>
               <div>
+                <label className="mb-1 block text-xs font-bold uppercase text-primary/70">{"Default Phone Country"}</label>
+                <div className="mb-2 grid gap-2 sm:grid-cols-[8rem_1fr]">
+                  <Input
+                    className="w-full border-2 border-secondary/20 bg-white px-3 py-2 font-bold uppercase outline-none focus:border-primary"
+                    maxLength={2}
+                    onChange={(event) =>
+                      updateSettings((current) => ({
+                        ...current,
+                        profile: { ...current.profile, defaultPhoneCountry: event.target.value.toUpperCase() },
+                      }))}
+                    placeholder="US"
+                    value={formValues.profile.defaultPhoneCountry ?? "US"}
+                  />
+                  <select
+                    className="w-full border-2 border-secondary/20 bg-white px-3 py-2 text-sm font-bold outline-none focus:border-primary"
+                    onChange={(event) =>
+                      updateSettings((current) => ({
+                        ...current,
+                        profile: { ...current.profile, defaultPhoneCountry: event.target.value },
+                      }))}
+                    value={phoneCountryOptions.some(([code]) => code === formValues.profile.defaultPhoneCountry) ? formValues.profile.defaultPhoneCountry : ""}
+                  >
+                    <option value="">{"Custom ISO code"}</option>
+                    {phoneCountryOptions.map(([code, label]) => (
+                      <option key={code} value={code}>{label}</option>
+                    ))}
+                  </select>
+                </div>
                 <label className="mb-1 block text-xs font-bold uppercase text-primary/70">{"Contact Phone"}</label>
                 <Input
                   className="w-full border-2 border-secondary/20 bg-white px-3 py-2 outline-none focus:border-primary"

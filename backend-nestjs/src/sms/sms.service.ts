@@ -2,10 +2,11 @@ import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { SmsMessage } from './entities/sms-message.entity';
-import { Lead } from '../leads/entities/lead.entity';
-import { LeadHistoryEntry } from '../leads/entities/lead-history.entity';
+import { Lead, LeadFollowUpStatus } from '../leads/entities/lead.entity';
+import { LeadHistoryEntry, leadHistoryKindDb, leadHistoryStatusDb } from '../leads/entities/lead-history.entity';
 import { SettingsService } from '../settings/settings.service';
 import { paginated, toInt } from '../common/api-contract';
+import { normalizePhoneNumber } from '../common/phone-normalizer';
 
 type CommunicationConfig = {
   providerName?: string;
@@ -47,7 +48,9 @@ export class SmsService {
     if (!config?.supportsSms) throw new BadRequestException('SMS provider is not configured.');
 
     const lead = dto.leadId ? await this.leadRepo.findOne({ where: { id: Number(dto.leadId) } }) : null;
-    const toNumber = `${dto.to ?? lead?.phone ?? ''}`.trim();
+    const defaultPhoneCountry = await this.getDefaultPhoneCountry();
+    const toNumber = normalizePhoneNumber(dto.to ?? lead?.phone, defaultPhoneCountry);
+    config.fromNumber = normalizePhoneNumber(config.fromNumber, defaultPhoneCountry);
     const body = `${dto.body ?? dto.message ?? ''}`.trim();
     const mediaUrls = this.stringList(dto.mediaUrls).slice(0, 10);
     if (!toNumber) throw new BadRequestException('Recipient phone number is required.');
@@ -65,7 +68,7 @@ export class SmsService {
     const saved = await this.saveMessage({
       body,
       direction: 'Outgoing',
-      fromNumber: config.fromNumber ?? '',
+      fromNumber: normalizePhoneNumber(config.fromNumber, defaultPhoneCountry),
       lead,
       mediaUrls,
       provider: config.providerName ?? 'Custom',
@@ -134,10 +137,11 @@ export class SmsService {
   }
 
   private async saveMessage(input: any) {
+    const defaultPhoneCountry = await this.getDefaultPhoneCountry();
     const entity = this.smsRepo.create({
       body: input.body ?? '',
       direction: input.direction ?? 'Incoming',
-      fromNumber: input.fromNumber ?? '',
+      fromNumber: normalizePhoneNumber(input.fromNumber, defaultPhoneCountry),
       leadId: input.lead?.id ?? null,
       leadName: input.lead?.name ?? '',
       mediaUrls: input.mediaUrls ?? null,
@@ -146,15 +150,50 @@ export class SmsService {
       providerMessageId: input.providerMessageId || `${input.provider ?? 'sms'}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       rawPayload: input.rawPayload ?? null,
       status: input.status ?? 'Received',
-      toNumber: input.toNumber ?? '',
+      toNumber: normalizePhoneNumber(input.toNumber, defaultPhoneCountry),
     });
-    return this.smsRepo.save(entity);
+    const saved = await this.smsRepo.save(entity);
+    if ((input.direction ?? 'Incoming') === 'Incoming' && input.lead?.id) {
+      await this.cancelScheduledFollowUps(input.lead.id, saved.occurredAt ?? new Date());
+    }
+    return saved;
+  }
+
+  private async cancelScheduledFollowUps(leadId: number, repliedAt: Date) {
+    await this.historyRepo.createQueryBuilder()
+      .update(LeadHistoryEntry)
+      .set({
+        occurredAt: repliedAt,
+        status: 'Failed',
+        summary: 'Automatic follow-up canceled because lead replied by SMS.',
+      })
+      .where('lead_id = :leadId', { leadId })
+      .andWhere('status = :status', { status: leadHistoryStatusDb('Scheduled') })
+      .andWhere('kind IN (:...kinds)', { kinds: ['Email', 'Sms'].map(leadHistoryKindDb) })
+      .execute();
+    await this.leadRepo.update(leadId, {
+      followUpStatus: LeadFollowUpStatus.Completed,
+      lastActivityAt: repliedAt,
+      updatedAt: repliedAt,
+    });
   }
 
   private async findLeadByPhone(phone: string) {
-    const normalized = this.onlyDigits(phone);
+    const normalizedPhone = normalizePhoneNumber(phone, await this.getDefaultPhoneCountry());
+    const normalized = this.onlyDigits(normalizedPhone);
     if (!normalized) return null;
-    return this.leadRepo.createQueryBuilder('lead').where("regexp_replace(lead.phone, '[^0-9]', '', 'g') = :phone", { phone: normalized }).getOne();
+    const exact = await this.leadRepo.createQueryBuilder('lead')
+      .where("regexp_replace(lead.phone, '[^0-9]', '', 'g') = :phone", { phone: normalized })
+      .getOne();
+    if (exact || normalized.length < 10) return exact;
+    return this.leadRepo.createQueryBuilder('lead')
+      .where("RIGHT(regexp_replace(lead.phone, '[^0-9]', '', 'g'), 10) = :phone", { phone: normalized.slice(-10) })
+      .getOne();
+  }
+
+  private async getDefaultPhoneCountry() {
+    const settings = await this.settingsService.getAdminSettings();
+    return settings.profile?.defaultPhoneCountry ?? 'US';
   }
 
   private normalizeWebhook(provider: string, payload: any) {
@@ -182,55 +221,70 @@ export class SmsService {
   }
 
   private async sendTwilio(config: CommunicationConfig, to: string, body: string, mediaUrls: string[]) {
-    const url = `${this.baseUrl(config, 'https://api.twilio.com')}/2010-04-01/Accounts/${config.accountId}/Messages.json`;
-    const params = new URLSearchParams({ Body: body, From: config.fromNumber ?? '', To: to });
-    mediaUrls.forEach((url) => params.append('MediaUrl', url));
-    const res = await fetch(url, { body: params, headers: { Authorization: `Basic ${Buffer.from(`${config.accountId}:${config.authToken}`).toString('base64')}`, 'Content-Type': 'application/x-www-form-urlencoded' }, method: 'POST' });
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(json.message ?? `Twilio HTTP ${res.status}`);
-    return json.sid ?? '';
+    const twilio = require('twilio');
+    const client = twilio(config.accountId, config.authToken);
+    const message = await client.messages.create({
+      body,
+      from: config.fromNumber,
+      mediaUrl: mediaUrls.length ? mediaUrls : undefined,
+      to,
+    });
+    return message.sid ?? '';
   }
 
   private async sendPlivo(config: CommunicationConfig, to: string, body: string, mediaUrls: string[]) {
-    const url = `${this.baseUrl(config, 'https://api.plivo.com')}/v1/Account/${config.accountId}/Message/`;
-    const res = await fetch(url, { body: JSON.stringify({ dst: to, media_urls: mediaUrls, src: config.fromNumber, text: body }), headers: { Authorization: `Basic ${Buffer.from(`${config.accountId}:${config.authToken}`).toString('base64')}`, 'Content-Type': 'application/json' }, method: 'POST' });
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(json.error ?? json.message ?? `Plivo HTTP ${res.status}`);
-    return Array.isArray(json.message_uuid) ? json.message_uuid[0] : json.message_uuid ?? '';
+    const plivo = require('plivo');
+    const client = new plivo.Client(config.accountId, config.authToken);
+    const response = await client.messages.create(config.fromNumber, to, body, mediaUrls.length ? { media_urls: mediaUrls } : {});
+    const uuid = response?.messageUuid ?? response?.message_uuid;
+    return Array.isArray(uuid) ? uuid[0] : `${uuid ?? ''}`;
   }
 
   private async sendRingCentral(config: CommunicationConfig, to: string, body: string, mediaUrls: string[]) {
-    const url = `${this.baseUrl(config, 'https://platform.ringcentral.com')}/restapi/v1.0/account/~/extension/~/${mediaUrls.length ? 'mms' : 'sms'}`;
-    if (mediaUrls.length) return this.sendRingCentralMms(config, url, to, body, mediaUrls);
-    const res = await fetch(url, { body: JSON.stringify({ from: { phoneNumber: config.fromNumber }, text: body, to: [{ phoneNumber: to }] }), headers: { Authorization: `Bearer ${config.authToken}`, 'Content-Type': 'application/json' }, method: 'POST' });
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(json.message ?? `RingCentral HTTP ${res.status}`);
+    const platform = await this.ringCentralPlatform(config);
+    const endpoint = `/restapi/v1.0/account/~/extension/~/${mediaUrls.length ? 'mms' : 'sms'}`;
+    const response = mediaUrls.length
+      ? await this.sendRingCentralMms(platform, endpoint, to, body, mediaUrls, config.fromNumber ?? '')
+      : await platform.post(endpoint, { from: { phoneNumber: config.fromNumber }, text: body, to: [{ phoneNumber: to }] });
+    const json = await response.json();
     return `${json.id ?? ''}`;
   }
 
-  private async sendRingCentralMms(config: CommunicationConfig, url: string, to: string, body: string, mediaUrls: string[]) {
+  private async sendRingCentralMms(platform: any, endpoint: string, to: string, body: string, mediaUrls: string[], fromNumber: string) {
     const form = new FormData();
-    form.append('json', new Blob([JSON.stringify({ from: { phoneNumber: config.fromNumber }, text: body, to: [{ phoneNumber: to }] })], { type: 'application/json' }));
+    form.append('json', new Blob([JSON.stringify({ from: { phoneNumber: fromNumber }, text: body, to: [{ phoneNumber: to }] })], { type: 'application/json' }));
     for (const mediaUrl of mediaUrls) {
       const response = await fetch(mediaUrl);
       if (!response.ok) throw new Error(`Attachment fetch failed: ${mediaUrl}`);
       const blob = await response.blob();
       form.append('attachment', blob, mediaUrl.split('/').pop() || 'attachment');
     }
-    const res = await fetch(url, { body: form, headers: { Authorization: `Bearer ${config.authToken}` }, method: 'POST' });
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(json.message ?? `RingCentral HTTP ${res.status}`);
+    const res = await platform.post(endpoint, form);
+    const json = await res.json();
     return `${json.id ?? ''}`;
   }
 
   private async fetchRingCentralMessages(config: CommunicationConfig) {
-    const url = new URL(`${this.baseUrl(config, 'https://platform.ringcentral.com')}/restapi/v1.0/account/~/extension/~/message-store`);
-    url.searchParams.set('type', 'SMS');
-    url.searchParams.set('perPage', `${config.maxMessagesPerSync ?? 25}`);
-    const res = await fetch(url, { headers: { Authorization: `Bearer ${config.authToken}` } });
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(json.message ?? `RingCentral HTTP ${res.status}`);
+    const platform = await this.ringCentralPlatform(config);
+    const res = await platform.get('/restapi/v1.0/account/~/extension/~/message-store', {
+      perPage: config.maxMessagesPerSync ?? 25,
+      type: 'SMS',
+    });
+    const json = await res.json();
     return Array.isArray(json.records) ? json.records : [];
+  }
+
+  private async ringCentralPlatform(config: CommunicationConfig) {
+    const RingCentralSdk = require('@ringcentral/sdk').SDK ?? require('@ringcentral/sdk');
+    const sdk = new RingCentralSdk({ server: this.baseUrl(config, 'https://platform.ringcentral.com') });
+    const platform = sdk.platform();
+    await platform.auth().setData({
+      access_token: config.authToken,
+      expires_in: 3600,
+      expire_time: Date.now() + 3600_000,
+      token_type: 'bearer',
+    });
+    return platform;
   }
 
   private async getConfig(): Promise<CommunicationConfig | null> {
