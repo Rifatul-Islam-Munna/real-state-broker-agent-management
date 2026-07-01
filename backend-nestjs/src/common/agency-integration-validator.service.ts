@@ -10,6 +10,7 @@ export interface IntegrationConnection {
     apiKey?: string;
     clientId?: string;
     clientSecret?: string;
+    password?: string;
   };
   status: 'Active' | 'Inactive' | 'Error';
   lastSyncAt?: Date;
@@ -208,7 +209,7 @@ export class AgencyIntegrationConnectionValidator {
     maxRetries: number = 3,
   ): Promise<{ success: boolean; attemptCount: number; lastError?: string }> {
     let attemptCount = 0;
-    let lastError: string;
+    let lastError = '';
 
     for (let i = 0; i < maxRetries; i++) {
       attemptCount++;

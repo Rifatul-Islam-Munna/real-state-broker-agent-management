@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DeepPartial, Repository } from 'typeorm';
 import { Property, PropertyStatus, NeighborhoodInsight, PropertyPreQuestion, propertyCategories, propertyListingTypes, propertyStatuses } from './entities/property.entity';
 import { numericEnumValue } from '../common/numeric-enum';
 import { PredictionService } from '../prediction/prediction.service';
@@ -39,7 +39,7 @@ export class PropertiesService {
     if (agent) qb.andWhere("concat(agent.first_name, ' ', agent.last_name) ILIKE :agent", { agent: `%${agent}%` });
 
     const [properties, total] = await qb
-      .orderBy('property.updated_at', 'DESC')
+      .orderBy('property.updatedAt', 'DESC')
       .skip((page - 1) * pageSize)
       .take(pageSize)
       .getManyAndCount();
@@ -77,12 +77,15 @@ export class PropertiesService {
   }
 
   async findBySlug(slug: string): Promise<any> {
+    const normalizedSlug = this.slug(slug);
+    const idFromSlug = Number(normalizedSlug.match(/-(\d+)$/)?.[1] ?? slug);
     const property = await this.propertyRepository.findOne({
-      where: { slug },
+      where: { slug: normalizedSlug },
       relations: ['neighborhoodInsights', 'preQuestions', 'agent'],
     });
-    if (!property) throw new NotFoundException('Property not found');
-    return this.mapProperty(property);
+    if (property) return this.mapProperty(property);
+    if (Number.isFinite(idFromSlug) && idFromSlug > 0) return this.findOne(idFromSlug);
+    throw new NotFoundException('Property not found');
   }
 
   async create(createDto: any, actor = 'CRM', isAdmin = true): Promise<any> {
@@ -184,7 +187,7 @@ export class PropertiesService {
     return {
       id: property.id,
       title: property.title,
-      slug: property.slug,
+      slug: property.slug || this.fallbackSlug(property),
       propertyType: property.propertyType,
       listingType: property.listingType,
       price: property.price,
@@ -268,13 +271,17 @@ export class PropertiesService {
           attachmentObjectName: text(item.attachmentObjectName).trim() || null,
           createdAt: now,
           updatedAt: now,
-        }))
+        } as DeepPartial<PropertyPreQuestion>))
         .sort((a, b) => a.sortOrder - b.sortOrder),
     };
   }
 
   private slug(title: string) {
     return text(title).toLowerCase().trim().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-');
+  }
+
+  private fallbackSlug(property: Property) {
+    return `${this.slug(property.title) || 'property'}-${property.id}`;
   }
 
   private isLiveStatus(status: PropertyStatus) {

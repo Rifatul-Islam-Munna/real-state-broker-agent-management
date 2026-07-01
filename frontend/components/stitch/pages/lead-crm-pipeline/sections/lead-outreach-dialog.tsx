@@ -19,6 +19,7 @@ import { leadButtonClass } from "./lead-shared"
 import type { LeadOutreachComposerValues, LeadOutreachMode } from "./lead-outreach-types"
 
 const emptyTemplateValue = "__none__"
+const sequenceRank: Record<string, number> = { Direct: 0, FollowUp1: 1, FollowUp2: 2, FollowUp3: 3 }
 
 function resolveTemplateTokens(templateText: string, lead: LeadItem, agentName?: string | null) {
   const replacements: Record<string, string> = {
@@ -75,6 +76,10 @@ export function LeadOutreachDialog({
     const templates = templatesQuery.data ?? []
 
     return templates.filter((template) => {
+      if (template.isActive === false) {
+        return false
+      }
+
       if (mode === "email") {
         return template.channels.includes("Email")
       }
@@ -84,7 +89,7 @@ export function LeadOutreachDialog({
       }
 
       return false
-    })
+    }).sort((left, right) => (sequenceRank[left.sequenceType ?? "Direct"] ?? 99) - (sequenceRank[right.sequenceType ?? "Direct"] ?? 99))
   }, [mode, templatesQuery.data])
 
   if (!lead || !mode) {
@@ -148,8 +153,10 @@ export function LeadOutreachDialog({
 
                 setValues((current) => ({
                   ...current,
+                  attachPropertyDocuments: selectedTemplate.attachPropertyDocuments !== false,
                   title: nextTitle,
                   message: resolveTemplateTokens(selectedTemplate.body, lead, agentName),
+                  templateId: selectedTemplate.id,
                 }))
               }}
               value={templateId}
@@ -161,7 +168,7 @@ export function LeadOutreachDialog({
                 <SelectItem value={emptyTemplateValue}>{"No template"}</SelectItem>
                 {filteredTemplates.map((template) => (
                   <SelectItem key={template.id} value={template.id}>
-                    {template.name}
+                    {`${template.name} - ${template.sequenceType ?? "Direct"} (${template.gapDays ?? 0}d)`}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -217,6 +224,8 @@ export function LeadOutreachDialog({
                 title: values.title.trim(),
                 message: values.message.trim(),
                 scheduledAt: values.scheduledAt,
+                attachPropertyDocuments: values.attachPropertyDocuments !== false,
+                templateId: templateId === emptyTemplateValue ? undefined : templateId,
               })
 
               if (responseError) {

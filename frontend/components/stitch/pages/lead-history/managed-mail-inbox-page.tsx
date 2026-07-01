@@ -10,10 +10,14 @@ import {
   useMailInbox,
   useMailInboxSyncStatus,
   useRunMailInboxSync,
+  useSendMailMessage,
 } from "@/hooks/use-real-estate-api"
 import { formatDateTimeLabel } from "@/lib/admin-portal"
 import { getPortalRoutes } from "@/lib/portal-routes"
 import { Input } from "@/components/ui/input"
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
+import { Textarea } from "@/components/ui/textarea"
+import { uploadPropertyAsset } from "@/lib/upload-client"
 import {
   Select,
   SelectContent,
@@ -34,6 +38,11 @@ export function ManagedMailInboxPage() {
   const [page, setPage] = useState(1)
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState<"" | "New" | "Replied" | "Converted">("")
+  const [isComposeOpen, setIsComposeOpen] = useState(false)
+  const [mailTo, setMailTo] = useState("")
+  const [mailSubject, setMailSubject] = useState("")
+  const [mailMessage, setMailMessage] = useState("")
+  const [mailFiles, setMailFiles] = useState<File[]>([])
 
   const mailInboxQuery = useMailInbox({
     page,
@@ -44,6 +53,7 @@ export function ManagedMailInboxPage() {
   const syncStatusQuery = useMailInboxSyncStatus()
   const runSyncMutation = useRunMailInboxSync()
   const convertMailInboxToLead = useConvertMailInboxToLead()
+  const sendMail = useSendMailMessage()
   const syncStatus = syncStatusQuery.data
   const isInitialLoading =
     !mailInboxQuery.data && (mailInboxQuery.isLoading || mailInboxQuery.isFetching)
@@ -67,6 +77,23 @@ export function ManagedMailInboxPage() {
     ],
     [mailInbox],
   )
+
+  async function handleSendMail() {
+    const uploads = await Promise.all(mailFiles.map((file) => uploadPropertyAsset(file, "mail-attachments")))
+    const response = await sendMail.mutateAsync({
+      attachmentUrls: uploads.map((upload) => upload.url),
+      message: mailMessage.trim(),
+      subject: mailSubject.trim(),
+      to: mailTo.trim(),
+    })
+    if (!response.error) {
+      setIsComposeOpen(false)
+      setMailFiles([])
+      setMailMessage("")
+      setMailSubject("")
+      setMailTo("")
+    }
+  }
 
   return (
     <div className="bg-background-light font-sans text-slate-900 dark:bg-background-dark dark:text-slate-100">
@@ -112,6 +139,13 @@ export function ManagedMailInboxPage() {
                 </SelectItem>
               </SelectContent>
             </Select>
+            <button
+              className="border border-primary bg-primary px-4 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-70"
+              onClick={() => setIsComposeOpen(true)}
+              type="button"
+            >
+              {"Send Mail"}
+            </button>
           </div>
         </section>
 
@@ -236,6 +270,38 @@ export function ManagedMailInboxPage() {
         <div className="border-t border-slate-200 px-4 py-4 dark:border-white/10 md:px-6">
           <PagePagination currentPage={page} onPageChange={setPage} totalPages={mailInboxQuery.data?.totalPages ?? 1} />
         </div>
+        <Dialog open={isComposeOpen} onOpenChange={setIsComposeOpen}>
+          <DialogContent className="max-w-xl">
+            <DialogTitle>{"Send Mail"}</DialogTitle>
+            <div className="flex flex-col gap-4">
+              <label className="flex flex-col gap-2">
+                <span className="text-sm font-bold text-slate-700">{"To Email"}</span>
+                <Input onChange={(event) => setMailTo(event.target.value)} placeholder="lead@example.com" type="email" value={mailTo} />
+              </label>
+              <label className="flex flex-col gap-2">
+                <span className="text-sm font-bold text-slate-700">{"Subject"}</span>
+                <Input onChange={(event) => setMailSubject(event.target.value)} placeholder="Subject" value={mailSubject} />
+              </label>
+              <label className="flex flex-col gap-2">
+                <span className="text-sm font-bold text-slate-700">{"Message"}</span>
+                <Textarea className="min-h-40" onChange={(event) => setMailMessage(event.target.value)} placeholder="Write mail" value={mailMessage} />
+              </label>
+              <label className="flex flex-col gap-2">
+                <span className="text-sm font-bold text-slate-700">{"Attachments"}</span>
+                <Input multiple onChange={(event) => setMailFiles(Array.from(event.target.files ?? []))} type="file" />
+                {mailFiles.length ? <span className="text-xs font-semibold text-slate-500">{`${mailFiles.length} file(s) selected`}</span> : null}
+              </label>
+              <button
+                className="rounded-xl bg-primary px-5 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={sendMail.isPending || !mailTo.trim() || !mailSubject.trim() || (!mailMessage.trim() && mailFiles.length === 0)}
+                onClick={() => void handleSendMail()}
+                type="button"
+              >
+                {sendMail.isPending ? "Sending..." : "Send Mail"}
+              </button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </main>
     </div>
   )

@@ -47,6 +47,9 @@ import type {
   ShowingBookingItem,
   UpdateShowingBookingInput,
   SmtpIntegrationWriteInput,
+  SmsMessageItem,
+  SendSmsMessageInput,
+  SendMailMessageInput,
   TwilioIntegrationWriteInput,
   UpdateAgencyIntegrationSettingsInput,
   UpdateDocumentRepositoryInput,
@@ -92,6 +95,7 @@ export type {
   DocumentRepositoryItem,
   DocumentRepositorySaveInput,
   DocumentRepositorySummary,
+  DocumentType,
   HomePageFeatureItem,
   HomePageHeroSearchMode,
   HomePageHeroSection,
@@ -118,6 +122,11 @@ export type {
   MailInboxItem,
   MailInboxKind,
   MailInboxStatus,
+  SmsMessageItem,
+  SmsMessageDirection,
+  SmsMessageStatus,
+  SendSmsMessageInput,
+  SendMailMessageInput,
   MarketingEmailCampaignItem,
   MarketingHomepageBoostSection,
   MarketingHomepageBoostSlot,
@@ -927,5 +936,48 @@ export function useConvertMailInboxToLead() {
     onSuccess: () => void invalidate(),
     successMessage: "Mail converted to lead",
     url: "/mail-inbox/convert-to-lead",
+  })
+}
+
+export function useSendMailMessage() {
+  const invalidate = useInvalidate(["mail-inbox", "lead-history", "leads"])
+
+  return useCommonMutationApi<MailInboxItem, SendMailMessageInput>({
+    method: "POST",
+    onSuccess: () => void invalidate(),
+    successMessage: "Mail sent",
+    url: "/mail-inbox/send",
+  })
+}
+
+export function useSmsMessages(params?: QueryParams) {
+  return useQueryWrapper<PaginatedResult<SmsMessageItem>>(
+    ["sms-messages", params],
+    `/sms-inbox${buildQuery(params)}`,
+    defaultQueryOptions,
+    0,
+    "sms-messages",
+  )
+}
+
+export function useSendSmsMessage() {
+  const invalidate = useInvalidate(["sms-messages", "lead-history", "leads"])
+
+  return useCommonMutationApi<SmsMessageItem, SendSmsMessageInput>({
+    method: "POST",
+    onSuccess: () => void invalidate(),
+    successMessage: "SMS sent",
+    url: "/sms-inbox/send",
+  })
+}
+
+export function useSyncSmsMessages() {
+  const invalidate = useInvalidate(["sms-messages"])
+
+  return useCommonMutationApi<{ imported: number }, Record<string, never>>({
+    method: "POST",
+    onSuccess: () => void invalidate(),
+    successMessage: "SMS sync finished",
+    url: "/sms-inbox/sync",
   })
 }

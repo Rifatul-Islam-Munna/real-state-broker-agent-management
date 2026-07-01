@@ -1,6 +1,6 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between } from 'typeorm';
+import { DeepPartial, Repository, Between } from 'typeorm';
 import {
   ShowingBooking,
   ShowingBookingStatus,
@@ -184,12 +184,12 @@ export class BrokerageService {
     const rows = await query
       .leftJoinAndSelect('showing.property', 'property')
       .leftJoinAndSelect('showing.agent', 'agent')
-      .orderBy('showing.start_at', 'ASC')
+      .orderBy('showing.startAt', 'ASC')
       .getMany();
     return rows.map((row) => this.mapShowing(row));
   }
 
-  async getShowingById(id: number): Promise<ShowingBooking> {
+  async getShowingById(id: number): Promise<any> {
     const showing = await this.showingRepo.findOne({ where: { id }, relations: ['property', 'agent'] });
     if (!showing) {
       throw new NotFoundException('Showing not found');
@@ -259,7 +259,7 @@ export class BrokerageService {
     const rule = this.assignmentRepo.create({
       ...dto,
       area: (dto.area ?? '').trim(),
-      priorityOrder: dto.priorityOrder > 0 ? dto.priorityOrder : 100,
+      priorityOrder: (dto.priorityOrder ?? 0) > 0 ? dto.priorityOrder! : 100,
     });
     const saved = await this.assignmentRepo.save(rule);
     return this.getMappedAssignmentRule(saved.id);
@@ -268,7 +268,7 @@ export class BrokerageService {
   async getAssignmentRules(agencyId?: number): Promise<any[]> {
     const rows = await this.assignmentRepo.createQueryBuilder('rule')
       .leftJoinAndSelect('rule.agent', 'agent')
-      .orderBy('rule.priority_order', 'ASC')
+      .orderBy('rule.priorityOrder', 'ASC')
       .addOrderBy('rule.area', 'ASC')
       .getMany();
     return rows.map((row) => this.mapAssignmentRule(row));
@@ -283,7 +283,7 @@ export class BrokerageService {
     rule.area = (dto.area ?? '').trim();
     rule.isActive = dto.isActive ?? rule.isActive;
     rule.listingType = dto.listingType ?? null;
-    rule.priorityOrder = dto.priorityOrder > 0 ? dto.priorityOrder : 100;
+    rule.priorityOrder = (dto.priorityOrder ?? 0) > 0 ? dto.priorityOrder! : 100;
     rule.propertyType = dto.propertyType ?? null;
     const saved = await this.assignmentRepo.save(rule);
     return this.getMappedAssignmentRule(saved.id);
@@ -333,7 +333,7 @@ export class BrokerageService {
         relations: ['agent'],
         order: { priorityOrder: 'ASC', id: 'ASC' },
       });
-      let matchedRule: LeadAssignmentRule = null;
+      let matchedRule: LeadAssignmentRule | null = null;
 
       for (const rule of rules) {
         const areaText = `${property?.location ?? ''} ${property?.title ?? lead.property ?? ''}`.toLowerCase();
@@ -399,7 +399,7 @@ export class BrokerageService {
     const approval = this.approvalRepo.create({
       ...dto,
       status: ApprovalStatus.Pending,
-    });
+    } as DeepPartial<BrokerageApprovalRequest>);
     return this.approvalRepo.save(approval);
   }
 
@@ -417,7 +417,7 @@ export class BrokerageService {
     const rows = await query
       .leftJoinAndSelect('approval.property', 'property')
       .orderBy('CASE WHEN approval.status = 0 THEN 0 ELSE 1 END', 'ASC')
-      .addOrderBy('approval.created_at', 'DESC')
+      .addOrderBy('approval.createdAt', 'DESC')
       .getMany();
     return rows.map((row) => this.mapApproval(row));
   }
@@ -504,7 +504,7 @@ export class BrokerageService {
       query.andWhere('log.created_at BETWEEN :startDate AND :endDate', { startDate, endDate });
     }
 
-    return query.orderBy('log.created_at', 'DESC').getMany();
+    return query.orderBy('log.createdAt', 'DESC').getMany();
   }
 
   // ============ WEBSITE INQUIRY MANAGEMENT ============

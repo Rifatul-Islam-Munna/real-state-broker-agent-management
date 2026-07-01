@@ -19,7 +19,7 @@ export class BlogService {
       qb.andWhere('(blog.title ILIKE :search OR blog.excerpt ILIKE :search OR blog.category ILIKE :search OR blog.author_name ILIKE :search)', { search: `%${search}%` });
     }
     if (typeof isPublished === 'boolean') qb.andWhere('blog.is_published = :isPublished', { isPublished });
-    const [rows, total] = await qb.orderBy('blog.updated_at', 'DESC').skip((page - 1) * pageSize).take(pageSize).getManyAndCount();
+    const [rows, total] = await qb.orderBy('blog.updatedAt', 'DESC').skip((page - 1) * pageSize).take(pageSize).getManyAndCount();
     return paginated(rows.map((post) => this.mapAdmin(post)), total, page, pageSize);
   }
 
@@ -33,8 +33,9 @@ export class BlogService {
     if (category) qb.andWhere('lower(blog.category) = :category', { category: category.toLowerCase() });
     if (featuredOnly) qb.andWhere('blog.is_featured = true');
     const [rows, total] = await qb
-      .orderBy('blog.is_featured', 'DESC')
-      .addOrderBy('COALESCE(blog.published_at, blog.updated_at)', 'DESC')
+      .orderBy('blog.isFeatured', 'DESC')
+      .addOrderBy('blog.publishedAt', 'DESC', 'NULLS LAST')
+      .addOrderBy('blog.updatedAt', 'DESC')
       .skip((page - 1) * pageSize)
       .take(pageSize)
       .getManyAndCount();

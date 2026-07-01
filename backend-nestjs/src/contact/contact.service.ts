@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DeepPartial, Repository } from 'typeorm';
 import { ContactRequest, contactStatusDb } from './entities/contact.entity';
 import { LeadsService } from '../leads/leads.service';
 import { paginated, toInt } from '../common/api-contract';
@@ -14,7 +14,7 @@ export class ContactService {
   ) {}
 
   async create(dto: any) {
-    const request = this.contactRepo.create({ ...dto, name: `${dto.name ?? ''}`.trim(), email: `${dto.email ?? ''}`.trim().toLowerCase(), phone: `${dto.phone ?? ''}`.trim(), message: `${dto.message ?? ''}`, inquiryType: `${dto.inquiryType ?? ''}`.trim(), status: 'New', leadId: null });
+    const request = this.contactRepo.create({ ...this.normalizeRequest(dto), status: 'New', leadId: null } as DeepPartial<ContactRequest>);
     return this.mapContact(await this.contactRepo.save(request));
   }
 
@@ -26,7 +26,7 @@ export class ContactService {
       qb.andWhere('(contact.name ILIKE :search OR contact.email ILIKE :search OR contact.message ILIKE :search OR contact.inquiry_type ILIKE :search)', { search: `%${search}%` });
     }
     if (status) qb.andWhere('contact.status = :status', { status: contactStatusDb(status) });
-    const [rows, total] = await qb.orderBy('contact.created_at', 'DESC').skip((page - 1) * pageSize).take(pageSize).getManyAndCount();
+    const [rows, total] = await qb.orderBy('contact.createdAt', 'DESC').skip((page - 1) * pageSize).take(pageSize).getManyAndCount();
     return paginated(rows.map((item) => this.mapContact(item)), total, page, pageSize);
   }
 
@@ -38,7 +38,7 @@ export class ContactService {
     if (!lead) lead = await this.leadsService.findByEmail(request.email);
     if (!lead) {
       const now = new Date();
-      lead = await this.leadsService.create({ name: request.name.trim(), email: request.email.trim().toLowerCase(), phone: request.phone.trim(), source: 'Contact Form', summary: request.message, interest: request.inquiryType, notes: [request.message], stage: 'New', priority: 'Warm', inBoard: false, nextActionDate: new Date(now.getTime() + 86_400_000), nextActionType: 'First response', followUpStatus: 'Open', lastActivityAt: now });
+      lead = await this.leadsService.create({ name: request.name.trim(), email: request.email.trim().toLowerCase(), phone: request.phone.trim(), property: request.propertyTitle, agent: request.agentName, agentId: request.agentId ?? undefined, source: 'Contact Form', summary: request.message, interest: request.inquiryType, notes: [request.message], stage: 'New', priority: 'Warm', inBoard: false, nextActionDate: new Date(now.getTime() + 86_400_000), nextActionType: 'First response', followUpStatus: 'Open', lastActivityAt: now });
       await this.leadsService.createHistory({ leadId: lead.id, kind: 'ContactForm', direction: 'Incoming', status: 'Received', title: 'Website contact form', summary: request.message, body: request.message, createdBy: 'Website' });
     }
 
@@ -57,8 +57,22 @@ export class ContactService {
   async update(dto: any) {
     const request = await this.contactRepo.findOne({ where: { id: dto.id } });
     if (!request) throw new NotFoundException('Contact request not found');
-    Object.assign(request, { name: `${dto.name ?? ''}`.trim(), email: `${dto.email ?? ''}`.trim().toLowerCase(), phone: `${dto.phone ?? ''}`.trim(), message: `${dto.message ?? ''}`, inquiryType: `${dto.inquiryType ?? ''}`.trim(), status: dto.status ?? request.status });
+    Object.assign(request, { ...this.normalizeRequest(dto), status: dto.status ?? request.status });
     return this.mapContact(await this.contactRepo.save(request));
+  }
+
+  private normalizeRequest(dto: any) {
+    return {
+      name: `${dto.name ?? ''}`.trim(),
+      email: `${dto.email ?? ''}`.trim().toLowerCase(),
+      phone: `${dto.phone ?? ''}`.trim(),
+      message: `${dto.message ?? ''}`,
+      inquiryType: `${dto.inquiryType ?? ''}`.trim(),
+      propertyId: dto.propertyId ? Number(dto.propertyId) : null,
+      propertyTitle: `${dto.propertyTitle ?? ''}`.trim(),
+      agentId: dto.agentId ? Number(dto.agentId) : null,
+      agentName: `${dto.agentName ?? ''}`.trim(),
+    };
   }
 
   private mapContact(item: ContactRequest) {
@@ -69,6 +83,10 @@ export class ContactService {
       phone: item.phone ?? '',
       message: item.message,
       inquiryType: item.inquiryType ?? '',
+      propertyId: item.propertyId ?? null,
+      propertyTitle: item.propertyTitle ?? '',
+      agentId: item.agentId ?? null,
+      agentName: item.agentName ?? '',
       status: item.status,
       leadId: item.leadId ?? null,
       createdAt: item.createdAt,

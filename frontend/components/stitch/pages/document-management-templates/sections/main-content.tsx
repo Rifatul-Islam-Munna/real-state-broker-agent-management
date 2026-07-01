@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react"
 
-import type { DocumentAccessLevel, DocumentRepositoryItem, DocumentRepositorySaveInput } from "@/@types/real-estate-api"
+import type { DocumentAccessLevel, DocumentRepositoryItem, DocumentRepositorySaveInput, DocumentType, PropertyItem } from "@/@types/real-estate-api"
 import { PagePagination } from "@/components/stitch/shared/page-pagination"
 import { AppIcon } from "@/components/ui/app-icon"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
@@ -14,6 +14,7 @@ import {
   useDeleteDocumentRepositoryItem,
   useDocumentRepository,
   useDocumentRepositorySummary,
+  useProperties,
   useUpdateDocumentRepositoryItem,
 } from "@/hooks/use-real-estate-api"
 import { formatDateTimeLabel } from "@/lib/admin-portal"
@@ -21,6 +22,7 @@ import { deleteUploadedAsset, uploadPropertyAsset } from "@/lib/upload-client"
 
 const PAGE_SIZE = 10
 const accessOptions: DocumentAccessLevel[] = ["AdminOnly", "AgentAccess", "Public"]
+const documentTypeOptions: DocumentType[] = ["System", "Property", "Other"]
 const defaultCategories = ["General", "Contracts", "Agreements", "Floor Plans", "Legal", "Marketing", "Templates"]
 
 type TemplateFilter = "all" | "template" | "standard"
@@ -32,9 +34,12 @@ type FormValues = {
   fileName: string
   fileObjectName: string
   fileUrl: string
+  documentType: DocumentType
   folder: string
   isTemplate: boolean
   mimeType: string
+  propertyId: number | null
+  propertyTitle: string
   requiresSignature: boolean
   sizeBytes: number
   tags: string
@@ -51,9 +56,12 @@ function emptyForm(): FormValues {
     fileName: "",
     fileObjectName: "",
     fileUrl: "",
+    documentType: "Other",
     folder: "Repository",
     isTemplate: false,
     mimeType: "",
+    propertyId: null,
+    propertyTitle: "",
     requiresSignature: false,
     sizeBytes: 0,
     tags: "",
@@ -70,9 +78,12 @@ function toFormValues(document: DocumentRepositoryItem): FormValues {
     fileName: document.fileName ?? "",
     fileObjectName: document.fileObjectName ?? "",
     fileUrl: document.fileUrl ?? "",
+    documentType: document.documentType ?? "Other",
     folder: document.folder ?? "Repository",
     isTemplate: document.isTemplate ?? false,
     mimeType: document.mimeType ?? "",
+    propertyId: document.propertyId ?? null,
+    propertyTitle: document.propertyTitle ?? "",
     requiresSignature: document.requiresSignature ?? false,
     sizeBytes: document.sizeBytes ?? 0,
     tags: (document.tags ?? []).join("\n"),
@@ -99,6 +110,10 @@ function validate(values: FormValues) {
     errors.fileUrl = "Upload a document before saving."
   }
 
+  if (values.documentType === "Property" && !values.propertyId) {
+    errors.propertyId = "Choose the property for this document."
+  }
+
   return errors
 }
 
@@ -110,9 +125,12 @@ function toPayload(values: FormValues): DocumentRepositorySaveInput {
     fileName: values.fileName.trim(),
     fileObjectName: values.fileObjectName.trim() || null,
     fileUrl: values.fileUrl.trim(),
+    documentType: values.documentType,
     folder: values.folder.trim() || "Repository",
     isTemplate: values.isTemplate,
     mimeType: values.mimeType.trim(),
+    propertyId: values.documentType === "Property" ? values.propertyId : null,
+    propertyTitle: values.documentType === "Property" ? values.propertyTitle.trim() : "",
     requiresSignature: values.requiresSignature,
     sizeBytes: values.sizeBytes,
     tags: splitTags(values.tags),
@@ -178,9 +196,10 @@ type EditorProps = {
   onSubmit: (values: FormValues) => Promise<void>
   open: boolean
   submitError?: string | null
+  properties: PropertyItem[]
 }
 
-function DocumentEditorDialog({ initialValues, isSubmitting, mode, onClose, onSubmit, open, submitError }: EditorProps) {
+function DocumentEditorDialog({ initialValues, isSubmitting, mode, onClose, onSubmit, open, properties, submitError }: EditorProps) {
   const [formValues, setFormValues] = useState<FormValues>(initialValues)
   const [errors, setErrors] = useState<FormErrors>({})
   const [isUploading, setIsUploading] = useState(false)
@@ -276,9 +295,54 @@ function DocumentEditorDialog({ initialValues, isSubmitting, mode, onClose, onSu
 
               <div className="grid gap-5 md:grid-cols-2">
                 <label className="flex flex-col gap-2">
+                  <span className="text-sm font-bold text-slate-700">{"Document Type"}</span>
+                  <Select
+                    modal={false}
+                    onValueChange={(value) => updateField("documentType", value as DocumentType)}
+                    value={formValues.documentType}
+                  >
+                    <SelectTrigger className="h-auto w-full rounded-xl border-slate-200 bg-slate-50 px-4 py-3 text-sm">
+                      <SelectValue placeholder="Select document type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {documentTypeOptions.map((item) => (
+                        <SelectItem key={item} value={item}>{item}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </label>
+                <label className="flex flex-col gap-2">
                   <span className="text-sm font-bold text-slate-700">{"Version"}</span>
                   <Input className="rounded-xl border-slate-200 bg-slate-50" onChange={(event) => updateField("versionLabel", event.target.value)} placeholder="v1.0" value={formValues.versionLabel} />
                 </label>
+              </div>
+
+              {formValues.documentType === "Property" ? (
+                <label className="flex flex-col gap-2">
+                  <span className="text-sm font-bold text-slate-700">{"Property Document For"}</span>
+                  <Select
+                    modal={false}
+                    onValueChange={(value) => {
+                      const property = properties.find((item) => String(item.id) === value)
+                      updateField("propertyId", property?.id ?? null)
+                      updateField("propertyTitle", property?.title ?? "")
+                    }}
+                    value={formValues.propertyId ? String(formValues.propertyId) : ""}
+                  >
+                    <SelectTrigger className="h-auto w-full rounded-xl border-slate-200 bg-slate-50 px-4 py-3 text-sm">
+                      <SelectValue placeholder="Select property" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {properties.map((property) => (
+                        <SelectItem key={property.id} value={String(property.id)}>{`${property.title} - ${property.location}`}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {errors.propertyId ? <span className="text-xs font-semibold text-rose-600">{errors.propertyId}</span> : null}
+                </label>
+              ) : null}
+
+              <div className="grid gap-5 md:grid-cols-2">
                 <label className="flex flex-col gap-2">
                   <span className="text-sm font-bold text-slate-700">{"Access Level"}</span>
                   <Select modal={false} onValueChange={(value) => updateField("accessLevel", value as DocumentAccessLevel)} value={formValues.accessLevel}>
@@ -405,6 +469,7 @@ export function MainContentSection() {
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [templateFilter, setTemplateFilter] = useState<TemplateFilter>("all")
 
+  const propertiesQuery = useProperties({ page: 1, pageSize: 200 })
   const documentsQuery = useDocumentRepository({
     accessLevel: accessFilter || undefined,
     category: categoryFilter || undefined,
@@ -419,6 +484,7 @@ export function MainContentSection() {
   const deleteDocumentMutation = useDeleteDocumentRepositoryItem()
 
   const documents = useMemo(() => documentsQuery.data?.items ?? [], [documentsQuery.data?.items])
+  const properties = useMemo(() => propertiesQuery.data?.items ?? [], [propertiesQuery.data?.items])
   const isInitialLoading = !documentsQuery.data && (documentsQuery.isLoading || documentsQuery.isFetching)
   const categoryOptions = useMemo(
     () => Array.from(new Set([...defaultCategories, ...documents.map((item) => item.category).filter(Boolean)])).sort((left, right) => left.localeCompare(right)),
@@ -568,6 +634,7 @@ export function MainContentSection() {
                 <tr>
                   <th className="px-6 py-3 text-xs font-bold uppercase tracking-[0.18em] text-slate-400">{"Document"}</th>
                   <th className="px-6 py-3 text-xs font-bold uppercase tracking-[0.18em] text-slate-400">{"Category"}</th>
+                  <th className="px-6 py-3 text-xs font-bold uppercase tracking-[0.18em] text-slate-400">{"Type"}</th>
                   <th className="px-6 py-3 text-xs font-bold uppercase tracking-[0.18em] text-slate-400">{"Access"}</th>
                   <th className="px-6 py-3 text-xs font-bold uppercase tracking-[0.18em] text-slate-400">{"Version"}</th>
                   <th className="px-6 py-3 text-xs font-bold uppercase tracking-[0.18em] text-slate-400">{"Last Modified"}</th>
@@ -595,6 +662,10 @@ export function MainContentSection() {
                     <td className="px-6 py-4">
                       <p className="text-sm font-semibold text-slate-900 dark:text-white">{document.category}</p>
                       <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{document.folder}</p>
+                    </td>
+                    <td className="px-6 py-4">
+                      <p className="text-sm font-semibold text-slate-900 dark:text-white">{document.documentType ?? "Other"}</p>
+                      {document.propertyTitle ? <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{document.propertyTitle}</p> : null}
                     </td>
                     <td className="px-6 py-4"><span className={`inline-flex border px-2 py-1 text-[10px] font-bold uppercase tracking-wide ${accessBadgeClass(document.accessLevel)}`}>{formatAccessLabel(document.accessLevel)}</span></td>
                     <td className="px-6 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200">{document.versionLabel}</td>
@@ -625,6 +696,7 @@ export function MainContentSection() {
         onClose={() => setModalState(null)}
         onSubmit={handleSubmit}
         open={modalState !== null}
+        properties={properties}
         submitError={submitError}
       />
     </main>

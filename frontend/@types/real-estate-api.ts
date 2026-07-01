@@ -247,6 +247,8 @@ export type AgencyIntegrationStatus = {
   hasCommunicationConfig: boolean
   communicationUpdatedAt?: string | null
   communicationProviderName?: string | null
+  communicationSmsSyncEnabled?: boolean
+  communicationSmsSyncIntervalMinutes?: number | null
   hasAiProviderConfig: boolean
   aiProviderUpdatedAt?: string | null
   aiProviderName?: string | null
@@ -265,8 +267,12 @@ export type CommunicationProviderWriteInput = {
   fromNumber: string
   baseUrl?: string | null
   voiceWebhookUrl?: string | null
+  smsWebhookUrl?: string | null
   supportsSms: boolean
   supportsVoice: boolean
+  enableSmsSync?: boolean
+  syncIntervalMinutes?: number
+  maxMessagesPerSync?: number
 }
 
 export type AiProviderIntegrationWriteInput = {
@@ -292,6 +298,9 @@ export type SmtpIntegrationWriteInput = {
   imapPassword?: string | null
   imapUseSsl?: boolean
   imapFolder?: string | null
+  mailboxTag?: string | null
+  duplicatePolicy?: "skip-exact-message" | "process-every-message"
+  autoCreateLeads?: boolean
   syncIntervalMinutes?: number
   maxMessagesPerSync?: number
 }
@@ -306,6 +315,40 @@ export type UpdateAgencyIntegrationSettingsInput = {
 }
 
 export type TwilioIntegrationWriteInput = CommunicationProviderWriteInput
+
+export type SmsMessageDirection = "Incoming" | "Outgoing"
+export type SmsMessageStatus = "Received" | "Sent" | "Failed"
+
+export type SmsMessageItem = {
+  id: number
+  provider: string
+  providerMessageId: string
+  leadId?: number | null
+  leadName: string
+  fromNumber: string
+  toNumber: string
+  body: string
+  mediaUrls: string[]
+  direction: SmsMessageDirection
+  status: SmsMessageStatus
+  occurredAt?: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export type SendSmsMessageInput = {
+  leadId?: number | null
+  to?: string | null
+  body: string
+  mediaUrls?: string[]
+}
+
+export type SendMailMessageInput = {
+  to: string
+  subject: string
+  message: string
+  attachmentUrls?: string[]
+}
 
 export type AgencyCommunicationChannel = "Email" | "SMS" | "WhatsApp"
 
@@ -340,6 +383,10 @@ export type AgencyCommunicationTemplateItem = {
   body: string
   channels: AgencyCommunicationChannel[]
   variableTokens: string[]
+  sequenceType?: "Direct" | "FollowUp1" | "FollowUp2" | "FollowUp3"
+  gapDays?: number
+  isActive?: boolean
+  attachPropertyDocuments?: boolean
 }
 
 export type AgencySettings = {
@@ -415,6 +462,7 @@ export type BlogPostDetail = BlogPostSummary & {
 }
 
 export type DocumentAccessLevel = "AdminOnly" | "AgentAccess" | "Public"
+export type DocumentType = "System" | "Property" | "Other"
 
 export type DocumentRepositoryItem = {
   id: number
@@ -425,6 +473,9 @@ export type DocumentRepositoryItem = {
   mimeType: string
   sizeBytes: number
   category: string
+  documentType: DocumentType
+  propertyId?: number | null
+  propertyTitle?: string | null
   folder: string
   description: string
   versionLabel: string
@@ -454,6 +505,9 @@ export type DocumentRepositorySaveInput = {
   mimeType: string
   sizeBytes: number
   category: string
+  documentType: DocumentType
+  propertyId?: number | null
+  propertyTitle?: string | null
   folder: string
   description: string
   versionLabel: string
@@ -726,6 +780,8 @@ export type LeadOutreachDispatchInput = {
   kind: Extract<LeadHistoryKind, "Email" | "Sms" | "Call">
   title: string
   message: string
+  attachPropertyDocuments?: boolean
+  templateId?: string
   createdBy?: string | null
   scheduledAt?: string | null
 }
@@ -739,6 +795,8 @@ export type LeadOutreachBulkDispatchInput = {
   kind: Extract<LeadHistoryKind, "Email" | "Sms" | "Call">
   title: string
   message: string
+  attachPropertyDocuments?: boolean
+  templateId?: string
   createdBy?: string | null
   scheduledAt?: string | null
 }
@@ -827,6 +885,10 @@ export type ContactRequestItem = {
   phone: string
   message: string
   inquiryType: string
+  propertyId?: number | null
+  propertyTitle?: string | null
+  agentId?: number | null
+  agentName?: string | null
   status: ContactRequestStatus
   leadId?: number | null
   createdAt: string

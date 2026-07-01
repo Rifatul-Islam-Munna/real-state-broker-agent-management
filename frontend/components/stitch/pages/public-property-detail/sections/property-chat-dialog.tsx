@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react"
 
 import type {
-  CreatePropertyChatConversationInput,
   PropertyItem,
   PropertyPreQuestion,
 } from "@/@types/real-estate-api"
@@ -11,7 +10,7 @@ import { AppIcon } from "@/components/ui/app-icon"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { useCreatePropertyChat } from "@/hooks/use-real-estate-api"
+import { useCreateContactRequest } from "@/hooks/use-real-estate-api"
 import { deleteUploadedAsset, uploadPropertyAsset } from "@/lib/upload-client"
 
 type PropertyChatDialogProps = {
@@ -167,7 +166,7 @@ function formatVisitorAnswer(step: ChatStep, contactState: ContactFormState, pre
 }
 
 export function PropertyChatDialog({ open, onOpenChange, property }: PropertyChatDialogProps) {
-  const createPropertyChat = useCreatePropertyChat()
+  const createContactRequest = useCreateContactRequest()
   const steps = useMemo(() => buildSteps(property), [property])
   const [currentStepIndex, setCurrentStepIndex] = useState(0)
   const [draftAnswer, setDraftAnswer] = useState("")
@@ -271,19 +270,34 @@ export function PropertyChatDialog({ open, onOpenChange, property }: PropertyCha
         }),
       )
 
-      const payload: CreatePropertyChatConversationInput = {
-        additionalMessage: contactState.additionalMessage,
-        answers,
-        budget: contactState.budget,
-        contactEmail: contactState.contactEmail,
-        contactName: contactState.contactName,
-        contactPhone: contactState.contactPhone,
-        interest: contactState.interest,
-        propertyId: property.id,
-        timeline: contactState.timeline,
-      }
+      const message = [
+        `Property: ${property.title}`,
+        `Property ID: ${property.id}`,
+        property.slug ? `Property Link: /properties/${property.slug}` : "",
+        property.location ? `Location: ${property.location}` : "",
+        property.price ? `Price: ${property.price}` : "",
+        property.agent?.fullName ? `Assigned Agent: ${property.agent.fullName}` : "",
+        contactState.budget ? `Budget: ${contactState.budget}` : "",
+        contactState.timeline ? `Timeline: ${contactState.timeline}` : "",
+        contactState.interest ? `Interest: ${contactState.interest}` : "",
+        contactState.additionalMessage ? `Message: ${contactState.additionalMessage}` : "",
+        ...answers.map((answer, index) => {
+          const uploadLine = answer.attachmentUrl ? `\nAttachment: ${answer.attachmentUrl}` : ""
+          return `Question ${index + 1}: ${answer.questionPrompt}\nAnswer: ${answer.answerText || "Skipped"}${uploadLine}`
+        }),
+      ].filter(Boolean).join("\n\n")
 
-      const response = await createPropertyChat.mutateAsync(payload)
+      const response = await createContactRequest.mutateAsync({
+        agentId: property.agentId ?? property.agent?.id ?? null,
+        agentName: property.agent?.fullName ?? "",
+        email: contactState.contactEmail,
+        inquiryType: "Inquire About Listing",
+        message,
+        name: contactState.contactName,
+        phone: contactState.contactPhone,
+        propertyId: property.id,
+        propertyTitle: property.title,
+      })
 
       if (response.error) {
         throw response.error
@@ -292,7 +306,7 @@ export function PropertyChatDialog({ open, onOpenChange, property }: PropertyCha
       setIsSubmitted(true)
     } catch (error) {
       await Promise.allSettled(uploadedObjectNames.map((objectName) => deleteUploadedAsset(objectName)))
-      setSubmitError(error instanceof Error ? error.message : "Failed to send the chat.")
+      setSubmitError(error instanceof Error ? error.message : "Failed to send the inquiry.")
     }
   }
 
@@ -306,13 +320,13 @@ export function PropertyChatDialog({ open, onOpenChange, property }: PropertyCha
         </DialogTitle>
         <div className="border-b border-slate-200 px-6 py-5">
           <p className="text-xs font-bold uppercase tracking-[0.24em] text-secondary">
-            {"Property Chat Intake"}
+            {"Listing Inquiry"}
           </p>
           <h3 className="mt-2 text-2xl font-black text-slate-900">
             {"Contact Agent"}
           </h3>
           <p className="mt-2 max-w-2xl text-sm text-slate-500">
-            {"The chat starts with listing-specific pre-questions, then it collects the structured details your agent needs to follow up and create a lead."}
+            {"This sends the listing inquiry to the Contact Us inbox with property and assigned-agent context. Admin can convert it to a lead with one button."}
           </p>
         </div>
 
@@ -399,10 +413,10 @@ export function PropertyChatDialog({ open, onOpenChange, property }: PropertyCha
                   </div>
                   <div className="max-w-[85%] rounded-3xl rounded-tl-md bg-white px-4 py-3 shadow-sm">
                     <p className="text-sm font-semibold text-slate-900">
-                      {"Your chat has been saved."}
+                      {"Your inquiry has been sent."}
                     </p>
                     <p className="mt-2 text-sm leading-6 text-slate-600">
-                      {"The transcript and summary are now stored for the assigned agent, and the system has already checked whether it should create or update a lead automatically."}
+                      {"Admin and the assigned agent context are saved in Contact Us. Admin can convert this inquiry to a lead."}
                     </p>
                   </div>
                 </div>
@@ -415,10 +429,10 @@ export function PropertyChatDialog({ open, onOpenChange, property }: PropertyCha
               <div className="space-y-4">
                 <div className="rounded-3xl border border-green-200 bg-green-50 p-5">
                   <p className="text-xs font-bold uppercase tracking-[0.22em] text-green-700">
-                    {"Chat Submitted"}
+                    {"Inquiry Submitted"}
                   </p>
                   <p className="mt-3 text-lg font-bold text-slate-900">
-                    {"The agent can review it now."}
+                    {"Admin can review it now."}
                   </p>
                   <p className="mt-2 text-sm leading-6 text-slate-600">
                     {"You can close this window or continue browsing the property details."}
@@ -429,7 +443,7 @@ export function PropertyChatDialog({ open, onOpenChange, property }: PropertyCha
                   onClick={() => onOpenChange(false)}
                   type="button"
                 >
-                  {"Close Chat"}
+                  {"Close"}
                 </button>
               </div>
             ) : currentStep ? (
@@ -502,7 +516,7 @@ export function PropertyChatDialog({ open, onOpenChange, property }: PropertyCha
 
                 <button
                   className="w-full rounded-2xl bg-primary px-5 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-70"
-                  disabled={createPropertyChat.isPending}
+                  disabled={createContactRequest.isPending}
                   onClick={handleCurrentStepSubmit}
                   type="button"
                 >
@@ -519,7 +533,7 @@ export function PropertyChatDialog({ open, onOpenChange, property }: PropertyCha
                     {"Your transcript is complete."}
                   </p>
                   <p className="mt-2 text-sm leading-6 text-slate-600">
-                    {"When you send this, the system stores the chat, creates a summary, and checks whether the inquiry should be auto-added to leads."}
+                    {"When you send this, it goes to Contact Us. Admin can convert it to a lead in one click."}
                   </p>
                 </div>
 
@@ -529,11 +543,11 @@ export function PropertyChatDialog({ open, onOpenChange, property }: PropertyCha
 
                 <button
                   className="w-full rounded-2xl bg-primary px-5 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-70"
-                  disabled={createPropertyChat.isPending}
+                  disabled={createContactRequest.isPending}
                   onClick={() => void handleSendConversation()}
                   type="button"
                 >
-                  {createPropertyChat.isPending ? "Sending Chat..." : "Send To Agent"}
+                  {createContactRequest.isPending ? "Sending Inquiry..." : "Send To Contact Us"}
                 </button>
               </div>
             )}

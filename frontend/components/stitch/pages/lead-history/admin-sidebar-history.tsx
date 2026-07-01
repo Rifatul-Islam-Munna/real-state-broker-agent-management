@@ -55,7 +55,7 @@ const adminNavigation = [
     icon: "contact_phone",
   },
   {
-    href: "/admin/mail-monitor",
+    href: "/dashboard/mail",
     label: "Mail",
     icon: "mail",
   },

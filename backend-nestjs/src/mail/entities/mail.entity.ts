@@ -46,17 +46,32 @@ export class MailInboxItem {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({ type: 'text' })
+  @Column({ type: 'text', default: '' })
   email: string;
 
-  @Column({ type: 'text' })
+  @Column({ type: 'text', default: '' })
   name: string;
 
-  @Column({ type: 'text' })
+  @Column({ type: 'text', default: '' })
   subject: string;
 
-  @Column({ type: 'text' })
+  @Column({ type: 'text', default: '' })
   message: string;
+
+  @Column({ type: 'text', default: '' })
+  messageId: string;
+
+  @Column({ type: 'text', default: '' })
+  inReplyTo: string;
+
+  @Column({ type: 'text', array: true, default: '{}' })
+  references: string[];
+
+  @Column({ type: 'text', default: '' })
+  mailboxTag: string;
+
+  @Column({ type: 'jsonb', default: {} })
+  extractedLead: Record<string, any>;
 
   @Column({
     type: 'int',
@@ -76,7 +91,7 @@ export class MailInboxItem {
   })
   status: MailInboxStatus = MailInboxStatus.New;
 
-  @Column({ nullable: true })
+  @Column({ type: 'int', nullable: true })
   leadId: number | null;
 
   @ManyToOne(() => Lead, { nullable: true, onDelete: 'SET NULL' })

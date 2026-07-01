@@ -5,7 +5,8 @@ import { ImapFlow } from 'imapflow';
 import { simpleParser } from 'mailparser';
 import { DataSource, Repository } from 'typeorm';
 import { AgencyIntegrationSettings } from '../settings/entities/integration-settings.entity';
-import { Lead, LeadPriority, LeadStage } from '../leads/entities/lead.entity';
+import { Lead, LeadFollowUpStatus, LeadPriority, LeadStage } from '../leads/entities/lead.entity';
+import { LeadHistoryEntry } from '../leads/entities/lead-history.entity';
 import { MailboxLeadIntelligenceService } from '../leads/mailbox-lead-intelligence.service';
 import { Property } from '../properties/entities/property.entity';
 import { MailInboxItem, MailInboxKind, MailInboxStatus } from './entities/mail.entity';
@@ -19,6 +20,9 @@ interface MailProviderConfig {
   imapPassword: string;
   imapUseSsl: boolean;
   imapFolder: string;
+  mailboxTag: string;
+  duplicatePolicy: 'skip-exact-message' | 'process-every-message';
+  autoCreateLeads: boolean;
   syncIntervalMinutes: number;
   maxMessagesPerSync: number;
 }
@@ -28,7 +32,32 @@ interface InboundEmail {
   senderName: string;
   subject: string;
   body: string;
+  messageId: string;
+  inReplyTo: string;
+  references: string[];
+  mailboxTag: string;
   receivedAt: Date;
+}
+
+interface AiProviderConfig {
+  providerName: string;
+  baseUrl: string;
+  model: string;
+  apiKey: string;
+}
+
+interface ExtractedLeadInfo {
+  name?: string;
+  email?: string;
+  phone?: string;
+  propertyTitle?: string;
+  propertyLocation?: string;
+  budget?: string;
+  timeline?: string;
+  interest?: string;
+  intent?: string;
+  confidence?: number;
+  shouldCreateLead?: boolean;
 }
 
 interface SyncRunResult {
@@ -105,8 +134,8 @@ export class MailInboxSyncBackgroundService {
         : !syncEnabled
           ? 'Inbox sync is turned off.'
           : settings?.aiProviderPayload && this.isJson(settings.aiProviderPayload)
-            ? 'Inbox sync imports unread mail and marks it as read.'
-            : 'Inbox sync imports unread mail and marks it as read, but AI extraction is not configured for new sender matching.',
+            ? 'Inbox sync imports unread mail, extracts lead details, links replies, and routes property inquiries to assigned agents.'
+            : 'Inbox sync imports unread mail and uses fallback parsing. Connect AI to improve property, phone, budget, and intent extraction.',
     };
   }
 
@@ -126,7 +155,8 @@ export class MailInboxSyncBackgroundService {
     this.lastError = null;
 
     try {
-      const result = await this.syncInbox(config);
+      const aiConfig = this.readAiConfig(settings?.aiProviderPayload);
+      const result = await this.syncInbox(config, aiConfig);
       this.lastImportedCount = result.importedCount;
       this.lastMatchedLeadCount = result.matchedLeadCount;
       this.lastCreatedLeadCount = result.createdLeadCount;
@@ -142,7 +172,7 @@ export class MailInboxSyncBackgroundService {
     }
   }
 
-  private async syncInbox(config: MailProviderConfig): Promise<SyncRunResult> {
+  private async syncInbox(config: MailProviderConfig, aiConfig: AiProviderConfig | null): Promise<SyncRunResult> {
     this.validateConfig(config);
     const result: SyncRunResult = {
       importedCount: 0,
@@ -188,6 +218,10 @@ export class MailInboxSyncBackgroundService {
             senderName: (sender?.name ?? '').trim(),
             subject: (parsed.subject ?? '').trim(),
             body: (parsed.text ?? '').trim(),
+            messageId: `${parsed.messageId ?? ''}`.trim(),
+            inReplyTo: `${parsed.inReplyTo ?? ''}`.trim(),
+            references: this.normalizeReferences(parsed.references),
+            mailboxTag: config.mailboxTag,
             receivedAt: parsed.date ?? this.toDate(message.internalDate) ?? new Date(),
           };
 
@@ -197,7 +231,7 @@ export class MailInboxSyncBackgroundService {
             continue;
           }
 
-          const saved = await this.saveInbound(inbound, properties);
+          const saved = await this.saveInbound(inbound, properties, config, aiConfig);
           if (saved.skipped) result.skippedCount++;
           else result.importedCount++;
           if (saved.matchedLead) result.matchedLeadCount++;
@@ -223,28 +257,27 @@ export class MailInboxSyncBackgroundService {
     return result;
   }
 
-  private async saveInbound(inbound: InboundEmail, properties: Property[]) {
-    const extracted = await this.leadIntelligence.extractLeadFromEmail({
+  private async saveInbound(inbound: InboundEmail, properties: Property[], config: MailProviderConfig, aiConfig: AiProviderConfig | null) {
+    const fallback = await this.leadIntelligence.extractLeadFromEmail({
       ...inbound,
       receivedAt: inbound.receivedAt,
     });
-    const matchedProperty = this.matchProperty(properties, inbound);
+    const extracted = await this.extractLeadInfo(inbound, aiConfig, fallback);
+    const matchedProperty = this.matchProperty(properties, inbound, extracted);
     const combined = `${inbound.subject}\n${inbound.body}`.toLowerCase();
-    const isPropertyInquiry = !!matchedProperty || this.isPropertyInquiry(combined);
+    const isPropertyInquiry = !!matchedProperty || extracted.shouldCreateLead === true || this.isPropertyInquiry(combined);
 
     return this.dataSource.transaction(async (manager) => {
       const mailRepo = manager.getRepository(MailInboxItem);
       const leadRepo = manager.getRepository(Lead);
-      const duplicate = await mailRepo.exists({
-        where: {
-          email: inbound.senderEmail,
-          subject: inbound.subject,
-          message: inbound.body,
-        },
-      });
-      if (duplicate) return { skipped: true, matchedLead: false, createdLead: false };
+      const historyRepo = manager.getRepository(LeadHistoryEntry);
+      if (config.duplicatePolicy === 'skip-exact-message') {
+        const duplicate = await this.findDuplicate(mailRepo, inbound);
+        if (duplicate) return { skipped: true, matchedLead: false, createdLead: false };
+      }
 
-      let lead = await leadRepo.createQueryBuilder('lead')
+      let lead = await this.findThreadLead(mailRepo, leadRepo, inbound);
+      if (!lead) lead = await leadRepo.createQueryBuilder('lead')
         .where('LOWER(lead.email) = :email', { email: inbound.senderEmail })
         .getOne();
       let matchedLead = false;
@@ -253,17 +286,20 @@ export class MailInboxSyncBackgroundService {
       if (lead) {
         matchedLead = true;
         lead.lastActivityAt = inbound.receivedAt;
-        if (extracted.phone && !lead.phone) lead.phone = extracted.phone;
+        if (extracted.name && (!lead.name || lead.name === 'Unknown')) lead.name = extracted.name;
+        if (extracted.phone && (!lead.phone || lead.phone === 'Not provided')) lead.phone = extracted.phone;
+        if (extracted.budget && !lead.budget) lead.budget = extracted.budget;
+        if (extracted.timeline && !lead.timeline) lead.timeline = extracted.timeline;
         if (extracted.interest) lead.interest = extracted.interest;
         if (matchedProperty) {
           if (!lead.property) lead.property = matchedProperty.title;
-          if (!lead.agent && matchedProperty.agent) {
+          if (matchedProperty.agent) {
             lead.agent = `${matchedProperty.agent.firstName ?? ''} ${matchedProperty.agent.lastName ?? ''}`.trim();
           }
-          if (!lead.agentId) lead.agentId = matchedProperty.agentId;
+          if (matchedProperty.agentId) lead.agentId = matchedProperty.agentId;
         }
         lead = await leadRepo.save(lead);
-      } else if (isPropertyInquiry) {
+      } else if (config.autoCreateLeads && isPropertyInquiry) {
         const interest = this.inferInterest(combined, extracted.interest);
         lead = leadRepo.create({
           name: this.chooseName(extracted.name, inbound),
@@ -271,19 +307,21 @@ export class MailInboxSyncBackgroundService {
           phone: extracted.phone ?? 'Not provided',
           summary: this.buildSummary(inbound, interest),
           property: matchedProperty?.title ?? '',
+          budget: extracted.budget ?? '',
           stage: LeadStage.New,
-          priority: LeadPriority.Warm,
+          priority: this.priorityFromIntent(extracted.intent, extracted.confidence),
           agent: matchedProperty?.agent
             ? `${matchedProperty.agent.firstName ?? ''} ${matchedProperty.agent.lastName ?? ''}`.trim()
             : '',
           agentId: matchedProperty?.agentId,
           source: 'Mail Inbox',
           interest,
-          timeline: '',
+          timeline: extracted.timeline ?? '',
           inBoard: true,
+          followUpStatus: LeadFollowUpStatus.Open,
+          nextActionDate: new Date(inbound.receivedAt.getTime() + 24 * 60 * 60 * 1000),
+          nextActionType: 'Reply to inbound email',
           notes: [],
-          createdAt: inbound.receivedAt,
-          updatedAt: inbound.receivedAt,
           lastActivityAt: inbound.receivedAt,
         });
         lead = await leadRepo.save(lead);
@@ -295,6 +333,11 @@ export class MailInboxSyncBackgroundService {
         name: inbound.senderName,
         subject: inbound.subject,
         message: inbound.body,
+        messageId: inbound.messageId,
+        inReplyTo: inbound.inReplyTo,
+        references: inbound.references,
+        mailboxTag: inbound.mailboxTag,
+        extractedLead: extracted,
         kind: MailInboxKind.Direct,
         status: MailInboxStatus.New,
         leadId: lead?.id ?? null,
@@ -302,6 +345,20 @@ export class MailInboxSyncBackgroundService {
         updatedAt: inbound.receivedAt,
       });
       await mailRepo.save(mail);
+      if (lead) {
+        await historyRepo.save(historyRepo.create({
+          leadId: lead.id,
+          kind: 'MailInbox',
+          direction: 'Incoming',
+          status: 'Received',
+          title: inbound.subject || 'Inbound email',
+          summary: this.buildHistorySummary(inbound, extracted, matchedProperty),
+          body: inbound.body,
+          provider: 'Mail Inbox',
+          createdBy: inbound.senderName || inbound.senderEmail,
+          occurredAt: inbound.receivedAt,
+        }));
+      }
       return { skipped: false, matchedLead, createdLead };
     });
   }
@@ -331,8 +388,25 @@ export class MailInboxSyncBackgroundService {
       imapPassword: `${raw.imapPassword ?? raw.password ?? ''}`.trim(),
       imapUseSsl: raw.imapUseSsl !== false,
       imapFolder: `${raw.imapFolder ?? 'INBOX'}`.trim() || 'INBOX',
+      mailboxTag: `${raw.mailboxTag ?? ''}`.trim(),
+      duplicatePolicy: raw.duplicatePolicy === 'process-every-message' ? 'process-every-message' : 'skip-exact-message',
+      autoCreateLeads: raw.autoCreateLeads !== false,
       syncIntervalMinutes: this.clampInt(raw.syncIntervalMinutes, 10, 5, 120),
       maxMessagesPerSync: this.clampInt(raw.maxMessagesPerSync, 25, 5, 100),
+    };
+  }
+
+  private readAiConfig(payload?: string | null): AiProviderConfig | null {
+    if (!payload) return null;
+    const raw = this.parseJson(payload);
+    if (!raw?.apiKey || !raw?.model) return null;
+    const providerName = `${raw.providerName ?? 'OpenAI'}`.trim() || 'OpenAI';
+    const defaultBaseUrl = providerName.toLowerCase().includes('openai') ? 'https://api.openai.com/v1' : '';
+    return {
+      providerName,
+      baseUrl: `${raw.baseUrl ?? defaultBaseUrl}`.replace(/\/+$/, ''),
+      model: `${raw.model}`.trim(),
+      apiKey: `${raw.apiKey}`.trim(),
     };
   }
 
@@ -351,12 +425,16 @@ export class MailInboxSyncBackgroundService {
     if (!config.imapPassword) throw new Error('IMAP password is required when inbox sync is enabled.');
   }
 
-  private matchProperty(properties: Property[], inbound: InboundEmail) {
-    const text = `${inbound.subject}\n${inbound.body}`.toLowerCase();
+  private matchProperty(properties: Property[], inbound: InboundEmail, extracted?: ExtractedLeadInfo) {
+    const text = `${inbound.subject}\n${inbound.body}\n${extracted?.propertyTitle ?? ''}\n${extracted?.propertyLocation ?? ''}`.toLowerCase();
     return properties
       .filter((property) => !!property.title?.trim())
       .sort((a, b) => b.title.length - a.title.length)
-      .find((property) => text.includes(property.title.trim().toLowerCase()));
+      .find((property) => {
+        const title = property.title.trim().toLowerCase();
+        const location = `${property.location ?? ''} ${property.exactLocation ?? ''}`.trim().toLowerCase();
+        return text.includes(title) || (!!location && location.split(/\s+/).some((word) => word.length > 4 && text.includes(word)));
+      });
   }
 
   private isPropertyInquiry(text: string) {
@@ -379,10 +457,135 @@ export class MailInboxSyncBackgroundService {
     return `Interest: ${interest}\nMessage: ${summary || 'New inbound email inquiry.'}`;
   }
 
-  private chooseName(suggested: string, inbound: InboundEmail) {
+  private chooseName(suggested: string | undefined, inbound: InboundEmail) {
     if (suggested && suggested !== 'Unknown') return suggested.trim();
     if (inbound.senderName) return inbound.senderName;
     return (inbound.senderEmail.split('@')[0] || 'Email Lead').replace(/[._-]+/g, ' ').trim();
+  }
+
+  private async extractLeadInfo(inbound: InboundEmail, aiConfig: AiProviderConfig | null, fallback: any): Promise<ExtractedLeadInfo> {
+    const fallbackInfo: ExtractedLeadInfo = {
+      name: fallback.name,
+      email: inbound.senderEmail,
+      phone: fallback.phone,
+      interest: fallback.interest,
+      shouldCreateLead: this.isPropertyInquiry(`${inbound.subject}\n${inbound.body}`.toLowerCase()),
+      confidence: 0.45,
+    };
+    if (!aiConfig?.baseUrl) return fallbackInfo;
+
+    try {
+      const response = await fetch(`${aiConfig.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${aiConfig.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: aiConfig.model,
+          temperature: 0,
+          response_format: { type: 'json_object' },
+          messages: [
+            {
+              role: 'system',
+              content: 'Extract real estate lead info from email. Return only JSON with keys: name,email,phone,propertyTitle,propertyLocation,budget,timeline,interest,intent,confidence,shouldCreateLead. confidence 0-1. shouldCreateLead true for buyer/renter/seller/property inquiry.',
+            },
+            {
+              role: 'user',
+              content: JSON.stringify({
+                from: inbound.senderEmail,
+                senderName: inbound.senderName,
+                subject: inbound.subject,
+                body: inbound.body.slice(0, 8000),
+              }),
+            },
+          ],
+        }),
+      });
+      if (!response.ok) return fallbackInfo;
+      const data: any = await response.json();
+      const parsed = this.parseJson(data?.choices?.[0]?.message?.content);
+      if (!parsed) return fallbackInfo;
+      return {
+        ...fallbackInfo,
+        name: this.cleanText(parsed.name) || fallbackInfo.name,
+        email: this.cleanText(parsed.email) || inbound.senderEmail,
+        phone: this.cleanText(parsed.phone) || fallbackInfo.phone,
+        propertyTitle: this.cleanText(parsed.propertyTitle),
+        propertyLocation: this.cleanText(parsed.propertyLocation),
+        budget: this.cleanText(parsed.budget),
+        timeline: this.cleanText(parsed.timeline),
+        interest: this.cleanText(parsed.interest) || fallbackInfo.interest,
+        intent: this.cleanText(parsed.intent),
+        confidence: this.clampNumber(parsed.confidence, fallbackInfo.confidence ?? 0.45, 0, 1),
+        shouldCreateLead: parsed.shouldCreateLead === true || fallbackInfo.shouldCreateLead,
+      };
+    } catch {
+      return fallbackInfo;
+    }
+  }
+
+  private async findDuplicate(mailRepo: Repository<MailInboxItem>, inbound: InboundEmail) {
+    if (inbound.messageId) {
+      const byMessageId = await mailRepo.findOne({ where: { messageId: inbound.messageId } });
+      if (byMessageId) return byMessageId;
+    }
+    return mailRepo.findOne({
+      where: {
+        email: inbound.senderEmail,
+        subject: inbound.subject,
+        message: inbound.body,
+      },
+    });
+  }
+
+  private async findThreadLead(mailRepo: Repository<MailInboxItem>, leadRepo: Repository<Lead>, inbound: InboundEmail) {
+    const threadIds = [inbound.inReplyTo, ...inbound.references].map((item) => item.trim()).filter(Boolean);
+    if (!threadIds.length) return null;
+    const previous = await mailRepo.createQueryBuilder('mail')
+      .where('mail.messageId IN (:...threadIds)', { threadIds })
+      .andWhere('mail.leadId IS NOT NULL')
+      .orderBy('mail.createdAt', 'DESC')
+      .getOne();
+    return previous?.leadId ? leadRepo.findOne({ where: { id: previous.leadId } }) : null;
+  }
+
+  private buildHistorySummary(inbound: InboundEmail, extracted: ExtractedLeadInfo, property?: Property) {
+    return [
+      property ? `Property: ${property.title}` : extracted.propertyTitle ? `Property: ${extracted.propertyTitle}` : '',
+      extracted.phone ? `Phone: ${extracted.phone}` : '',
+      extracted.budget ? `Budget: ${extracted.budget}` : '',
+      extracted.timeline ? `Timeline: ${extracted.timeline}` : '',
+      `Subject: ${inbound.subject || 'Inbound email'}`,
+    ].filter(Boolean).join('\n');
+  }
+
+  private priorityFromIntent(intent?: string, confidence = 0) {
+    const text = `${intent ?? ''}`.toLowerCase();
+    if (confidence >= 0.75 && ['buy', 'rent', 'viewing', 'showing', 'urgent'].some((word) => text.includes(word))) return LeadPriority.HighPriority;
+    return LeadPriority.Warm;
+  }
+
+  private normalizeReferences(value: unknown) {
+    const raw = Array.isArray(value) ? value : typeof value === 'string' ? value.split(/\s+/) : [];
+    return raw.map((item) => `${item ?? ''}`.trim()).filter(Boolean);
+  }
+
+  private parseJson(value: string) {
+    try {
+      return JSON.parse(value);
+    } catch {
+      return null;
+    }
+  }
+
+  private cleanText(value: any) {
+    return `${value ?? ''}`.trim() || undefined;
+  }
+
+  private clampNumber(value: any, fallback: number, min: number, max: number) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? Math.min(max, Math.max(min, parsed)) : fallback;
   }
 
   private clampInt(value: any, fallback: number, min: number, max: number) {

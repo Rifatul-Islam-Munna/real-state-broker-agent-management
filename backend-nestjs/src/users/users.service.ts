@@ -1,16 +1,22 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, IsNull } from 'typeorm';
+import { DeepPartial, Repository, IsNull } from 'typeorm';
 import { User } from './entities/user.entity';
 import { UserRole } from './enums/user-role.enum';
 import * as bcrypt from 'bcrypt';
 
 @Injectable()
-export class UsersService {
+export class UsersService implements OnModuleInit {
+  private readonly logger = new Logger(UsersService.name);
+
   constructor(
     @InjectRepository(User)
     private usersRepository: Repository<User>,
   ) {}
+
+  async onModuleInit() {
+    await this.ensureDefaultAdmin();
+  }
 
   async findOneByEmail(email: string): Promise<User | null> {
     return this.usersRepository.findOne({
@@ -95,7 +101,7 @@ export class UsersService {
       role: UserRole.Agent,
       hasCustomAgentRoutePermissions: !!useCustomAgentRoutePermissions,
       agentRoutePermissions: useCustomAgentRoutePermissions ? (dto.agentRoutePermissions ?? []) : [],
-    });
+    } as DeepPartial<User>);
     return this.mapAgent(await this.usersRepository.save(agent));
   }
 
@@ -164,5 +170,42 @@ export class UsersService {
     if (user.role !== UserRole.Agent) return [];
     if (!user.hasCustomAgentRoutePermissions) return ['dashboard', 'properties', 'deal-pipeline', 'lead', 'mail', 'settings'];
     return user.agentRoutePermissions ?? [];
+  }
+
+  private async ensureDefaultAdmin() {
+    const email = 'test@gmail.com';
+    const existing = await this.usersRepository.findOne({
+      where: { email },
+      select: ['id', 'email', 'passwordHash', 'firstName', 'lastName', 'role', 'isActive'],
+    });
+
+    if (existing) {
+      let changed = false;
+      if (existing.role !== UserRole.Admin) {
+        existing.role = UserRole.Admin;
+        changed = true;
+      }
+      if (!existing.isActive) {
+        existing.isActive = true;
+        changed = true;
+      }
+      if (!existing.passwordHash) {
+        existing.passwordHash = await bcrypt.hash('11111111', 10);
+        changed = true;
+      }
+      if (changed) await this.usersRepository.save(existing);
+      return;
+    }
+
+    await this.usersRepository.save(this.usersRepository.create({
+      firstName: 'Test',
+      lastName: 'Admin',
+      email,
+      passwordHash: await bcrypt.hash('11111111', 10),
+      role: UserRole.Admin,
+      isActive: true,
+      isEmailVerified: true,
+    } as DeepPartial<User>));
+    this.logger.log('Default admin created: test@gmail.com');
   }
 }

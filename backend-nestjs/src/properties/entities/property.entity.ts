@@ -42,10 +42,10 @@ export class Property {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column()
+  @Column({ default: '' })
   slug: string;
 
-  @Column()
+  @Column({ default: '' })
   title: string;
 
   @Column({ type: 'int', transformer: numericEnumTransformer(propertyCategories, PropertyCategory.Residential) })
@@ -54,35 +54,35 @@ export class Property {
   @Column({ type: 'int', transformer: numericEnumTransformer(propertyListingTypes, PropertyListingType.ForSale) })
   listingType: PropertyListingType = PropertyListingType.ForSale;
 
-  @Column()
+  @Column({ default: '' })
   price: string;
 
   @Column({ type: 'int', transformer: numericEnumTransformer(propertyStatuses, PropertyStatus.Open) })
   status: PropertyStatus = PropertyStatus.Open;
 
-  @Column()
+  @Column({ default: '' })
   location: string;
 
-  @Column()
+  @Column({ default: '' })
   exactLocation: string;
 
-  @Column()
+  @Column({ default: '' })
   bedRoom: string;
 
-  @Column()
+  @Column({ default: '' })
   bathRoom: string;
 
-  @Column()
+  @Column({ default: '' })
   width: string;
 
-  @Column({ type: 'text' })
+  @Column({ type: 'text', default: '' })
   description: string;
 
-  @Column({ nullable: true })
-  thumbnailUrl: string;
+  @Column({ type: 'text', nullable: true })
+  thumbnailUrl: string | null;
 
-  @Column({ nullable: true })
-  thumbnailObjectName: string;
+  @Column({ type: 'text', nullable: true })
+  thumbnailObjectName: string | null;
 
   @Column({ type: 'jsonb', default: [] })
   imageUrls: string[];
@@ -96,8 +96,8 @@ export class Property {
   @Column({ type: 'jsonb', default: [] })
   documentRepositoryItemIds: number[];
 
-  @Column({ nullable: true })
-  agentId: number;
+  @Column({ type: 'int', nullable: true })
+  agentId: number | null;
 
   @ManyToOne(() => User, (user) => user.properties, { onDelete: 'SET NULL' })
   @JoinColumn({ name: 'agent_id' })
@@ -127,13 +127,13 @@ export class NeighborhoodInsight {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column()
+  @Column({ default: '' })
   title: string;
 
-  @Column({ type: 'text' })
+  @Column({ type: 'text', default: '' })
   description: string;
 
-  @Column()
+  @Column({ default: 0 })
   propertyId: number;
 
   @ManyToOne(() => Property, (property) => property.neighborhoodInsights, { onDelete: 'CASCADE' })
@@ -146,7 +146,7 @@ export class PropertyPreQuestion {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column()
+  @Column({ default: '' })
   prompt: string;
 
   @Column({ default: '' })
@@ -161,13 +161,13 @@ export class PropertyPreQuestion {
   @Column({ default: false })
   allowsFileUpload: boolean;
 
-  @Column({ nullable: true })
-  attachmentUrl: string;
+  @Column({ type: 'text', nullable: true })
+  attachmentUrl: string | null;
 
-  @Column({ nullable: true })
-  attachmentObjectName: string;
+  @Column({ type: 'text', nullable: true })
+  attachmentObjectName: string | null;
 
-  @Column()
+  @Column({ default: 0 })
   propertyId: number;
 
   @ManyToOne(() => Property, (property) => property.preQuestions, { onDelete: 'CASCADE' })

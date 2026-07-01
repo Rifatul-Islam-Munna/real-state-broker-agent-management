@@ -10,6 +10,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
@@ -17,9 +18,40 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarRail,
   SidebarSeparator,
 } from "@/components/ui/sidebar"
-import { getDashboardRoutesForUser } from "@/lib/dashboard-routes"
+import { getDashboardRoutesForUser, type DashboardRoute } from "@/lib/dashboard-routes"
+
+const routeGroups = [
+  {
+    label: "Overview",
+    hrefs: ["/dashboard", "/dashboard/reports"],
+  },
+  {
+    label: "Listings",
+    hrefs: ["/dashboard/properties", "/dashboard/property-chat-inbox"],
+  },
+  {
+    label: "Leads",
+    hrefs: [
+      "/dashboard/leads",
+      "/dashboard/lead-history",
+      "/dashboard/lead-schedule",
+      "/dashboard/contact-inbox",
+      "/dashboard/text-messages",
+      "/dashboard/mail",
+    ],
+  },
+  {
+    label: "Content",
+    hrefs: ["/dashboard/homepage", "/dashboard/blog", "/dashboard/marketing", "/dashboard/documents"],
+  },
+  {
+    label: "Business",
+    hrefs: ["/dashboard/deals", "/dashboard/team", "/dashboard/settings"],
+  },
+] as const
 
 type DashboardSidebarProps = {
   agencyName: string
@@ -39,59 +71,88 @@ export function DashboardSidebar({
   const homeHref = navigation[0]?.href ?? "/dashboard"
 
   return (
-    <Sidebar className="border-r border-primary/10">
-      <SidebarHeader className="border-b border-white/10 bg-primary p-4 text-white">
+    <Sidebar collapsible="offcanvas" variant="sidebar">
+      <SidebarHeader className="border-b border-sidebar-border p-3">
         <PortalBrandLink
           agencyName={agencyName}
+          className="min-w-0 text-sidebar-foreground"
           href={homeHref}
-          iconWrapperClassName="bg-white/95 p-2"
+          iconWrapperClassName="bg-sidebar-accent p-2 text-sidebar-accent-foreground"
           logoUrl={logoUrl}
-          nameClassName="text-white"
+          nameClassName="text-sidebar-foreground group-data-[collapsible=icon]:hidden"
         />
       </SidebarHeader>
 
-      <SidebarContent className="bg-primary text-white">
+      <SidebarContent>
         <ScrollArea className="min-h-0 flex-1">
-          <SidebarGroup className="p-4">
-            <SidebarGroupLabel className="px-2 text-white/60">
-              {"Workspace"}
-            </SidebarGroupLabel>
-            <SidebarSeparator className="mb-2 bg-white/10" />
-            <SidebarGroupContent>
-        <nav aria-label="Dashboard">
-          {navigation.length === 0 ? (
-            <Alert className="border-white/10 bg-white/10 text-white">
-              <AlertDescription className="text-white/75">
-                {"No dashboard routes are assigned yet. Ask an admin to grant access."}
-              </AlertDescription>
-            </Alert>
-          ) : (
-            <SidebarMenu className="gap-2">
-              {navigation.map((item) => {
-                const isActive =
-                  pathname === item.href || pathname.startsWith(`${item.href}/`)
+          <nav aria-label="Dashboard">
+            {navigation.length === 0 ? (
+              <SidebarGroup>
+                <SidebarGroupContent>
+                  <Alert>
+                    <AlertDescription>
+                      {"No dashboard routes are assigned yet. Ask an admin to grant access."}
+                    </AlertDescription>
+                  </Alert>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            ) : (
+              routeGroups.map((group) => {
+                const items = group.hrefs
+                  .map((href) => navigation.find((item) => item.href === href))
+                  .filter((item): item is DashboardRoute => Boolean(item))
+
+                if (items.length === 0) return null
 
                 return (
-                  <SidebarMenuItem key={item.href}>
-                    <SidebarMenuButton
-                      className="h-11 rounded-2xl px-4 text-white/80 hover:bg-white/10 hover:text-white data-active:bg-white data-active:text-primary"
-                      isActive={isActive}
-                      render={<Link href={item.href} />}
-                      tooltip={item.label}
-                    >
-                      <AppIcon name={item.icon} />
-                      <span className="font-semibold">{item.label}</span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
+                  <SidebarGroup key={group.label}>
+                    <SidebarGroupLabel>
+                      {group.label}
+                    </SidebarGroupLabel>
+                    <SidebarSeparator />
+                    <SidebarGroupContent>
+                      <SidebarMenu>
+                        {items.map((item) => {
+                          const isActive =
+                            pathname === item.href || pathname.startsWith(`${item.href}/`)
+
+                          return (
+                            <SidebarMenuItem key={item.href}>
+                              <SidebarMenuButton
+                                isActive={isActive}
+                                render={<Link href={item.href} />}
+                                tooltip={item.label}
+                              >
+                                <AppIcon name={item.icon} />
+                                <span>{item.label}</span>
+                              </SidebarMenuButton>
+                            </SidebarMenuItem>
+                          )
+                        })}
+                      </SidebarMenu>
+                    </SidebarGroupContent>
+                  </SidebarGroup>
                 )
-              })}
-            </SidebarMenu>
-          )}
-        </nav>
-            </SidebarGroupContent>
-          </SidebarGroup>
+              })
+            )}
+          </nav>
         </ScrollArea>
       </SidebarContent>
+      <SidebarFooter className="border-t border-sidebar-border">
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton tooltip={role}>
+                  <AppIcon name={role === "Admin" ? "verified" : "badge"} />
+                  <span>{role}</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+      </SidebarFooter>
+      <SidebarRail />
     </Sidebar>
   )
 }

@@ -30,7 +30,7 @@ export class DealsService {
     if (stage) qb.andWhere('deal.stage = :stage', { stage: numericEnumValue(dealStages, stage) });
 
     const [rows, total] = await qb
-      .orderBy('deal.updated_at', 'DESC')
+      .orderBy('deal.updatedAt', 'DESC')
       .skip((page - 1) * pageSize)
       .take(pageSize)
       .getManyAndCount();

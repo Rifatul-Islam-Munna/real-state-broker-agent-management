@@ -48,7 +48,7 @@ export function DashboardTopbar({ userName, role, avatarUrl }: DashboardTopbarPr
     <header className="sticky top-0 border-b border-border/70 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
       <div className="flex min-h-16 items-center gap-3 px-4 lg:px-6">
         <SidebarTrigger
-          className="border border-border text-foreground md:hidden"
+          className="border border-border text-foreground"
           render={<Button variant="outline" size="icon-sm" />}
         />
         <div className="min-w-0 flex-1">

@@ -47,6 +47,13 @@ export class MailController {
     return this.mailService.convertToLead(dto.mailInboxId);
   }
 
+  @Post('send')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Send mail' })
+  async send(@Body() dto: any) {
+    return this.mailService.send(dto);
+  }
+
   @Post()
   @ApiOperation({ summary: 'Create mail item' })
   async create(@Body() dto: any) {

@@ -19,8 +19,10 @@ export class DocumentsController {
       @Query('category') category?: string,
       @Query('isTemplate') isTemplate?: string,
       @Query('requiresSignature') requiresSignature?: string,
+      @Query('documentType') documentType?: string,
+      @Query('propertyId') propertyId?: number,
   ) {
-    return this.documentsService.findAll(page, pageSize, search, accessLevel, category, isTemplate === undefined ? undefined : isTemplate === 'true', requiresSignature === undefined ? undefined : requiresSignature === 'true');
+    return this.documentsService.findAll(page, pageSize, search, accessLevel, category, isTemplate === undefined ? undefined : isTemplate === 'true', requiresSignature === undefined ? undefined : requiresSignature === 'true', documentType, propertyId ? Number(propertyId) : undefined);
   }
 
   @Get('summary')

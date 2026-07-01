@@ -1,9 +1,10 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { MailInboxItem, mailInboxStatusDbValue } from './entities/mail.entity';
+import { DeepPartial, Repository } from 'typeorm';
+import { MailInboxItem, MailInboxStatus, mailInboxStatusDbValue } from './entities/mail.entity';
 import { LeadsService } from '../leads/leads.service';
 import { paginated, toInt } from '../common/api-contract';
+import { SettingsService } from '../settings/settings.service';
 
 @Injectable()
 export class MailService {
@@ -11,6 +12,7 @@ export class MailService {
     @InjectRepository(MailInboxItem)
     private mailRepo: Repository<MailInboxItem>,
     private leadsService: LeadsService,
+    private settingsService: SettingsService,
   ) {}
 
   async findAll(page = 1, pageSize = 20, search?: string, status?: string) {
@@ -21,7 +23,7 @@ export class MailService {
       qb.andWhere('(mail.subject ILIKE :search OR mail.message ILIKE :search OR mail.email ILIKE :search OR mail.name ILIKE :search)', { search: `%${search}%` });
     }
     if (status) qb.andWhere('mail.status = :status', { status: mailInboxStatusDbValue(status) });
-    const [items, total] = await qb.orderBy('mail.created_at', 'DESC').skip((page - 1) * pageSize).take(pageSize).getManyAndCount();
+    const [items, total] = await qb.orderBy('mail.createdAt', 'DESC').skip((page - 1) * pageSize).take(pageSize).getManyAndCount();
     return paginated(items.map((item) => this.mapMail(item)), total, page, pageSize);
   }
 
@@ -32,8 +34,44 @@ export class MailService {
   }
 
   async create(dto: any) {
-      const item = this.mailRepo.create({ ...this.toMailEntity(dto), status: 'New', leadId: null });
+      const item = this.mailRepo.create({ ...this.toMailEntity(dto), status: MailInboxStatus.New, leadId: null } as DeepPartial<MailInboxItem>);
       return this.mapMail(await this.mailRepo.save(item));
+  }
+
+  async send(dto: any) {
+    const to = `${dto.to ?? dto.email ?? ''}`.trim().toLowerCase();
+    const subject = `${dto.subject ?? ''}`.trim();
+    const message = `${dto.message ?? dto.body ?? ''}`.trim();
+    const attachmentUrls = this.stringList(dto.attachmentUrls);
+    if (!to) throw new BadRequestException('Recipient email is required.');
+    if (!subject) throw new BadRequestException('Subject is required.');
+    if (!message && attachmentUrls.length === 0) throw new BadRequestException('Message or attachment is required.');
+    const config = await this.settingsService.getSmtpConfig();
+    if (!config?.host || !config?.username || !config?.password) throw new BadRequestException('SMTP mail is not configured.');
+    const nodemailer = require('nodemailer');
+    const transporter = nodemailer.createTransport({
+      host: config.host,
+      port: config.port ?? 587,
+      secure: !!config.useSsl && Number(config.port ?? 587) === 465,
+      auth: { user: config.username, pass: config.password },
+    });
+    await transporter.sendMail({
+      from: config.fromName ? `"${config.fromName}" <${config.fromEmail || config.username}>` : (config.fromEmail || config.username),
+      to,
+      subject,
+      text: message,
+      html: message.replace(/\n/g, '<br>'),
+      attachments: attachmentUrls.map((url) => ({ filename: url.split('/').pop() || 'attachment', path: url })),
+    });
+    const item = this.mailRepo.create({
+      email: to,
+      kind: 'Direct',
+      message: this.messageBodyWithAttachments(message, attachmentUrls),
+      name: `${dto.name ?? to.split('@')[0]}`.trim(),
+      status: MailInboxStatus.Replied,
+      subject,
+    } as DeepPartial<MailInboxItem>);
+    return this.mapMail(await this.mailRepo.save(item));
   }
 
   async update(id: number, dto: any) {
@@ -89,5 +127,13 @@ export class MailService {
       status: dto.status ?? 'New',
       leadId: dto.leadId ?? null,
     };
+  }
+
+  private stringList(value: any) {
+    return Array.isArray(value) ? [...new Set(value.map((item) => `${item ?? ''}`.trim()).filter(Boolean))] : [];
+  }
+
+  private messageBodyWithAttachments(message: string, attachmentUrls: string[]) {
+    return [message, ...attachmentUrls.map((url) => `Attachment: ${url}`)].filter(Boolean).join('\n');
   }
 }

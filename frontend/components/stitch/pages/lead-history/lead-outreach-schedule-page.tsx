@@ -62,6 +62,7 @@ export function LeadOutreachSchedulePage() {
   const rawLeadId = searchParams.get("leadId")
   const selectedLeadId = rawLeadId ? Number(rawLeadId) : NaN
   const [kindFilter, setKindFilter] = useState<"" | OutreachKind>("")
+  const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState<"" | LeadHistoryStatus>("")
   const [composer, setComposer] = useState<ComposerState>({
     audienceType: "SingleLead",
@@ -124,6 +125,23 @@ export function LeadOutreachSchedulePage() {
     }
   }, [dealStagePreviewQuery.data?.items, dealStagePreviewQuery.data?.totalCount])
   const isSaving = dispatchMutation.isPending || bulkDispatchMutation.isPending
+  const filteredSchedule = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase()
+    const rows = scheduleQuery.data ?? []
+    if (!term) return rows
+    return rows.filter((entry) =>
+      [
+        entry.leadName,
+        entry.leadEmail,
+        entry.leadPhone,
+        entry.title,
+        entry.summary,
+        entry.body,
+        entry.status,
+        entry.kind,
+      ].some((value) => `${value ?? ""}`.toLowerCase().includes(term)),
+    )
+  }, [scheduleQuery.data, searchTerm])
 
   function updateLeadSelection(nextLeadId: string) {
     const nextParams = new URLSearchParams(searchParams.toString())
@@ -268,7 +286,7 @@ export function LeadOutreachSchedulePage() {
         <div className="flex flex-wrap gap-3">
           <Link
             className="inline-flex border border-slate-200 px-4 py-2 text-xs font-bold uppercase tracking-wide text-slate-700"
-            href="/dashboard/mail-monitor"
+            href="/dashboard/mail"
           >
             {"Open Mail"}
           </Link>
@@ -522,6 +540,12 @@ export function LeadOutreachSchedulePage() {
               </p>
             </div>
             <div className="flex flex-wrap gap-3">
+              <Input
+                className="h-10 w-64 rounded-xl border-slate-200 bg-slate-50"
+                onChange={(event) => setSearchTerm(event.target.value)}
+                placeholder="Search lead, status, message..."
+                value={searchTerm}
+              />
               <select
                 className="h-10 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-800"
                 onChange={(event) => setKindFilter((event.target.value || "") as "" | OutreachKind)}
@@ -564,44 +588,54 @@ export function LeadOutreachSchedulePage() {
             <div className="mt-6 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">
               {scheduleQuery.error.message}
             </div>
-          ) : (scheduleQuery.data?.length ?? 0) === 0 ? (
-            <div className="py-10 text-center text-sm font-semibold text-slate-500">{"No scheduled outreach matches the current filters."}</div>
+          ) : filteredSchedule.length === 0 ? (
+            <div className="py-10 text-center text-sm font-semibold text-slate-500">{"No lead activity matches the current filters."}</div>
           ) : (
-            <div className="mt-6 space-y-4">
-              {scheduleQuery.data?.map((entry) => (
-                <article key={`${entry.id}-${entry.updatedAt}`} className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="text-sm font-bold text-slate-900">{entry.title}</p>
-                        <span className="rounded-full border border-slate-200 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-600">{entry.kind}</span>
+            <div className="mt-6 overflow-x-auto">
+              <table className="w-full min-w-[980px] text-left text-sm">
+                <thead className="bg-slate-50 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">
+                  <tr>
+                    <th className="px-4 py-3">{"Lead"}</th>
+                    <th className="px-4 py-3">{"Action"}</th>
+                    <th className="px-4 py-3">{"Status"}</th>
+                    <th className="px-4 py-3">{"Summary"}</th>
+                    <th className="px-4 py-3">{"When"}</th>
+                    <th className="px-4 py-3 text-right">{"History"}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  {filteredSchedule.map((entry) => (
+                    <tr key={`${entry.id}-${entry.updatedAt}`} className="align-top">
+                      <td className="px-4 py-4">
+                        <p className="font-bold text-slate-900">{displayText(entry.leadName, `Lead #${entry.leadId}`)}</p>
+                        <p className="mt-1 text-xs text-slate-500">{displayText(entry.leadEmail)}</p>
+                        <p className="mt-1 text-xs text-slate-500">{displayText(entry.leadPhone)}</p>
+                      </td>
+                      <td className="px-4 py-4">
+                        <p className="font-bold text-slate-900">{entry.title}</p>
+                        <p className="mt-1 text-xs font-bold uppercase tracking-[0.16em] text-slate-400">{entry.kind}</p>
+                      </td>
+                      <td className="px-4 py-4">
                         <span className={`rounded-full border px-2 py-1 text-[10px] font-bold uppercase tracking-[0.18em] ${entry.status === "Failed" ? "border-rose-200 bg-rose-50 text-rose-700" : entry.status === "Scheduled" ? "border-amber-200 bg-amber-50 text-amber-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>{entry.status}</span>
-                      </div>
-                      <p className="mt-2 text-sm font-semibold text-slate-900">{entry.leadName}</p>
-                      <p className="mt-1 text-sm text-slate-600">{entry.summary}</p>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <Link
-                        className="border border-slate-200 px-3 py-2 text-xs font-bold uppercase tracking-wide text-slate-700"
-                        href={buildHistoryHref(pathname, entry.leadId)}
-                      >
-                        {"Open History"}
-                      </Link>
-                    </div>
-                  </div>
-
-                  {entry.body ? <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-500">{entry.body}</p> : null}
-
-                  <div className="mt-4 flex flex-wrap gap-4 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">
-                    <span>{`Lead Email: ${displayText(entry.leadEmail)}`}</span>
-                    <span>{`Lead Phone: ${displayText(entry.leadPhone)}`}</span>
-                    <span>{`Provider: ${displayText(entry.provider)}`}</span>
-                    {entry.scheduledAt ? <span>{`Scheduled: ${formatDateTimeLabel(entry.scheduledAt)}`}</span> : null}
-                    {entry.occurredAt ? <span>{`Occurred: ${formatDateTimeLabel(entry.occurredAt)}`}</span> : null}
-                    <span>{`Saved: ${formatDateTimeLabel(entry.createdAt)}`}</span>
-                  </div>
-                </article>
-              ))}
+                      </td>
+                      <td className="max-w-sm px-4 py-4">
+                        <p className="text-slate-600">{entry.summary}</p>
+                        {entry.body ? <p className="mt-2 max-h-16 overflow-hidden whitespace-pre-wrap text-xs text-slate-500">{entry.body}</p> : null}
+                      </td>
+                      <td className="px-4 py-4 text-xs font-semibold text-slate-500">
+                        {entry.scheduledAt ? <p>{`Scheduled: ${formatDateTimeLabel(entry.scheduledAt)}`}</p> : null}
+                        {entry.occurredAt ? <p>{`Occurred: ${formatDateTimeLabel(entry.occurredAt)}`}</p> : null}
+                        <p>{`Saved: ${formatDateTimeLabel(entry.createdAt)}`}</p>
+                      </td>
+                      <td className="px-4 py-4 text-right">
+                        <Link className="border border-slate-200 px-3 py-2 text-xs font-bold uppercase tracking-wide text-slate-700" href={buildHistoryHref(pathname, entry.leadId)}>
+                          {"Open"}
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </section>

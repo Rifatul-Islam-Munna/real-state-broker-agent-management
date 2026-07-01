@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DeepPartial, Repository } from 'typeorm';
 import { Lead, leadStages } from './entities/lead.entity';
 import { numericEnumValue } from '../common/numeric-enum';
 import { LeadHistoryEntry } from './entities/lead-history.entity';
@@ -37,7 +37,7 @@ export class LeadsService {
     if (stage) qb.andWhere('lead.stage = :stage', { stage: numericEnumValue(leadStages, stage) });
 
     const [rows, total] = await qb
-      .orderBy('lead.last_activity_at', 'DESC')
+      .orderBy('lead.lastActivityAt', 'DESC')
       .skip((page - 1) * pageSize)
       .take(pageSize)
       .getManyAndCount();
@@ -113,7 +113,7 @@ export class LeadsService {
     const body = `${dto.body ?? ''}`.trim();
     const title = `${dto.title ?? dto.summary ?? ''}`.trim() || this.historyTitle(dto.kind);
     const summary = `${dto.summary ?? ''}`.trim() || (body ? body.length > 220 ? `${body.slice(0, 217)}...` : body : title);
-    const entry = this.historyRepository.create({ ...dto, kind: dto.kind ?? 'Note', direction: dto.direction ?? 'Internal', status: dto.status ?? 'Logged', title, summary, body, provider: `${dto.provider ?? ''}`.trim(), createdBy: `${dto.createdBy ?? ''}`.trim() || 'Admin' });
+    const entry = this.historyRepository.create({ ...dto, kind: dto.kind ?? 'Note', direction: dto.direction ?? 'Internal', status: dto.status ?? 'Logged', title, summary, body, provider: `${dto.provider ?? ''}`.trim(), createdBy: `${dto.createdBy ?? ''}`.trim() || 'Admin' } as DeepPartial<LeadHistoryEntry>);
     const saved = await this.historyRepository.save(entry);
     lead.lastActivityAt = new Date();
     await this.leadsRepository.save(lead);

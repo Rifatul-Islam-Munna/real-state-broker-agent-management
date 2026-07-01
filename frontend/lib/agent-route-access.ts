@@ -48,6 +48,13 @@ export const agentRouteAccessItems = [
     label: "Mail",
     permission: "mail",
   },
+  {
+    description: "Agency profile, integrations, AI, and mailbox sync settings.",
+    href: "/dashboard/settings",
+    icon: "settings",
+    label: "Settings",
+    permission: "settings",
+  },
 ] as const
 
 export type AgentRoutePermission = (typeof agentRouteAccessItems)[number]["permission"]

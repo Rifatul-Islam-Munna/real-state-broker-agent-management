@@ -47,10 +47,10 @@ export class Lead {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column()
+  @Column({ default: '' })
   name: string;
 
-  @Column()
+  @Column({ default: '' })
   email: string;
 
   @Column({ default: '' })
@@ -74,8 +74,8 @@ export class Lead {
   @Column({ default: '' })
   agent: string;
 
-  @Column({ nullable: true })
-  agentId: number;
+  @Column({ type: 'int', nullable: true })
+  agentId: number | null;
 
   @ManyToOne(() => User, { onDelete: 'SET NULL' })
   @JoinColumn({ name: 'agent_id' })

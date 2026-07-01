@@ -8,7 +8,7 @@ export type DashboardRoute = {
   adminOnly?: boolean
 }
 
-export const dashboardRoutes = [
+export const dashboardRoutes: readonly DashboardRoute[] = [
   { href: "/dashboard", label: "Dashboard", icon: "dashboard", permission: "dashboard" },
   { href: "/dashboard/homepage", label: "Homepage", icon: "home", adminOnly: true },
   { href: "/dashboard/properties", label: "Properties", icon: "domain", permission: "properties" },
@@ -19,14 +19,14 @@ export const dashboardRoutes = [
   { href: "/dashboard/lead-schedule", label: "Lead Schedule", icon: "event", permission: "lead" },
   { href: "/dashboard/contact-inbox", label: "Contact Us", icon: "contact_phone", permission: "lead" },
   { href: "/dashboard/property-chat-inbox", label: "Property Chat", icon: "textsms", permission: "lead" },
+  { href: "/dashboard/text-messages", label: "Text Messages", icon: "sms", permission: "lead" },
   { href: "/dashboard/mail", label: "Mail", icon: "mail", permission: "mail" },
-  { href: "/dashboard/mail-monitor", label: "Mail Monitor", icon: "mail", permission: "mail" },
   { href: "/dashboard/marketing", label: "Marketing", icon: "campaign", adminOnly: true },
   { href: "/dashboard/documents", label: "Documents", icon: "description", adminOnly: true },
   { href: "/dashboard/team", label: "Teams", icon: "badge", adminOnly: true },
   { href: "/dashboard/reports", label: "Reports", icon: "trending_up", permission: "dashboard" },
   { href: "/dashboard/settings", label: "Settings", icon: "settings", adminOnly: true },
-] as const satisfies readonly DashboardRoute[]
+] as const
 
 export function getDashboardRoutesForUser(role: string, permissions?: string[] | null) {
   if (role === "Admin") return [...dashboardRoutes]

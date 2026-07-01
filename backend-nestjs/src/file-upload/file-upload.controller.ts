@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Controller,
   Post,
   UploadedFile,
@@ -44,6 +45,8 @@ export class FileUploadController {
   @Delete()
   @ApiOperation({ summary: 'Delete a file' })
   async deleteFile(@Query('ObjectName') objectName: string, @Query('objectName') lowerObjectName?: string) {
-    return this.fileUploadService.deleteFile(objectName || lowerObjectName);
+    const name = objectName || lowerObjectName;
+    if (!name) throw new BadRequestException('Object name is required');
+    return this.fileUploadService.deleteFile(name);
   }
 }

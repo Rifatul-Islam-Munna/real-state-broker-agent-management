@@ -52,6 +52,7 @@ type AgentEditorFormValues = {
 }
 
 type AgentEditorFormErrors = Partial<Record<keyof AgentEditorFormValues | "form", string>>
+const templateSequenceOptions = ["Direct", "FollowUp1", "FollowUp2", "FollowUp3"] as const
 
 const initialAgentEditorValues: AgentEditorFormValues = {
   accessMode: "full",
@@ -481,6 +482,10 @@ export function MainContentSection() {
       ...formValues,
       communicationTemplates: (formValues.communicationTemplates ?? []).map((item) => ({
         ...item,
+        sequenceType: item.sequenceType ?? "Direct",
+        gapDays: Math.max(0, Number(item.gapDays ?? 0) || 0),
+        isActive: item.isActive !== false,
+        attachPropertyDocuments: item.attachPropertyDocuments !== false,
         variableTokens: (item.variableTokens ?? []).filter(Boolean),
       })),
       profile: {
@@ -910,7 +915,10 @@ export function MainContentSection() {
                         onClick={() => setSelectedTemplateId(template.id)}
                         type="button"
                       >
-                        {template.name}
+                        <span className="block">{template.name}</span>
+                        <span className="mt-1 block text-[10px] font-bold uppercase tracking-[0.16em] text-primary/50">
+                          {`${template.sequenceType ?? "Direct"} | ${template.gapDays ?? 0}d${template.isActive === false ? " | Off" : ""}`}
+                        </span>
                       </button>
                     </li>
                   )
@@ -936,6 +944,44 @@ export function MainContentSection() {
                     </div>
                   </div>
                   <div className="grid gap-4 md:grid-cols-2">
+                    <label className="space-y-2">
+                      <span className="text-xs font-bold uppercase tracking-[0.16em] text-primary/70">{"Sequence"}</span>
+                      <select
+                        className="w-full border-2 border-secondary/20 bg-white px-3 py-3 text-sm font-bold outline-none focus:border-primary"
+                        onChange={(event) => updateTemplate((current) => ({ ...current, sequenceType: event.target.value as AgencyCommunicationTemplateItem["sequenceType"] }))}
+                        value={selectedTemplate.sequenceType ?? "Direct"}
+                      >
+                        {templateSequenceOptions.map((item) => <option key={item} value={item}>{item}</option>)}
+                      </select>
+                    </label>
+                    <label className="space-y-2">
+                      <span className="text-xs font-bold uppercase tracking-[0.16em] text-primary/70">{"Gap Days"}</span>
+                      <Input
+                        className="w-full border-2 border-secondary/20 px-3 py-3 font-bold outline-none focus:border-primary"
+                        min={0}
+                        onChange={(event) => updateTemplate((current) => ({ ...current, gapDays: Math.max(0, Number(event.target.value) || 0) }))}
+                        type="number"
+                        value={selectedTemplate.gapDays ?? 0}
+                      />
+                    </label>
+                    <label className="flex items-center gap-2 rounded border border-secondary/10 bg-slate-50 px-3 py-3 text-xs font-bold uppercase tracking-[0.16em] text-primary/70">
+                      <input
+                        checked={selectedTemplate.isActive !== false}
+                        className="form-checkbox rounded border-slate-300 text-primary focus:ring-primary"
+                        onChange={(event) => updateTemplate((current) => ({ ...current, isActive: event.target.checked }))}
+                        type="checkbox"
+                      />
+                      {"Active"}
+                    </label>
+                    <label className="flex items-center gap-2 rounded border border-secondary/10 bg-slate-50 px-3 py-3 text-xs font-bold uppercase tracking-[0.16em] text-primary/70">
+                      <input
+                        checked={selectedTemplate.attachPropertyDocuments !== false}
+                        className="form-checkbox rounded border-slate-300 text-primary focus:ring-primary"
+                        onChange={(event) => updateTemplate((current) => ({ ...current, attachPropertyDocuments: event.target.checked }))}
+                        type="checkbox"
+                      />
+                      {"Attach Property Docs"}
+                    </label>
                     <label className="flex items-center gap-2 rounded border border-secondary/10 bg-slate-50 px-3 py-3 text-xs font-bold uppercase tracking-[0.16em] text-primary/70">
                       <input
                         checked={selectedTemplate.channels.includes("Email")}

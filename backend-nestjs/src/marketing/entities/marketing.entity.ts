@@ -5,7 +5,7 @@ export class MarketingSettings {
   @PrimaryColumn({ type: 'int' })
   id: number;
 
-  @Column({ type: 'text' })
+  @Column({ type: 'text', default: '{}' })
   contentJson: string = '{}';
 
   @CreateDateColumn({ type: 'timestamptz' })

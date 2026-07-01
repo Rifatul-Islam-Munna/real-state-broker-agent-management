@@ -19,16 +19,16 @@ export const leadHistoryStatusDb = (value: string) => Math.max(0, statuses.index
 @Entity('lead_history')
 export class LeadHistoryEntry {
   @PrimaryGeneratedColumn() id: number;
-  @Column({ type: 'int' }) leadId: number;
+  @Column({ type: 'int', default: 0 }) leadId: number;
   @ManyToOne(() => Lead, { onDelete: 'CASCADE' }) @JoinColumn({ name: 'lead_id' }) lead: Lead;
   @Column({ type: 'int', transformer: transform(kinds, LeadHistoryKind.Note) }) kind: string = LeadHistoryKind.Note;
   @Column({ type: 'int', transformer: transform(directions, LeadHistoryDirection.Internal) }) direction: string = LeadHistoryDirection.Internal;
   @Column({ type: 'int', transformer: transform(statuses, LeadHistoryStatus.Logged) }) status: string = LeadHistoryStatus.Logged;
-  @Column({ type: 'text' }) title: string = '';
-  @Column({ type: 'text' }) summary: string = '';
-  @Column({ type: 'text' }) body: string = '';
-  @Column({ type: 'text' }) provider: string = '';
-  @Column({ type: 'text' }) createdBy: string = '';
+  @Column({ type: 'text', default: '' }) title: string = '';
+  @Column({ type: 'text', default: '' }) summary: string = '';
+  @Column({ type: 'text', default: '' }) body: string = '';
+  @Column({ type: 'text', default: '' }) provider: string = '';
+  @Column({ type: 'text', default: '' }) createdBy: string = '';
   @Column({ type: 'timestamptz', nullable: true }) scheduledAt: Date | null;
   @Column({ type: 'timestamptz', nullable: true }) occurredAt: Date | null;
   @CreateDateColumn({ type: 'timestamptz' }) createdAt: Date;

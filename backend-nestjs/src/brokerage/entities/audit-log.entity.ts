@@ -3,6 +3,7 @@ import {
   PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
+  UpdateDateColumn,
   Index,
 } from 'typeorm';
 
@@ -32,28 +33,28 @@ export class BrokerageAuditLog {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({ type: 'text' })
+  @Column({ type: 'text', default: '' })
   entityType: AuditEntityType;
 
-  @Column({ nullable: true })
+  @Column({ type: 'int', nullable: true })
   entityId: number | null;
 
-  @Column({ type: 'text' })
+  @Column({ type: 'text', default: '' })
   action: AuditAction;
 
-  @Column({ type: 'text' })
+  @Column({ type: 'text', default: '' })
   fieldName: string;
 
-  @Column({ type: 'text' })
+  @Column({ type: 'text', default: '' })
   oldValue: string;
 
-  @Column({ type: 'text' })
+  @Column({ type: 'text', default: '' })
   newValue: string;
 
-  @Column({ type: 'text' })
+  @Column({ type: 'text', default: '' })
   actor: string;
 
-  @Column({ type: 'text' })
+  @Column({ type: 'text', default: '' })
   note: string;
 
   @CreateDateColumn({ type: 'timestamptz' })
@@ -69,19 +70,19 @@ export class WebsiteInquiry {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({ nullable: true })
-  leadId: number;
+  @Column({ type: 'int', nullable: true })
+  leadId: number | null;
 
-  @Column()
+  @Column({ default: '' })
   name: string;
 
-  @Column()
+  @Column({ default: '' })
   email: string;
 
-  @Column({ nullable: true })
-  phone: string;
+  @Column({ type: 'text', nullable: true })
+  phone: string | null;
 
-  @Column({ type: 'text' })
+  @Column({ type: 'text', default: 'ContactForm' })
   source: 'ContactForm' | 'PropertyChat' | 'ScheduleViewing';
 
   @Column({ type: 'text', nullable: true })
@@ -90,8 +91,8 @@ export class WebsiteInquiry {
   @Column({ default: 'New' })
   status: string;
 
-  @Column({ nullable: true })
-  convertedAt: Date;
+  @Column({ type: 'timestamptz', nullable: true })
+  convertedAt: Date | null;
 
   @Column({ type: 'text', nullable: true })
   notes: string;
@@ -99,6 +100,6 @@ export class WebsiteInquiry {
   @CreateDateColumn()
   createdAt: Date;
 
-  @Column({ type: 'timestamp', onUpdate: 'CURRENT_TIMESTAMP' })
+  @UpdateDateColumn({ type: 'timestamptz' })
   updatedAt: Date;
 }

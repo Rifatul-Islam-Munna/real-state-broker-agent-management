@@ -1,7 +1,6 @@
 import { PredictionModule } from "./prediction/prediction.module";
 import { Module } from '@nestjs/common';
-import { ConfigModule, ConfigService } from '@nestjs/config';
-import { TypeOrmModule } from '@nestjs/typeorm';
+import { ConfigModule } from '@nestjs/config';
 import { AppService } from './app.service';
 import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
@@ -12,7 +11,6 @@ import { BrokerageModule } from './brokerage/brokerage.module';
 import { BlogModule } from './blog/blog.module';
 import { SettingsModule } from './settings/settings.module';
 import { FileUploadModule } from './file-upload/file-upload.module';
-import { SnakeNamingStrategy } from 'typeorm-naming-strategies';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ContactModule } from './contact/contact.module';
 import { PropertyChatModule } from './property-chat/property-chat.module';
@@ -22,24 +20,15 @@ import { MailModule } from './mail/mail.module';
 import { DocumentsModule } from './documents/documents.module';
 import { MarketingModule } from './marketing/marketing.module';
 import { HomepageModule } from './homepage/homepage.module';
+import { DatabaseModule } from './lib/database.module';
+import { SmsModule } from './sms/sms.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
     }),
-    TypeOrmModule.forRootAsync({
-      imports: [ConfigModule],
-      useFactory: (configService: ConfigService) => ({
-        type: 'postgres',
-        url: configService.get<string>('DATABASE_URL'),
-        autoLoadEntities: true,
-        synchronize: configService.get<string>('TYPEORM_SYNCHRONIZE') === 'true',
-        namingStrategy: new SnakeNamingStrategy(),
-        logging: true,
-      }),
-      inject: [ConfigService],
-    }),
+    DatabaseModule,
     ScheduleModule.forRoot(),
     UsersModule,
     AuthModule,
@@ -57,7 +46,9 @@ import { HomepageModule } from './homepage/homepage.module';
     MailModule,
     DocumentsModule,
     MarketingModule,
-    HomepageModule, PredictionModule,
+    HomepageModule,
+    SmsModule,
+    PredictionModule,
   ],
   controllers: [],
   providers: [AppService],

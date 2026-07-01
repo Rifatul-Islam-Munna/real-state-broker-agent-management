@@ -136,6 +136,20 @@ export function ContactInboxApiPage() {
                       <span className="border border-primary/20 bg-primary/5 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-primary">{item.inquiryType}</span>
                       <span className="border border-slate-200 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-600 dark:border-white/10 dark:text-slate-300">{item.status}</span>
                     </div>
+                    {(item.propertyTitle || item.agentName) ? (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {item.propertyTitle ? (
+                          <span className="border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-semibold text-slate-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-300">
+                            {`Property: ${item.propertyTitle}`}
+                          </span>
+                        ) : null}
+                        {item.agentName ? (
+                          <span className="border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-semibold text-slate-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-300">
+                            {`Agent: ${item.agentName}`}
+                          </span>
+                        ) : null}
+                      </div>
+                    ) : null}
                     <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">{item.message}</p>
                   </div>
                   <div>

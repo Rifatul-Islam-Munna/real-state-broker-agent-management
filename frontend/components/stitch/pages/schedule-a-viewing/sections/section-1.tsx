@@ -104,7 +104,7 @@ export function Section1Section() {
               <Select
                 modal={false}
                 onValueChange={(value) => {
-                  setSelectedPropertyId(value)
+                  setSelectedPropertyId(value ?? "")
                   setSelectedSlot("")
                 }}
                 value={selectedPropertyId}

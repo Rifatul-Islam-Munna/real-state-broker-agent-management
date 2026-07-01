@@ -61,6 +61,14 @@ export const mailInboxPageMeta = {
   routePath: "/admin/mail-inbox",
 } as const
 
+export const textMessagesPageMeta = {
+  id: "text-messages",
+  title: "Text Messages",
+  description:
+    "Unified SMS inbox for RingCentral, Twilio, Plivo, and lead text conversations.",
+  routePath: "/admin/text-messages",
+} as const
+
 export const marketingToolsCampaignsPageMeta = {
   id: "marketing-tools-campaigns",
   title: "Marketing Tools - Real Estate Admin",

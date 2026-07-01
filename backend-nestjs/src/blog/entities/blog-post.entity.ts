@@ -11,7 +11,7 @@ export class BlogPost {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column()
+  @Column({ default: '' })
   title: string;
 
   @Column({ default: '' })

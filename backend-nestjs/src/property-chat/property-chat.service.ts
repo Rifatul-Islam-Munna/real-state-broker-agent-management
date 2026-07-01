@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DeepPartial, Repository } from 'typeorm';
 import {
   PropertyChatConversation,
   PropertyChatConversationStatus,
@@ -109,7 +109,7 @@ export class PropertyChatService {
       .leftJoinAndSelect('conv.property', 'property')
       .leftJoinAndSelect('conv.lead', 'lead')
       .leftJoinAndSelect('conv.messages', 'messages')
-      .orderBy('conv.created_at', 'DESC')
+      .orderBy('conv.createdAt', 'DESC')
       .skip((page - 1) * pageSize)
       .take(pageSize);
 
@@ -131,7 +131,7 @@ export class PropertyChatService {
   }
 
   private buildSummary(dto: any) {
-    const lines = [];
+    const lines: string[] = [];
     if (dto.timeline) lines.push(`Timeline: ${dto.timeline}`);
     if (dto.interest) lines.push(`Interest: ${dto.interest}`);
     if (dto.additionalMessage) lines.push(`Message: ${dto.additionalMessage}`);
@@ -143,7 +143,7 @@ export class PropertyChatService {
 
   private buildMessages(dto: any) {
     const now = new Date();
-    const messages = [];
+    const messages: DeepPartial<PropertyChatMessage>[] = [];
     for (const answer of dto.answers ?? []) {
       messages.push({
         message: answer.questionPrompt || 'Pre-question',

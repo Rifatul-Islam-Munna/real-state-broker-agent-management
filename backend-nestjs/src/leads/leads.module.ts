@@ -15,9 +15,11 @@ import { SettingsModule } from '../settings/settings.module';
 import { MailInboxItem } from '../mail/entities/mail.entity';
 import { ContactRequest } from '../contact/entities/contact.entity';
 import { BrokerageModule } from '../brokerage/brokerage.module';
+import { SmsModule } from '../sms/sms.module';
+import { DocumentRepositoryItem } from '../documents/entities/document.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Lead, LeadHistoryEntry, DealPipeline, MailInboxItem, ContactRequest]), SettingsModule, BrokerageModule],
+  imports: [TypeOrmModule.forFeature([Lead, LeadHistoryEntry, DealPipeline, MailInboxItem, ContactRequest, DocumentRepositoryItem]), SettingsModule, BrokerageModule, SmsModule],
   providers: [
     LeadsService,
     LeadOutreachService,

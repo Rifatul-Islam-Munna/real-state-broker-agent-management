@@ -159,6 +159,8 @@ export function LeadCrmPipelinePage() {
       kind: mode === "email" ? "Email" : mode === "message" ? "Sms" : "Call",
       title: values.title.trim(),
       message: values.message.trim(),
+      attachPropertyDocuments: values.attachPropertyDocuments !== false,
+      templateId: values.templateId,
       scheduledAt: values.scheduledAt || undefined,
       createdBy: portalRoutes.kind === "agent" ? "Agent" : "Admin",
     })
@@ -323,10 +325,14 @@ function mapLeadValuesToForm(lead: LeadItem): LeadFormValues {
     stage: lead.stage ?? "New",
     priority: lead.priority ?? "Warm",
     agent: lead.agent ?? "",
+    agentId: lead.agentId ?? null,
     source: lead.source ?? "",
     interest: lead.interest ?? "",
     timeline: lead.timeline ?? "",
     inBoard: lead.inBoard ?? false,
+    nextActionDate: lead.nextActionDate ? lead.nextActionDate.slice(0, 16) : "",
+    nextActionType: lead.nextActionType ?? "",
+    followUpStatus: lead.followUpStatus ?? "Open",
     notes: (lead.notes ?? []).join("\n"),
   }
 }

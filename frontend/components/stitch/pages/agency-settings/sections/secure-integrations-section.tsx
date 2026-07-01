@@ -11,14 +11,18 @@ import { formatDateTimeLabel } from "@/lib/admin-portal"
 type SectionKey = "aiProvider" | "communication" | "smtp"
 
 type CommunicationFormValues = {
-  providerName: "Custom" | "Plivo" | "Twilio"
+  providerName: "Custom" | "Plivo" | "RingCentral" | "Twilio"
   accountId: string
   authToken: string
   fromNumber: string
   baseUrl: string
   voiceWebhookUrl: string
+  smsWebhookUrl: string
   supportsSms: boolean
   supportsVoice: boolean
+  enableSmsSync: boolean
+  syncIntervalMinutes: string
+  maxMessagesPerSync: string
 }
 
 type AiProviderFormValues = {
@@ -44,6 +48,9 @@ type SmtpFormValues = {
   imapPassword: string
   imapUseSsl: boolean
   imapFolder: string
+  mailboxTag: string
+  duplicatePolicy: "skip-exact-message" | "process-every-message"
+  autoCreateLeads: boolean
   syncIntervalMinutes: string
   maxMessagesPerSync: string
 }
@@ -72,8 +79,12 @@ const blankCommunicationForm = (): CommunicationFormValues => ({
   fromNumber: "",
   baseUrl: "",
   voiceWebhookUrl: "",
+  smsWebhookUrl: "/api/sms-webhooks/twilio",
   supportsSms: true,
   supportsVoice: true,
+  enableSmsSync: false,
+  syncIntervalMinutes: "5",
+  maxMessagesPerSync: "25",
 })
 
 const blankAiProviderForm = (): AiProviderFormValues => ({
@@ -99,6 +110,9 @@ const blankSmtpForm = (): SmtpFormValues => ({
   imapPassword: "",
   imapUseSsl: true,
   imapFolder: "INBOX",
+  mailboxTag: "",
+  duplicatePolicy: "skip-exact-message",
+  autoCreateLeads: true,
   syncIntervalMinutes: "10",
   maxMessagesPerSync: "25",
 })
@@ -251,14 +265,25 @@ function applyCommunicationPreset(
   const nextBaseUrl =
     providerName === "Plivo"
       ? "https://api.plivo.com"
+      : providerName === "RingCentral"
+        ? "https://platform.ringcentral.com"
       : providerName === "Twilio"
         ? "https://api.twilio.com"
         : current.baseUrl
+  const smsWebhookUrl =
+    providerName === "Plivo"
+      ? "/api/sms-webhooks/plivo"
+      : providerName === "RingCentral"
+        ? "/api/sms-webhooks/ringcentral"
+        : providerName === "Twilio"
+          ? "/api/sms-webhooks/twilio"
+          : current.smsWebhookUrl
 
   return {
     ...current,
     providerName,
     baseUrl: nextBaseUrl,
+    smsWebhookUrl,
   }
 }
 
@@ -330,6 +355,10 @@ function buildCommunicationPayload(values: CommunicationFormValues): UpdateAgenc
       accountId: trimValue(values.accountId),
       authToken: trimValue(values.authToken),
       baseUrl: trimValue(values.baseUrl) || undefined,
+      enableSmsSync: values.enableSmsSync,
+      maxMessagesPerSync: Math.max(5, Number(values.maxMessagesPerSync) || 0),
+      smsWebhookUrl: trimValue(values.smsWebhookUrl) || undefined,
+      syncIntervalMinutes: Math.max(1, Number(values.syncIntervalMinutes) || 0),
       voiceWebhookUrl: trimValue(values.voiceWebhookUrl) || undefined,
       fromNumber: trimValue(values.fromNumber),
       providerName: values.providerName,
@@ -363,6 +392,9 @@ function buildSmtpPayload(values: SmtpFormValues): UpdateAgencyIntegrationSettin
       username: trimValue(values.username),
       enableInboxSync: values.enableInboxSync,
       imapFolder: trimValue(values.imapFolder) || undefined,
+      mailboxTag: trimValue(values.mailboxTag) || undefined,
+      duplicatePolicy: values.duplicatePolicy,
+      autoCreateLeads: values.autoCreateLeads,
       imapHost: trimValue(values.imapHost) || undefined,
       imapPassword: trimValue(values.imapPassword) || undefined,
       imapPort: Math.max(1, Number(values.imapPort) || 0),
@@ -490,7 +522,7 @@ export function SecureIntegrationsSection() {
           description="Use Twilio, Plivo, or a custom provider for lead SMS, call triggers, reminders, and scheduled outreach."
           iconContainerClassName="bg-red-50"
           iconClassName="text-red-600"
-          iconName="phone_in_talk"
+          iconName="phone"
           isBusy={isBusy && pendingSection === "communication"}
           onClear={() =>
             void submitSection("communication", { clearCommunication: true }, () => setCommunicationValues(blankCommunicationForm()))
@@ -500,7 +532,7 @@ export function SecureIntegrationsSection() {
           }
           providerLabel={status?.communicationProviderName}
           saveDisabled={!canSaveCommunication || isBusy}
-          subtitle="Choose the provider first, then validate the credentials before they are stored."
+          subtitle="RingCentral can auto sync from here. Twilio and Plivo need this webhook URL pasted in their provider dashboard."
           title="Calls & SMS"
           updatedAt={status?.communicationUpdatedAt}
         >
@@ -511,34 +543,35 @@ export function SecureIntegrationsSection() {
               onChange={(value) =>
                 setCommunicationValues((current) => applyCommunicationPreset(current, value as CommunicationFormValues["providerName"]))
               }
-              options={[
+          options={[
                 { label: "Twilio", value: "Twilio" },
                 { label: "Plivo", value: "Plivo" },
+                { label: "RingCentral", value: "RingCentral" },
                 { label: "Custom", value: "Custom" },
               ]}
               value={communicationValues.providerName}
             />
           </label>
           <label className="flex flex-col gap-2">
-            <FieldLabel>{communicationValues.providerName === "Plivo" ? "Auth ID" : "Account ID"}</FieldLabel>
+            <FieldLabel>{communicationValues.providerName === "Plivo" ? "Auth ID" : communicationValues.providerName === "RingCentral" ? "Client / Account ID" : "Account ID"}</FieldLabel>
             <Input
               autoComplete="off"
               className="rounded-xl border-slate-200 bg-slate-50"
               disabled={isBusy}
               onChange={(event) => setCommunicationValues((current) => ({ ...current, accountId: event.target.value }))}
-              placeholder={communicationValues.providerName === "Plivo" ? "MA..." : "AC..."}
+              placeholder={communicationValues.providerName === "Plivo" ? "MA..." : communicationValues.providerName === "RingCentral" ? "RingCentral app/client id" : "AC..."}
               spellCheck={false}
               value={communicationValues.accountId}
             />
           </label>
           <label className="flex flex-col gap-2">
-            <FieldLabel>{"Auth Token"}</FieldLabel>
+            <FieldLabel>{communicationValues.providerName === "RingCentral" ? "Access Token" : "Auth Token"}</FieldLabel>
             <Input
               autoComplete="new-password"
               className="rounded-xl border-slate-200 bg-slate-50"
               disabled={isBusy}
               onChange={(event) => setCommunicationValues((current) => ({ ...current, authToken: event.target.value }))}
-              placeholder={`Enter a new ${communicationValues.providerName} auth token`}
+              placeholder={communicationValues.providerName === "RingCentral" ? "Bearer access token" : `Enter a new ${communicationValues.providerName} auth token`}
               spellCheck={false}
               type="password"
               value={communicationValues.authToken}
@@ -584,6 +617,29 @@ export function SecureIntegrationsSection() {
               {"Twilio can speak inline without this, but Plivo voice calls need a public callback URL that points to your lead outreach call-script endpoint."}
             </p>
           </label>
+          <label className="flex flex-col gap-2">
+            <FieldLabel>{"SMS Webhook URL"}</FieldLabel>
+            <Input
+              autoComplete="off"
+              className="rounded-xl border-slate-200 bg-slate-50"
+              disabled={isBusy}
+              onChange={(event) => setCommunicationValues((current) => ({ ...current, smsWebhookUrl: event.target.value }))}
+              placeholder="/api/sms-webhooks/twilio"
+              spellCheck={false}
+              value={communicationValues.smsWebhookUrl}
+            />
+            <p className="text-xs text-slate-500">
+              {"Use your public backend URL plus this path. Twilio: Phone Number > Messaging > A message comes in. Plivo: Messaging Application > Message URL. RingCentral can use this webhook too."}
+            </p>
+          </label>
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold leading-5 text-amber-900">
+            {"Setup note: RingCentral auto sync works from this card after save. For Twilio and Plivo, copy SMS Webhook URL and paste it in their dashboard so incoming texts can reach this backend."}
+          </div>
+          {communicationValues.providerName === "RingCentral" ? (
+            <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-xs font-semibold leading-5 text-sky-800">
+              {"RingCentral poll sync uses /restapi/v1.0/account/~/extension/~/message-store?type=SMS. Webhook target: /api/sms-webhooks/ringcentral."}
+            </div>
+          ) : null}
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
             <label className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
               <div>
@@ -609,6 +665,43 @@ export function SecureIntegrationsSection() {
                 disabled={isBusy}
                 onChange={(event) => setCommunicationValues((current) => ({ ...current, supportsVoice: event.target.checked }))}
                 type="checkbox"
+              />
+            </label>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
+            <label className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+              <div>
+                <p className="text-sm font-bold text-slate-800">{"Auto Sync Texts"}</p>
+                <p className="text-xs text-slate-500">{"RingCentral polls automatically; Twilio and Plivo sync through webhooks."}</p>
+              </div>
+              <input
+                checked={communicationValues.enableSmsSync}
+                className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
+                disabled={isBusy}
+                onChange={(event) => setCommunicationValues((current) => ({ ...current, enableSmsSync: event.target.checked }))}
+                type="checkbox"
+              />
+            </label>
+            <label className="flex flex-col gap-2">
+              <FieldLabel>{"Sync Minutes"}</FieldLabel>
+              <Input
+                className="rounded-xl border-slate-200 bg-slate-50"
+                disabled={isBusy}
+                min="1"
+                onChange={(event) => setCommunicationValues((current) => ({ ...current, syncIntervalMinutes: event.target.value }))}
+                type="number"
+                value={communicationValues.syncIntervalMinutes}
+              />
+            </label>
+            <label className="flex flex-col gap-2">
+              <FieldLabel>{"Max Messages Per Sync"}</FieldLabel>
+              <Input
+                className="rounded-xl border-slate-200 bg-slate-50"
+                disabled={isBusy}
+                min="5"
+                onChange={(event) => setCommunicationValues((current) => ({ ...current, maxMessagesPerSync: event.target.value }))}
+                type="number"
+                value={communicationValues.maxMessagesPerSync}
               />
             </label>
           </div>
@@ -930,9 +1023,50 @@ export function SecureIntegrationsSection() {
                   />
                 </label>
                 <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm leading-6 text-slate-600">
-                  {"Incoming email is checked with mailbox sync. Outgoing email is sent with SMTP. They are separate behind the scenes, but you only need one setup here."}
+                  {"Inbox Folder selects which mailbox/folder is read. Mailbox Tag is an optional label saved on imported mail so you can separate sources like Buyers, Rentals, or VIP."}
                 </div>
               </div>
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
+                <label className="flex flex-col gap-2">
+                  <FieldLabel>{"Mailbox Tag"}</FieldLabel>
+                  <Input
+                    autoComplete="off"
+                    className="rounded-xl border-slate-200 bg-white"
+                    disabled={isBusy}
+                    onChange={(event) => setSmtpValues((current) => ({ ...current, mailboxTag: event.target.value }))}
+                    placeholder="Buyers, Rentals, VIP"
+                    spellCheck={false}
+                    value={smtpValues.mailboxTag}
+                  />
+                </label>
+                <label className="flex flex-col gap-2">
+                  <FieldLabel>{"Duplicate Email Policy"}</FieldLabel>
+                  <select
+                    className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+                    disabled={isBusy}
+                    onChange={(event) => setSmtpValues((current) => ({ ...current, duplicatePolicy: event.target.value as SmtpFormValues["duplicatePolicy"] }))}
+                    value={smtpValues.duplicatePolicy}
+                  >
+                    <option value="skip-exact-message">{"Skip same email message"}</option>
+                    <option value="process-every-message">{"Read every message"}</option>
+                  </select>
+                </label>
+              </div>
+              <label className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
+                <input
+                  checked={smtpValues.autoCreateLeads}
+                  className="mt-1 h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
+                  disabled={isBusy}
+                  onChange={(event) => setSmtpValues((current) => ({ ...current, autoCreateLeads: event.target.checked }))}
+                  type="checkbox"
+                />
+                <div>
+                  <p className="text-sm font-bold text-slate-900">{"Auto-create and route leads from inbound mail"}</p>
+                  <p className="mt-1 text-xs leading-5 text-slate-500">
+                    {"Each synced email goes through AI/fallback parsing. If it looks like a property lead, the CRM links it to the matching property and assigns that property's agent."}
+                  </p>
+                </div>
+              </label>
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
                 <label className="flex flex-col gap-2">
                   <FieldLabel>{"Sync Every (Minutes)"}</FieldLabel>

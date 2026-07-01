@@ -32,15 +32,15 @@ export class PropertyChatConversation {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column()
+  @Column({ default: 0 })
   propertyId: number;
 
   @ManyToOne(() => Property, (property) => property.chatConversations, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'property_id' })
   property: Property;
 
-  @Column({ nullable: true })
-  leadId: number;
+  @Column({ type: 'int', nullable: true })
+  leadId: number | null;
 
   @ManyToOne(() => Lead, { onDelete: 'SET NULL' })
   @JoinColumn({ name: 'lead_id' })
@@ -97,7 +97,7 @@ export class PropertyChatMessage {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column()
+  @Column({ default: 0 })
   conversationId: number;
 
   @ManyToOne(() => PropertyChatConversation, (conv) => conv.messages, { onDelete: 'CASCADE' })
@@ -110,11 +110,11 @@ export class PropertyChatMessage {
   @Column({ type: 'int', transformer: numericEnumTransformer(senderRoles, PropertyChatSenderRole.Visitor) })
   senderRole: PropertyChatSenderRole = PropertyChatSenderRole.Visitor;
 
-  @Column({ nullable: true })
-  attachmentUrl: string;
+  @Column({ type: 'text', nullable: true })
+  attachmentUrl: string | null;
 
-  @Column({ nullable: true })
-  attachmentObjectName: string;
+  @Column({ type: 'text', nullable: true })
+  attachmentObjectName: string | null;
 
   @CreateDateColumn()
   createdAt: Date;

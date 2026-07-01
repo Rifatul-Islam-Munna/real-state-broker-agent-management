@@ -75,7 +75,7 @@ export class SettingsService {
     const now = new Date();
 
     if (dto.clearTwilio) { settings.twilioPayload = null; settings.twilioUpdatedAt = null; }
-    else if (dto.twilio) { settings.twilioPayload = JSON.stringify(dto.twilio); settings.twilioUpdatedAt = now; }
+    else if (dto.twilio) { settings.twilioPayload = JSON.stringify(this.normalizeCommunicationProvider(dto.twilio)); settings.twilioUpdatedAt = now; }
 
     if (dto.clearAiProvider) { settings.aiProviderPayload = null; settings.aiProviderUpdatedAt = null; }
     else if (dto.aiProvider) { settings.aiProviderPayload = JSON.stringify(dto.aiProvider); settings.aiProviderUpdatedAt = now; }
@@ -96,6 +96,8 @@ export class SettingsService {
           hasCommunicationConfig: !!settings?.twilioPayload,
           communicationUpdatedAt: settings?.twilioUpdatedAt ?? null,
           communicationProviderName: communication?.providerName ?? null,
+          communicationSmsSyncEnabled: !!communication?.enableSmsSync,
+          communicationSmsSyncIntervalMinutes: communication?.enableSmsSync ? communication.syncIntervalMinutes : null,
           hasAiProviderConfig: !!settings?.aiProviderPayload,
           aiProviderUpdatedAt: settings?.aiProviderUpdatedAt ?? null,
           aiProviderName: aiProvider?.providerName ?? null,
@@ -114,7 +116,7 @@ export class SettingsService {
     const now = new Date();
 
     if (dto.clearCommunication) { settings.twilioPayload = null; settings.twilioUpdatedAt = null; }
-    else if (dto.communication) { settings.twilioPayload = JSON.stringify(dto.communication); settings.twilioUpdatedAt = now; }
+    else if (dto.communication) { settings.twilioPayload = JSON.stringify(this.normalizeCommunicationProvider(dto.communication)); settings.twilioUpdatedAt = now; }
 
     if (dto.clearAiProvider) { settings.aiProviderPayload = null; settings.aiProviderUpdatedAt = null; }
     else if (dto.aiProvider) { settings.aiProviderPayload = JSON.stringify(dto.aiProvider); settings.aiProviderUpdatedAt = now; }
@@ -124,6 +126,16 @@ export class SettingsService {
 
     await this.integrationRepository.save(settings);
     return this.getWorkspaceStatus();
+  }
+
+  async getCommunicationConfig() {
+    const settings = await this.integrationRepository.findOne({ where: { id: 1 } });
+    return settings?.twilioPayload ? this.readJson(settings.twilioPayload) : null;
+  }
+
+  async getSmtpConfig() {
+    const settings = await this.integrationRepository.findOne({ where: { id: 1 } });
+    return settings?.smtpPayload ? this.readJson(settings.smtpPayload) : null;
   }
 
   private readJson(value: string) {
@@ -167,7 +179,37 @@ export class SettingsService {
       imapPassword: imapPassword || null,
       imapUseSsl: input?.imapUseSsl !== false,
       imapFolder: this.loose(input?.imapFolder, 'INBOX'),
+      mailboxTag: this.loose(input?.mailboxTag),
+      duplicatePolicy: input?.duplicatePolicy === 'process-every-message' ? 'process-every-message' : 'skip-exact-message',
+      autoCreateLeads: input?.autoCreateLeads !== false,
       syncIntervalMinutes: this.clampInt(input?.syncIntervalMinutes, 10, 5, 120),
+      maxMessagesPerSync: this.clampInt(input?.maxMessagesPerSync, 25, 5, 100),
+    };
+  }
+
+  private normalizeCommunicationProvider(input: any) {
+    const providerName = this.loose(input?.providerName, 'Twilio');
+    const provider = providerName.toLowerCase();
+    const baseUrl = this.loose(
+      input?.baseUrl,
+      provider === 'plivo' ? 'https://api.plivo.com'
+        : provider === 'ringcentral' ? 'https://platform.ringcentral.com'
+          : provider === 'twilio' ? 'https://api.twilio.com'
+            : '',
+    );
+
+    return {
+      providerName,
+      accountId: this.loose(input?.accountId),
+      authToken: this.loose(input?.authToken),
+      fromNumber: this.loose(input?.fromNumber),
+      baseUrl: baseUrl || null,
+      voiceWebhookUrl: this.nullText(input?.voiceWebhookUrl),
+      smsWebhookUrl: this.nullText(input?.smsWebhookUrl),
+      supportsSms: input?.supportsSms !== false,
+      supportsVoice: input?.supportsVoice !== false,
+      enableSmsSync: input?.enableSmsSync === true,
+      syncIntervalMinutes: this.clampInt(input?.syncIntervalMinutes, 5, 1, 120),
       maxMessagesPerSync: this.clampInt(input?.maxMessagesPerSync, 25, 5, 100),
     };
   }
@@ -210,6 +252,10 @@ export class SettingsService {
           body: this.text(item?.body, fallbackItem.body),
           channels: Array.isArray(item?.channels) && item.channels.length ? [...new Set(item.channels)] : fallbackItem.channels,
           variableTokens: this.stringList(item?.variableTokens, fallbackItem.variableTokens),
+          sequenceType: ['Direct', 'FollowUp1', 'FollowUp2', 'FollowUp3'].includes(item?.sequenceType) ? item.sequenceType : (fallbackItem.sequenceType ?? 'Direct'),
+          gapDays: this.clampInt(item?.gapDays, fallbackItem.gapDays ?? 0, 0, 365),
+          isActive: item?.isActive !== false,
+          attachPropertyDocuments: item?.attachPropertyDocuments !== false,
         };
       }),
     };
@@ -257,6 +303,10 @@ export class SettingsService {
           body: "Hello {{client_name}}, Thank you for your interest in {{property_address}}. My name is {{agent_name}} and I'll be your primary point of contact. When is a good time for a quick call? Best regards, {{agency_name}}",
           channels: ['Email', 'SMS'],
           variableTokens: ['{{client_name}}', '{{property_address}}', '{{agent_name}}', '{{agency_name}}'],
+          sequenceType: 'Direct',
+          gapDays: 0,
+          isActive: true,
+          attachPropertyDocuments: true,
         },
         {
           id: 'showing-confirmation',
@@ -265,6 +315,10 @@ export class SettingsService {
           body: 'Hi {{client_name}}, your showing for {{property_address}} is confirmed for {{showing_time}}. Reach out to {{agent_name}} if you need to reschedule.',
           channels: ['Email', 'SMS'],
           variableTokens: ['{{client_name}}', '{{property_address}}', '{{showing_time}}', '{{agent_name}}'],
+          sequenceType: 'FollowUp1',
+          gapDays: 2,
+          isActive: true,
+          attachPropertyDocuments: true,
         },
         {
           id: 'contract-executed',
@@ -273,6 +327,10 @@ export class SettingsService {
           body: 'Hello {{client_name}}, the contract for {{property_address}} has been executed successfully. {{agent_name}} will guide you through the next steps and timeline.',
           channels: ['Email'],
           variableTokens: ['{{client_name}}', '{{property_address}}', '{{agent_name}}'],
+          sequenceType: 'FollowUp2',
+          gapDays: 5,
+          isActive: true,
+          attachPropertyDocuments: true,
         },
         {
           id: 'closing-reminder',

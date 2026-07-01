@@ -2,7 +2,9 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, LessThan } from 'typeorm';
-import { Lead } from './entities/lead.entity';
+import { Lead, LeadFollowUpStatus } from './entities/lead.entity';
+import { LeadHistoryEntry } from './entities/lead-history.entity';
+import { LeadOutreachService } from './lead-outreach.service';
 
 /**
  * Lead Outreach Background Service
@@ -15,6 +17,9 @@ export class LeadOutreachBackgroundService {
   constructor(
     @InjectRepository(Lead)
     private leadRepo: Repository<Lead>,
+    @InjectRepository(LeadHistoryEntry)
+    private historyRepo: Repository<LeadHistoryEntry>,
+    private outreachService: LeadOutreachService,
   ) {}
 
   /**
@@ -73,17 +78,48 @@ export class LeadOutreachBackgroundService {
     try {
       this.logger.log('Processing outreach queue...');
 
-      // Get pending outreach items (mock implementation)
-      const queue = await this.getPendingOutreach();
+      const dueItems = await this.historyRepo.find({
+        relations: ['lead'],
+        where: {
+          scheduledAt: LessThan(new Date()),
+          status: 'Scheduled' as any,
+        },
+        take: 50,
+      });
 
-      for (const item of queue) {
-        await this.sendOutreach(item);
+      for (const item of dueItems) {
+        await this.sendScheduledHistoryItem(item);
       }
 
-      this.logger.log(`Processed ${queue.length} outreach items`);
+      this.logger.log(`Processed ${dueItems.length} outreach items`);
     } catch (error) {
       this.logger.error('Error in processOutreachQueue:', error);
     }
+  }
+
+  private async sendScheduledHistoryItem(item: LeadHistoryEntry): Promise<void> {
+    const now = new Date();
+    if (item.kind === 'Sms' && item.lead?.inBoard) {
+      item.status = 'Failed' as any;
+      item.summary = 'SMS auto-send canceled because lead is already on the board.';
+      item.occurredAt = now;
+      await this.historyRepo.save(item);
+      return;
+    }
+
+    const result = await this.outreachService.sendOutreach({
+      leadId: item.leadId,
+      kind: item.kind,
+      title: item.title,
+      message: item.body || item.summary || item.title,
+      createdBy: item.createdBy || 'Scheduler',
+      attachPropertyDocuments: true,
+    });
+    item.status = result.status as any;
+    item.summary = result.summary;
+    item.provider = result.provider;
+    item.occurredAt = now;
+    await this.historyRepo.save(item);
   }
 
   /**
@@ -212,7 +248,7 @@ export class LeadOutreachBackgroundService {
       throw new Error('Lead not found');
     }
 
-    lead.followUpStatus = 'Completed';
+    lead.followUpStatus = LeadFollowUpStatus.Completed;
     lead.notes = [...(lead.notes ?? []), `[Outreach sent via ${channel}] ${new Date().toISOString()}`];
 
     // Set next follow-up automatically (7 days if no response)
@@ -249,7 +285,7 @@ export class LeadOutreachBackgroundService {
       .where('lead.next_action_date < :now', { now: new Date() })
       .andWhere('lead.follow_up_status IN (0, 1)');
 
-    return query.orderBy('lead.next_action_date', 'ASC').getMany();
+    return query.orderBy('lead.nextActionDate', 'ASC').getMany();
   }
 
   /**

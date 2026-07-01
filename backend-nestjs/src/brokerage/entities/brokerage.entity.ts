@@ -52,22 +52,22 @@ export class ShowingBooking {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({ nullable: true })
-  leadId: number;
+  @Column({ type: 'int', nullable: true })
+  leadId: number | null;
 
   @ManyToOne(() => Lead, { onDelete: 'SET NULL', eager: false })
   @JoinColumn({ name: 'lead_id' })
   lead?: Lead;
 
-  @Column()
+  @Column({ default: 0 })
   propertyId: number;
 
   @ManyToOne(() => Property, { onDelete: 'CASCADE', eager: false })
   @JoinColumn({ name: 'property_id' })
-  property: Property;
+  property?: Property;
 
-  @Column({ nullable: true })
-  agentId: number;
+  @Column({ type: 'int', nullable: true })
+  agentId: number | null;
 
   @ManyToOne(() => User, { onDelete: 'SET NULL', eager: false })
   @JoinColumn({ name: 'agent_id' })
@@ -82,10 +82,10 @@ export class ShowingBooking {
   @Column({ default: '' })
   contactPhone: string;
 
-  @Column({ type: 'timestamptz' })
+  @Column({ type: 'timestamptz', default: () => 'CURRENT_TIMESTAMP' })
   startAt: Date;
 
-  @Column({ type: 'timestamptz' })
+  @Column({ type: 'timestamptz', default: () => 'CURRENT_TIMESTAMP' })
   endAt: Date;
 
   @Column({ type: 'int', transformer: numericEnumTransformer(showingStatuses, ShowingBookingStatus.Scheduled) })
@@ -118,7 +118,7 @@ export class LeadAssignmentRule {
   @Column({ type: 'int', nullable: true, transformer: nullableEnum(propertyListingTypes) })
   listingType: PropertyListingType | null;
 
-  @Column()
+  @Column({ default: 0 })
   agentId: number;
 
   @ManyToOne(() => User, { onDelete: 'CASCADE', eager: false })
@@ -153,12 +153,12 @@ export class BrokerageApprovalRequest {
   @Column({ type: 'int', transformer: numericEnumTransformer(approvalStatuses, ApprovalStatus.Pending) })
   status: ApprovalStatus = ApprovalStatus.Pending;
 
-  @Column()
+  @Column({ default: 0 })
   propertyId: number;
 
   @ManyToOne(() => Property, { onDelete: 'CASCADE', eager: false })
   @JoinColumn({ name: 'property_id' })
-  property: Property;
+  property?: Property;
 
   @Column({ default: '' })
   oldPrice: string;

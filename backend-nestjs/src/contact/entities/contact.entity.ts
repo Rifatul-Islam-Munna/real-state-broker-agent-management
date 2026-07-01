@@ -18,25 +18,37 @@ export class ContactRequest {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({ type: 'text' })
+  @Column({ type: 'text', default: '' })
   name: string;
 
-  @Column({ type: 'text' })
+  @Column({ type: 'text', default: '' })
   email: string;
 
-  @Column({ type: 'text' })
+  @Column({ type: 'text', default: '' })
   phone: string = '';
 
-  @Column({ type: 'text' })
+  @Column({ type: 'text', default: '' })
   message: string;
 
-  @Column({ type: 'text' })
+  @Column({ type: 'text', default: '' })
   inquiryType: string = '';
+
+  @Column({ type: 'int', nullable: true })
+  propertyId: number | null;
+
+  @Column({ type: 'text', default: '' })
+  propertyTitle: string = '';
+
+  @Column({ type: 'int', nullable: true })
+  agentId: number | null;
+
+  @Column({ type: 'text', default: '' })
+  agentName: string = '';
 
   @Column({ type: 'int', transformer: { to: contactStatusDb, from: (value: number) => statusValues[value] ?? ContactRequestStatus.New } })
   status: string = ContactRequestStatus.New;
 
-  @Column({ nullable: true })
+  @Column({ type: 'int', nullable: true })
   leadId: number | null;
 
   @ManyToOne(() => Lead, { onDelete: 'SET NULL' })

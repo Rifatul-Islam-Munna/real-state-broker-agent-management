@@ -46,13 +46,13 @@ export class DealPipeline {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column()
+  @Column({ default: '' })
   title: string;
 
   @Column({ type: 'int', transformer: numericEnumTransformer(dealTypes, DealType.Residential) })
   type: DealType = DealType.Residential;
 
-  @Column()
+  @Column({ default: '' })
   client: string;
 
   @Column({ type: 'decimal', precision: 18, scale: 2, default: 0 })
@@ -85,15 +85,15 @@ export class DealPipeline {
   @Column({ default: '' })
   agent: string;
 
-  @Column({ nullable: true })
-  agentId: number;
+  @Column({ type: 'int', nullable: true })
+  agentId: number | null;
 
   @ManyToOne(() => User, { onDelete: 'SET NULL' })
   @JoinColumn({ name: 'agent_id' })
   dealOwner: User;
 
-  @Column({ nullable: true })
-  sourceLeadId: number;
+  @Column({ type: 'int', nullable: true })
+  sourceLeadId: number | null;
 
   @ManyToOne(() => Lead, (lead) => lead.deals, { onDelete: 'SET NULL' })
   @JoinColumn({ name: 'source_lead_id' })
@@ -114,14 +114,14 @@ export class DealChecklistItem {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column()
+  @Column({ default: 0 })
   dealPipelineId: number;
 
   @ManyToOne(() => DealPipeline, (deal) => deal.checklistItems, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'deal_pipeline_id' })
   dealPipeline: DealPipeline;
 
-  @Column()
+  @Column({ default: '' })
   title: string;
 
   @Column({ default: false })
