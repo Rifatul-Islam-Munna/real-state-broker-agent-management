@@ -6,14 +6,20 @@ import { useMemo, useState } from "react"
 import { PagePagination } from "@/components/stitch/shared/page-pagination"
 import { usePropertyChats } from "@/hooks/use-real-estate-api"
 import { formatDateTimeLabel } from "@/lib/admin-portal"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty"
 import { Input } from "@/components/ui/input"
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 
 const PAGE_SIZE = 10
 
@@ -59,16 +65,18 @@ export function PropertyChatInboxPage() {
   )
 
   return (
-    <div className="bg-background-light font-sans text-slate-900 dark:bg-background-dark dark:text-slate-100">
-      <main className="flex min-h-screen w-full flex-col overflow-x-hidden">
-        <section className="border-b border-slate-200 bg-white px-4 py-5 dark:border-white/10 dark:bg-background-dark md:px-6">
-          <h1 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">{"Property Chat Inbox"}</h1>
-          <p className="mt-2 max-w-2xl text-sm text-slate-500 dark:text-slate-400">
+    <main className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 py-6 md:px-6">
+      <Card>
+        <CardHeader className="gap-2">
+          <CardTitle>{"Property Chat Inbox"}</CardTitle>
+          <CardDescription className="max-w-3xl">
             {"Listing-specific chats from public property pages land here. Use this page to review buyer questions, see pre-question answers, and open the lead created from each qualified property chat."}
-          </p>
-          <div className="mt-5 flex flex-col gap-3 md:flex-row">
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col gap-3 md:flex-row">
             <Input
-              className="h-auto border-slate-200 bg-slate-50 px-4 py-3 text-sm dark:border-white/10 dark:bg-white/5"
+              className="md:flex-1"
               onChange={(event) => {
                 setSearchTerm(event.target.value)
                 setPage(1)
@@ -86,92 +94,97 @@ export function PropertyChatInboxPage() {
               }}
               value={statusFilter || "all"}
             >
-              <SelectTrigger className="h-auto min-w-44 border-slate-200 bg-slate-50 px-4 py-3 text-sm dark:border-white/10 dark:bg-white/5">
+              <SelectTrigger className="w-full md:w-44">
                 <SelectValue placeholder="All Statuses" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">
-                  {"All Statuses"}
-                </SelectItem>
-                <SelectItem value="New">
-                  {"New"}
-                </SelectItem>
-                <SelectItem value="NeedsReview">
-                  {"Needs Review"}
-                </SelectItem>
-                <SelectItem value="LeadCreated">
-                  {"Lead Created"}
-                </SelectItem>
+                <SelectGroup>
+                  <SelectItem value="all">{"All Statuses"}</SelectItem>
+                  <SelectItem value="New">{"New"}</SelectItem>
+                  <SelectItem value="NeedsReview">{"Needs Review"}</SelectItem>
+                  <SelectItem value="LeadCreated">{"Lead Created"}</SelectItem>
+                </SelectGroup>
               </SelectContent>
             </Select>
           </div>
-        </section>
+        </CardContent>
+      </Card>
 
-        <section className="grid gap-4 border-b border-slate-200 bg-background-light px-4 py-4 dark:border-white/10 dark:bg-background-dark sm:grid-cols-2 xl:grid-cols-4 md:px-6">
-          {stats.map((stat) => (
-            <article key={stat.label} className="border border-slate-200 bg-white p-5 dark:border-white/10 dark:bg-slate-900">
-              <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-400">{stat.label}</p>
-              <p className="mt-3 text-3xl font-black text-slate-900 dark:text-white">{stat.value}</p>
-            </article>
-          ))}
-        </section>
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {stats.map((stat) => (
+          <Card key={stat.label}>
+            <CardHeader className="gap-1">
+              <CardDescription>{stat.label}</CardDescription>
+              <CardTitle>{stat.value}</CardTitle>
+            </CardHeader>
+          </Card>
+        ))}
+      </section>
 
-        <section className="space-y-4 px-4 py-6 md:px-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>{"Chats"}</CardTitle>
+          <CardDescription>{"Review conversations, routing, and converted leads."}</CardDescription>
+        </CardHeader>
+        <CardContent>
           {isInitialLoading ? (
-            <article className="border border-slate-200 bg-white p-5 text-center dark:border-white/10 dark:bg-slate-900">
-              <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">{"Loading property chats..."}</p>
-            </article>
+            <Empty><EmptyHeader><EmptyTitle>{"Loading property chats..."}</EmptyTitle></EmptyHeader></Empty>
           ) : propertyChatsQuery.error ? (
-            <article className="border border-slate-200 bg-white p-5 text-center dark:border-white/10 dark:bg-slate-900">
-              <p className="text-sm font-semibold text-rose-600">{propertyChatsQuery.error.message}</p>
-            </article>
+            <Empty><EmptyHeader><EmptyTitle>{propertyChatsQuery.error.message}</EmptyTitle></EmptyHeader></Empty>
           ) : propertyChats.length === 0 ? (
-            <article className="border border-slate-200 bg-white p-5 text-center dark:border-white/10 dark:bg-slate-900">
-              <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">{"No property chats match the current filters."}</p>
-            </article>
+            <Empty><EmptyHeader><EmptyTitle>{"No property chats"}</EmptyTitle><EmptyDescription>{"No chats match the current filters."}</EmptyDescription></EmptyHeader></Empty>
           ) : (
-            <div className="space-y-4">
-              {propertyChats.map((chat) => (
-                <article key={chat.id} className="border border-primary/10 bg-white p-5 dark:border-white/10 dark:bg-slate-900">
-                  <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr_auto] xl:items-center">
-                    <div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h2 className="text-base font-bold text-slate-900 dark:text-white">{chat.contactName || "Anonymous visitor"}</h2>
-                        <span className="border border-primary/20 bg-primary/5 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-primary">{chat.propertyTitle}</span>
-                        <span className="border border-slate-200 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-600 dark:border-white/10 dark:text-slate-300">{chat.status}</span>
-                        {chat.autoQualified ? (
-                          <span className="border border-green-200 bg-green-50 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-green-700">{"Lead Created"}</span>
-                        ) : null}
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{"Visitor"}</TableHead>
+                  <TableHead>{"Property"}</TableHead>
+                  <TableHead>{"Summary"}</TableHead>
+                  <TableHead>{"Routing"}</TableHead>
+                  <TableHead>{"Status"}</TableHead>
+                  <TableHead className="text-right">{"Action"}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {propertyChats.map((chat) => (
+                  <TableRow key={chat.id}>
+                    <TableCell>
+                      <p className="font-medium">{chat.contactName || "Anonymous visitor"}</p>
+                      <p className="text-muted-foreground">{chat.contactEmail || chat.contactPhone || "No contact detail"}</p>
+                    </TableCell>
+                    <TableCell>{chat.propertyTitle}</TableCell>
+                    <TableCell className="max-w-md">
+                      <p className="max-h-10 overflow-hidden text-muted-foreground">{chat.summary}</p>
+                    </TableCell>
+                    <TableCell>
+                      <p className="font-medium">{chat.assignedAgent || "Unassigned"}</p>
+                      <p className="text-muted-foreground">{formatDateTimeLabel(chat.createdAt)}</p>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-2">
+                        <Badge variant={chat.status === "NeedsReview" ? "outline" : "secondary"}>{chat.status}</Badge>
+                        {chat.autoQualified ? <Badge>{"Lead Created"}</Badge> : null}
                       </div>
-                      <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-600 dark:text-slate-300">{chat.summary}</p>
-                    </div>
-                    <div>
-                      <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">{"Routing"}</p>
-                      <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-white">{chat.assignedAgent || "Unassigned"}</p>
-                      <p className="text-sm text-slate-500 dark:text-slate-400">{chat.contactEmail || chat.contactPhone || "No contact detail"}</p>
-                      <p className="mt-2 text-xs font-bold uppercase tracking-wide text-slate-400">{formatDateTimeLabel(chat.createdAt)}</p>
-                    </div>
-                    <div className="flex flex-wrap gap-2 xl:justify-end">
+                    </TableCell>
+                    <TableCell className="text-right">
                       {chat.leadId ? (
-                        <Link className="border border-primary bg-primary px-4 py-2 text-xs font-bold uppercase tracking-wide text-white" href={`/dashboard/leads?leadId=${chat.leadId}`}>
-                          {"Open Lead CRM"}
-                        </Link>
+                        <Button render={<Link href={`/dashboard/leads?leadId=${chat.leadId}`} />} size="sm">
+                          {"Open Lead"}
+                        </Button>
                       ) : (
-                        <span className="border border-amber-200 bg-amber-50 px-4 py-2 text-xs font-bold uppercase tracking-wide text-amber-700">
-                          {"Needs Review"}
-                        </span>
+                        <Badge variant="outline">{"Needs Review"}</Badge>
                       )}
-                    </div>
-                  </div>
-                </article>
-              ))}
-            </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           )}
-        </section>
-        <div className="border-t border-slate-200 px-4 py-4 dark:border-white/10 md:px-6">
+        </CardContent>
+        <CardContent>
           <PagePagination currentPage={page} onPageChange={setPage} totalPages={propertyChatsQuery.data?.totalPages ?? 1} />
-        </div>
-      </main>
-    </div>
+        </CardContent>
+      </Card>
+    </main>
   )
 }

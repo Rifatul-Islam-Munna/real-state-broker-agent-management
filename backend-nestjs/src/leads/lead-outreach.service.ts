@@ -85,6 +85,7 @@ export class LeadOutreachService {
     const propertyDocuments = dto.attachPropertyDocuments !== false && !shouldSchedule && ['Email', 'Sms'].includes(kind)
       ? await this.findPropertyDocuments(lead.property)
       : [];
+    const mediaUrls = [...this.stringList(dto.mediaUrls), ...propertyDocuments.map((doc) => doc.fileUrl)];
     if (kind === 'Sms' && lead.inBoard) {
       shouldSchedule = false;
       status = 'Failed';
@@ -93,7 +94,7 @@ export class LeadOutreachService {
     if (!shouldSchedule && kind === 'Sms' && hasTarget) {
       const sms = status === 'Failed'
         ? { status }
-        : await this.smsService.send({ leadId: lead.id, body: dto.message.trim(), mediaUrls: propertyDocuments.map((doc) => doc.fileUrl), skipHistory: true }, dto.createdBy?.trim() || 'CRM');
+        : await this.smsService.send({ leadId: lead.id, body: dto.message.trim(), mediaUrls, skipHistory: true }, dto.createdBy?.trim() || 'CRM');
       if (sms.status === 'Failed') {
         status = 'Failed';
         sendFailure ||= ' Provider send failed.';
@@ -242,6 +243,10 @@ export class LeadOutreachService {
 
   private bodyWithDocuments(body: string, docs: DocumentRepositoryItem[]) {
     return [body, ...docs.map((doc) => `Attached document: ${doc.title} - ${doc.fileUrl}`)].filter(Boolean).join('\n');
+  }
+
+  private stringList(value: any) {
+    return Array.isArray(value) ? [...new Set(value.map((item) => `${item ?? ''}`.trim()).filter(Boolean))] : [];
   }
 
   private async queueFollowUpTemplates(lead: Lead, kind: string, templateId: string, provider: string, createdBy: string, now: Date) {

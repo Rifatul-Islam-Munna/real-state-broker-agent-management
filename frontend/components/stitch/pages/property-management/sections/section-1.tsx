@@ -1,14 +1,20 @@
 import Link from "next/link"
 
 import { AppIcon } from "@/components/ui/app-icon"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty"
 import { Input } from "@/components/ui/input"
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { cn } from "@/lib/utils"
 import { PagePagination } from "@/components/stitch/shared/page-pagination"
 import type { PropertyStatus } from "@/hooks/use-real-estate-api"
@@ -124,9 +130,6 @@ function getStatusLabel(listing: PropertyManagementListing) {
   return "Open"
 }
 
-const filterSelectClassName =
-  "h-11 min-w-44 rounded-xl border-slate-200 bg-slate-50 px-4 text-sm dark:border-slate-700 dark:bg-slate-800"
-
 export function Section1Section({
   activeFilter,
   activeAgent,
@@ -149,272 +152,206 @@ export function Section1Section({
   visibleAgents,
 }: Section1SectionProps) {
   return (
-    <div className="flex min-h-screen flex-col">
-      <header className="border-b border-slate-200 bg-white px-4 py-4 dark:border-slate-800 dark:bg-slate-900 lg:px-8">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+    <main className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 py-6 lg:px-8">
+      <Card>
+        <CardHeader>
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.24em] text-secondary">
-              {"Admin Workspace"}
-            </p>
-            <h1 className="mt-2 text-3xl font-black tracking-tight text-slate-900 dark:text-white">
-              {"Property Management"}
-            </h1>
-            <p className="mt-2 max-w-2xl text-sm text-slate-500 dark:text-slate-400">
+            <CardDescription>{"Admin Workspace"}</CardDescription>
+            <CardTitle>{"Property Management"}</CardTitle>
+            <CardDescription className="max-w-3xl">
               {"Track every listing, identify long-open inventory, and launch a new property only when you need it."}
-            </p>
+            </CardDescription>
           </div>
+        </CardHeader>
+        <CardContent>
           <div className="flex flex-col gap-3 sm:flex-row">
-            <label className="relative block min-w-[260px]">
-              <AppIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" name="search" />
+            <div className="relative min-w-[260px] flex-1">
+              <AppIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" name="search" />
               <Input
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-4 text-sm outline-none transition-colors focus:border-primary dark:border-slate-700 dark:bg-slate-800"
+                className="pl-9"
                 onChange={(event) => onSearchChange(event.target.value)}
                 placeholder="Search listings, cities, or agents"
                 type="text"
                 value={searchTerm}
               />
-            </label>
-            <button
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-6 py-3 text-sm font-bold text-white transition-colors hover:bg-primary/90"
+            </div>
+            <Button
               onClick={onAddPropertyClick}
               type="button"
             >
-              <AppIcon className="text-lg" name="add" />
+              <AppIcon data-icon="inline-start" name="add" />
               {"Add Property"}
-            </button>
+            </Button>
           </div>
-        </div>
-      </header>
+        </CardContent>
+      </Card>
 
-      <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-8 px-4 py-8 lg:px-8">
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           {statusCards.map((card) => (
-            <article
-              key={card.label}
-              className="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900"
-            >
-              <div className="flex items-center justify-between">
+            <Card key={card.label}>
+              <CardHeader className="grid grid-cols-[1fr_auto] items-center gap-3">
                 <div>
-                  <p className="text-xs font-bold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">
-                    {card.label}
-                  </p>
-                  <p className="mt-3 text-3xl font-black text-slate-900 dark:text-white">
-                    {card.value}
-                  </p>
+                  <CardDescription>{card.label}</CardDescription>
+                  <CardTitle>{card.value}</CardTitle>
                 </div>
-                <div className="flex size-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-                  <AppIcon className="text-2xl" name={card.icon} />
-                </div>
-              </div>
-              <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">
-                {card.detail}
-              </p>
-            </article>
+                <AppIcon className="text-primary" name={card.icon} />
+              </CardHeader>
+              <CardContent>
+                <p className="text-muted-foreground">{card.detail}</p>
+              </CardContent>
+            </Card>
           ))}
         </section>
 
-        <section className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+        <Card>
+          <CardContent>
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex flex-wrap gap-3">
               {quickFilters.map((filter) => (
-                <button
+                <Button
                   key={filter.id}
-                  className={cn(
-                    "inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition-colors",
-                    activeFilter === filter.id
-                      ? "border-primary bg-primary text-white"
-                      : "border-slate-200 bg-white text-slate-600 hover:border-primary hover:text-primary dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300",
-                  )}
                   onClick={() => onFilterChange(filter.id)}
+                  size="sm"
                   type="button"
+                  variant={activeFilter === filter.id ? "default" : "outline"}
                 >
-                  <AppIcon className="text-base" name={filter.icon} />
+                  <AppIcon data-icon="inline-start" name={filter.icon} />
                   {filter.label}
-                </button>
+                </Button>
               ))}
             </div>
             <div className="flex flex-wrap gap-3">
               <Select modal={false} onValueChange={(value) => onTypeChange((value ?? activeType) as "All" | "Residential" | "Commercial")} value={activeType}
               >
-                <SelectTrigger className={filterSelectClassName}>
+                <SelectTrigger className="w-44">
                   <SelectValue placeholder="All Types" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="All">{"All Types"}</SelectItem>
-                  <SelectItem value="Residential">{"Residential"}</SelectItem>
-                  <SelectItem value="Commercial">{"Commercial"}</SelectItem>
+                  <SelectGroup>
+                    <SelectItem value="All">{"All Types"}</SelectItem>
+                    <SelectItem value="Residential">{"Residential"}</SelectItem>
+                    <SelectItem value="Commercial">{"Commercial"}</SelectItem>
+                  </SelectGroup>
                 </SelectContent>
               </Select>
               <Select modal={false} onValueChange={(value) => onAgentChange(!value || value === "all-agents" ? "" : value)} value={activeAgent || "all-agents"}>
-                <SelectTrigger className={filterSelectClassName}>
+                <SelectTrigger className="w-44">
                   <SelectValue placeholder="All Agents" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all-agents">{"All Agents"}</SelectItem>
-                  {visibleAgents.map((agent) => (
-                    <SelectItem key={agent} value={agent}>
-                      {agent}
-                    </SelectItem>
-                  ))}
+                  <SelectGroup>
+                    <SelectItem value="all-agents">{"All Agents"}</SelectItem>
+                    {visibleAgents.map((agent) => (
+                      <SelectItem key={agent} value={agent}>{agent}</SelectItem>
+                    ))}
+                  </SelectGroup>
                 </SelectContent>
               </Select>
             </div>
           </div>
-        </section>
+          </CardContent>
+        </Card>
 
-        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-          <div className="flex flex-col gap-4 border-b border-slate-200 px-6 py-4 dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between">
+        <Card>
+          <CardHeader className="grid gap-1 sm:grid-cols-[1fr_auto] sm:items-center">
             <div>
-              <h2 className="text-lg font-bold text-slate-900 dark:text-white">
-                {"Your Listings"}
-              </h2>
-              <p className="text-sm text-slate-500 dark:text-slate-400">
+              <CardTitle>{"Your Listings"}</CardTitle>
+              <CardDescription>
                 {`${totalResults} total result${totalResults === 1 ? "" : "s"} across ${totalPages} page${totalPages === 1 ? "" : "s"}`}
-              </p>
+              </CardDescription>
             </div>
-            <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-400">
+            <Badge variant="outline">
               {`Page ${currentPage} of ${Math.max(totalPages, 1)}`}
-            </p>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[920px] text-left">
-              <thead className="bg-slate-50 dark:bg-slate-800/50">
-                <tr>
-                  <th className="px-6 py-4 text-xs font-bold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
-                    {"Listing"}
-                  </th>
-                  <th className="px-6 py-4 text-xs font-bold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
-                    {"Type"}
-                  </th>
-                  <th className="px-6 py-4 text-xs font-bold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
-                    {"Price"}
-                  </th>
-                  <th className="px-6 py-4 text-xs font-bold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
-                    {"Agent"}
-                  </th>
-                  <th className="px-6 py-4 text-xs font-bold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
-                    {"Status"}
-                  </th>
-                  <th className="px-6 py-4 text-xs font-bold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
-                    {"Days Open"}
-                  </th>
-                  <th className="px-6 py-4 text-xs font-bold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
-                    {"ML Forecast"}
-                  </th>
-                  <th className="px-6 py-4 text-right text-xs font-bold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
-                    {"Actions"}
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+            </Badge>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{"Listing"}</TableHead>
+                  <TableHead>{"Type"}</TableHead>
+                  <TableHead>{"Price"}</TableHead>
+                  <TableHead>{"Agent"}</TableHead>
+                  <TableHead>{"Status"}</TableHead>
+                  <TableHead>{"Days Open"}</TableHead>
+                  <TableHead>{"Forecast"}</TableHead>
+                  <TableHead className="text-right">{"Actions"}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {isLoading ? (
-                  <tr>
-                    <td className="px-6 py-12 text-center text-sm font-semibold text-slate-500 dark:text-slate-400" colSpan={8}>
-                      {"Loading listings..."}
-                    </td>
-                  </tr>
+                  <TableRow><TableCell colSpan={8}><Empty><EmptyHeader><EmptyTitle>{"Loading listings..."}</EmptyTitle></EmptyHeader></Empty></TableCell></TableRow>
                 ) : errorMessage ? (
-                  <tr>
-                    <td className="px-6 py-12 text-center text-sm font-semibold text-rose-600" colSpan={8}>
-                      {errorMessage}
-                    </td>
-                  </tr>
+                  <TableRow><TableCell colSpan={8}><Empty><EmptyHeader><EmptyTitle>{errorMessage}</EmptyTitle></EmptyHeader></Empty></TableCell></TableRow>
                 ) : listings.length === 0 ? (
-                  <tr>
-                    <td className="px-6 py-12 text-center text-sm font-semibold text-slate-500 dark:text-slate-400" colSpan={8}>
-                      {"No listings match the current filters."}
-                    </td>
-                  </tr>
+                  <TableRow><TableCell colSpan={8}><Empty><EmptyHeader><EmptyTitle>{"No listings"}</EmptyTitle><EmptyDescription>{"No listings match the current filters."}</EmptyDescription></EmptyHeader></Empty></TableCell></TableRow>
                 ) : (
                   listings.map((listing) => (
-                    <tr
-                      key={listing.id}
-                      className="transition-colors hover:bg-slate-50/70 dark:hover:bg-slate-800/20"
-                    >
-                      <td className="px-6 py-4">
+                    <TableRow key={listing.id}>
+                      <TableCell>
                         <div className="flex items-center gap-4">
                           <div
-                            className="h-14 w-20 rounded-xl bg-cover bg-center"
+                            className="h-14 w-20 bg-cover bg-center"
                             data-alt={listing.imageAlt}
                             style={{ backgroundImage: `url("${listing.imageSrc}")` }}
                           />
                           <div>
-                            <p className="text-sm font-bold text-slate-900 dark:text-white">
+                            <p className="font-medium">
                               {listing.addressLine1}
                             </p>
-                            <p className="text-xs text-slate-500 dark:text-slate-400">
+                            <p className="text-muted-foreground">
                               {listing.addressLine2}
                             </p>
                           </div>
                         </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="space-y-1">
-                          <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">
-                            {listing.propertyType}
-                          </p>
-                          <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                            {listing.listingType}
-                          </p>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-sm font-bold text-primary">
+                      </TableCell>
+                      <TableCell>
+                        <p className="font-medium">{listing.propertyType}</p>
+                        <p className="text-muted-foreground">{listing.listingType}</p>
+                      </TableCell>
+                      <TableCell className="font-medium">
                         {listing.price}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-slate-700 dark:text-slate-300">
+                      </TableCell>
+                      <TableCell>
                         {listing.agent}
-                      </td>
-                      <td className="px-6 py-4">
-                        <span
-                          className={cn(
-                            "inline-flex rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide",
-                            getStatusClasses(listing),
-                          )}
-                        >
+                      </TableCell>
+                      <TableCell>
+                        <Badge className={cn(getStatusClasses(listing))} variant="secondary">
                           {getStatusLabel(listing)}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300">
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
                         {listing.status === "Closed" ? "-" : `${listing.daysOnMarket} days`}
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="space-y-1">
-                          <p className="text-sm font-bold text-primary">
-                            {`${listing.predictedSellDays} days`}
-                          </p>
-                          <p className="text-xs text-slate-500 dark:text-slate-400">
-                            {listing.predictionLabel}
-                          </p>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
+                      </TableCell>
+                      <TableCell>
+                        <p className="font-medium">{`${listing.predictedSellDays} days`}</p>
+                        <p className="text-muted-foreground">{listing.predictionLabel}</p>
+                      </TableCell>
+                      <TableCell>
                         <div className="flex justify-end gap-2">
-                          <button
-                            className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-primary dark:hover:bg-slate-800"
+                          <Button
                             onClick={() => onEditPropertyClick(listing.id)}
+                            size="icon-sm"
                             type="button"
+                            variant="ghost"
                           >
                             <AppIcon name="edit" />
-                          </button>
-                          <Link
-                            className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-primary dark:hover:bg-slate-800"
-                            href={`/properties/${listing.slug}`}
-                          >
+                          </Button>
+                          <Button render={<Link href={`/properties/${listing.slug}`} />} size="icon-sm" variant="ghost">
                             <AppIcon name="visibility" />
-                          </Link>
+                          </Button>
                         </div>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ))
                 )}
-              </tbody>
-            </table>
-          </div>
-          <div className="border-t border-slate-200 px-6 py-4 dark:border-slate-800">
+              </TableBody>
+            </Table>
+          </CardContent>
+          <CardFooter>
             <PagePagination currentPage={currentPage} onPageChange={onPageChange} totalPages={totalPages} />
-          </div>
-        </section>
-      </main>
-    </div>
+          </CardFooter>
+        </Card>
+    </main>
   )
 }

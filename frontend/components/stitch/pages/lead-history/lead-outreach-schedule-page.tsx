@@ -2,17 +2,39 @@
 
 import Link from "next/link"
 import { useMemo, useState } from "react"
-import { usePathname, useRouter, useSearchParams } from "next/navigation"
+import { usePathname, useSearchParams } from "next/navigation"
 
 import type { DealStage, LeadHistoryStatus, LeadStage } from "@/@types/real-estate-api"
 import { AppIcon } from "@/components/ui/app-icon"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
 import { useDeals, useLeads } from "@/hooks/use-real-estate-api"
 import {
   useDispatchBulkLeadOutreach,
   useDispatchLeadOutreach,
   useLeadOutreachSchedule,
+  useLeadOutreachTemplates,
 } from "@/hooks/use-lead-outreach-api"
 import {
   dealStageOrder,
@@ -24,16 +46,20 @@ import {
 
 type ComposerAudienceType = "SingleLead" | "LeadStage" | "DealStage"
 type OutreachKind = "Email" | "Sms" | "Call"
+type FollowUpFilter = "" | "Direct" | "FollowUp"
 
 type ComposerState = {
   audienceType: ComposerAudienceType
   leadId: string
   leadStage: "" | LeadStage
   dealStage: "" | DealStage
-  kind: OutreachKind
+  sendEmail: boolean
+  sendSms: boolean
   title: string
   message: string
+  mediaUrls: string
   scheduledAt: string
+  templateId: string
 }
 
 type SubmitFeedback = {
@@ -55,13 +81,37 @@ function formatRecipientCount(count: number) {
   return `${count} recipient${count === 1 ? "" : "s"}`
 }
 
+function resolveTemplateTokens(templateText: string, lead?: { name?: string | null; property?: string | null; agent?: string | null; timeline?: string | null } | null) {
+  const replacements: Record<string, string> = {
+    "{{client_name}}": lead?.name || "Client",
+    "{{property_address}}": lead?.property || "the property",
+    "{{agent_name}}": lead?.agent || "our agent",
+    "{{agency_name}}": "EstateBlue",
+    "{{showing_time}}": lead?.timeline || "the requested time",
+    "{{closing_date}}": lead?.timeline || "the scheduled date",
+  }
+
+  return Object.entries(replacements).reduce((current, [token, value]) => current.replaceAll(token, value), templateText)
+}
+
+function isFollowUpScheduleEntry(entry: { body?: string | null; createdBy?: string | null; provider?: string | null; summary?: string | null; title?: string | null }) {
+  return [entry.title, entry.summary, entry.body, entry.provider, entry.createdBy]
+    .some((value) => /follow[-\s]?up/i.test(`${value ?? ""}`))
+}
+
+function formatKindLabel(kind: OutreachKind) {
+  return kind === "Sms" ? "SMS" : kind
+}
+
 export function LeadOutreachSchedulePage() {
   const pathname = usePathname()
-  const router = useRouter()
   const searchParams = useSearchParams()
   const rawLeadId = searchParams.get("leadId")
   const selectedLeadId = rawLeadId ? Number(rawLeadId) : NaN
   const [kindFilter, setKindFilter] = useState<"" | OutreachKind>("")
+  const [followUpFilter, setFollowUpFilter] = useState<FollowUpFilter>("")
+  const [composerOpen, setComposerOpen] = useState(false)
+  const [leadSearch, setLeadSearch] = useState("")
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState<"" | LeadHistoryStatus>("")
   const [composer, setComposer] = useState<ComposerState>({
@@ -69,10 +119,13 @@ export function LeadOutreachSchedulePage() {
     leadId: Number.isFinite(selectedLeadId) ? String(selectedLeadId) : "",
     leadStage: "",
     dealStage: "",
-    kind: "Call",
+    sendEmail: true,
+    sendSms: false,
     title: "",
     message: "",
+    mediaUrls: "",
     scheduledAt: "",
+    templateId: "",
   })
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [submitFeedback, setSubmitFeedback] = useState<SubmitFeedback | null>(null)
@@ -90,17 +143,28 @@ export function LeadOutreachSchedulePage() {
   })
   const scheduleQuery = useLeadOutreachSchedule({
     kind: kindFilter || undefined,
-    leadId: Number.isFinite(selectedLeadId) ? selectedLeadId : undefined,
     status: statusFilter || undefined,
   })
+  const templatesQuery = useLeadOutreachTemplates()
   const dispatchMutation = useDispatchLeadOutreach()
   const bulkDispatchMutation = useDispatchBulkLeadOutreach()
 
   const leadOptions = useMemo(() => leadsQuery.data?.items ?? [], [leadsQuery.data?.items])
+  const filteredLeadOptions = useMemo(() => {
+    const term = leadSearch.trim().toLowerCase()
+    if (!term) return leadOptions
+    return leadOptions.filter((lead) =>
+      [lead.name, lead.email, lead.phone, lead.property].some((value) => `${value ?? ""}`.toLowerCase().includes(term)),
+    )
+  }, [leadOptions, leadSearch])
   const selectedLead = useMemo(
     () => leadOptions.find((item) => String(item.id) === composer.leadId) ?? null,
     [composer.leadId, leadOptions],
   )
+  const availableTemplates = useMemo(() => {
+    const templates = templatesQuery.data ?? []
+    return templates.filter((template) => template.isActive !== false && template.channels.some((channel) => channel === "Email" || channel === "SMS"))
+  }, [templatesQuery.data])
   const leadStagePreviewItems = useMemo(
     () => leadStagePreviewQuery.data?.items ?? [],
     [leadStagePreviewQuery.data?.items],
@@ -128,9 +192,14 @@ export function LeadOutreachSchedulePage() {
   const filteredSchedule = useMemo(() => {
     const term = searchTerm.trim().toLowerCase()
     const rows = scheduleQuery.data ?? []
-    if (!term) return rows
-    return rows.filter((entry) =>
-      [
+    return rows.filter((entry) => {
+      const isFollowUp = isFollowUpScheduleEntry(entry)
+
+      if (followUpFilter === "FollowUp" && !isFollowUp) return false
+      if (followUpFilter === "Direct" && isFollowUp) return false
+      if (!term) return true
+
+      return [
         entry.leadName,
         entry.leadEmail,
         entry.leadPhone,
@@ -139,22 +208,9 @@ export function LeadOutreachSchedulePage() {
         entry.body,
         entry.status,
         entry.kind,
-      ].some((value) => `${value ?? ""}`.toLowerCase().includes(term)),
-    )
-  }, [scheduleQuery.data, searchTerm])
-
-  function updateLeadSelection(nextLeadId: string) {
-    const nextParams = new URLSearchParams(searchParams.toString())
-
-    if (nextLeadId) {
-      nextParams.set("leadId", nextLeadId)
-    } else {
-      nextParams.delete("leadId")
-    }
-
-    const nextQuery = nextParams.toString()
-    router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname)
-  }
+      ].some((value) => `${value ?? ""}`.toLowerCase().includes(term))
+    })
+  }, [followUpFilter, scheduleQuery.data, searchTerm])
 
   function updateComposer(patch: Partial<ComposerState>) {
     setSubmitError(null)
@@ -178,8 +234,13 @@ export function LeadOutreachSchedulePage() {
       return
     }
 
-    if (composer.kind !== "Sms" && composer.title.trim().length < 3) {
-      setSubmitError(composer.kind === "Email" ? "Email subject is required." : "Call title is required.")
+    if (!composer.sendEmail && !composer.sendSms) {
+      setSubmitError("Choose email, SMS, or both.")
+      return
+    }
+
+    if (composer.sendEmail && composer.title.trim().length < 3) {
+      setSubmitError("Email subject is required.")
       return
     }
 
@@ -188,89 +249,107 @@ export function LeadOutreachSchedulePage() {
       return
     }
 
-    if (!composer.scheduledAt) {
-      setSubmitError("Choose the schedule time.")
-      return
-    }
-
     setSubmitError(null)
     setSubmitFeedback(null)
 
     const createdBy = pathname.startsWith("/dashboard") ? "Dashboard" : "Admin"
+    const mediaUrls = composer.mediaUrls
+      .split(/[\r\n,]+/)
+      .map((item) => item.trim())
+      .filter(Boolean)
+    const selectedKinds: Array<"Email" | "Sms"> = [
+      composer.sendEmail ? "Email" : null,
+      composer.sendSms ? "Sms" : null,
+    ].filter((item): item is "Email" | "Sms" => Boolean(item))
+    const titleForKind = (kind: "Email" | "Sms") => kind === "Email" ? composer.title.trim() : composer.title.trim() || "SMS follow-up"
 
     if (composer.audienceType === "SingleLead") {
-      const response = await dispatchMutation.mutateAsync({
-        leadId: Number(composer.leadId),
-        kind: composer.kind,
-        title: composer.title.trim(),
-        message: composer.message.trim(),
-        scheduledAt: composer.scheduledAt,
-        createdBy,
-      })
+      const responses = await Promise.all(selectedKinds.map((kind) =>
+        dispatchMutation.mutateAsync({
+          leadId: Number(composer.leadId),
+          kind,
+          title: titleForKind(kind),
+          message: composer.message.trim(),
+          mediaUrls: kind === "Sms" ? mediaUrls : undefined,
+          scheduledAt: composer.scheduledAt,
+          createdBy,
+          templateId: composer.templateId || undefined,
+        }),
+      ))
 
-      if (response.error) {
-        setSubmitError(response.error.message || "Unable to save the schedule item.")
+      const failed = responses.find((response) => response.error)
+      if (failed) {
+        setSubmitError(failed.error?.message || "Unable to save the schedule item.")
         return
       }
 
       setSubmitFeedback({
         details: [],
-        message: `Scheduled ${composer.kind.toLowerCase()} outreach for ${displayText(selectedLead?.name, "the selected lead")}.`,
+        message: `Saved ${selectedKinds.map((kind) => kind === "Sms" ? "SMS" : "email").join(" + ")} outreach for ${displayText(selectedLead?.name, "the selected lead")}.`,
         tone: "success",
       })
       setComposer((current) => ({
         ...current,
         title: "",
         message: "",
+        mediaUrls: "",
         scheduledAt: "",
       }))
+      setComposerOpen(false)
       return
     }
 
-    const response = await bulkDispatchMutation.mutateAsync({
-      audienceType: composer.audienceType,
-      leadStage: composer.audienceType === "LeadStage" ? composer.leadStage || null : null,
-      dealStage: composer.audienceType === "DealStage" ? composer.dealStage || null : null,
-      kind: composer.kind,
-      title: composer.title.trim(),
-      message: composer.message.trim(),
-      scheduledAt: composer.scheduledAt,
-      createdBy,
-    })
+    const responses = await Promise.all(selectedKinds.map((kind) =>
+      bulkDispatchMutation.mutateAsync({
+        audienceType: composer.audienceType,
+        leadStage: composer.audienceType === "LeadStage" ? composer.leadStage || null : null,
+        dealStage: composer.audienceType === "DealStage" ? composer.dealStage || null : null,
+        kind,
+        title: titleForKind(kind),
+        message: composer.message.trim(),
+        mediaUrls: kind === "Sms" ? mediaUrls : undefined,
+        scheduledAt: composer.scheduledAt,
+        createdBy,
+        templateId: composer.templateId || undefined,
+      }),
+    ))
 
-    if (response.error) {
-      setSubmitError(response.error.message || "Unable to save the bulk schedule items.")
+    const failed = responses.find((response) => response.error)
+    if (failed) {
+      setSubmitError(failed.error?.message || "Unable to save the bulk schedule items.")
       return
     }
 
-    const result = response.data
-    if (!result) {
+    const results = responses.map((response) => response.data).filter(Boolean)
+    if (results.length === 0) {
       setSubmitError("Unable to save the bulk schedule items.")
       return
     }
 
-    const detailLines = result.failures.slice(0, 3)
-    if (result.failures.length > detailLines.length) {
-      detailLines.push(`+${result.failures.length - detailLines.length} more failure(s)`)
+    const failures = results.flatMap((result) => result?.failures ?? [])
+    const detailLines = failures.slice(0, 3)
+    if (failures.length > detailLines.length) {
+      detailLines.push(`+${failures.length - detailLines.length} more failure(s)`)
     }
 
     const summaryParts = [
-      `Saved ${formatRecipientCount(result.savedCount)} from ${result.audienceLabel}.`,
-      result.skippedCount > 0 ? `${result.skippedCount} skipped.` : null,
-      result.failedCount > 0 ? `${result.failedCount} failed.` : null,
+      `Saved ${formatRecipientCount(results.reduce((sum, result) => sum + (result?.savedCount ?? 0), 0))}.`,
+      failures.length > 0 ? `${failures.length} failed.` : null,
     ].filter(Boolean)
 
     setSubmitFeedback({
       details: detailLines,
       message: summaryParts.join(" "),
-      tone: result.skippedCount > 0 || result.failedCount > 0 ? "warning" : "success",
+      tone: failures.length > 0 ? "warning" : "success",
     })
     setComposer((current) => ({
       ...current,
       title: "",
       message: "",
+      mediaUrls: "",
       scheduledAt: "",
     }))
+    setComposerOpen(false)
   }
 
   return (
@@ -284,32 +363,39 @@ export function LeadOutreachSchedulePage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-3">
-          <Link
-            className="inline-flex border border-slate-200 px-4 py-2 text-xs font-bold uppercase tracking-wide text-slate-700"
-            href="/dashboard/mail"
-          >
+          <Button render={<Link href="/dashboard/mail" />} variant="outline">
             {"Open Mail"}
-          </Link>
-          <Link
-            className="inline-flex border border-primary bg-primary px-4 py-2 text-xs font-bold uppercase tracking-wide text-white"
-            href="/dashboard/leads"
-          >
+          </Button>
+          <Button render={<Link href="/dashboard/leads" />}>
             {"Back To Lead CRM"}
-          </Link>
+          </Button>
         </div>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
-        <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-black text-slate-900">{"Add Scheduled Follow-Up"}</h2>
-          <p className="mt-2 text-sm leading-6 text-slate-500">
-            {"Use this to queue a reminder email, SMS, or call for one lead, a lead stage, or a deal stage. It will move itself from Scheduled to Sent or Failed when the time arrives."}
-          </p>
+      <div className="flex flex-col gap-4">
+        <Card>
+          <CardHeader className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-center">
+            <div>
+              <CardTitle>{"Outreach Composer"}</CardTitle>
+              <CardDescription>{"Open a flexible sheet to send or schedule email, SMS, or MMS for one lead, a lead stage, or a deal stage."}</CardDescription>
+            </div>
+            <Button onClick={() => setComposerOpen(true)} type="button">
+              <AppIcon data-icon="inline-start" name="add" />
+              {"New Outreach"}
+            </Button>
+          </CardHeader>
+        </Card>
+        <Sheet open={composerOpen} onOpenChange={setComposerOpen}>
+          <SheetContent className="!w-[100vw] overflow-hidden p-0 sm:!max-w-none md:!w-[60vw] xl:!w-[50vw]" side="right">
+            <SheetHeader className="border-b pr-12">
+              <SheetTitle>{"New Outreach"}</SheetTitle>
+              <SheetDescription>{"Send now or schedule email plus SMS/MMS from one place."}</SheetDescription>
+            </SheetHeader>
 
-          <div className="mt-5 space-y-4">
-            <div className="space-y-2">
+            <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-4">
+            <div className="flex flex-col gap-2">
               <span className="text-sm font-bold text-slate-700">{"Audience"}</span>
-              <div className="grid gap-2 sm:grid-cols-3 xl:grid-cols-1">
+              <div className="grid gap-2 sm:grid-cols-3">
                 {[
                   { icon: "person", label: "Single Lead", value: "SingleLead" as const },
                   { icon: "group", label: "Lead Stage", value: "LeadStage" as const },
@@ -318,19 +404,16 @@ export function LeadOutreachSchedulePage() {
                   const isActive = composer.audienceType === option.value
 
                   return (
-                    <button
+                    <Button
                       key={option.value}
-                      className={`flex items-center gap-2 rounded-xl border px-3 py-3 text-left text-sm font-bold transition ${
-                        isActive
-                          ? "border-primary bg-primary/5 text-primary"
-                          : "border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300"
-                      }`}
                       onClick={() => updateComposer({ audienceType: option.value })}
+                      size="sm"
                       type="button"
+                      variant={isActive ? "default" : "outline"}
                     >
-                      <AppIcon className="text-base" name={option.icon} />
+                      <AppIcon data-icon="inline-start" name={option.icon} />
                       <span>{option.label}</span>
-                    </button>
+                    </Button>
                   )
                 })}
               </div>
@@ -340,28 +423,44 @@ export function LeadOutreachSchedulePage() {
               <>
                 <label className="flex flex-col gap-2">
                   <span className="text-sm font-bold text-slate-700">{"Lead"}</span>
-                  <select
-                    className="h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-800"
-                    onChange={(event) => updateComposer({ leadId: event.target.value })}
-                    value={composer.leadId}
-                  >
-                    <option value="">{"Choose a lead"}</option>
-                    {leadOptions.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {`${displayText(item.name, `Lead #${item.id}`)} - ${displayText(item.phone || item.email, "No contact")}`}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+                    <Input
+                      onChange={(event) => setLeadSearch(event.target.value)}
+                      placeholder="Search name, email, phone, property"
+                      value={leadSearch}
+                    />
+                    <Select
+                      modal={false}
+                      onValueChange={(value) => updateComposer({ leadId: value === "none" ? "" : value })}
+                      value={composer.leadId || "none"}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Choose a lead" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          <SelectItem value="none">{"Choose a lead"}</SelectItem>
+                          {filteredLeadOptions.map((item) => (
+                            <SelectItem key={item.id} value={String(item.id)}>
+                              {`${displayText(item.name, `Lead #${item.id}`)} - ${displayText(item.phone || item.email, "No contact")}`}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </label>
 
                 {selectedLead ? (
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                    <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">{"Selected Lead"}</p>
-                    <p className="mt-1 text-sm font-bold text-slate-900">{displayText(selectedLead.name, `Lead #${selectedLead.id}`)}</p>
-                    <p className="mt-2 text-sm text-slate-500">
-                      {`Phone: ${displayText(selectedLead.phone)} | Email: ${displayText(selectedLead.email)}`}
-                    </p>
-                  </div>
+                  <Card className="bg-slate-50">
+                    <CardContent className="p-4">
+                      <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">{"Selected Lead"}</p>
+                      <p className="mt-1 text-sm font-bold text-slate-900">{displayText(selectedLead.name, `Lead #${selectedLead.id}`)}</p>
+                      <p className="mt-2 text-sm text-slate-500">
+                        {`Phone: ${displayText(selectedLead.phone)} | Email: ${displayText(selectedLead.email)}`}
+                      </p>
+                    </CardContent>
+                  </Card>
                 ) : null}
               </>
             ) : null}
@@ -370,37 +469,44 @@ export function LeadOutreachSchedulePage() {
               <>
                 <label className="flex flex-col gap-2">
                   <span className="text-sm font-bold text-slate-700">{"Lead Stage"}</span>
-                  <select
-                    className="h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-800"
-                    onChange={(event) => updateComposer({ leadStage: event.target.value as "" | LeadStage })}
-                    value={composer.leadStage}
+                  <Select
+                    modal={false}
+                    onValueChange={(value) => updateComposer({ leadStage: value === "none" ? "" : (value as LeadStage) })}
+                    value={composer.leadStage || "none"}
                   >
-                    <option value="">{"Choose a lead stage"}</option>
-                    {leadStageOrder.map((stage) => (
-                      <option key={stage} value={stage}>
-                        {formatLeadStage(stage)}
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Choose a lead stage" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
+                        <SelectItem value="none">{"Choose a lead stage"}</SelectItem>
+                        {leadStageOrder.map((stage) => (
+                          <SelectItem key={stage} value={stage}>{formatLeadStage(stage)}</SelectItem>
+                        ))}
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
                 </label>
 
                 {composer.leadStage ? (
-                  <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4">
-                    <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-sky-700">{"Stage Preview"}</p>
-                    <p className="mt-1 text-sm font-bold text-slate-900">
-                      {`${leadStagePreviewQuery.data?.totalCount ?? 0} leads in ${formatLeadStage(composer.leadStage)}`}
-                    </p>
-                    <p className="mt-2 text-sm text-slate-600">
-                      {leadStagePreviewQuery.isLoading
-                        ? "Loading matching leads..."
-                        : leadStagePreviewItems.length > 0
-                          ? `Examples: ${leadStagePreviewItems
-                              .slice(0, 4)
-                              .map((item) => displayText(item.name, `Lead #${item.id}`))
-                              .join(", ")}`
-                          : "No leads are currently in this stage."}
-                    </p>
-                  </div>
+                  <Card className="border-sky-200 bg-sky-50">
+                    <CardContent className="p-4">
+                      <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-sky-700">{"Stage Preview"}</p>
+                      <p className="mt-1 text-sm font-bold text-slate-900">
+                        {`${leadStagePreviewQuery.data?.totalCount ?? 0} leads in ${formatLeadStage(composer.leadStage)}`}
+                      </p>
+                      <p className="mt-2 text-sm text-slate-600">
+                        {leadStagePreviewQuery.isLoading
+                          ? "Loading matching leads..."
+                          : leadStagePreviewItems.length > 0
+                            ? `Examples: ${leadStagePreviewItems
+                                .slice(0, 4)
+                                .map((item) => displayText(item.name, `Lead #${item.id}`))
+                                .join(", ")}`
+                            : "No leads are currently in this stage."}
+                      </p>
+                    </CardContent>
+                  </Card>
                 ) : null}
               </>
             ) : null}
@@ -409,58 +515,70 @@ export function LeadOutreachSchedulePage() {
               <>
                 <label className="flex flex-col gap-2">
                   <span className="text-sm font-bold text-slate-700">{"Deal Stage"}</span>
-                  <select
-                    className="h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-800"
-                    onChange={(event) => updateComposer({ dealStage: event.target.value as "" | DealStage })}
-                    value={composer.dealStage}
+                  <Select
+                    modal={false}
+                    onValueChange={(value) => updateComposer({ dealStage: value === "none" ? "" : (value as DealStage) })}
+                    value={composer.dealStage || "none"}
                   >
-                    <option value="">{"Choose a deal stage"}</option>
-                    {dealStageOrder.map((stage) => (
-                      <option key={stage} value={stage}>
-                        {formatDealStage(stage)}
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Choose a deal stage" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
+                        <SelectItem value="none">{"Choose a deal stage"}</SelectItem>
+                        {dealStageOrder.map((stage) => (
+                          <SelectItem key={stage} value={stage}>{formatDealStage(stage)}</SelectItem>
+                        ))}
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
                 </label>
 
                 {composer.dealStage ? (
-                  <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
-                    <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-amber-700">{"Stage Preview"}</p>
-                    <p className="mt-1 text-sm font-bold text-slate-900">
-                      {`${dealStagePreview.totalDeals} deals in ${formatDealStage(composer.dealStage)}`}
-                    </p>
-                    <p className="mt-2 text-sm text-slate-600">
-                      {dealStagePreviewQuery.isLoading
-                        ? "Loading matching deals..."
-                        : dealStagePreview.linkedLeadCount > 0
-                          ? dealStagePreview.truncated
-                            ? `Showing ${dealStagePreview.linkedLeadCount} linked leads from the first 200 deals.`
-                            : `${dealStagePreview.linkedLeadCount} linked leads can receive outreach.`
-                          : "No linked leads were found in this deal stage yet."}
-                    </p>
-                    <p className="mt-2 text-sm text-slate-500">
-                      {dealStagePreview.previewLeadNames.length > 0
-                        ? `Examples: ${dealStagePreview.previewLeadNames.join(", ")}`
-                        : "Deals without a linked lead will be skipped automatically."}
-                    </p>
-                  </div>
+                  <Card className="border-amber-200 bg-amber-50">
+                    <CardContent className="p-4">
+                      <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-amber-700">{"Stage Preview"}</p>
+                      <p className="mt-1 text-sm font-bold text-slate-900">
+                        {`${dealStagePreview.totalDeals} deals in ${formatDealStage(composer.dealStage)}`}
+                      </p>
+                      <p className="mt-2 text-sm text-slate-600">
+                        {dealStagePreviewQuery.isLoading
+                          ? "Loading matching deals..."
+                          : dealStagePreview.linkedLeadCount > 0
+                            ? dealStagePreview.truncated
+                              ? `Showing ${dealStagePreview.linkedLeadCount} linked leads from the first 200 deals.`
+                              : `${dealStagePreview.linkedLeadCount} linked leads can receive outreach.`
+                            : "No linked leads were found in this deal stage yet."}
+                      </p>
+                      <p className="mt-2 text-sm text-slate-500">
+                        {dealStagePreview.previewLeadNames.length > 0
+                          ? `Examples: ${dealStagePreview.previewLeadNames.join(", ")}`
+                          : "Deals without a linked lead will be skipped automatically."}
+                      </p>
+                    </CardContent>
+                  </Card>
                 ) : null}
               </>
             ) : null}
 
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1">
-              <label className="flex flex-col gap-2">
-                <span className="text-sm font-bold text-slate-700">{"Channel"}</span>
-                <select
-                  className="h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-800"
-                  onChange={(event) => updateComposer({ kind: event.target.value as OutreachKind })}
-                  value={composer.kind}
-                >
-                  <option value="Call">{"Call"}</option>
-                  <option value="Sms">{"SMS"}</option>
-                  <option value="Email">{"Email"}</option>
-                </select>
-              </label>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="flex flex-col gap-2">
+                <span className="text-sm font-bold text-slate-700">{"Channels"}</span>
+                <label className="flex items-center gap-2 rounded-lg border p-2.5 text-sm font-semibold">
+                  <Checkbox
+                    checked={composer.sendEmail}
+                    onCheckedChange={(checked) => updateComposer({ sendEmail: checked === true })}
+                  />
+                  {"Email"}
+                </label>
+                <label className="flex items-center gap-2 rounded-lg border p-2.5 text-sm font-semibold">
+                  <Checkbox
+                    checked={composer.sendSms}
+                    onCheckedChange={(checked) => updateComposer({ sendSms: checked === true })}
+                  />
+                  {"SMS / MMS"}
+                </label>
+              </div>
               <label className="flex flex-col gap-2">
                 <span className="text-sm font-bold text-slate-700">{"Scheduled Time"}</span>
                 <Input
@@ -471,13 +589,63 @@ export function LeadOutreachSchedulePage() {
               </label>
             </div>
 
-            {composer.kind !== "Sms" ? (
+            <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center justify-between gap-2 text-sm font-bold text-slate-700">
+                  {"Template"}
+                </div>
+                <Select
+                  modal={false}
+                  onValueChange={(value) => {
+                    const nextTemplateId = value === "none" ? "" : value
+                    const template = availableTemplates.find((item) => item.id === nextTemplateId)
+                    updateComposer({
+                      sendEmail: template ? template.channels.includes("Email") : composer.sendEmail,
+                      sendSms: template ? template.channels.includes("SMS") : composer.sendSms,
+                      templateId: nextTemplateId,
+                      title: template ? resolveTemplateTokens(template.subject, selectedLead) : composer.title,
+                      message: template ? resolveTemplateTokens(template.body, selectedLead) : composer.message,
+                    })
+                  }}
+                  value={composer.templateId || "none"}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Choose template" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      <SelectItem value="none">{"No template"}</SelectItem>
+                      {availableTemplates.map((template) => (
+                        <SelectItem key={template.id} value={template.id}>{`${template.name} - ${template.sequenceType ?? "Direct"}`}</SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button render={<Link href="/dashboard/settings" />} size="sm" variant="outline">
+                {"Manage Templates"}
+              </Button>
+            </div>
+
+            {composer.sendEmail ? (
               <label className="flex flex-col gap-2">
-                <span className="text-sm font-bold text-slate-700">{composer.kind === "Email" ? "Subject" : "Title"}</span>
+                <span className="text-sm font-bold text-slate-700">{"Email Subject"}</span>
                 <Input
                   onChange={(event) => updateComposer({ title: event.target.value })}
-                  placeholder={composer.kind === "Email" ? "Viewing follow-up" : "Reminder call"}
+                  placeholder="Viewing follow-up"
                   value={composer.title}
+                />
+              </label>
+            ) : null}
+
+            {composer.sendSms ? (
+              <label className="flex flex-col gap-2">
+                <span className="text-sm font-bold text-slate-700">{"MMS Attachment URLs"}</span>
+                <Textarea
+                  className="min-h-16 rounded-xl border-slate-200"
+                  onChange={(event) => updateComposer({ mediaUrls: event.target.value })}
+                  placeholder="One URL per line, or comma separated"
+                  value={composer.mediaUrls}
                 />
               </label>
             ) : null}
@@ -485,9 +653,9 @@ export function LeadOutreachSchedulePage() {
             <label className="flex flex-col gap-2">
               <span className="text-sm font-bold text-slate-700">{"Message"}</span>
               <Textarea
-                className="min-h-32 rounded-xl border-slate-200"
+                className="min-h-28 rounded-xl border-slate-200"
                 onChange={(event) => updateComposer({ message: event.target.value })}
-                placeholder={composer.kind === "Call" ? "What should the call say?" : "Write the reminder message"}
+                placeholder="Write the email/SMS message"
                 value={composer.message}
               />
             </label>
@@ -515,72 +683,75 @@ export function LeadOutreachSchedulePage() {
               </div>
             ) : null}
 
-            <button
-              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-70"
-              disabled={isSaving}
-              onClick={() => void handleSaveSchedule()}
-              type="button"
-            >
-              <AppIcon className="text-base" name="calendar_today" />
-              {isSaving
-                ? "Saving..."
-                : composer.audienceType === "SingleLead"
-                  ? "Save Scheduled Outreach"
-                  : "Save Bulk Scheduled Outreach"}
-            </button>
-          </div>
-        </section>
-
-        <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-          <div className="flex flex-wrap items-end justify-between gap-4 border-b border-slate-200 pb-4">
-            <div>
-              <h2 className="text-lg font-black text-slate-900">{"Schedule Timeline"}</h2>
-              <p className="mt-1 text-sm text-slate-500">
-                {"This shows pending outreach first, then sent, completed, and failed items so you can see exactly what happened."}
-              </p>
             </div>
-            <div className="flex flex-wrap gap-3">
+            <SheetFooter className="border-t bg-background">
+              <Button
+                className="w-full"
+                disabled={isSaving}
+                onClick={() => void handleSaveSchedule()}
+                type="button"
+              >
+                <AppIcon data-icon="inline-start" name="calendar_today" />
+                {isSaving
+                  ? "Saving..."
+                  : composer.scheduledAt
+                    ? "Schedule Outreach"
+                    : "Send Outreach"}
+              </Button>
+            </SheetFooter>
+          </SheetContent>
+        </Sheet>
+
+        <Card>
+          <CardHeader className="flex flex-wrap items-end justify-between gap-4 border-b border-slate-200">
+            <div>
+              <CardTitle>{"Schedule Timeline"}</CardTitle>
+              <CardDescription>
+                {"This shows pending outreach first, then sent, completed, and failed items so you can see exactly what happened."}
+              </CardDescription>
+            </div>
+            <div className="grid w-full gap-3 md:grid-cols-[minmax(220px,1fr)_160px_160px_170px]">
               <Input
-                className="h-10 w-64 rounded-xl border-slate-200 bg-slate-50"
                 onChange={(event) => setSearchTerm(event.target.value)}
-                placeholder="Search lead, status, message..."
+                placeholder="Search people, email, phone, message..."
                 value={searchTerm}
               />
-              <select
-                className="h-10 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-800"
-                onChange={(event) => setKindFilter((event.target.value || "") as "" | OutreachKind)}
-                value={kindFilter}
-              >
-                <option value="">{"All channels"}</option>
-                <option value="Email">{"Email"}</option>
-                <option value="Sms">{"SMS"}</option>
-                <option value="Call">{"Call"}</option>
-              </select>
-              <select
-                className="h-10 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-800"
-                onChange={(event) => setStatusFilter((event.target.value || "") as "" | LeadHistoryStatus)}
-                value={statusFilter}
-              >
-                <option value="">{"All statuses"}</option>
-                <option value="Scheduled">{"Scheduled"}</option>
-                <option value="Sent">{"Sent"}</option>
-                <option value="Completed">{"Completed"}</option>
-                <option value="Failed">{"Failed"}</option>
-              </select>
-              <select
-                className="h-10 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-800"
-                onChange={(event) => updateLeadSelection(event.target.value)}
-                value={Number.isFinite(selectedLeadId) ? String(selectedLeadId) : ""}
-              >
-                <option value="">{"All leads"}</option>
-                {leadOptions.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {displayText(item.name, `Lead #${item.id}`)}
-                  </option>
-                ))}
-              </select>
+              <Select modal={false} onValueChange={(value) => setKindFilter(value === "all" ? "" : (value as OutreachKind))} value={kindFilter || "all"}>
+                <SelectTrigger><SelectValue placeholder="All channels" /></SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    <SelectItem value="all">{"All channels"}</SelectItem>
+                    <SelectItem value="Email">{"Email"}</SelectItem>
+                    <SelectItem value="Sms">{"SMS"}</SelectItem>
+                    <SelectItem value="Call">{"Call"}</SelectItem>
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+              <Select modal={false} onValueChange={(value) => setStatusFilter(value === "all" ? "" : (value as LeadHistoryStatus))} value={statusFilter || "all"}>
+                <SelectTrigger><SelectValue placeholder="All states" /></SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    <SelectItem value="all">{"All states"}</SelectItem>
+                    <SelectItem value="Scheduled">{"Scheduled"}</SelectItem>
+                    <SelectItem value="Sent">{"Sent"}</SelectItem>
+                    <SelectItem value="Completed">{"Completed"}</SelectItem>
+                    <SelectItem value="Failed">{"Failed"}</SelectItem>
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+              <Select modal={false} onValueChange={(value) => setFollowUpFilter(value === "all" ? "" : (value as FollowUpFilter))} value={followUpFilter || "all"}>
+                <SelectTrigger><SelectValue placeholder="All follow-up" /></SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    <SelectItem value="all">{"All follow-up"}</SelectItem>
+                    <SelectItem value="Direct">{"Direct only"}</SelectItem>
+                    <SelectItem value="FollowUp">{"Follow-up only"}</SelectItem>
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
             </div>
-          </div>
+          </CardHeader>
+          <CardContent className="p-6">
 
           {scheduleQuery.isLoading ? (
             <div className="py-10 text-center text-sm font-semibold text-slate-500">{"Loading schedule..."}</div>
@@ -591,54 +762,63 @@ export function LeadOutreachSchedulePage() {
           ) : filteredSchedule.length === 0 ? (
             <div className="py-10 text-center text-sm font-semibold text-slate-500">{"No lead activity matches the current filters."}</div>
           ) : (
-            <div className="mt-6 overflow-x-auto">
-              <table className="w-full min-w-[980px] text-left text-sm">
-                <thead className="bg-slate-50 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">
-                  <tr>
-                    <th className="px-4 py-3">{"Lead"}</th>
-                    <th className="px-4 py-3">{"Action"}</th>
-                    <th className="px-4 py-3">{"Status"}</th>
-                    <th className="px-4 py-3">{"Summary"}</th>
-                    <th className="px-4 py-3">{"When"}</th>
-                    <th className="px-4 py-3 text-right">{"History"}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200">
-                  {filteredSchedule.map((entry) => (
-                    <tr key={`${entry.id}-${entry.updatedAt}`} className="align-top">
-                      <td className="px-4 py-4">
-                        <p className="font-bold text-slate-900">{displayText(entry.leadName, `Lead #${entry.leadId}`)}</p>
-                        <p className="mt-1 text-xs text-slate-500">{displayText(entry.leadEmail)}</p>
-                        <p className="mt-1 text-xs text-slate-500">{displayText(entry.leadPhone)}</p>
-                      </td>
-                      <td className="px-4 py-4">
-                        <p className="font-bold text-slate-900">{entry.title}</p>
-                        <p className="mt-1 text-xs font-bold uppercase tracking-[0.16em] text-slate-400">{entry.kind}</p>
-                      </td>
-                      <td className="px-4 py-4">
-                        <span className={`rounded-full border px-2 py-1 text-[10px] font-bold uppercase tracking-[0.18em] ${entry.status === "Failed" ? "border-rose-200 bg-rose-50 text-rose-700" : entry.status === "Scheduled" ? "border-amber-200 bg-amber-50 text-amber-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>{entry.status}</span>
-                      </td>
-                      <td className="max-w-sm px-4 py-4">
-                        <p className="text-slate-600">{entry.summary}</p>
-                        {entry.body ? <p className="mt-2 max-h-16 overflow-hidden whitespace-pre-wrap text-xs text-slate-500">{entry.body}</p> : null}
-                      </td>
-                      <td className="px-4 py-4 text-xs font-semibold text-slate-500">
-                        {entry.scheduledAt ? <p>{`Scheduled: ${formatDateTimeLabel(entry.scheduledAt)}`}</p> : null}
-                        {entry.occurredAt ? <p>{`Occurred: ${formatDateTimeLabel(entry.occurredAt)}`}</p> : null}
-                        <p>{`Saved: ${formatDateTimeLabel(entry.createdAt)}`}</p>
-                      </td>
-                      <td className="px-4 py-4 text-right">
-                        <Link className="border border-slate-200 px-3 py-2 text-xs font-bold uppercase tracking-wide text-slate-700" href={buildHistoryHref(pathname, entry.leadId)}>
-                          {"Open"}
-                        </Link>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="mt-4 overflow-x-auto">
+              <Table className="min-w-[1080px]">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>{"Lead"}</TableHead>
+                    <TableHead>{"Channel"}</TableHead>
+                    <TableHead>{"State"}</TableHead>
+                    <TableHead>{"Follow-Up"}</TableHead>
+                    <TableHead>{"Message"}</TableHead>
+                    <TableHead>{"When"}</TableHead>
+                    <TableHead className="text-right">{"History"}</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredSchedule.map((entry) => {
+                    const isFollowUp = isFollowUpScheduleEntry(entry)
+
+                    return (
+                      <TableRow key={`${entry.id}-${entry.updatedAt}`}>
+                        <TableCell className="max-w-[220px]">
+                          <p className="font-medium">{displayText(entry.leadName, `Lead #${entry.leadId}`)}</p>
+                          <p className="truncate text-muted-foreground">{displayText(entry.leadEmail)}</p>
+                          <p className="text-muted-foreground">{displayText(entry.leadPhone)}</p>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline">{formatKindLabel(entry.kind)}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={entry.status === "Failed" ? "destructive" : entry.status === "Scheduled" ? "outline" : "secondary"}>{entry.status}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={isFollowUp ? "secondary" : "outline"}>{isFollowUp ? "Follow-up" : "Direct"}</Badge>
+                        </TableCell>
+                        <TableCell className="max-w-[360px]">
+                          <p className="font-medium">{entry.title}</p>
+                          <p className="truncate text-muted-foreground">{entry.summary}</p>
+                          {entry.body ? <p className="mt-1 line-clamp-2 whitespace-pre-wrap text-muted-foreground">{entry.body}</p> : null}
+                        </TableCell>
+                        <TableCell className="min-w-[190px] text-muted-foreground">
+                          {entry.scheduledAt ? <p>{`Scheduled: ${formatDateTimeLabel(entry.scheduledAt)}`}</p> : null}
+                          {entry.occurredAt ? <p>{`Occurred: ${formatDateTimeLabel(entry.occurredAt)}`}</p> : null}
+                          <p>{`Saved: ${formatDateTimeLabel(entry.createdAt)}`}</p>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button render={<Link href={buildHistoryHref(pathname, entry.leadId)} />} size="sm" variant="outline">
+                            {"Open"}
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })}
+                </TableBody>
+              </Table>
             </div>
           )}
-        </section>
+          </CardContent>
+        </Card>
       </div>
     </main>
   )

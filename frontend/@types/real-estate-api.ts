@@ -782,6 +782,7 @@ export type LeadOutreachDispatchInput = {
   title: string
   message: string
   attachPropertyDocuments?: boolean
+  mediaUrls?: string[]
   templateId?: string
   createdBy?: string | null
   scheduledAt?: string | null
@@ -797,6 +798,7 @@ export type LeadOutreachBulkDispatchInput = {
   title: string
   message: string
   attachPropertyDocuments?: boolean
+  mediaUrls?: string[]
   templateId?: string
   createdBy?: string | null
   scheduledAt?: string | null

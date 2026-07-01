@@ -9,9 +9,12 @@ import type {
   AgentUserOption,
 } from "@/@types/real-estate-api"
 import { AppIcon } from "@/components/ui/app-icon"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import {
   useAgencySettings,
@@ -53,6 +56,14 @@ type AgentEditorFormValues = {
 
 type AgentEditorFormErrors = Partial<Record<keyof AgentEditorFormValues | "form", string>>
 const templateSequenceOptions = ["Direct", "FollowUp1", "FollowUp2", "FollowUp3"] as const
+const communicationTemplateTokens = [
+  "{{client_name}}",
+  "{{property_address}}",
+  "{{agent_name}}",
+  "{{agency_name}}",
+  "{{showing_time}}",
+  "{{closing_date}}",
+]
 const phoneCountryOptions = [
   ["US", "United States (+1)"],
   ["CA", "Canada (+1)"],
@@ -134,6 +145,22 @@ function channelBadgeClass(channel: AgencyCommunicationChannel) {
   return channel === "Email"
     ? "bg-accent/10 text-accent border-accent/20"
     : "bg-secondary/10 text-secondary border-secondary/20"
+}
+
+function createCustomCommunicationTemplate(index: number): AgencyCommunicationTemplateItem {
+  const id = `custom-${Date.now()}-${index}`
+  return {
+    attachPropertyDocuments: true,
+    body: "Hi {{client_name}}, thanks for your interest in {{property_address}}. Reply here and we will help with next steps.",
+    channels: ["Email", "SMS"],
+    gapDays: 0,
+    id,
+    isActive: true,
+    name: `Custom Template ${index + 1}`,
+    sequenceType: "Direct",
+    subject: "Property follow-up",
+    variableTokens: communicationTemplateTokens,
+  }
 }
 
 function displayText(value?: string | null, fallback = "Not set") {
@@ -250,8 +277,10 @@ function AgentAccessFields({
               <SelectValue placeholder="Select access mode" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="full">{"Full Agent Portal"}</SelectItem>
-              <SelectItem value="custom">{"Custom Route Access"}</SelectItem>
+              <SelectGroup>
+                <SelectItem value="full">{"Full Agent Portal"}</SelectItem>
+                <SelectItem value="custom">{"Custom Route Access"}</SelectItem>
+              </SelectGroup>
             </SelectContent>
           </Select>
         </div>
@@ -468,6 +497,45 @@ export function MainContentSection() {
       communicationTemplates: current.communicationTemplates.map((item, index) =>
         index === selectedTemplateIndex ? update(item) : item,
       ),
+    }))
+  }
+
+  function handleCreateTemplate() {
+    const nextTemplate = createCustomCommunicationTemplate(formValues.communicationTemplates.length)
+    updateSettings((current) => ({
+      ...current,
+      communicationTemplates: [nextTemplate, ...current.communicationTemplates],
+    }))
+    setSelectedTemplateId(nextTemplate.id)
+  }
+
+  function handleDuplicateTemplate() {
+    if (!selectedTemplate) {
+      return
+    }
+
+    const nextTemplate: AgencyCommunicationTemplateItem = {
+      ...selectedTemplate,
+      id: `custom-${Date.now()}-${formValues.communicationTemplates.length}`,
+      name: `${selectedTemplate.name} Copy`,
+    }
+    updateSettings((current) => ({
+      ...current,
+      communicationTemplates: [nextTemplate, ...current.communicationTemplates],
+    }))
+    setSelectedTemplateId(nextTemplate.id)
+  }
+
+  function handleDeleteTemplate() {
+    if (!selectedTemplate) {
+      return
+    }
+
+    const nextTemplates = formValues.communicationTemplates.filter((item) => item.id !== selectedTemplate.id)
+    setSelectedTemplateId(nextTemplates[0]?.id ?? "")
+    updateSettings((current) => ({
+      ...current,
+      communicationTemplates: current.communicationTemplates.filter((item) => item.id !== selectedTemplate.id),
     }))
   }
 
@@ -950,145 +1018,185 @@ export function MainContentSection() {
         </SectionCard>
 
         <SectionCard icon="mail" title="Communication Templates">
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-            <div className="border-2 border-secondary/10 bg-white p-4 lg:col-span-1">
-              <h4 className="mb-3 border-b border-secondary/10 pb-2 text-sm font-bold">{"Available Templates"}</h4>
-              <ul className="space-y-1">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <p className="max-w-2xl text-sm text-primary/60">
+              {"Create custom direct or follow-up templates here. New Outreach can use any active Email or SMS template from this list."}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={handleCreateTemplate} type="button">
+                <AppIcon data-icon="inline-start" name="add" />
+                {"New Custom Template"}
+              </Button>
+              <Button disabled={!selectedTemplate} onClick={handleDuplicateTemplate} type="button" variant="outline">
+                {"Duplicate"}
+              </Button>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
+            <div className="rounded-lg border bg-background p-3">
+              <div className="mb-3 flex items-center justify-between gap-2 border-b pb-2">
+                <h4 className="text-sm font-bold">{"Templates"}</h4>
+                <Badge variant="secondary">{formValues.communicationTemplates.length}</Badge>
+              </div>
+              <ul className="flex max-h-[520px] flex-col gap-2 overflow-y-auto">
                 {formValues.communicationTemplates.map((template) => {
                   const isActive = template.id === selectedTemplateId
 
                   return (
                     <li key={template.id}>
-                      <button
-                        className={`w-full rounded p-2 text-left text-sm font-semibold transition-colors ${
-                          isActive ? "bg-primary/5 text-primary" : "hover:bg-secondary/5"
-                        }`}
+                      <Button
+                        className="h-auto w-full justify-start px-3 py-2"
                         onClick={() => setSelectedTemplateId(template.id)}
                         type="button"
+                        variant={isActive ? "secondary" : "ghost"}
                       >
-                        <span className="block">{template.name}</span>
-                        <span className="mt-1 block text-[10px] font-bold uppercase tracking-[0.16em] text-primary/50">
-                          {`${template.sequenceType ?? "Direct"} | ${template.gapDays ?? 0}d${template.isActive === false ? " | Off" : ""}`}
+                        <span className="flex min-w-0 flex-col items-start gap-1">
+                          <span className="w-full truncate text-left">{template.name}</span>
+                          <span className="flex flex-wrap gap-1">
+                            <Badge variant={template.isActive === false ? "outline" : "secondary"}>{template.sequenceType ?? "Direct"}</Badge>
+                            <Badge variant="outline">{`${template.gapDays ?? 0}d`}</Badge>
+                            {template.channels.map((channel) => (
+                              <Badge key={channel} className={channelBadgeClass(channel)} variant="outline">
+                                {channel}
+                              </Badge>
+                            ))}
+                            {template.isActive === false ? <Badge variant="destructive">{"Off"}</Badge> : null}
+                          </span>
                         </span>
-                      </button>
+                      </Button>
                     </li>
                   )
                 })}
               </ul>
             </div>
-            <div className="space-y-4 border-2 border-secondary/10 bg-white p-6 lg:col-span-2">
+            <div className="rounded-lg border bg-background p-4">
               {selectedTemplate ? (
-                <>
-                  <div className="mb-2 flex items-center justify-between">
-                    <h4 className="text-sm font-bold uppercase text-primary">
-                      {`Edit: ${selectedTemplate.name}`}
-                    </h4>
+                <div className="flex flex-col gap-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3 border-b pb-3">
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary/50">{"Editing Template"}</p>
+                      <h4 className="mt-1 text-lg font-black text-primary">{selectedTemplate.name}</h4>
+                    </div>
                     <div className="flex gap-2">
                       {selectedTemplate.channels.map((channel) => (
-                        <span
-                          key={channel}
-                          className={`rounded-full border px-2 py-1 text-[10px] font-bold uppercase ${channelBadgeClass(channel)}`}
-                        >
+                        <Badge key={channel} className={channelBadgeClass(channel)} variant="outline">
                           {channel}
-                        </span>
+                        </Badge>
                       ))}
+                      <Button onClick={handleDeleteTemplate} size="sm" type="button" variant="destructive">
+                        {"Delete"}
+                      </Button>
                     </div>
                   </div>
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <label className="space-y-2">
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <label className="flex flex-col gap-2">
+                      <span className="text-xs font-bold uppercase tracking-[0.16em] text-primary/70">{"Template Name"}</span>
+                      <Input
+                        onChange={(event) => updateTemplate((current) => ({ ...current, name: event.target.value }))}
+                        value={selectedTemplate.name}
+                      />
+                    </label>
+                    <label className="flex flex-col gap-2">
                       <span className="text-xs font-bold uppercase tracking-[0.16em] text-primary/70">{"Sequence"}</span>
-                      <select
-                        className="w-full border-2 border-secondary/20 bg-white px-3 py-3 text-sm font-bold outline-none focus:border-primary"
-                        onChange={(event) => updateTemplate((current) => ({ ...current, sequenceType: event.target.value as AgencyCommunicationTemplateItem["sequenceType"] }))}
+                      <Select
+                        modal={false}
+                        onValueChange={(value) => updateTemplate((current) => ({ ...current, sequenceType: value as AgencyCommunicationTemplateItem["sequenceType"] }))}
                         value={selectedTemplate.sequenceType ?? "Direct"}
                       >
-                        {templateSequenceOptions.map((item) => <option key={item} value={item}>{item}</option>)}
-                      </select>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select sequence" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectGroup>
+                            {templateSequenceOptions.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}
+                          </SelectGroup>
+                        </SelectContent>
+                      </Select>
                     </label>
-                    <label className="space-y-2">
+                    <label className="flex flex-col gap-2">
                       <span className="text-xs font-bold uppercase tracking-[0.16em] text-primary/70">{"Gap Days"}</span>
                       <Input
-                        className="w-full border-2 border-secondary/20 px-3 py-3 font-bold outline-none focus:border-primary"
                         min={0}
                         onChange={(event) => updateTemplate((current) => ({ ...current, gapDays: Math.max(0, Number(event.target.value) || 0) }))}
                         type="number"
                         value={selectedTemplate.gapDays ?? 0}
                       />
                     </label>
-                    <label className="flex items-center gap-2 rounded border border-secondary/10 bg-slate-50 px-3 py-3 text-xs font-bold uppercase tracking-[0.16em] text-primary/70">
-                      <input
+                    <label className="flex items-center gap-2 rounded-lg border p-3 text-sm font-semibold">
+                      <Checkbox
                         checked={selectedTemplate.isActive !== false}
-                        className="form-checkbox rounded border-slate-300 text-primary focus:ring-primary"
-                        onChange={(event) => updateTemplate((current) => ({ ...current, isActive: event.target.checked }))}
-                        type="checkbox"
+                        onCheckedChange={(checked) => updateTemplate((current) => ({ ...current, isActive: checked === true }))}
                       />
                       {"Active"}
                     </label>
-                    <label className="flex items-center gap-2 rounded border border-secondary/10 bg-slate-50 px-3 py-3 text-xs font-bold uppercase tracking-[0.16em] text-primary/70">
-                      <input
+                    <label className="flex items-center gap-2 rounded-lg border p-3 text-sm font-semibold">
+                      <Checkbox
                         checked={selectedTemplate.attachPropertyDocuments !== false}
-                        className="form-checkbox rounded border-slate-300 text-primary focus:ring-primary"
-                        onChange={(event) => updateTemplate((current) => ({ ...current, attachPropertyDocuments: event.target.checked }))}
-                        type="checkbox"
+                        onCheckedChange={(checked) => updateTemplate((current) => ({ ...current, attachPropertyDocuments: checked === true }))}
                       />
                       {"Attach Property Docs"}
                     </label>
-                    <label className="flex items-center gap-2 rounded border border-secondary/10 bg-slate-50 px-3 py-3 text-xs font-bold uppercase tracking-[0.16em] text-primary/70">
-                      <input
+                    <label className="flex items-center gap-2 rounded-lg border p-3 text-sm font-semibold">
+                      <Checkbox
                         checked={selectedTemplate.channels.includes("Email")}
-                        className="form-checkbox rounded border-slate-300 text-primary focus:ring-primary"
-                        onChange={(event) =>
+                        onCheckedChange={(checked) =>
                           updateTemplate((current) => ({
                             ...current,
-                            channels: event.target.checked
+                            channels: checked === true
                               ? Array.from(new Set([...current.channels, "Email"]))
                               : current.channels.filter((channel) => channel !== "Email"),
                           }))}
-                        type="checkbox"
                       />
                       {"Email Enabled"}
                     </label>
-                    <label className="flex items-center gap-2 rounded border border-secondary/10 bg-slate-50 px-3 py-3 text-xs font-bold uppercase tracking-[0.16em] text-primary/70">
-                      <input
+                    <label className="flex items-center gap-2 rounded-lg border p-3 text-sm font-semibold">
+                      <Checkbox
                         checked={selectedTemplate.channels.includes("SMS")}
-                        className="form-checkbox rounded border-slate-300 text-primary focus:ring-primary"
-                        onChange={(event) =>
+                        onCheckedChange={(checked) =>
                           updateTemplate((current) => ({
                             ...current,
-                            channels: event.target.checked
+                            channels: checked === true
                               ? Array.from(new Set([...current.channels, "SMS"]))
                               : current.channels.filter((channel) => channel !== "SMS"),
                           }))}
-                        type="checkbox"
                       />
                       {"SMS Enabled"}
                     </label>
                   </div>
-                  <Input
-                    className="mb-4 w-full border-2 border-secondary/20 px-3 py-2 font-bold outline-none focus:border-primary"
-                    onChange={(event) => updateTemplate((current) => ({ ...current, subject: event.target.value }))}
-                    type="text"
-                    value={selectedTemplate.subject}
-                  />
-                  <Textarea
-                    className="w-full resize-none border-2 border-secondary/20 px-3 py-2 outline-none focus:border-primary"
-                    onChange={(event) => updateTemplate((current) => ({ ...current, body: event.target.value }))}
-                    rows={6}
-                    value={selectedTemplate.body}
-                  />
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {selectedTemplate.variableTokens.map((token) => (
-                      <span
-                        key={token}
-                        className="cursor-default bg-secondary/10 px-2 py-1 font-mono text-[10px] text-primary hover:bg-secondary/20"
-                      >
-                        {token}
-                      </span>
-                    ))}
+                  <label className="flex flex-col gap-2">
+                    <span className="text-xs font-bold uppercase tracking-[0.16em] text-primary/70">{"Email Subject"}</span>
+                    <Input
+                      onChange={(event) => updateTemplate((current) => ({ ...current, subject: event.target.value }))}
+                      type="text"
+                      value={selectedTemplate.subject}
+                    />
+                  </label>
+                  <label className="flex flex-col gap-2">
+                    <span className="text-xs font-bold uppercase tracking-[0.16em] text-primary/70">{"Message Body"}</span>
+                    <Textarea
+                      className="min-h-44"
+                      onChange={(event) => updateTemplate((current) => ({ ...current, body: event.target.value }))}
+                      value={selectedTemplate.body}
+                    />
+                  </label>
+                  <div className="rounded-lg border bg-muted/30 p-3">
+                    <p className="mb-2 text-xs font-bold uppercase tracking-[0.16em] text-primary/50">{"Variables"}</p>
+                    <div className="flex flex-wrap gap-2">
+                      {communicationTemplateTokens.map((token) => (
+                        <Badge key={token} variant="outline">
+                          {token}
+                        </Badge>
+                      ))}
+                    </div>
                   </div>
-                </>
+                </div>
               ) : (
-                <p className="text-sm font-semibold text-primary/60">{"No template selected."}</p>
+                <div className="rounded-lg border border-dashed p-8 text-center">
+                  <p className="text-sm font-semibold text-primary/60">{"No template selected."}</p>
+                  <Button className="mt-4" onClick={handleCreateTemplate} type="button">
+                    {"Create Template"}
+                  </Button>
+                </div>
               )}
             </div>
           </div>
