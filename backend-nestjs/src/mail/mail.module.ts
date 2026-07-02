@@ -10,12 +10,14 @@ import { Lead } from '../leads/entities/lead.entity';
 import { LeadHistoryEntry } from '../leads/entities/lead-history.entity';
 import { Property } from '../properties/entities/property.entity';
 import { SettingsModule } from '../settings/settings.module';
+import { ShowingFeedbackModule } from '../showing-feedback/showing-feedback.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([MailInboxItem, AgencyIntegrationSettings, Lead, LeadHistoryEntry, Property]),
     LeadsModule,
     SettingsModule,
+    ShowingFeedbackModule,
   ],
   providers: [MailService, MailInboxSyncBackgroundService],
   controllers: [MailController],

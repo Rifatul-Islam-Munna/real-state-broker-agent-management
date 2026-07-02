@@ -140,6 +140,11 @@ export class SettingsService {
     return settings?.smtpPayload ? this.readJson(settings.smtpPayload) : null;
   }
 
+  async getAiProviderConfig() {
+    const settings = await this.integrationRepository.findOne({ where: { id: 1 } });
+    return settings?.aiProviderPayload ? this.readJson(settings.aiProviderPayload) : null;
+  }
+
   private readJson(value: string) {
     try {
       return JSON.parse(value);
@@ -259,7 +264,11 @@ export class SettingsService {
           gapDays: this.clampInt(item?.gapDays, fallbackItem.gapDays ?? 0, 0, 365),
           isActive: item?.isActive !== false,
           attachPropertyDocuments: item?.attachPropertyDocuments !== false,
-          audience: item?.audience === 'Realtor' || item?.id === 'showing-confirmation' ? 'Realtor' : 'Lead',
+          audience: item?.audience === 'OwnerFeedback'
+            ? 'OwnerFeedback'
+            : item?.audience === 'Realtor' || item?.id === 'showing-confirmation'
+              ? 'Realtor'
+              : 'Lead',
         };
       }),
     };

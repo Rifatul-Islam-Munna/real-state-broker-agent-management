@@ -23,6 +23,7 @@ import { HomepageModule } from './homepage/homepage.module';
 import { DatabaseModule } from './lib/database.module';
 import { SmsModule } from './sms/sms.module';
 import { RealtorShowingsModule } from './realtor-showings/realtor-showings.module';
+import { ShowingFeedbackModule } from './showing-feedback/showing-feedback.module';
 
 @Module({
   imports: [
@@ -50,6 +51,7 @@ import { RealtorShowingsModule } from './realtor-showings/realtor-showings.modul
     HomepageModule,
     SmsModule,
     RealtorShowingsModule,
+    ShowingFeedbackModule,
     PredictionModule,
   ],
   controllers: [],

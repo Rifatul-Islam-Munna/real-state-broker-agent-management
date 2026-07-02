@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, forwardRef, Inject, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { SmsMessage } from './entities/sms-message.entity';
@@ -7,6 +7,7 @@ import { LeadHistoryEntry, leadHistoryKindDb, leadHistoryStatusDb } from '../lea
 import { SettingsService } from '../settings/settings.service';
 import { paginated, toInt } from '../common/api-contract';
 import { normalizePhoneNumber } from '../common/phone-normalizer';
+import { ShowingFeedbackService } from '../showing-feedback/showing-feedback.service';
 
 type CommunicationConfig = {
   providerName?: string;
@@ -29,6 +30,8 @@ export class SmsService {
     @InjectRepository(Lead) private leadRepo: Repository<Lead>,
     @InjectRepository(LeadHistoryEntry) private historyRepo: Repository<LeadHistoryEntry>,
     private settingsService: SettingsService,
+    @Inject(forwardRef(() => ShowingFeedbackService))
+    private showingFeedbackService: ShowingFeedbackService,
   ) {}
 
   async findAll(page = 1, pageSize = 20, search?: string, direction?: string) {
@@ -155,6 +158,14 @@ export class SmsService {
     const saved = await this.smsRepo.save(entity);
     if ((input.direction ?? 'Incoming') === 'Incoming' && input.lead?.id) {
       await this.cancelScheduledFollowUps(input.lead.id, saved.occurredAt ?? new Date());
+      await this.showingFeedbackService.processInbound({
+        channel: 'Sms',
+        leadId: input.lead.id,
+        message: saved.body,
+        receivedAt: saved.occurredAt ?? saved.createdAt ?? new Date(),
+        realtorContact: saved.fromNumber,
+        sourceMessageId: saved.providerMessageId || `sms-${saved.id}`,
+      });
     } else if (
       (input.direction ?? 'Incoming') === 'Outgoing'
       && input.lead?.id

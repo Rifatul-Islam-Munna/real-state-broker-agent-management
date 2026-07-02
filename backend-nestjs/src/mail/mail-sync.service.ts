@@ -12,6 +12,7 @@ import { Property } from '../properties/entities/property.entity';
 import { MailInboxItem, MailInboxKind, MailInboxStatus } from './entities/mail.entity';
 import { SettingsService } from '../settings/settings.service';
 import { normalizePhoneNumber } from '../common/phone-normalizer';
+import { ShowingFeedbackService } from '../showing-feedback/showing-feedback.service';
 
 interface MailProviderConfig {
   providerName: string;
@@ -91,6 +92,7 @@ export class MailInboxSyncBackgroundService {
     private dataSource: DataSource,
     private leadIntelligence: MailboxLeadIntelligenceService,
     private settingsService: SettingsService,
+    private showingFeedbackService: ShowingFeedbackService,
   ) {}
 
   @Cron(CronExpression.EVERY_5_MINUTES)
@@ -273,13 +275,13 @@ export class MailInboxSyncBackgroundService {
     const combined = `${inbound.subject}\n${inbound.body}`.toLowerCase();
     const isPropertyInquiry = !!matchedProperty || extracted.shouldCreateLead === true || this.isPropertyInquiry(combined);
 
-    return this.dataSource.transaction(async (manager) => {
+    const outcome = await this.dataSource.transaction(async (manager) => {
       const mailRepo = manager.getRepository(MailInboxItem);
       const leadRepo = manager.getRepository(Lead);
       const historyRepo = manager.getRepository(LeadHistoryEntry);
       if (config.duplicatePolicy === 'skip-exact-message') {
         const duplicate = await this.findDuplicate(mailRepo, inbound);
-        if (duplicate) return { skipped: true, matchedLead: false, createdLead: false };
+        if (duplicate) return { skipped: true, matchedLead: false, createdLead: false, leadId: null, mailId: null };
       }
 
       let lead = await this.findThreadLead(mailRepo, leadRepo, inbound);
@@ -350,7 +352,7 @@ export class MailInboxSyncBackgroundService {
         createdAt: inbound.receivedAt,
         updatedAt: inbound.receivedAt,
       });
-      await mailRepo.save(mail);
+      const savedMail = await mailRepo.save(mail);
       if (lead) {
         await historyRepo.save(historyRepo.create({
           leadId: lead.id,
@@ -371,8 +373,27 @@ export class MailInboxSyncBackgroundService {
           updatedAt: inbound.receivedAt,
         });
       }
-      return { skipped: false, matchedLead, createdLead };
+      return {
+        skipped: false,
+        matchedLead,
+        createdLead,
+        leadId: lead?.id ?? null,
+        mailId: savedMail.id,
+      };
     });
+
+    if (outcome.leadId) {
+      await this.showingFeedbackService.processInbound({
+        channel: 'Email',
+        leadId: outcome.leadId,
+        message: inbound.body,
+        receivedAt: inbound.receivedAt,
+        realtorContact: inbound.senderEmail,
+        sourceMessageId: inbound.messageId || `mail-${outcome.mailId}`,
+        subject: inbound.subject,
+      });
+    }
+    return outcome;
   }
 
   private async cancelScheduledFollowUps(historyRepo: Repository<LeadHistoryEntry>, leadId: number, repliedAt: Date) {

@@ -149,20 +149,25 @@ function channelBadgeClass(channel: AgencyCommunicationChannel) {
     : "bg-secondary/10 text-secondary border-secondary/20"
 }
 
-function createCustomCommunicationTemplate(index: number, audience: "Lead" | "Realtor"): AgencyCommunicationTemplateItem {
+function createCustomCommunicationTemplate(index: number, audience: "Lead" | "Realtor" | "OwnerFeedback"): AgencyCommunicationTemplateItem {
   const id = `custom-${Date.now()}-${index}`
+  const isOwnerFeedback = audience === "OwnerFeedback"
   return {
     audience,
     attachPropertyDocuments: true,
-    body: "Hi {{client_name}}, thanks for your interest in {{property_address}}. Reply here and we will help with next steps.",
+    body: isOwnerFeedback
+      ? "Showing feedback for {{property_address}} from {{fromdate}} to {{todate}}:\n\n{{feedback_summary}}\n{{feedback1}}\n{{feedback2}}\n{{feedback3}}"
+      : "Hi {{client_name}}, thanks for your interest in {{property_address}}. Reply here and we will help with next steps.",
     channels: ["Email", "SMS"],
     gapDays: 0,
     id,
     isActive: true,
     name: `${audience} Template ${index + 1}`,
     sequenceType: "Direct",
-    subject: "Property follow-up",
-    variableTokens: communicationTemplateTokens,
+    subject: isOwnerFeedback ? "Showing feedback: {{property_address}}" : "Property follow-up",
+    variableTokens: isOwnerFeedback
+      ? ["{{property_address}}", "{{fromdate}}", "{{todate}}", "{{feedback_summary}}", "{{feedback1}}", "{{feedback2}}", "{{feedback3}}"]
+      : communicationTemplateTokens,
   }
 }
 
@@ -503,7 +508,7 @@ export function MainContentSection() {
     }))
   }
 
-  function handleCreateTemplate(audience: "Lead" | "Realtor" = "Lead") {
+  function handleCreateTemplate(audience: "Lead" | "Realtor" | "OwnerFeedback" = "Lead") {
     const nextTemplate = createCustomCommunicationTemplate(formValues.communicationTemplates.length, audience)
     updateSettings((current) => ({
       ...current,
@@ -579,7 +584,7 @@ export function MainContentSection() {
         gapDays: Math.max(0, Number(item.gapDays ?? 0) || 0),
         isActive: item.isActive !== false,
         attachPropertyDocuments: item.attachPropertyDocuments !== false,
-        audience: item.audience === "Realtor" ? "Realtor" : "Lead",
+        audience: item.audience === "OwnerFeedback" ? "OwnerFeedback" : item.audience === "Realtor" ? "Realtor" : "Lead",
         variableTokens: (item.variableTokens ?? []).filter(Boolean),
       })),
       profile: {
@@ -1035,6 +1040,10 @@ export function MainContentSection() {
                 <AppIcon data-icon="inline-start" name="add" />
                 {"New Realtor Template"}
               </Button>
+              <Button onClick={() => handleCreateTemplate("OwnerFeedback")} type="button" variant="outline">
+                <AppIcon data-icon="inline-start" name="add" />
+                {"New Owner Feedback Template"}
+              </Button>
               <Button disabled={!selectedTemplate} onClick={handleDuplicateTemplate} type="button" variant="outline">
                 {"Duplicate"}
               </Button>
@@ -1102,7 +1111,7 @@ export function MainContentSection() {
                       <span className="text-xs font-bold uppercase tracking-[0.16em] text-primary/70">{"Audience"}</span>
                       <Select
                         modal={false}
-                        onValueChange={(value) => updateTemplate((current) => ({ ...current, audience: value as "Lead" | "Realtor" }))}
+                        onValueChange={(value) => updateTemplate((current) => ({ ...current, audience: value as "Lead" | "Realtor" | "OwnerFeedback" }))}
                         value={selectedTemplate.audience ?? "Lead"}
                       >
                         <SelectTrigger><SelectValue placeholder="Select audience" /></SelectTrigger>
@@ -1110,6 +1119,7 @@ export function MainContentSection() {
                           <SelectGroup>
                             <SelectItem value="Lead">{"Lead"}</SelectItem>
                             <SelectItem value="Realtor">{"Realtor"}</SelectItem>
+                            <SelectItem value="OwnerFeedback">{"Owner Feedback"}</SelectItem>
                           </SelectGroup>
                         </SelectContent>
                       </Select>

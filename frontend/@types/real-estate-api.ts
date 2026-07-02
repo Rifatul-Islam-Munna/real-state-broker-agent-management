@@ -388,7 +388,7 @@ export type AgencyCommunicationTemplateItem = {
   gapDays?: number
   isActive?: boolean
   attachPropertyDocuments?: boolean
-  audience?: "Lead" | "Realtor"
+  audience?: "Lead" | "Realtor" | "OwnerFeedback"
 }
 
 export type AgencySettings = {
@@ -987,6 +987,54 @@ export type RealtorShowingManualInput = Omit<RealtorShowingImportInput, "rows" |
   realtorPhone: string
   property: string
   showingAt?: string | null
+}
+
+export type ShowingFeedbackPropertySummary = {
+  propertyId: number
+  propertyTitle: string
+  propertyLocation: string
+  feedbackCount: number
+  latestFeedbackAt?: string | null
+}
+
+export type ShowingFeedbackItem = {
+  id: number
+  realtorShowingId: number
+  propertyId: number
+  leadId?: number | null
+  realtorName: string
+  realtorContact: string
+  channel: "Email" | "Sms"
+  sourceMessageId: string
+  feedbackText: string
+  sentiment: "positive" | "neutral" | "negative"
+  confidence: number
+  classifier: string
+  firstMessageAt: string
+  receivedAt: string
+  createdAt: string
+  updatedAt: string
+}
+
+export type ShowingFeedbackPreviewInput = {
+  propertyId: number
+  fromDate: string
+  toDate: string
+  templateId: string
+  maxFeedback: number
+  summarize: boolean
+}
+
+export type ShowingFeedbackSendInput = ShowingFeedbackPreviewInput & {
+  channels: Array<"Email" | "Sms">
+}
+
+export type ShowingFeedbackRenderedReport = {
+  subject: string
+  body: string
+  feedbackCount: number
+  summarized: boolean
+  sent?: string[]
 }
 
 export type PropertyChatConversationStatus = "New" | "LeadCreated" | "NeedsReview"
