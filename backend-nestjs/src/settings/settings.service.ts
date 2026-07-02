@@ -259,6 +259,7 @@ export class SettingsService {
           gapDays: this.clampInt(item?.gapDays, fallbackItem.gapDays ?? 0, 0, 365),
           isActive: item?.isActive !== false,
           attachPropertyDocuments: item?.attachPropertyDocuments !== false,
+          audience: item?.audience === 'Realtor' || item?.id === 'showing-confirmation' ? 'Realtor' : 'Lead',
         };
       }),
     };

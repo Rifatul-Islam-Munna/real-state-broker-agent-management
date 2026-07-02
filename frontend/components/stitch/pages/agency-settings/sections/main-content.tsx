@@ -123,15 +123,17 @@ function collectAgencyAssetObjectNames(settings: AgencySettings) {
 
 function SectionCard({
   icon,
+  id,
   title,
   children,
 }: Readonly<{
   icon: string
+  id?: string
   title: string
   children: ReactNode
 }>) {
   return (
-    <section>
+    <section id={id}>
       <div className="mb-6 flex items-center gap-2 border-b border-primary/10 pb-2">
         <AppIcon className="text-accent" name={icon} />
         <h3 className="text-xl font-bold uppercase tracking-tight text-neutral-base">{title}</h3>
@@ -147,16 +149,17 @@ function channelBadgeClass(channel: AgencyCommunicationChannel) {
     : "bg-secondary/10 text-secondary border-secondary/20"
 }
 
-function createCustomCommunicationTemplate(index: number): AgencyCommunicationTemplateItem {
+function createCustomCommunicationTemplate(index: number, audience: "Lead" | "Realtor"): AgencyCommunicationTemplateItem {
   const id = `custom-${Date.now()}-${index}`
   return {
+    audience,
     attachPropertyDocuments: true,
     body: "Hi {{client_name}}, thanks for your interest in {{property_address}}. Reply here and we will help with next steps.",
     channels: ["Email", "SMS"],
     gapDays: 0,
     id,
     isActive: true,
-    name: `Custom Template ${index + 1}`,
+    name: `${audience} Template ${index + 1}`,
     sequenceType: "Direct",
     subject: "Property follow-up",
     variableTokens: communicationTemplateTokens,
@@ -500,8 +503,8 @@ export function MainContentSection() {
     }))
   }
 
-  function handleCreateTemplate() {
-    const nextTemplate = createCustomCommunicationTemplate(formValues.communicationTemplates.length)
+  function handleCreateTemplate(audience: "Lead" | "Realtor" = "Lead") {
+    const nextTemplate = createCustomCommunicationTemplate(formValues.communicationTemplates.length, audience)
     updateSettings((current) => ({
       ...current,
       communicationTemplates: [nextTemplate, ...current.communicationTemplates],
@@ -576,6 +579,7 @@ export function MainContentSection() {
         gapDays: Math.max(0, Number(item.gapDays ?? 0) || 0),
         isActive: item.isActive !== false,
         attachPropertyDocuments: item.attachPropertyDocuments !== false,
+        audience: item.audience === "Realtor" ? "Realtor" : "Lead",
         variableTokens: (item.variableTokens ?? []).filter(Boolean),
       })),
       profile: {
@@ -1017,15 +1021,19 @@ export function MainContentSection() {
           </div>
         </SectionCard>
 
-        <SectionCard icon="mail" title="Communication Templates">
+        <SectionCard icon="mail" id="communication-templates" title="Communication Templates">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <p className="max-w-2xl text-sm text-primary/60">
-              {"Create custom direct or follow-up templates here. New Outreach can use any active Email or SMS template from this list."}
+              {"Create Lead or Realtor direct/follow-up templates here. Lead Activity uses Lead templates; Realtor Showings uses Realtor templates."}
             </p>
             <div className="flex flex-wrap gap-2">
-              <Button onClick={handleCreateTemplate} type="button">
+              <Button onClick={() => handleCreateTemplate("Lead")} type="button">
                 <AppIcon data-icon="inline-start" name="add" />
-                {"New Custom Template"}
+                {"New Lead Template"}
+              </Button>
+              <Button onClick={() => handleCreateTemplate("Realtor")} type="button" variant="outline">
+                <AppIcon data-icon="inline-start" name="add" />
+                {"New Realtor Template"}
               </Button>
               <Button disabled={!selectedTemplate} onClick={handleDuplicateTemplate} type="button" variant="outline">
                 {"Duplicate"}
@@ -1054,6 +1062,7 @@ export function MainContentSection() {
                           <span className="w-full truncate text-left">{template.name}</span>
                           <span className="flex flex-wrap gap-1">
                             <Badge variant={template.isActive === false ? "outline" : "secondary"}>{template.sequenceType ?? "Direct"}</Badge>
+                            <Badge variant="outline">{template.audience ?? "Lead"}</Badge>
                             <Badge variant="outline">{`${template.gapDays ?? 0}d`}</Badge>
                             {template.channels.map((channel) => (
                               <Badge key={channel} className={channelBadgeClass(channel)} variant="outline">
@@ -1089,6 +1098,22 @@ export function MainContentSection() {
                     </div>
                   </div>
                   <div className="grid gap-3 md:grid-cols-2">
+                    <label className="flex flex-col gap-2">
+                      <span className="text-xs font-bold uppercase tracking-[0.16em] text-primary/70">{"Audience"}</span>
+                      <Select
+                        modal={false}
+                        onValueChange={(value) => updateTemplate((current) => ({ ...current, audience: value as "Lead" | "Realtor" }))}
+                        value={selectedTemplate.audience ?? "Lead"}
+                      >
+                        <SelectTrigger><SelectValue placeholder="Select audience" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectGroup>
+                            <SelectItem value="Lead">{"Lead"}</SelectItem>
+                            <SelectItem value="Realtor">{"Realtor"}</SelectItem>
+                          </SelectGroup>
+                        </SelectContent>
+                      </Select>
+                    </label>
                     <label className="flex flex-col gap-2">
                       <span className="text-xs font-bold uppercase tracking-[0.16em] text-primary/70">{"Template Name"}</span>
                       <Input
@@ -1193,7 +1218,7 @@ export function MainContentSection() {
               ) : (
                 <div className="rounded-lg border border-dashed p-8 text-center">
                   <p className="text-sm font-semibold text-primary/60">{"No template selected."}</p>
-                  <Button className="mt-4" onClick={handleCreateTemplate} type="button">
+                  <Button className="mt-4" onClick={() => handleCreateTemplate("Lead")} type="button">
                     {"Create Template"}
                   </Button>
                 </div>

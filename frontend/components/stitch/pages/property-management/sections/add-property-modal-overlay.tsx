@@ -5,11 +5,14 @@ import { AppIcon } from "@/components/ui/app-icon"
 import { deleteUploadedAsset, uploadPropertyAsset } from "@/lib/upload-client"
 
 import {
+  FieldError,
+  type PendingPropertyDocument,
   type PendingUploadFile,
   type PropertyFormErrors,
   type PropertyFormValues,
 } from "./property-form-shared"
 import { PropertyFormFieldsSection } from "./property-form-fields"
+import { PropertyDocumentsSection } from "./property-documents-section"
 import { PropertyMediaSection } from "./property-media-section"
 
 type AddPropertyModalOverlaySectionProps = {
@@ -42,6 +45,9 @@ function validatePropertyForm(values: PropertyFormValues, options: { galleryCoun
   }
   if (!options.hasThumbnail) errors.thumbnailUrl = "A thumbnail image is required."
   if (options.galleryCount === 0) errors.imageUrls = "Add at least one gallery image."
+  if ((values.propertyDocuments ?? []).some((document) => !document.name.trim())) {
+    errors.propertyDocuments = "Every document needs a name."
+  }
   if (
     (values.neighborhoodInsights ?? []).some((item) => {
       const type = item.type?.trim() ?? ""
@@ -97,14 +103,17 @@ export function AddPropertyModalOverlaySection({
   const [isUploading, setIsUploading] = useState(false)
   const [pendingThumbnail, setPendingThumbnail] = useState<PendingUploadFile | null>(null)
   const [pendingGalleryFiles, setPendingGalleryFiles] = useState<PendingUploadFile[]>([])
+  const [pendingDocuments, setPendingDocuments] = useState<PendingPropertyDocument[]>([])
   const thumbnailInputRef = useRef<HTMLInputElement | null>(null)
   const galleryInputRef = useRef<HTMLInputElement | null>(null)
+  const documentInputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
     setFormValues(initialValues)
     setErrors({})
     setPendingThumbnail(null)
     setPendingGalleryFiles([])
+    setPendingDocuments([])
   }, [initialValues])
 
   useEffect(() => {
@@ -181,6 +190,39 @@ export function AddPropertyModalOverlaySection({
     clearFieldErrors("imageUrls", "form")
   }
 
+  function handleDocumentSelection(event: ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(event.target.files ?? [])
+    event.target.value = ""
+    if (files.length === 0) return
+
+    setPendingDocuments((current) => [
+      ...current,
+      ...files.map((file) => ({
+        file,
+        id:
+          typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+            ? crypto.randomUUID()
+            : `${file.name}-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        name: file.name.replace(/\.[^.]+$/, ""),
+      })),
+    ])
+  }
+
+  function renamePendingDocument(id: string, name: string) {
+    setPendingDocuments((current) =>
+      current.map((document) => document.id === id ? { ...document, name } : document),
+    )
+  }
+
+  function renameExistingDocument(index: number, name: string) {
+    updateField(
+      "propertyDocuments",
+      (formValues.propertyDocuments ?? []).map((document, itemIndex) =>
+        itemIndex === index ? { ...document, name } : document,
+      ),
+    )
+  }
+
   function handleRemoveThumbnail() {
     if (pendingThumbnail) {
       URL.revokeObjectURL(pendingThumbnail.previewUrl)
@@ -210,6 +252,11 @@ export function AddPropertyModalOverlaySection({
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
 
+    if (pendingDocuments.some((document) => !document.name.trim())) {
+      setErrors((current) => ({ ...current, propertyDocuments: "Every document needs a name." }))
+      return
+    }
+
     const nextErrors = validatePropertyForm(formValues, {
       galleryCount: (formValues.imageUrls?.length ?? 0) + pendingGalleryFiles.length,
       hasThumbnail: Boolean(formValues.thumbnailUrl || pendingThumbnail),
@@ -229,6 +276,7 @@ export function AddPropertyModalOverlaySection({
         ...formValues,
         imageObjectNames: [...(formValues.imageObjectNames ?? [])],
         imageUrls: [...(formValues.imageUrls ?? [])],
+        propertyDocuments: [...(formValues.propertyDocuments ?? [])],
       }
 
       if (pendingThumbnail) {
@@ -247,6 +295,32 @@ export function AddPropertyModalOverlaySection({
         }
       }
 
+      if (pendingDocuments.length > 0) {
+        const uploadedDocuments: Array<{
+          document: PendingPropertyDocument
+          uploaded: Awaited<ReturnType<typeof uploadPropertyAsset>>
+        }> = []
+        for (const document of pendingDocuments) {
+          const uploaded = await uploadPropertyAsset(document.file, "properties/documents")
+          uploadedObjectNames.push(uploaded.objectName)
+          uploadedDocuments.push({ document, uploaded })
+        }
+        nextValues = {
+          ...nextValues,
+          propertyDocuments: [
+            ...nextValues.propertyDocuments,
+            ...uploadedDocuments.map(({ document, uploaded }) => ({
+              fileName: document.file.name,
+              fileObjectName: uploaded.objectName,
+              fileUrl: uploaded.url,
+              mimeType: uploaded.mimeType || document.file.type || "application/octet-stream",
+              name: document.name.trim(),
+              sizeBytes: uploaded.sizeBytes || document.file.size,
+            })),
+          ],
+        }
+      }
+
       const submissionSucceeded = await onSubmit(nextValues)
       if (!submissionSucceeded) {
         await Promise.allSettled(uploadedObjectNames.map((objectName) => deleteUploadedAsset(objectName)))
@@ -258,6 +332,11 @@ export function AddPropertyModalOverlaySection({
         ...(initialValues.imageObjectNames ?? []).filter(
           (objectName) => !(nextValues.imageObjectNames ?? []).includes(objectName),
         ),
+        ...(initialValues.propertyDocuments ?? [])
+          .filter((document) =>
+            !(nextValues.propertyDocuments ?? []).some((item) => item.fileObjectName === document.fileObjectName),
+          )
+          .map((document) => document.fileObjectName),
       ].filter(Boolean)
 
       if (removedObjectNames.length > 0) {
@@ -305,6 +384,24 @@ export function AddPropertyModalOverlaySection({
               thumbnailPreviewUrl={thumbnailPreviewUrl}
               thumbnailStatusLabel={pendingThumbnail ? "New thumbnail selected" : "Current property thumbnail"}
             />
+            <PropertyDocumentsSection
+              documents={formValues.propertyDocuments ?? []}
+              fileInputRef={documentInputRef}
+              onFileSelection={handleDocumentSelection}
+              onRemoveExisting={(index) =>
+                updateField(
+                  "propertyDocuments",
+                  (formValues.propertyDocuments ?? []).filter((_, itemIndex) => itemIndex !== index),
+                )
+              }
+              onRemovePending={(id) =>
+                setPendingDocuments((current) => current.filter((document) => document.id !== id))
+              }
+              onRenameExisting={renameExistingDocument}
+              onRenamePending={renamePendingDocument}
+              pendingDocuments={pendingDocuments}
+            />
+            <FieldError error={errors.propertyDocuments} />
             <PropertyFormFieldsSection
               agentOptions={agentOptions}
               errors={errors}

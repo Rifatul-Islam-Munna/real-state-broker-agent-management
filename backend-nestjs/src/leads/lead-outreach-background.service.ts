@@ -102,7 +102,7 @@ export class LeadOutreachBackgroundService {
     if (!current || current.status !== 'Scheduled') return;
     item = current;
     const now = new Date();
-    if (item.kind === 'Sms' && item.lead?.inBoard) {
+    if (item.kind === 'Sms' && item.lead?.inBoard && !item.createdBy.startsWith('Realtor Showing #')) {
       item.status = 'Failed' as any;
       item.summary = 'SMS auto-send canceled because lead is already on the board.';
       item.occurredAt = now;

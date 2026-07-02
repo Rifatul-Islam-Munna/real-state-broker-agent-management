@@ -388,6 +388,7 @@ export type AgencyCommunicationTemplateItem = {
   gapDays?: number
   isActive?: boolean
   attachPropertyDocuments?: boolean
+  audience?: "Lead" | "Realtor"
 }
 
 export type AgencySettings = {
@@ -619,6 +620,15 @@ export type PropertySellPrediction = {
   basis: string
 }
 
+export type PropertyDocumentItem = {
+  name: string
+  fileName: string
+  fileUrl: string
+  fileObjectName: string
+  mimeType: string
+  sizeBytes: number
+}
+
 export type PropertyItem = {
   id: number
   slug: string
@@ -633,6 +643,12 @@ export type PropertyItem = {
   bathRoom: string
   width: string
   description: string
+  extraDescription: string
+  ownerName?: string
+  ownerEmail?: string
+  ownerPhone?: string
+  ownerExtraInfo?: string
+  propertyDocuments?: PropertyDocumentItem[]
   thumbnailUrl?: string | null
   thumbnailObjectName?: string | null
   imageUrls: string[]
@@ -672,6 +688,12 @@ export type PropertySaveInput = {
   bathRoom: string
   width: string
   description: string
+  extraDescription: string
+  ownerName: string
+  ownerEmail: string
+  ownerPhone: string
+  ownerExtraInfo: string
+  propertyDocuments: PropertyDocumentItem[]
   thumbnailUrl?: string | null
   thumbnailObjectName?: string | null
   imageUrls: string[]
@@ -896,6 +918,75 @@ export type ContactRequestItem = {
   leadId?: number | null
   createdAt: string
   updatedAt: string
+}
+
+export type RealtorShowingItem = {
+  id: number
+  realtorName: string
+  realtorEmail: string
+  realtorPhone: string
+  showingAt?: string | null
+  propertyText: string
+  propertyId?: number | null
+  propertyMatchScore: number
+  propertyMatchMethod: "Auto" | "Manual" | "Unmatched"
+  leadId?: number | null
+  emailEnabled: boolean
+  smsEnabled: boolean
+  directTemplateId: string
+  followUpEnabled: boolean
+  followUpTemplateId: string
+  followUpGapDays: number
+  outreachAt?: string | null
+  automationStatus: "Scheduled" | "StoppedByReply" | "NotScheduled"
+  property?: { id: number; title: string; location: string } | null
+  lead?: { id: number; followUpStatus: LeadFollowUpStatus } | null
+  createdAt: string
+  updatedAt: string
+}
+
+export type RealtorShowingImportInput = {
+  rows: Array<Record<string, string>>
+  mapping: {
+    realtorName: string
+    realtorEmail: string
+    realtorPhone: string
+    property: string
+    showingAt: string
+  }
+  defaultPhoneCountry?: string
+  emailEnabled: boolean
+  smsEnabled: boolean
+  directTemplateId: string
+  outreachAt?: string | null
+  followUpEnabled: boolean
+  followUpTemplateId: string
+  followUpGapDays: number
+}
+
+export type RealtorShowingImportResult = {
+  createdCount: number
+  failedCount: number
+  failures: string[]
+}
+
+export type RealtorShowingAutomationInput = {
+  id: number
+  emailEnabled: boolean
+  smsEnabled: boolean
+  directTemplateId: string
+  outreachAt?: string | null
+  followUpEnabled: boolean
+  followUpTemplateId: string
+  followUpGapDays: number
+}
+
+export type RealtorShowingManualInput = Omit<RealtorShowingImportInput, "rows" | "mapping"> & {
+  realtorName: string
+  realtorEmail: string
+  realtorPhone: string
+  property: string
+  showingAt?: string | null
 }
 
 export type PropertyChatConversationStatus = "New" | "LeadCreated" | "NeedsReview"

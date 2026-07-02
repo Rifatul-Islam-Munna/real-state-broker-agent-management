@@ -78,6 +78,31 @@ export class Property {
   @Column({ type: 'text', default: '' })
   description: string;
 
+  @Column({ type: 'text', default: '' })
+  extraDescription: string;
+
+  @Column({ default: '' })
+  ownerName: string;
+
+  @Column({ default: '' })
+  ownerEmail: string;
+
+  @Column({ default: '' })
+  ownerPhone: string;
+
+  @Column({ type: 'text', default: '' })
+  ownerExtraInfo: string;
+
+  @Column({ type: 'jsonb', default: [] })
+  propertyDocuments: Array<{
+    name: string;
+    fileName: string;
+    fileUrl: string;
+    fileObjectName: string;
+    mimeType: string;
+    sizeBytes: number;
+  }>;
+
   @Column({ type: 'text', nullable: true })
   thumbnailUrl: string | null;
 

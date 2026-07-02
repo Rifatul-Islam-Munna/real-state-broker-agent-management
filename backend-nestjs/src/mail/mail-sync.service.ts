@@ -365,6 +365,11 @@ export class MailInboxSyncBackgroundService {
           occurredAt: inbound.receivedAt,
         }));
         await this.cancelScheduledFollowUps(historyRepo, lead.id, inbound.receivedAt);
+        await leadRepo.update(lead.id, {
+          followUpStatus: LeadFollowUpStatus.Completed,
+          lastActivityAt: inbound.receivedAt,
+          updatedAt: inbound.receivedAt,
+        });
       }
       return { skipped: false, matchedLead, createdLead };
     });

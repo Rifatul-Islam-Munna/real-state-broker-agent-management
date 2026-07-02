@@ -535,7 +535,7 @@ export function useDeleteAgentUser() {
 }
 
 export function useCreateProperty() {
-  const invalidate = useInvalidate(["properties"])
+  const invalidate = useInvalidate(["properties", "managed-properties"])
 
   return useCommonMutationApi<PropertyItem, PropertySaveInput>({
     method: "POST",
@@ -546,7 +546,7 @@ export function useCreateProperty() {
 }
 
 export function useUpdateProperty() {
-  const invalidate = useInvalidate(["properties"])
+  const invalidate = useInvalidate(["properties", "managed-properties"])
 
   return useCommonMutationApi<PropertyItem, PropertyItem>({
     method: "PATCH",
@@ -557,7 +557,7 @@ export function useUpdateProperty() {
 }
 
 export function useDeleteProperty() {
-  const invalidate = useInvalidate(["properties"])
+  const invalidate = useInvalidate(["properties", "managed-properties"])
 
   return useCommonMutationApi<unknown, { id: string }>({
     method: "DELETE",
@@ -937,6 +937,16 @@ export function useConvertMailInboxToLead() {
     successMessage: "Mail converted to lead",
     url: "/mail-inbox/convert-to-lead",
   })
+}
+
+export function useManagedProperties(params?: QueryParams) {
+  return useQueryWrapper<PaginatedResult<PropertyItem>>(
+    ["managed-properties", params],
+    `/properties/management${buildQuery(params)}`,
+    defaultQueryOptions,
+    0,
+    "managed-properties",
+  )
 }
 
 export function useSendMailMessage() {

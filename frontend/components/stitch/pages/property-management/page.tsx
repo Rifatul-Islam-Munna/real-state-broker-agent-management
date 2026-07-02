@@ -8,7 +8,7 @@ import {
   type PropertySaveInput,
   useAgentUsers,
   useCreateProperty,
-  useProperties,
+  useManagedProperties,
   useUpdateProperty,
 } from "@/hooks/use-real-estate-api"
 import { propertyHeroImage } from "@/lib/admin-portal"
@@ -42,6 +42,12 @@ function createEmptyPropertyForm(): PropertyFormValues {
     bathRoom: "",
     width: "",
     description: "",
+    extraDescription: "",
+    ownerName: "",
+    ownerEmail: "",
+    ownerPhone: "",
+    ownerExtraInfo: "",
+    propertyDocuments: [],
     keyAmenities: [],
     documentRepositoryItemIds: [],
     neighborhoodInsights: [{ type: "", description: "" }],
@@ -67,6 +73,12 @@ function mapPropertyToFormValues(property: PropertyItem): PropertyFormValues {
     bathRoom: property.bathRoom ?? "",
     width: property.width ?? "",
     description: property.description ?? "",
+    extraDescription: property.extraDescription ?? "",
+    ownerName: property.ownerName ?? "",
+    ownerEmail: property.ownerEmail ?? "",
+    ownerPhone: property.ownerPhone ?? "",
+    ownerExtraInfo: property.ownerExtraInfo ?? "",
+    propertyDocuments: property.propertyDocuments ?? [],
     thumbnailUrl: property.thumbnailUrl ?? "",
     thumbnailObjectName: property.thumbnailObjectName ?? "",
     imageUrls: property.imageUrls ?? [],
@@ -101,6 +113,12 @@ function buildPropertyPayload(
     bathRoom: values.bathRoom?.trim() ?? "",
     bedRoom: values.bedRoom?.trim() ?? "",
     description: values.description?.trim() ?? "",
+    extraDescription: values.extraDescription?.trim() ?? "",
+    ownerName: values.ownerName?.trim() ?? "",
+    ownerEmail: values.ownerEmail?.trim().toLowerCase() ?? "",
+    ownerPhone: values.ownerPhone?.trim() ?? "",
+    ownerExtraInfo: values.ownerExtraInfo?.trim() ?? "",
+    propertyDocuments: values.propertyDocuments ?? [],
     exactLocation: values.exactLocation?.trim() ?? "",
     imageObjectNames: values.imageObjectNames ?? [],
     imageUrls: values.imageUrls ?? [],
@@ -164,7 +182,7 @@ export function PropertyManagementPage() {
   const [modalState, setModalState] = useState<PropertyModalState>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
 
-  const propertiesQuery = useProperties({
+  const propertiesQuery = useManagedProperties({
     agent: activeAgent || undefined,
     page,
     pageSize: PAGE_SIZE,

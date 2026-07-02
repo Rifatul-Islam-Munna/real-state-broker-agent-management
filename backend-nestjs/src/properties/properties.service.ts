@@ -8,6 +8,8 @@ import { paginated, text, toInt } from '../common/api-contract';
 import { BrokerageService } from '../brokerage/brokerage.service';
 import { ApprovalType } from '../brokerage/entities/brokerage.entity';
 import { AuditAction, AuditEntityType } from '../brokerage/entities/audit-log.entity';
+import { SettingsService } from '../settings/settings.service';
+import { normalizePhoneNumber } from '../common/phone-normalizer';
 
 @Injectable()
 export class PropertiesService {
@@ -20,9 +22,10 @@ export class PropertiesService {
     private questionRepository: Repository<PropertyPreQuestion>,
     private predictionService: PredictionService,
     private brokerageService: BrokerageService,
+    private settingsService: SettingsService,
   ) {}
 
-  async findAll(page = 1, pageSize = 10, search?: string, propertyType?: string, listingType?: string, status?: string, agent?: string): Promise<any> {
+  async findAll(page = 1, pageSize = 10, search?: string, propertyType?: string, listingType?: string, status?: string, agent?: string, includePrivate = false): Promise<any> {
     page = toInt(page, 1);
     pageSize = toInt(pageSize, 10);
     const qb = this.propertyRepository.createQueryBuilder('property')
@@ -44,7 +47,7 @@ export class PropertiesService {
       .take(pageSize)
       .getManyAndCount();
 
-    const items = await Promise.all(properties.map(p => this.mapProperty(p)));
+    const items = await Promise.all(properties.map(p => this.mapProperty(p, includePrivate)));
     return paginated(items, total, page, pageSize);
   }
 
@@ -67,13 +70,13 @@ export class PropertiesService {
     return Promise.all(properties.map(p => this.mapProperty(p)));
   }
 
-  async findOne(id: number): Promise<any> {
+  async findOne(id: number, includePrivate = false): Promise<any> {
     const property = await this.propertyRepository.findOne({
       where: { id },
       relations: ['neighborhoodInsights', 'preQuestions', 'agent'],
     });
     if (!property) throw new NotFoundException('Property not found');
-    return this.mapProperty(property);
+    return this.mapProperty(property, includePrivate);
   }
 
   async findBySlug(slug: string): Promise<any> {
@@ -89,7 +92,7 @@ export class PropertiesService {
   }
 
   async create(createDto: any, actor = 'CRM', isAdmin = true): Promise<any> {
-    const normalized = this.normalizeDto(createDto);
+    const normalized = await this.normalizeDto(createDto);
     const requestedStatus = normalized.status ?? PropertyStatus.Open;
     const requestedLiveStatus = this.requestedLiveStatus(requestedStatus);
     if (!isAdmin && requestedLiveStatus) normalized.status = PropertyStatus.PendingApproval;
@@ -117,7 +120,7 @@ export class PropertiesService {
       newValue: saved.title,
       actor,
     });
-    return this.findOne(saved.id);
+    return this.findOne(saved.id, true);
   }
 
   async update(id: number, updateDto: any, actor = 'CRM', isAdmin = true): Promise<any> {
@@ -127,7 +130,7 @@ export class PropertiesService {
     });
     if (!property) throw new NotFoundException('Property not found');
 
-    const normalized = this.normalizeDto(updateDto);
+    const normalized = await this.normalizeDto(updateDto);
     const oldPrice = property.price;
     const oldStatus = property.status;
     const requestedStatus = normalized.status ?? property.status;
@@ -174,7 +177,7 @@ export class PropertiesService {
     if (oldPrice !== saved.price) await this.brokerageService.logAudit({ entityType: AuditEntityType.Property, entityId: saved.id, action: AuditAction.Update, fieldName: 'price', oldValue: oldPrice, newValue: saved.price, actor });
     if (oldStatus !== saved.status) await this.brokerageService.logAudit({ entityType: AuditEntityType.Property, entityId: saved.id, action: AuditAction.Update, fieldName: 'status', oldValue: oldStatus, newValue: saved.status, actor });
 
-    return this.findOne(saved.id);
+    return this.findOne(saved.id, true);
   }
 
   async delete(id: number): Promise<any> {
@@ -182,7 +185,7 @@ export class PropertiesService {
     if (property) return this.propertyRepository.remove(property);
   }
 
-  private async mapProperty(property: Property) {
+  private async mapProperty(property: Property, includePrivate = false) {
     const prediction = await this.predictionService.predictPropertySales(property);
     return {
       id: property.id,
@@ -198,6 +201,14 @@ export class PropertiesService {
       bathRoom: property.bathRoom,
       width: property.width,
       description: property.description,
+      extraDescription: property.extraDescription,
+      ...(includePrivate ? {
+        ownerName: property.ownerName,
+        ownerEmail: property.ownerEmail,
+        ownerPhone: property.ownerPhone,
+        ownerExtraInfo: property.ownerExtraInfo,
+        propertyDocuments: property.propertyDocuments ?? [],
+      } : {}),
       thumbnailUrl: property.thumbnailUrl,
       thumbnailObjectName: property.thumbnailObjectName,
       imageUrls: property.imageUrls ?? [],
@@ -237,9 +248,10 @@ export class PropertiesService {
     };
   }
 
-  private normalizeDto(dto: any) {
+  private async normalizeDto(dto: any) {
     const cleanList = (values: any[]) => [...new Set((values ?? []).map((value) => text(value).trim()).filter(Boolean))];
     const now = new Date();
+    const settings = await this.settingsService.getAdminSettings();
     return {
       ...dto,
       title: text(dto.title).trim(),
@@ -250,6 +262,21 @@ export class PropertiesService {
       bathRoom: text(dto.bathRoom).trim(),
       width: text(dto.width).trim(),
       description: text(dto.description).trim(),
+      extraDescription: text(dto.extraDescription).trim(),
+      ownerName: text(dto.ownerName).trim(),
+      ownerEmail: text(dto.ownerEmail).trim().toLowerCase(),
+      ownerPhone: normalizePhoneNumber(text(dto.ownerPhone).trim(), settings.profile?.defaultPhoneCountry),
+      ownerExtraInfo: text(dto.ownerExtraInfo).trim(),
+      propertyDocuments: (dto.propertyDocuments ?? [])
+        .map((item: any) => ({
+          name: text(item.name).trim(),
+          fileName: text(item.fileName).trim(),
+          fileUrl: text(item.fileUrl).trim(),
+          fileObjectName: text(item.fileObjectName).trim(),
+          mimeType: text(item.mimeType).trim(),
+          sizeBytes: Math.max(0, Number(item.sizeBytes) || 0),
+        }))
+        .filter((item: any) => item.name && item.fileName && item.fileUrl),
       thumbnailUrl: text(dto.thumbnailUrl).trim() || null,
       thumbnailObjectName: text(dto.thumbnailObjectName).trim() || null,
       imageUrls: cleanList(dto.imageUrls),

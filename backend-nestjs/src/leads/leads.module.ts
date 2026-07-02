@@ -17,9 +17,10 @@ import { ContactRequest } from '../contact/entities/contact.entity';
 import { BrokerageModule } from '../brokerage/brokerage.module';
 import { SmsModule } from '../sms/sms.module';
 import { DocumentRepositoryItem } from '../documents/entities/document.entity';
+import { Property } from '../properties/entities/property.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Lead, LeadHistoryEntry, DealPipeline, MailInboxItem, ContactRequest, DocumentRepositoryItem]), SettingsModule, BrokerageModule, SmsModule],
+  imports: [TypeOrmModule.forFeature([Lead, LeadHistoryEntry, DealPipeline, MailInboxItem, ContactRequest, DocumentRepositoryItem, Property]), SettingsModule, BrokerageModule, SmsModule],
   providers: [
     LeadsService,
     LeadOutreachService,
@@ -30,6 +31,7 @@ import { DocumentRepositoryItem } from '../documents/entities/document.entity';
   controllers: [LeadsController, LeadHistoryController, LeadOutreachController],
   exports: [
     LeadsService,
+    LeadOutreachService,
     LeadQualificationPredictionService,
     MailboxLeadIntelligenceService,
     LeadOutreachBackgroundService,

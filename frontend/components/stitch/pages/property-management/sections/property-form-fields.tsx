@@ -337,6 +337,50 @@ export function PropertyFormFieldsSection({
 
       <section>
         <h4 className="mb-6 flex items-center gap-2 text-lg font-bold text-slate-900 dark:text-white">
+          <AppIcon className="text-primary" name="person" />
+          {" Property Owner "}
+        </h4>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div className="flex flex-col gap-2">
+            <label className="text-sm font-bold text-slate-700 dark:text-slate-300">{"Owner Name"}</label>
+            <Input
+              onChange={(event) => updateField("ownerName", event.target.value)}
+              placeholder="Property owner full name"
+              value={formValues.ownerName}
+            />
+          </div>
+          <div className="flex flex-col gap-2">
+            <label className="text-sm font-bold text-slate-700 dark:text-slate-300">{"Owner Phone"}</label>
+            <Input
+              onChange={(event) => updateField("ownerPhone", event.target.value)}
+              placeholder="+1 555 000 0000"
+              type="tel"
+              value={formValues.ownerPhone}
+            />
+          </div>
+          <div className="flex flex-col gap-2">
+            <label className="text-sm font-bold text-slate-700 dark:text-slate-300">{"Owner Email"}</label>
+            <Input
+              onChange={(event) => updateField("ownerEmail", event.target.value)}
+              placeholder="owner@example.com"
+              type="email"
+              value={formValues.ownerEmail}
+            />
+          </div>
+          <div className="flex flex-col gap-2">
+            <label className="text-sm font-bold text-slate-700 dark:text-slate-300">{"Owner Extra Information"}</label>
+            <Textarea
+              className="min-h-24"
+              onChange={(event) => updateField("ownerExtraInfo", event.target.value)}
+              placeholder="Preferred contact time, ownership notes, access instructions..."
+              value={formValues.ownerExtraInfo}
+            />
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h4 className="mb-6 flex items-center gap-2 text-lg font-bold text-slate-900 dark:text-white">
           <AppIcon className="text-primary" name="straighten" />
           {" Specifications & Layout "}
         </h4>
@@ -395,6 +439,17 @@ export function PropertyFormFieldsSection({
           value={formValues.description}
         />
         <FieldError error={errors.description} />
+        <div className="mt-4 flex flex-col gap-2">
+          <label className="text-sm font-bold text-slate-700 dark:text-slate-300">
+            {"Extra Property Description"}
+          </label>
+          <Textarea
+            className="min-h-28"
+            onChange={(event) => updateField("extraDescription", event.target.value)}
+            placeholder="Internal or additional property details..."
+            value={formValues.extraDescription}
+          />
+        </div>
       </section>
 
       <section>

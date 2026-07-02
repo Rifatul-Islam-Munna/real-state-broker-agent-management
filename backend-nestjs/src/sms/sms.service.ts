@@ -107,7 +107,7 @@ export class SmsService {
       const fromNumber = record.from?.phoneNumber ?? '';
       const toNumber = Array.isArray(record.to) ? record.to[0]?.phoneNumber ?? '' : '';
       const mediaUrls = Array.isArray(record.attachments) ? record.attachments.map((item) => item.uri ?? item.contentUri).filter(Boolean) : [];
-      const lead = await this.findLeadByPhone(fromNumber || toNumber);
+      const lead = await this.findLeadByPhone(record.direction === 'Outbound' ? toNumber : fromNumber);
       await this.saveMessage({
         body: record.subject ?? record.message ?? '',
         direction: record.direction === 'Outbound' ? 'Outgoing' : 'Incoming',
@@ -131,7 +131,7 @@ export class SmsService {
       return { validationToken: headers['validation-token'] };
     }
     const normalized = this.normalizeWebhook(provider, payload);
-    const lead = await this.findLeadByPhone(normalized.fromNumber);
+    const lead = await this.findLeadByPhone(normalized.direction === 'Outgoing' ? normalized.toNumber : normalized.fromNumber);
     const saved = await this.saveMessage({ ...normalized, lead, rawPayload: payload });
     return this.mapMessage(saved);
   }
@@ -155,8 +155,41 @@ export class SmsService {
     const saved = await this.smsRepo.save(entity);
     if ((input.direction ?? 'Incoming') === 'Incoming' && input.lead?.id) {
       await this.cancelScheduledFollowUps(input.lead.id, saved.occurredAt ?? new Date());
+    } else if (
+      (input.direction ?? 'Incoming') === 'Outgoing'
+      && input.lead?.id
+      && !`${input.rawPayload?.createdBy ?? ''}`.startsWith('Realtor Showing #')
+    ) {
+      await this.cancelRealtorFollowUpsAfterManualMessage(input.lead.id, saved.occurredAt ?? new Date());
     }
     return saved;
+  }
+
+  private async cancelRealtorFollowUpsAfterManualMessage(leadId: number, contactedAt: Date) {
+    const initialMessageExists = await this.historyRepo.createQueryBuilder('history')
+      .where('history.lead_id = :leadId', { leadId })
+      .andWhere("history.created_by LIKE 'Realtor Showing #%'")
+      .andWhere("history.created_by NOT LIKE '% Follow-up'")
+      .andWhere('history.status IN (:...statuses)', { statuses: ['Sent', 'Completed'].map(leadHistoryStatusDb) })
+      .getExists();
+    if (!initialMessageExists) return;
+
+    await this.historyRepo.createQueryBuilder()
+      .update(LeadHistoryEntry)
+      .set({
+        occurredAt: contactedAt,
+        status: 'Failed',
+        summary: 'Realtor follow-up canceled because a manual message was sent after the first message.',
+      })
+      .where('lead_id = :leadId', { leadId })
+      .andWhere('status = :status', { status: leadHistoryStatusDb('Scheduled') })
+      .andWhere("created_by LIKE 'Realtor Showing #% Follow-up'")
+      .execute();
+    await this.leadRepo.update(leadId, {
+      followUpStatus: LeadFollowUpStatus.Completed,
+      lastActivityAt: contactedAt,
+      updatedAt: contactedAt,
+    });
   }
 
   private async cancelScheduledFollowUps(leadId: number, repliedAt: Date) {

@@ -163,7 +163,12 @@ export function LeadOutreachSchedulePage() {
   )
   const availableTemplates = useMemo(() => {
     const templates = templatesQuery.data ?? []
-    return templates.filter((template) => template.isActive !== false && template.channels.some((channel) => channel === "Email" || channel === "SMS"))
+    return templates.filter(
+      (template) =>
+        template.isActive !== false
+        && template.audience !== "Realtor"
+        && template.channels.some((channel) => channel === "Email" || channel === "SMS"),
+    )
   }, [templatesQuery.data])
   const leadStagePreviewItems = useMemo(
     () => leadStagePreviewQuery.data?.items ?? [],

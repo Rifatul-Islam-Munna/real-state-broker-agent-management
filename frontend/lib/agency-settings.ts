@@ -25,6 +25,7 @@ export const defaultAgencySettings: AgencySettings = {
       name: "New Lead Welcome",
       subject: "Welcome to Skyline Real Estate, {{client_name}}!",
       variableTokens: ["{{client_name}}", "{{property_address}}", "{{agent_name}}", "{{agency_name}}"],
+      audience: "Lead",
     },
     {
       body:
@@ -34,6 +35,7 @@ export const defaultAgencySettings: AgencySettings = {
       name: "Showing Confirmation",
       subject: "Your showing is confirmed for {{property_address}}",
       variableTokens: ["{{client_name}}", "{{property_address}}", "{{showing_time}}", "{{agent_name}}"],
+      audience: "Realtor",
     },
     {
       body:
@@ -43,6 +45,7 @@ export const defaultAgencySettings: AgencySettings = {
       name: "Contract Executed",
       subject: "Contract executed for {{property_address}}",
       variableTokens: ["{{client_name}}", "{{property_address}}", "{{agent_name}}"],
+      audience: "Lead",
     },
     {
       body:
@@ -52,6 +55,7 @@ export const defaultAgencySettings: AgencySettings = {
       name: "Closing Reminder",
       subject: "Closing reminder for {{property_address}}",
       variableTokens: ["{{client_name}}", "{{property_address}}", "{{closing_date}}", "{{agent_name}}"],
+      audience: "Lead",
     },
   ],
   updatedAt: "",

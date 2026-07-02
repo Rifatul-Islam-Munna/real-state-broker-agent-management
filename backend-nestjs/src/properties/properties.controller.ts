@@ -45,6 +45,21 @@ export class PropertiesController {
     return this.propertiesService.getFilters();
   }
 
+  @Get('management')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Fetch properties with private owner and document data' })
+  async findManaged(
+    @Query('page') page: number = 1,
+    @Query('pageSize') pageSize: number = 10,
+    @Query('search') search?: string,
+    @Query('propertyType') propertyType?: string,
+    @Query('listingType') listingType?: string,
+    @Query('status') status?: string,
+    @Query('agent') agent?: string,
+  ) {
+    return this.propertiesService.findAll(page, pageSize, search, propertyType, listingType, status, agent, true);
+  }
+
   @Post()
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Create property' })

@@ -1,4 +1,4 @@
-import type { PropertyItem } from "@/@types/real-estate-api"
+import type { PropertyDocumentItem, PropertyItem } from "@/@types/real-estate-api"
 
 export type NeighborhoodInsightFormValue = {
   type: string
@@ -28,6 +28,12 @@ export type PropertyFormValues = {
   bathRoom: string
   width: string
   description: string
+  extraDescription: string
+  ownerName: string
+  ownerEmail: string
+  ownerPhone: string
+  ownerExtraInfo: string
+  propertyDocuments: PropertyDocumentItem[]
   keyAmenities: string[]
   documentRepositoryItemIds: number[]
   neighborhoodInsights: NeighborhoodInsightFormValue[]
@@ -44,6 +50,12 @@ export type PendingUploadFile = {
   id: string
   file: File
   previewUrl: string
+}
+
+export type PendingPropertyDocument = {
+  id: string
+  name: string
+  file: File
 }
 
 export const defaultAmenityOptions = [

@@ -5,12 +5,18 @@ import { MailInboxItem, MailInboxStatus, mailInboxStatusDbValue } from './entiti
 import { LeadsService } from '../leads/leads.service';
 import { paginated, toInt } from '../common/api-contract';
 import { SettingsService } from '../settings/settings.service';
+import { Lead, LeadFollowUpStatus } from '../leads/entities/lead.entity';
+import { LeadHistoryEntry, leadHistoryStatusDb } from '../leads/entities/lead-history.entity';
 
 @Injectable()
 export class MailService {
   constructor(
     @InjectRepository(MailInboxItem)
     private mailRepo: Repository<MailInboxItem>,
+    @InjectRepository(Lead)
+    private leadRepo: Repository<Lead>,
+    @InjectRepository(LeadHistoryEntry)
+    private historyRepo: Repository<LeadHistoryEntry>,
     private leadsService: LeadsService,
     private settingsService: SettingsService,
   ) {}
@@ -63,6 +69,9 @@ export class MailService {
       html: message.replace(/\n/g, '<br>'),
       attachments: attachmentUrls.map((url) => ({ filename: url.split('/').pop() || 'attachment', path: url })),
     });
+    const lead = await this.leadRepo.createQueryBuilder('lead')
+      .where('LOWER(lead.email) = :email', { email: to })
+      .getOne();
     const item = this.mailRepo.create({
       email: to,
       kind: 'Direct',
@@ -70,8 +79,38 @@ export class MailService {
       name: `${dto.name ?? to.split('@')[0]}`.trim(),
       status: MailInboxStatus.Replied,
       subject,
+      leadId: lead?.id ?? null,
     } as DeepPartial<MailInboxItem>);
-    return this.mapMail(await this.mailRepo.save(item));
+    const saved = await this.mailRepo.save(item);
+    if (lead) await this.cancelRealtorFollowUpsAfterManualMessage(lead.id, saved.createdAt ?? new Date());
+    return this.mapMail(saved);
+  }
+
+  private async cancelRealtorFollowUpsAfterManualMessage(leadId: number, contactedAt: Date) {
+    const initialMessageExists = await this.historyRepo.createQueryBuilder('history')
+      .where('history.lead_id = :leadId', { leadId })
+      .andWhere("history.created_by LIKE 'Realtor Showing #%'")
+      .andWhere("history.created_by NOT LIKE '% Follow-up'")
+      .andWhere('history.status IN (:...statuses)', { statuses: ['Sent', 'Completed'].map(leadHistoryStatusDb) })
+      .getExists();
+    if (!initialMessageExists) return;
+
+    await this.historyRepo.createQueryBuilder()
+      .update(LeadHistoryEntry)
+      .set({
+        occurredAt: contactedAt,
+        status: 'Failed',
+        summary: 'Realtor follow-up canceled because a manual email was sent after the first message.',
+      })
+      .where('lead_id = :leadId', { leadId })
+      .andWhere('status = :status', { status: leadHistoryStatusDb('Scheduled') })
+      .andWhere("created_by LIKE 'Realtor Showing #% Follow-up'")
+      .execute();
+    await this.leadRepo.update(leadId, {
+      followUpStatus: LeadFollowUpStatus.Completed,
+      lastActivityAt: contactedAt,
+      updatedAt: contactedAt,
+    });
   }
 
   async update(id: number, dto: any) {

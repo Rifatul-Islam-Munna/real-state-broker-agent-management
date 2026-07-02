@@ -7,6 +7,13 @@ import { DealPipeline } from '../deals/entities/deal-pipeline.entity';
 import { SettingsService } from '../settings/settings.service';
 import { SmsService } from '../sms/sms.service';
 import { DocumentRepositoryItem } from '../documents/entities/document.entity';
+import { Property } from '../properties/entities/property.entity';
+
+type OutreachDocument = {
+  title: string;
+  fileName: string;
+  fileUrl: string;
+};
 
 @Injectable()
 export class LeadOutreachService {
@@ -19,6 +26,8 @@ export class LeadOutreachService {
     private dealRepo: Repository<DealPipeline>,
     @InjectRepository(DocumentRepositoryItem)
     private documentRepo: Repository<DocumentRepositoryItem>,
+    @InjectRepository(Property)
+    private propertyRepo: Repository<Property>,
     private settingsService: SettingsService,
     private smsService: SmsService,
   ) {}
@@ -86,7 +95,7 @@ export class LeadOutreachService {
       ? await this.findPropertyDocuments(lead.property)
       : [];
     const mediaUrls = [...this.stringList(dto.mediaUrls), ...propertyDocuments.map((doc) => doc.fileUrl)];
-    if (kind === 'Sms' && lead.inBoard) {
+    if (kind === 'Sms' && lead.inBoard && !`${dto.createdBy ?? ''}`.startsWith('Realtor Showing #')) {
       shouldSchedule = false;
       status = 'Failed';
       sendFailure = ' SMS auto-send canceled because lead is already on the board.';
@@ -137,6 +146,13 @@ export class LeadOutreachService {
     }
     if (status === 'Sent' && ['Email', 'Sms'].includes(kind) && dto.templateId) {
       await this.queueFollowUpTemplates(lead, kind, dto.templateId, provider, dto.createdBy?.trim() || 'CRM', now);
+    }
+    if (
+      status === 'Sent'
+      && ['Email', 'Sms'].includes(kind)
+      && !`${dto.createdBy ?? ''}`.startsWith('Realtor Showing #')
+    ) {
+      await this.cancelRealtorFollowUpsAfterManualMessage(lead.id, now);
     }
 
     return this.mapHistory(saved);
@@ -214,14 +230,28 @@ export class LeadOutreachService {
   private async findPropertyDocuments(propertyText: string) {
     const normalized = `${propertyText ?? ''}`.trim().toLowerCase();
     if (!normalized) return [];
-    const docs = await this.documentRepo.find({ where: { documentType: 'Property' as any } });
-    return docs.filter((doc) => {
+    const [docs, properties] = await Promise.all([
+      this.documentRepo.find({ where: { documentType: 'Property' as any } }),
+      this.propertyRepo.find(),
+    ]);
+    const repositoryDocs = docs.filter((doc) => {
       const title = `${doc.propertyTitle || doc.title || ''}`.trim().toLowerCase();
       return title && (normalized.includes(title) || title.includes(normalized));
     });
+    const embeddedDocs = properties
+      .filter((property) => {
+        const title = `${property.title ?? ''}`.trim().toLowerCase();
+        return title && (normalized.includes(title) || title.includes(normalized));
+      })
+      .flatMap((property) => (property.propertyDocuments ?? []).map((doc) => ({
+        title: doc.name,
+        fileName: doc.fileName,
+        fileUrl: doc.fileUrl,
+      })));
+    return [...repositoryDocs, ...embeddedDocs];
   }
 
-  private async sendEmailViaSmtp(to: string, subject: string, message: string, docs: DocumentRepositoryItem[]) {
+  private async sendEmailViaSmtp(to: string, subject: string, message: string, docs: OutreachDocument[]) {
     const config = await this.settingsService.getSmtpConfig();
     if (!config?.host || !config?.username || !config?.password) return;
     const nodemailer = require('nodemailer');
@@ -241,12 +271,39 @@ export class LeadOutreachService {
     });
   }
 
-  private bodyWithDocuments(body: string, docs: DocumentRepositoryItem[]) {
+  private bodyWithDocuments(body: string, docs: OutreachDocument[]) {
     return [body, ...docs.map((doc) => `Attached document: ${doc.title} - ${doc.fileUrl}`)].filter(Boolean).join('\n');
   }
 
   private stringList(value: any) {
     return Array.isArray(value) ? [...new Set(value.map((item) => `${item ?? ''}`.trim()).filter(Boolean))] : [];
+  }
+
+  private async cancelRealtorFollowUpsAfterManualMessage(leadId: number, contactedAt: Date) {
+    const initialMessageExists = await this.historyRepo.createQueryBuilder('history')
+      .where('history.lead_id = :leadId', { leadId })
+      .andWhere("history.created_by LIKE 'Realtor Showing #%'")
+      .andWhere("history.created_by NOT LIKE '% Follow-up'")
+      .andWhere('history.status IN (:...statuses)', { statuses: ['Sent', 'Completed'].map(leadHistoryStatusDb) })
+      .getExists();
+    if (!initialMessageExists) return;
+
+    await this.historyRepo.createQueryBuilder()
+      .update(LeadHistoryEntry)
+      .set({
+        occurredAt: contactedAt,
+        status: 'Failed',
+        summary: 'Realtor follow-up canceled because a manual message was sent after the first message.',
+      })
+      .where('lead_id = :leadId', { leadId })
+      .andWhere('status = :status', { status: leadHistoryStatusDb('Scheduled') })
+      .andWhere("created_by LIKE 'Realtor Showing #% Follow-up'")
+      .execute();
+    await this.leadRepo.update(leadId, {
+      followUpStatus: 'Completed' as any,
+      lastActivityAt: contactedAt,
+      updatedAt: contactedAt,
+    });
   }
 
   private async queueFollowUpTemplates(lead: Lead, kind: string, templateId: string, provider: string, createdBy: string, now: Date) {
