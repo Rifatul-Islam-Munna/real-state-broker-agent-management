@@ -3,6 +3,8 @@
 import { useDeferredValue, useEffect, useState } from "react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 
+import { LeadHistoryPage } from "@/components/stitch/pages/lead-history/page"
+import { LeadOutreachSchedulePage } from "@/components/stitch/pages/lead-history/lead-outreach-schedule-page"
 import {
   type AgentUserOption,
   type LeadItem,
@@ -17,8 +19,6 @@ import {
 } from "@/hooks/use-real-estate-api"
 import { useDispatchLeadOutreach } from "@/hooks/use-lead-outreach-api"
 import { getPortalRoutes } from "@/lib/portal-routes"
-import { LeadHistoryPage } from "@/components/stitch/pages/lead-history/page"
-import { LeadOutreachSchedulePage } from "@/components/stitch/pages/lead-history/lead-outreach-schedule-page"
 
 import { type LeadFormValues, Section1Section, Section2Section } from "./sections"
 import type {
@@ -28,21 +28,18 @@ import type {
 
 const PAGE_SIZE = 10
 
-function mapLeadValuesToPayload(values: LeadFormValues, lead?: LeadItem) {
+function buildLeadWriteFields(values: LeadFormValues) {
   return {
     agent: values.agent?.trim() ?? "",
     agentId: values.agentId ?? null,
     budget: values.budget?.trim() ?? "",
     email: values.email?.trim() ?? "",
-    id: lead?.id ?? 0,
     inBoard: values.inBoard,
     interest: values.interest?.trim() ?? "",
-    linkedDealId: lead?.linkedDealId ?? null,
-    linkedDealTitle: lead?.linkedDealTitle ?? null,
     name: values.name?.trim() ?? "",
     notes: (values.notes ?? "")
       .split("\n")
-      .map((item) => item?.trim() ?? "")
+      .map((item) => item.trim())
       .filter(Boolean),
     phone: values.phone?.trim() ?? "",
     priority: (values.priority ?? "Warm") as LeadPriority,
@@ -56,10 +53,13 @@ function mapLeadValuesToPayload(values: LeadFormValues, lead?: LeadItem) {
       : null,
     nextActionType: values.nextActionType?.trim() ?? "",
     followUpStatus: values.followUpStatus ?? "Open",
-    isFollowUpOverdue: lead?.isFollowUpOverdue ?? false,
-    createdAt: lead?.createdAt ?? new Date().toISOString(),
-    lastActivityAt: lead?.lastActivityAt ?? new Date().toISOString(),
-    updatedAt: lead?.updatedAt ?? new Date().toISOString(),
+  }
+}
+
+function buildLeadUpdatePayload(values: LeadFormValues, lead: LeadItem): LeadItem {
+  return {
+    ...lead,
+    ...buildLeadWriteFields(values),
   }
 }
 
@@ -103,12 +103,12 @@ export function LeadCrmPipelinePage() {
   }, [leadsQuery.data?.items])
 
   async function handleCreateLead(values: LeadFormValues) {
-    const response = await createLeadMutation.mutateAsync(mapLeadValuesToPayload(values))
+    const response = await createLeadMutation.mutateAsync(buildLeadWriteFields(values))
 
     if (response.error) return response.error.message
 
     if (response.data) {
-      setLocalLeads((current) => [response.data as LeadItem, ...current])
+      setLocalLeads((current) => [response.data, ...current])
     }
 
     return null
@@ -120,7 +120,7 @@ export function LeadCrmPipelinePage() {
     if (!existingLead) return "Lead not found."
 
     const response = await updateLeadMutation.mutateAsync(
-      mapLeadValuesToPayload(values, existingLead),
+      buildLeadUpdatePayload(values, existingLead),
     )
 
     if (response.error) return response.error.message
@@ -142,7 +142,7 @@ export function LeadCrmPipelinePage() {
     if (!existingLead) return "Lead not found."
 
     return handleUpdateLead(leadId, {
-      ...mapLeadValuesToPayloadToForm(existingLead),
+      ...mapLeadToFormValues(existingLead),
       inBoard: false,
       notes: `${(existingLead.notes ?? []).join("\n")}\nCanceled: ${reason ?? ""}`.trim(),
       stage: "Canceled",
@@ -154,9 +154,7 @@ export function LeadCrmPipelinePage() {
     mode: LeadOutreachMode,
     values: LeadOutreachComposerValues,
   ) {
-    const existingLead = localLeads.find((lead) => lead.id === leadId)
-
-    if (!existingLead) return "Lead not found."
+    if (!localLeads.some((lead) => lead.id === leadId)) return "Lead not found."
 
     const response = await dispatchLeadOutreachMutation.mutateAsync({
       leadId,
@@ -169,9 +167,7 @@ export function LeadCrmPipelinePage() {
       createdBy: portalRoutes.kind === "agent" ? "Agent" : "Admin",
     })
 
-    if (response.error) return response.error.message
-
-    return null
+    return response.error?.message ?? null
   }
 
   async function handleSetLeadBoard(leadId: number, inBoard: boolean) {
@@ -241,6 +237,7 @@ export function LeadCrmPipelinePage() {
     const response = await convertLeadToDealMutation.mutateAsync({ leadId })
 
     if (response.error) return response.error.message
+    if (!response.data) return "The deal was not returned by the server."
 
     setLocalLeads((current) =>
       current.map((lead) =>
@@ -248,18 +245,15 @@ export function LeadCrmPipelinePage() {
           ? {
               ...lead,
               inBoard: false,
-              linkedDealId: response.data?.id ?? lead.linkedDealId,
-              linkedDealTitle: response.data?.title ?? lead.linkedDealTitle,
+              linkedDealId: response.data.id,
+              linkedDealTitle: response.data.title,
               stage: "Deal",
             }
           : lead,
       ),
     )
 
-    if (response.data?.id) {
-      router.push(`${portalRoutes.deals}?dealId=${response.data.id}`)
-    }
-
+    router.push(`${portalRoutes.deals}?dealId=${response.data.id}`)
     return null
   }
 
@@ -305,7 +299,7 @@ export function LeadCrmPipelinePage() {
   )
 }
 
-function mapLeadValuesToForm(lead: LeadItem): LeadFormValues {
+function mapLeadToFormValues(lead: LeadItem): LeadFormValues {
   return {
     name: lead.name ?? "",
     email: lead.email ?? "",
@@ -330,8 +324,4 @@ function mapLeadValuesToForm(lead: LeadItem): LeadFormValues {
 
 function sortAgentOptions(items: AgentUserOption[]) {
   return [...items].sort((left, right) => left.fullName.localeCompare(right.fullName))
-}
-
-function mapLeadValuesToPayloadToForm(lead: LeadItem): LeadFormValues {
-  return mapLeadValuesToForm(lead)
 }
