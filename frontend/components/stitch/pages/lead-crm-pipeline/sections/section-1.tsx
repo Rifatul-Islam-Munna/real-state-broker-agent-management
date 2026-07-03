@@ -1,6 +1,8 @@
 import Link from "next/link"
 
 import { AppIcon } from "@/components/ui/app-icon"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 
 type Section1SectionProps = {
@@ -15,54 +17,43 @@ export function Section1Section({
   searchTerm,
 }: Section1SectionProps) {
   return (
-    <header className="border-b border-primary/10 bg-white px-4 py-4 dark:bg-background-dark md:px-6">
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:gap-8">
-          <div className="flex items-center gap-3 text-primary">
-            <div className="flex size-10 items-center justify-center border border-primary/20 bg-primary/10">
-              <AppIcon name="group" />
-            </div>
-            <div>
-              <h2 className="text-lg font-bold leading-tight tracking-tight text-slate-900 dark:text-white">
-                {"LeadPro CRM"}
-              </h2>
-              <p className="text-sm text-slate-500 dark:text-slate-400">
-                {"Track every buyer and seller from first touch to signed deal."}
-              </p>
-            </div>
+    <Card className="rounded-none border-x-0 border-t-0 shadow-none">
+      <CardHeader className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex items-start gap-3">
+          <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+            <AppIcon className="text-xl" name="group" />
+          </span>
+          <div>
+            <CardTitle className="text-xl">{"Lead CRM"}</CardTitle>
+            <CardDescription>
+              {"Track every buyer and seller from first touch to signed deal."}
+            </CardDescription>
           </div>
-          <label className="flex h-11 min-w-0 flex-1 xl:min-w-80">
-            <div className="flex w-full flex-1 items-center border border-slate-200 bg-slate-100 dark:border-white/10 dark:bg-white/5">
-              <div className="flex items-center justify-center pl-3 text-slate-500">
-                <AppIcon className="text-sm" name="search" />
-              </div>
-              <Input
-                className="form-input w-full border-none bg-transparent text-sm placeholder:text-slate-500 focus:ring-0"
-                onChange={(event) => onSearchChange(event.target.value)}
-                placeholder="Search leads, properties, or assigned agents..."
-                value={searchTerm}
-              />
-            </div>
-          </label>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <Link
-            className="flex h-11 items-center justify-center gap-2 border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 transition-colors hover:border-primary hover:text-primary dark:border-white/10 dark:bg-white/5 dark:text-slate-200"
-            href="/dashboard/lead-schedule"
-          >
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="relative min-w-0 sm:w-80">
+            <AppIcon
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+              name="search"
+            />
+            <Input
+              className="pl-9"
+              onChange={(event) => onSearchChange(event.target.value)}
+              placeholder="Search leads, properties, or agents"
+              value={searchTerm}
+            />
+          </div>
+          <Button render={<Link href="/dashboard/lead-schedule" />} variant="outline">
             <AppIcon name="event_note" />
-            {"Lead Activity"}
-          </Link>
-          <button
-            className="flex h-11 items-center justify-center gap-2 border border-primary bg-primary px-4 text-sm font-bold text-white"
-            onClick={onAddLeadClick}
-            type="button"
-          >
+            {"Lead activity"}
+          </Button>
+          <Button onClick={onAddLeadClick} type="button">
             <AppIcon name="person_add" />
-            {"Add Lead"}
-          </button>
+            {"Add lead"}
+          </Button>
         </div>
-      </div>
-    </header>
+      </CardHeader>
+      <CardContent className="hidden" />
+    </Card>
   )
 }
