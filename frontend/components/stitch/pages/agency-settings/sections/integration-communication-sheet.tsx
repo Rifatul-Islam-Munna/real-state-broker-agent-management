@@ -1,0 +1,201 @@
+"use client"
+
+import { useEffect, useState } from "react"
+
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet"
+import { useUpdateAgencyIntegrationSettings } from "@/hooks/use-real-estate-api"
+
+type Values = {
+  providerName: "Twilio" | "Plivo" | "RingCentral" | "Custom"
+  accountId: string
+  authToken: string
+  fromNumber: string
+  baseUrl: string
+  voiceWebhookUrl: string
+  smsWebhookUrl: string
+  supportsSms: boolean
+  supportsVoice: boolean
+  enableSmsSync: boolean
+  syncIntervalMinutes: string
+  maxMessagesPerSync: string
+  hasAuthToken: boolean
+}
+
+const emptyValues = (): Values => ({
+  providerName: "Twilio",
+  accountId: "",
+  authToken: "",
+  fromNumber: "",
+  baseUrl: "https://api.twilio.com",
+  voiceWebhookUrl: "",
+  smsWebhookUrl: "/api/sms-webhooks/twilio",
+  supportsSms: true,
+  supportsVoice: true,
+  enableSmsSync: false,
+  syncIntervalMinutes: "5",
+  maxMessagesPerSync: "25",
+  hasAuthToken: false,
+})
+
+export function IntegrationCommunicationSheet({
+  config,
+  onOpenChange,
+  open,
+}: {
+  config?: Partial<Values> | null
+  onOpenChange: (open: boolean) => void
+  open: boolean
+}) {
+  const mutation = useUpdateAgencyIntegrationSettings()
+  const [values, setValues] = useState<Values>(() => emptyValues())
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const defaults = emptyValues()
+    setValues({
+      ...defaults,
+      ...config,
+      authToken: "",
+      syncIntervalMinutes: String(config?.syncIntervalMinutes ?? defaults.syncIntervalMinutes),
+      maxMessagesPerSync: String(config?.maxMessagesPerSync ?? defaults.maxMessagesPerSync),
+    })
+    setError(null)
+  }, [config, open])
+
+  function patch(update: Partial<Values>) {
+    setValues((current) => ({ ...current, ...update }))
+  }
+
+  function changeProvider(providerName: Values["providerName"]) {
+    const preset =
+      providerName === "Plivo"
+        ? { baseUrl: "https://api.plivo.com", smsWebhookUrl: "/api/sms-webhooks/plivo" }
+        : providerName === "RingCentral"
+          ? { baseUrl: "https://platform.ringcentral.com", smsWebhookUrl: "/api/sms-webhooks/ringcentral" }
+          : providerName === "Twilio"
+            ? { baseUrl: "https://api.twilio.com", smsWebhookUrl: "/api/sms-webhooks/twilio" }
+            : {}
+    patch({ providerName, ...preset })
+  }
+
+  async function save() {
+    setError(null)
+    if (!values.accountId.trim() || !values.fromNumber.trim()) {
+      setError("Account ID and from number are required.")
+      return
+    }
+    if (!values.authToken.trim() && !values.hasAuthToken) {
+      setError("Auth token is required for a new connection.")
+      return
+    }
+    const response = await mutation.mutateAsync({
+      communication: {
+        providerName: values.providerName,
+        accountId: values.accountId.trim(),
+        authToken: values.authToken.trim(),
+        fromNumber: values.fromNumber.trim(),
+        baseUrl: values.baseUrl.trim() || null,
+        voiceWebhookUrl: values.voiceWebhookUrl.trim() || null,
+        smsWebhookUrl: values.smsWebhookUrl.trim() || null,
+        supportsSms: values.supportsSms,
+        supportsVoice: values.supportsVoice,
+        enableSmsSync: values.enableSmsSync,
+        syncIntervalMinutes: Math.max(1, Number(values.syncIntervalMinutes) || 5),
+        maxMessagesPerSync: Math.max(5, Number(values.maxMessagesPerSync) || 25),
+      },
+    })
+    if (response.error) {
+      setError(response.error.message)
+      return
+    }
+    onOpenChange(false)
+  }
+
+  async function disconnect() {
+    setError(null)
+    const response = await mutation.mutateAsync({ clearCommunication: true })
+    if (response.error) {
+      setError(response.error.message)
+      return
+    }
+    onOpenChange(false)
+  }
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent className="shadow-none sm:w-[36rem] sm:max-w-[36rem]">
+        <SheetHeader className="border-b">
+          <SheetTitle>{"Calls and SMS"}</SheetTitle>
+          <SheetDescription>
+            {"Existing secrets are never returned. Leave the token blank to keep the saved token."}
+          </SheetDescription>
+        </SheetHeader>
+        <div className="flex-1 space-y-5 overflow-y-auto px-5 pb-5">
+          {error ? <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert> : null}
+          <Field label="Provider">
+            <Select onValueChange={(value) => changeProvider(value as Values["providerName"])} value={values.providerName}>
+              <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Twilio">{"Twilio"}</SelectItem>
+                <SelectItem value="Plivo">{"Plivo"}</SelectItem>
+                <SelectItem value="RingCentral">{"RingCentral"}</SelectItem>
+                <SelectItem value="Custom">{"Custom"}</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Account / client ID"><Input onChange={(event) => patch({ accountId: event.target.value })} value={values.accountId} /></Field>
+            <Field label={values.hasAuthToken ? "Auth token (saved)" : "Auth token"}><Input autoComplete="new-password" onChange={(event) => patch({ authToken: event.target.value })} placeholder={values.hasAuthToken ? "Leave blank to keep saved token" : "Enter token"} type="password" value={values.authToken} /></Field>
+            <Field label="From number"><Input onChange={(event) => patch({ fromNumber: event.target.value })} value={values.fromNumber} /></Field>
+            <Field label="Base URL"><Input onChange={(event) => patch({ baseUrl: event.target.value })} value={values.baseUrl} /></Field>
+          </div>
+          <Field label="SMS webhook path"><Input onChange={(event) => patch({ smsWebhookUrl: event.target.value })} value={values.smsWebhookUrl} /></Field>
+          <Field label="Voice webhook URL"><Input onChange={(event) => patch({ voiceWebhookUrl: event.target.value })} value={values.voiceWebhookUrl} /></Field>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Toggle checked={values.supportsSms} label="SMS enabled" onChange={(checked) => patch({ supportsSms: checked })} />
+            <Toggle checked={values.supportsVoice} label="Voice enabled" onChange={(checked) => patch({ supportsVoice: checked })} />
+          </div>
+          <Toggle checked={values.enableSmsSync} label="Automatic inbound SMS sync" onChange={(checked) => patch({ enableSmsSync: checked })} />
+          {values.enableSmsSync ? (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Sync interval (minutes)"><Input min={1} onChange={(event) => patch({ syncIntervalMinutes: event.target.value })} type="number" value={values.syncIntervalMinutes} /></Field>
+              <Field label="Messages per sync"><Input min={5} onChange={(event) => patch({ maxMessagesPerSync: event.target.value })} type="number" value={values.maxMessagesPerSync} /></Field>
+            </div>
+          ) : null}
+        </div>
+        <SheetFooter>
+          <Button disabled={mutation.isPending} onClick={() => void disconnect()} type="button" variant="destructive">{"Disconnect"}</Button>
+          <Button disabled={mutation.isPending} onClick={() => void save()} type="button">{mutation.isPending ? "Saving..." : "Save connection"}</Button>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
+  )
+}
+
+function Field({ children, label }: { children: React.ReactNode; label: string }) {
+  return <div className="space-y-2"><Label>{label}</Label>{children}</div>
+}
+
+function Toggle({ checked, label, onChange }: { checked: boolean; label: string; onChange: (checked: boolean) => void }) {
+  return <label className="flex cursor-pointer items-center gap-3 rounded-xl border p-3 text-sm font-medium text-foreground"><Checkbox checked={checked} onCheckedChange={(value) => onChange(value === true)} />{label}</label>
+}
