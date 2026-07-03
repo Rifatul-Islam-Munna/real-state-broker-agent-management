@@ -5,7 +5,11 @@ import { redirect } from "next/navigation"
 
 import { type AgentRoutePermission } from "@/lib/agent-route-access"
 import { hasAgentRoutePermission } from "@/lib/agent-route-access"
-import { getPortalHomePath, getPortalPathByRole, resolvePostAuthRedirect } from "@/lib/portal-paths"
+import {
+  getPortalHomePath,
+  getPortalPathByRole,
+  resolvePostAuthRedirect,
+} from "@/lib/portal-paths"
 
 type AuthResponse = {
   id: number
@@ -45,17 +49,9 @@ async function readErrorMessage(response: Response) {
     const payload = await response.json()
     const message = payload?.message
 
-    if (typeof message === "string") {
-      return message
-    }
-
-    if (Array.isArray(message)) {
-      return message[0] ?? "Request failed"
-    }
-
-    if (typeof payload?.errors?.[0] === "string") {
-      return payload.errors[0]
-    }
+    if (typeof message === "string") return message
+    if (Array.isArray(message)) return message[0] ?? "Request failed"
+    if (typeof payload?.errors?.[0] === "string") return payload.errors[0]
   } catch {
     return "Request failed"
   }
@@ -107,10 +103,7 @@ async function fetchCurrentUser(accessToken: string) {
     },
   })
 
-  if (response.ok) {
-    return (await response.json()) as SessionUser
-  }
-
+  if (response.ok) return (await response.json()) as SessionUser
   return null
 }
 
@@ -118,10 +111,7 @@ export async function getSessionUser() {
   const cookieStore = await cookies()
   const accessToken = cookieStore.get("access_token")?.value
 
-  if (!accessToken) {
-    return null
-  }
-
+  if (!accessToken) return null
   return fetchCurrentUser(accessToken)
 }
 
@@ -131,9 +121,7 @@ export async function requireSession(
 ) {
   const user = await getSessionUser()
 
-  if (!user) {
-    redirect("/login")
-  }
+  if (!user) redirect("/login")
 
   if (allowedRoles && !allowedRoles.includes(user.role)) {
     redirect(getPortalHomePath(user))
@@ -168,14 +156,18 @@ export async function loginAction(
     cache: "no-store",
   })
 
-  if (!response.ok) {
-    return { error: await readErrorMessage(response) }
-  }
+  if (!response.ok) return { error: await readErrorMessage(response) }
 
   const auth = (await response.json()) as AuthResponse
   await persistSession(auth)
   const currentUser = await fetchCurrentUser(auth.accessToken)
-  redirect(await resolvePostAuthRedirect(auth.role, nextPath, currentUser?.agentRoutePermissions ?? []))
+  redirect(
+    await resolvePostAuthRedirect(
+      auth.role,
+      nextPath,
+      currentUser?.agentRoutePermissions ?? [],
+    ),
+  )
 }
 
 export async function registerAction(
@@ -194,14 +186,12 @@ export async function registerAction(
       lastName: String(formData.get("lastName") ?? "").trim(),
       password: String(formData.get("password") ?? ""),
       phone: String(formData.get("phone") ?? "").trim(),
-      role: String(formData.get("role") ?? "Admin"),
+      role: "Agent",
     }),
     cache: "no-store",
   })
 
-  if (!response.ok) {
-    return { error: await readErrorMessage(response) }
-  }
+  if (!response.ok) return { error: await readErrorMessage(response) }
 
   const auth = (await response.json()) as AuthResponse
   await persistSession(auth)
