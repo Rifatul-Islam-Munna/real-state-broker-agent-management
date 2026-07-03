@@ -6,6 +6,7 @@ import { RealtorShowing } from '../realtor-showings/entities/realtor-showing.ent
 import { SettingsModule } from '../settings/settings.module';
 import { SmsModule } from '../sms/sms.module';
 import { ShowingFeedback } from './entities/showing-feedback.entity';
+import { ShowingFeedbackAutomationService } from './showing-feedback-automation.service';
 import { ShowingFeedbackEntryService } from './showing-feedback-entry.service';
 import { ShowingFeedbackQueryService } from './showing-feedback-query.service';
 import { ShowingFeedbackService } from './showing-feedback.service';
@@ -22,6 +23,7 @@ import { ShowingFeedbackV2Controller } from './showing-feedback-v2.controller';
     ShowingFeedbackService,
     ShowingFeedbackQueryService,
     ShowingFeedbackEntryService,
+    ShowingFeedbackAutomationService,
   ],
   exports: [ShowingFeedbackService],
 })
