@@ -38,7 +38,10 @@ import {
 } from "@/hooks/use-realtor-showings-api"
 import { useProperties } from "@/hooks/use-real-estate-api"
 import { useSchedulingSettings } from "@/hooks/use-scheduling-settings"
-import { formatDateTimeLabel } from "@/lib/admin-portal"
+import {
+  formatDateTimeInZone,
+  toDateTimeLocalInZone,
+} from "@/lib/time-zone"
 
 import {
   RealtorShowingAutomationSheetV2,
@@ -209,7 +212,7 @@ export function RealtorShowingsPageV2() {
                         </TableCell>
                         <TableCell className="whitespace-nowrap text-foreground">
                           {showing.showingAt
-                            ? formatDateTimeLabel(showing.showingAt)
+                            ? formatDateTimeInZone(showing.showingAt, timeZone)
                             : "Not provided"}
                         </TableCell>
                         <TableCell className="min-w-[300px]">
@@ -272,7 +275,7 @@ export function RealtorShowingsPageV2() {
                           </div>
                           <p className="mt-2 text-xs text-muted-foreground">
                             {showing.outreachAt
-                              ? formatDateTimeLabel(showing.outreachAt)
+                              ? formatDateTimeInZone(showing.outreachAt, timeZone)
                               : "Send immediately"}
                           </p>
                         </TableCell>
@@ -301,9 +304,10 @@ export function RealtorShowingsPageV2() {
                                 followUpGapDays: showing.followUpGapDays,
                                 followUpTemplateId: showing.followUpTemplateId,
                                 id: showing.id,
-                                outreachAt: showing.outreachAt
-                                  ? showing.outreachAt.slice(0, 16)
-                                  : "",
+                                outreachAt: toDateTimeLocalInZone(
+                                  showing.outreachAt,
+                                  timeZone,
+                                ),
                                 realtorName: showing.realtorName,
                                 smsEnabled: showing.smsEnabled,
                               })
