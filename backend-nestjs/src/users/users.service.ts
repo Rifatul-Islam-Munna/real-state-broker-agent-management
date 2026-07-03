@@ -246,7 +246,21 @@ export class UsersService implements OnModuleInit {
   }
 
   private async ensureDefaultAdmin() {
-    const email = 'test@gmail.com';
+    const isProduction = process.env.NODE_ENV === 'production';
+    const configuredEmail = `${process.env.DEFAULT_ADMIN_EMAIL ?? ''}`.trim().toLowerCase();
+    const configuredPassword = `${process.env.DEFAULT_ADMIN_PASSWORD ?? ''}`;
+    const configuredFirstName = `${process.env.DEFAULT_ADMIN_FIRST_NAME ?? 'System'}`.trim() || 'System';
+    const configuredLastName = `${process.env.DEFAULT_ADMIN_LAST_NAME ?? 'Admin'}`.trim() || 'Admin';
+
+    if (isProduction && (!configuredEmail || configuredPassword.length < 12)) {
+      this.logger.warn(
+        'Default admin bootstrap skipped. Set DEFAULT_ADMIN_EMAIL and a DEFAULT_ADMIN_PASSWORD of at least 12 characters.',
+      );
+      return;
+    }
+
+    const email = configuredEmail || 'test@gmail.com';
+    const password = configuredPassword || '11111111';
     const existing = await this.usersRepository.findOne({
       where: { email },
       select: ['id', 'email', 'passwordHash', 'firstName', 'lastName', 'role', 'isActive'],
@@ -263,7 +277,7 @@ export class UsersService implements OnModuleInit {
         changed = true;
       }
       if (!existing.passwordHash) {
-        existing.passwordHash = await bcrypt.hash('11111111', 10);
+        existing.passwordHash = await bcrypt.hash(password, 10);
         changed = true;
       }
       if (changed) await this.usersRepository.save(existing);
@@ -271,14 +285,14 @@ export class UsersService implements OnModuleInit {
     }
 
     await this.usersRepository.save(this.usersRepository.create({
-      firstName: 'Test',
-      lastName: 'Admin',
+      firstName: configuredFirstName,
+      lastName: configuredLastName,
       email,
-      passwordHash: await bcrypt.hash('11111111', 10),
+      passwordHash: await bcrypt.hash(password, 10),
       role: UserRole.Admin,
       isActive: true,
       isEmailVerified: true,
     } as DeepPartial<User>));
-    this.logger.log('Default admin created: test@gmail.com');
+    this.logger.log(`Default admin created: ${email}`);
   }
 }
