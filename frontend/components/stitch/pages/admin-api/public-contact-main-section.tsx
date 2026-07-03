@@ -4,10 +4,13 @@ import { useState } from "react"
 import { sileo } from "sileo"
 
 import type { PublicAgencyProfileSettings } from "@/@types/real-estate-api"
-import { useCreateContactRequest } from "@/hooks/use-real-estate-api"
 import { AppIcon } from "@/components/ui/app-icon"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { useCreateContactRequest } from "@/hooks/use-real-estate-api"
 import { agencySocialPlatformOptions, getConfiguredAgencySocialLinks } from "@/lib/agency-social-links"
 
 const inquiryTypes = [
@@ -22,7 +25,7 @@ export function PublicContactMainApiSection({
 }: {
   profile: PublicAgencyProfileSettings
 }) {
-  const [activeInquiry, setActiveInquiry] = useState<typeof inquiryTypes[number]>("Buying")
+  const [activeInquiry, setActiveInquiry] = useState<(typeof inquiryTypes)[number]>("Buying")
   const createContactRequest = useCreateContactRequest()
   const [formState, setFormState] = useState({
     email: "",
@@ -31,204 +34,226 @@ export function PublicContactMainApiSection({
     phone: "",
   })
   const configuredSocialLinks = getConfiguredAgencySocialLinks(profile.socialLinks)
-  const primaryOfficeLocation = profile.officeLocations.find((item) => item.trim().length > 0) ?? "Office location not added yet"
+  const primaryOfficeLocation =
+    profile.officeLocations.find((item) => item.trim().length > 0) ??
+    "Office location not added yet"
   const contactMethods = [
     {
-      title: "General Inquiries",
+      title: "General inquiries",
       detail: profile.contactEmail || "Contact email not added yet",
       icon: "mail",
     },
     {
-      title: "Call Our Desk",
+      title: "Call our desk",
       detail: profile.contactPhone || "Phone number not added yet",
       icon: "call",
     },
     {
-      title: "Visit Headquarters",
+      title: "Visit headquarters",
       detail: primaryOfficeLocation,
       icon: "location_on",
     },
   ] as const
 
   function showValidationError(description: string) {
-    sileo.error({
-      title: "Check the form",
-      description,
-    })
+    sileo.error({ title: "Check the form", description })
   }
 
   return (
-    <section className="py-20">
-      <div className="mx-auto grid max-w-7xl gap-10 px-4 md:px-8 lg:grid-cols-[1.15fr_0.85fr] lg:px-10">
-        <div className="border border-slate-200 bg-white p-8">
-          <div className="flex flex-wrap gap-3">
-            {inquiryTypes.map((type) => (
-              <button
-                key={type}
-                className={type === activeInquiry
-                  ? "bg-primary px-4 py-2 text-sm font-bold text-white"
-                  : "border border-primary/10 px-4 py-2 text-sm font-bold text-slate-600 transition-colors hover:border-primary hover:text-primary"}
-                onClick={() => setActiveInquiry(type)}
-                type="button"
-              >
-                {type}
-              </button>
-            ))}
-          </div>
-          <form
-            className="mt-8 grid gap-5 md:grid-cols-2"
-            onSubmit={async (event) => {
-              event.preventDefault()
+    <section className="bg-muted/20 py-12 sm:py-16 lg:py-20">
+      <div className="mx-auto grid max-w-7xl gap-6 px-4 sm:px-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)] lg:px-8">
+        <Card className="shadow-lg">
+          <CardHeader>
+            <CardTitle className="text-2xl">{"Tell us how we can help"}</CardTitle>
+            <CardDescription>
+              {"Choose an inquiry type and share the details your advisor should know."}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-2" role="tablist" aria-label="Inquiry type">
+              {inquiryTypes.map((type) => (
+                <Button
+                  aria-selected={type === activeInquiry}
+                  key={type}
+                  onClick={() => setActiveInquiry(type)}
+                  role="tab"
+                  size="sm"
+                  type="button"
+                  variant={type === activeInquiry ? "default" : "outline"}
+                >
+                  {type}
+                </Button>
+              ))}
+            </div>
 
-              if (!formState.name.trim()) {
-                showValidationError("Full name is required.")
-                return
-              }
+            <form
+              className="mt-6 grid gap-5 md:grid-cols-2"
+              onSubmit={async (event) => {
+                event.preventDefault()
 
-              if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formState.email.trim())) {
-                showValidationError("Enter a valid email address.")
-                return
-              }
+                if (!formState.name.trim()) {
+                  showValidationError("Full name is required.")
+                  return
+                }
 
-              if (!formState.phone.trim()) {
-                showValidationError("Phone number is required.")
-                return
-              }
+                if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formState.email.trim())) {
+                  showValidationError("Enter a valid email address.")
+                  return
+                }
 
-              if (formState.message.trim().length < 20) {
-                showValidationError("Message must be at least 20 characters.")
-                return
-              }
+                if (!formState.phone.trim()) {
+                  showValidationError("Phone number is required.")
+                  return
+                }
 
-              const response = await createContactRequest.mutateAsync({
-                email: formState.email.trim(),
-                inquiryType: activeInquiry,
-                message: formState.message.trim(),
-                name: formState.name.trim(),
-                phone: formState.phone.trim(),
-              })
+                if (formState.message.trim().length < 20) {
+                  showValidationError("Message must be at least 20 characters.")
+                  return
+                }
 
-              if (response.error) {
-                return
-              }
+                const response = await createContactRequest.mutateAsync({
+                  email: formState.email.trim(),
+                  inquiryType: activeInquiry,
+                  message: formState.message.trim(),
+                  name: formState.name.trim(),
+                  phone: formState.phone.trim(),
+                })
 
-              setFormState({
-                email: "",
-                message: "",
-                name: "",
-                phone: "",
-              })
-            }}
-          >
-            <Input
-              className="h-auto border-slate-200 px-4 py-3 text-sm"
-              onChange={(event) => {
-                setFormState((current) => ({ ...current, name: event.target.value }))
+                if (response.error) return
+
+                setFormState({ email: "", message: "", name: "", phone: "" })
               }}
-              placeholder="Full name"
-              type="text"
-              value={formState.name}
-            />
-            <Input
-              className="h-auto border-slate-200 px-4 py-3 text-sm"
-              onChange={(event) => {
-                setFormState((current) => ({ ...current, email: event.target.value }))
-              }}
-              placeholder="Email address"
-              type="email"
-              value={formState.email}
-            />
-            <Input
-              className="h-auto border-slate-200 px-4 py-3 text-sm"
-              onChange={(event) => {
-                setFormState((current) => ({ ...current, phone: event.target.value }))
-              }}
-              placeholder="Phone number"
-              type="tel"
-              value={formState.phone}
-            />
-            <Input
-              className="h-auto border-slate-200 px-4 py-3 text-sm"
-              value={activeInquiry}
-              readOnly
-              type="text"
-            />
-            <Textarea
-              className="min-h-40 border-slate-200 px-4 py-3 text-sm md:col-span-2"
-              onChange={(event) => {
-                setFormState((current) => ({ ...current, message: event.target.value }))
-              }}
-              placeholder="Tell us what you need and include any listing or location details."
-              value={formState.message}
-            />
-            <button
-              className="bg-primary px-6 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-70 md:col-span-2 md:w-fit"
-              disabled={createContactRequest.isPending}
-              type="submit"
             >
-              {createContactRequest.isPending ? "Sending..." : "Send Inquiry"}
-            </button>
-          </form>
-        </div>
+              <div className="space-y-2">
+                <Label htmlFor="contact-name">{"Full name"}</Label>
+                <Input
+                  id="contact-name"
+                  onChange={(event) => {
+                    setFormState((current) => ({ ...current, name: event.target.value }))
+                  }}
+                  placeholder="Your full name"
+                  type="text"
+                  value={formState.name}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="contact-email">{"Email address"}</Label>
+                <Input
+                  id="contact-email"
+                  onChange={(event) => {
+                    setFormState((current) => ({ ...current, email: event.target.value }))
+                  }}
+                  placeholder="you@example.com"
+                  type="email"
+                  value={formState.email}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="contact-phone">{"Phone number"}</Label>
+                <Input
+                  id="contact-phone"
+                  onChange={(event) => {
+                    setFormState((current) => ({ ...current, phone: event.target.value }))
+                  }}
+                  placeholder="Your phone number"
+                  type="tel"
+                  value={formState.phone}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="contact-inquiry">{"Inquiry type"}</Label>
+                <Input id="contact-inquiry" readOnly type="text" value={activeInquiry} />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="contact-message">{"Message"}</Label>
+                <Textarea
+                  id="contact-message"
+                  className="min-h-40"
+                  onChange={(event) => {
+                    setFormState((current) => ({ ...current, message: event.target.value }))
+                  }}
+                  placeholder="Tell us what you need and include any listing or location details."
+                  value={formState.message}
+                />
+              </div>
+              <Button
+                className="md:col-span-2 md:w-fit"
+                disabled={createContactRequest.isPending}
+                size="lg"
+                type="submit"
+              >
+                {createContactRequest.isPending ? "Sending..." : "Send inquiry"}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+
         <aside className="grid gap-4">
           {contactMethods.map((method) => (
-            <div
-              key={method.title}
-              className="border border-slate-200 bg-white p-6"
-            >
-              <div className="flex items-center gap-3">
-                <AppIcon className="text-3xl text-accent" name={method.icon} />
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-[0.22em] text-slate-500">
+            <Card key={method.title} size="sm">
+              <CardContent className="flex items-start gap-3 pt-1">
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                  <AppIcon className="text-xl" name={method.icon} />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     {method.title}
                   </p>
-                  <p className="mt-2 text-lg font-bold text-primary">
-                    {method.detail}
-                  </p>
+                  <p className="mt-1 break-words font-semibold">{method.detail}</p>
                 </div>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
           ))}
-          <div className="border border-slate-200 bg-white p-6">
-            <p className="text-xs font-bold uppercase tracking-[0.22em] text-slate-500">
-              {"Social Channels"}
-            </p>
-            {configuredSocialLinks.length > 0 ? (
-              <div className="mt-4 flex flex-wrap gap-3">
-                {configuredSocialLinks.map((link) => {
-                  const platform = agencySocialPlatformOptions.find((item) => item.platform === link.platform)
 
-                  return (
-                    <a
-                      key={link.platform}
-                      className="inline-flex items-center gap-2 border border-primary/10 px-4 py-2 text-sm font-semibold text-primary transition-colors hover:border-primary"
-                      href={link.url}
-                      rel="noreferrer"
-                      target="_blank"
-                    >
-                      <AppIcon className="text-base" name={platform?.icon ?? "share"} />
-                      {platform?.label ?? link.platform}
-                    </a>
-                  )
-                })}
-              </div>
-            ) : (
-              <p className="mt-3 text-sm text-slate-500">
-                {"No social channels added yet in agency settings."}
+          <Card>
+            <CardHeader>
+              <CardTitle>{"Social channels"}</CardTitle>
+              <CardDescription>{"Connect with the agency on your preferred platform."}</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {configuredSocialLinks.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {configuredSocialLinks.map((link) => {
+                    const platform = agencySocialPlatformOptions.find(
+                      (item) => item.platform === link.platform,
+                    )
+
+                    return (
+                      <Button
+                        key={link.platform}
+                        render={
+                          <a href={link.url} rel="noreferrer" target="_blank" />
+                        }
+                        size="sm"
+                        variant="outline"
+                      >
+                        <AppIcon name={platform?.icon ?? "share"} />
+                        {platform?.label ?? link.platform}
+                      </Button>
+                    )
+                  })}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  {"No social channels added yet in agency settings."}
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="border-primary/20 bg-primary text-primary-foreground">
+            <CardHeader>
+              <CardDescription className="text-primary-foreground/70">
+                {"Response standard"}
+              </CardDescription>
+              <CardTitle className="text-3xl">{"Same-day reply"}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm leading-6 text-primary-foreground/75">
+                {"Luxury inquiries and active listing requests are routed immediately to the appropriate advisor."}
               </p>
-            )}
-          </div>
-          <div className="border border-primary/10 bg-primary p-6 text-white">
-            <p className="text-xs font-bold uppercase tracking-[0.22em] text-accent">
-              {"Response Standard"}
-            </p>
-            <p className="mt-3 text-3xl font-black">
-              {"Same-day reply"}
-            </p>
-            <p className="mt-3 text-sm text-white/75">
-              {"Luxury inquiries and active listing requests are routed immediately to the appropriate advisor."}
-            </p>
-          </div>
+            </CardContent>
+          </Card>
         </aside>
       </div>
     </section>
