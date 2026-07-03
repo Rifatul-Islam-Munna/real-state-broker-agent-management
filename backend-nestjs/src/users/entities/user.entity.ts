@@ -54,13 +54,13 @@ export class User {
   refreshToken: string | null;
 
   @Column({ type: 'timestamp', nullable: true, select: false })
-  refreshTokenExpiry: Date | null;
+  refreshTokenExpiry: Date;
 
   @Column({ type: 'text', nullable: true, select: false })
   passwordResetToken: string | null;
 
   @Column({ type: 'timestamp', nullable: true, select: false })
-  passwordResetExpiry: Date | null;
+  passwordResetExpiry: Date;
 
   @Column({ type: 'text', nullable: true, select: false })
   emailVerificationToken: string | null;
@@ -105,10 +105,10 @@ export class User {
   updatedAt: Date;
 
   @Column({ type: 'timestamp', nullable: true })
-  lastLoginAt: Date | null;
+  lastLoginAt: Date;
 
   @Column({ type: 'timestamp', nullable: true })
-  deletedAt: Date | null;
+  deletedAt: Date;
 
   @OneToMany(() => Property, (property) => property.agent)
   properties: Property[];
