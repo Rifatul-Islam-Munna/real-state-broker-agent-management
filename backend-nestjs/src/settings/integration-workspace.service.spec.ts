@@ -77,4 +77,25 @@ describe('IntegrationWorkspaceService', () => {
       }),
     ).rejects.toThrow('auth token');
   });
+
+  test('uses the SMTP login for IMAP when separate values are blank', async () => {
+    await service.update({
+      smtp: {
+        providerName: 'Gmail',
+        host: 'smtp.gmail.com',
+        port: 587,
+        username: 'agent@example.com',
+        password: 'app-password',
+        fromEmail: 'agent@example.com',
+        enableInboxSync: true,
+        imapHost: 'imap.gmail.com',
+        imapUsername: '',
+        imapPassword: '',
+      },
+    });
+
+    const saved = JSON.parse(row.smtpPayload ?? '{}');
+    expect(saved.imapUsername).toBe('agent@example.com');
+    expect(saved.imapPassword).toBe('app-password');
+  });
 });
