@@ -1,40 +1,59 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { AgencySettings } from './entities/settings.entity';
-import { AgencyIntegrationSettings } from './entities/integration-settings.entity';
 import { normalizePhoneCountry, normalizePhoneNumber } from '../common/phone-normalizer';
+import { AgencyIntegrationSettings } from './entities/integration-settings.entity';
+import { AgencySettings } from './entities/settings.entity';
 
 @Injectable()
 export class SettingsService {
   constructor(
-    @InjectRepository(AgencySettings)
-    private agencyRepository: Repository<AgencySettings>,
-    @InjectRepository(AgencyIntegrationSettings)
-    private integrationRepository: Repository<AgencyIntegrationSettings>,
+    @InjectRepository(AgencySettings) private agencyRepository: Repository<AgencySettings>,
+    @InjectRepository(AgencyIntegrationSettings) private integrationRepository: Repository<AgencyIntegrationSettings>,
   ) {}
 
   async getAdminSettings() {
-    let settings = await this.agencyRepository.findOne({ where: { id: 1 } });
-    if (!settings) {
-      settings = this.agencyRepository.create({ id: 1, contentJson: JSON.stringify(this.defaultAgencySettings()) });
-      await this.agencyRepository.save(settings);
-    }
+    const settings = await this.ensureAgencySettings();
+    const normalized = this.normalizeAgencySettings(this.readJson(settings.contentJson) ?? this.defaultAgencySettings());
     return {
-      ...this.normalizeAgencySettings(this.readJson(settings.contentJson) ?? this.defaultAgencySettings()),
+      ...normalized,
+      showingFeedbackAutomation: this.publicFeedbackAutomation(normalized.showingFeedbackAutomation),
       updatedAt: settings.updatedAt,
     };
   }
 
   async updateSettings(dto: any) {
-    let settings = await this.agencyRepository.findOne({ where: { id: 1 } });
-    if (!settings) {
-      settings = this.agencyRepository.create({ id: 1 });
-    }
+    const settings = await this.ensureAgencySettings();
+    const current = this.normalizeAgencySettings(this.readJson(settings.contentJson) ?? this.defaultAgencySettings());
     const payload = this.normalizeAgencySettings(dto);
+    payload.showingFeedbackAutomation.deliveryState = current.showingFeedbackAutomation.deliveryState;
     settings.contentJson = JSON.stringify(payload);
     const saved = await this.agencyRepository.save(settings);
-    return { ...payload, updatedAt: saved.updatedAt };
+    return {
+      ...payload,
+      showingFeedbackAutomation: this.publicFeedbackAutomation(payload.showingFeedbackAutomation),
+      updatedAt: saved.updatedAt,
+    };
+  }
+
+  async getShowingFeedbackAutomation() {
+    const settings = await this.ensureAgencySettings();
+    return this.normalizeAgencySettings(this.readJson(settings.contentJson) ?? this.defaultAgencySettings()).showingFeedbackAutomation;
+  }
+
+  async saveShowingFeedbackDeliveryState(propertyId: number, state: any) {
+    const settings = await this.ensureAgencySettings();
+    const payload = this.normalizeAgencySettings(this.readJson(settings.contentJson) ?? this.defaultAgencySettings());
+    payload.showingFeedbackAutomation.deliveryState[String(propertyId)] = {
+      lastError: this.loose(state?.lastError).slice(0, 500),
+      lastFeedbackId: Math.max(0, Number(state?.lastFeedbackId) || 0),
+      lastSentAt: state?.lastSentAt ? new Date(state.lastSentAt).toISOString() : null,
+      processingStartedAt: state?.processingStartedAt ? new Date(state.processingStartedAt).toISOString() : null,
+      processingThroughId: Math.max(0, Number(state?.processingThroughId) || 0),
+    };
+    settings.contentJson = JSON.stringify(payload);
+    await this.agencyRepository.save(settings);
+    return payload.showingFeedbackAutomation.deliveryState[String(propertyId)];
   }
 
   async getPublicSettings() {
@@ -61,13 +80,13 @@ export class SettingsService {
       await this.integrationRepository.save(settings);
     }
     return {
-        hasTwilioConfig: !!settings.twilioPayload,
-        twilioUpdatedAt: settings.twilioUpdatedAt,
-        hasAiProviderConfig: !!settings.aiProviderPayload,
-        aiProviderUpdatedAt: settings.aiProviderUpdatedAt,
-        hasSmtpConfig: !!settings.smtpPayload,
-        smtpUpdatedAt: settings.smtpUpdatedAt,
-        updatedAt: settings.updatedAt
+      hasTwilioConfig: !!settings.twilioPayload,
+      twilioUpdatedAt: settings.twilioUpdatedAt,
+      hasAiProviderConfig: !!settings.aiProviderPayload,
+      aiProviderUpdatedAt: settings.aiProviderUpdatedAt,
+      hasSmtpConfig: !!settings.smtpPayload,
+      smtpUpdatedAt: settings.smtpUpdatedAt,
+      updatedAt: settings.updatedAt,
     };
   }
 
@@ -75,57 +94,49 @@ export class SettingsService {
     let settings = await this.integrationRepository.findOne({ where: { id: 1 } });
     if (!settings) settings = this.integrationRepository.create({ id: 1 });
     const now = new Date();
-
     if (dto.clearTwilio) { settings.twilioPayload = null; settings.twilioUpdatedAt = null; }
     else if (dto.twilio) { settings.twilioPayload = JSON.stringify(this.normalizeCommunicationProvider(dto.twilio)); settings.twilioUpdatedAt = now; }
-
     if (dto.clearAiProvider) { settings.aiProviderPayload = null; settings.aiProviderUpdatedAt = null; }
     else if (dto.aiProvider) { settings.aiProviderPayload = JSON.stringify(dto.aiProvider); settings.aiProviderUpdatedAt = now; }
-
     if (dto.clearSmtp) { settings.smtpPayload = null; settings.smtpUpdatedAt = null; }
     else if (dto.smtp) { settings.smtpPayload = JSON.stringify(this.normalizeMailProvider(dto.smtp)); settings.smtpUpdatedAt = now; }
-
     await this.integrationRepository.save(settings);
     return this.getIntegrationStatus();
   }
 
   async getWorkspaceStatus() {
-      const settings = await this.integrationRepository.findOne({ where: { id: 1 } });
-      const smtp = settings?.smtpPayload ? this.readJson(settings.smtpPayload) : null;
-      const communication = settings?.twilioPayload ? this.readJson(settings.twilioPayload) : null;
-      const aiProvider = settings?.aiProviderPayload ? this.readJson(settings.aiProviderPayload) : null;
-      return {
-          hasCommunicationConfig: !!settings?.twilioPayload,
-          communicationUpdatedAt: settings?.twilioUpdatedAt ?? null,
-          communicationProviderName: communication?.providerName ?? null,
-          communicationSmsSyncEnabled: !!communication?.enableSmsSync,
-          communicationSmsSyncIntervalMinutes: communication?.enableSmsSync ? communication.syncIntervalMinutes : null,
-          hasAiProviderConfig: !!settings?.aiProviderPayload,
-          aiProviderUpdatedAt: settings?.aiProviderUpdatedAt ?? null,
-          aiProviderName: aiProvider?.providerName ?? null,
-          hasSmtpConfig: !!settings?.smtpPayload,
-          smtpUpdatedAt: settings?.smtpUpdatedAt ?? null,
-          smtpProviderName: smtp?.providerName ?? null,
-          mailboxSyncEnabled: !!smtp?.enableInboxSync,
-          mailboxSyncIntervalMinutes: smtp?.enableInboxSync ? smtp.syncIntervalMinutes : null,
-          updatedAt: settings?.updatedAt ?? null,
-      };
+    const settings = await this.integrationRepository.findOne({ where: { id: 1 } });
+    const smtp = settings?.smtpPayload ? this.readJson(settings.smtpPayload) : null;
+    const communication = settings?.twilioPayload ? this.readJson(settings.twilioPayload) : null;
+    const aiProvider = settings?.aiProviderPayload ? this.readJson(settings.aiProviderPayload) : null;
+    return {
+      hasCommunicationConfig: !!settings?.twilioPayload,
+      communicationUpdatedAt: settings?.twilioUpdatedAt ?? null,
+      communicationProviderName: communication?.providerName ?? null,
+      communicationSmsSyncEnabled: !!communication?.enableSmsSync,
+      communicationSmsSyncIntervalMinutes: communication?.enableSmsSync ? communication.syncIntervalMinutes : null,
+      hasAiProviderConfig: !!settings?.aiProviderPayload,
+      aiProviderUpdatedAt: settings?.aiProviderUpdatedAt ?? null,
+      aiProviderName: aiProvider?.providerName ?? null,
+      hasSmtpConfig: !!settings?.smtpPayload,
+      smtpUpdatedAt: settings?.smtpUpdatedAt ?? null,
+      smtpProviderName: smtp?.providerName ?? null,
+      mailboxSyncEnabled: !!smtp?.enableInboxSync,
+      mailboxSyncIntervalMinutes: smtp?.enableInboxSync ? smtp.syncIntervalMinutes : null,
+      updatedAt: settings?.updatedAt ?? null,
+    };
   }
 
   async updateWorkspace(dto: any) {
     let settings = await this.integrationRepository.findOne({ where: { id: 1 } });
     if (!settings) settings = this.integrationRepository.create({ id: 1 });
     const now = new Date();
-
     if (dto.clearCommunication) { settings.twilioPayload = null; settings.twilioUpdatedAt = null; }
     else if (dto.communication) { settings.twilioPayload = JSON.stringify(this.normalizeCommunicationProvider(dto.communication)); settings.twilioUpdatedAt = now; }
-
     if (dto.clearAiProvider) { settings.aiProviderPayload = null; settings.aiProviderUpdatedAt = null; }
     else if (dto.aiProvider) { settings.aiProviderPayload = JSON.stringify(dto.aiProvider); settings.aiProviderUpdatedAt = now; }
-
     if (dto.clearSmtp) { settings.smtpPayload = null; settings.smtpUpdatedAt = null; }
     else if (dto.smtp) { settings.smtpPayload = JSON.stringify(this.normalizeMailProvider(dto.smtp)); settings.smtpUpdatedAt = now; }
-
     await this.integrationRepository.save(settings);
     return this.getWorkspaceStatus();
   }
@@ -145,12 +156,17 @@ export class SettingsService {
     return settings?.aiProviderPayload ? this.readJson(settings.aiProviderPayload) : null;
   }
 
-  private readJson(value: string) {
-    try {
-      return JSON.parse(value);
-    } catch {
-      return null;
+  private async ensureAgencySettings() {
+    let settings = await this.agencyRepository.findOne({ where: { id: 1 } });
+    if (!settings) {
+      settings = this.agencyRepository.create({ id: 1, contentJson: JSON.stringify(this.defaultAgencySettings()) });
+      await this.agencyRepository.save(settings);
     }
+    return settings;
+  }
+
+  private readJson(value: string) {
+    try { return JSON.parse(value); } catch { return null; }
   }
 
   private normalizeMailProvider(input: any) {
@@ -158,18 +174,13 @@ export class SettingsService {
     const provider = providerName.toLowerCase();
     const username = this.loose(input?.username);
     const password = this.loose(input?.password);
-    const imapHost = this.loose(
-      input?.imapHost,
-      provider === 'gmail' ? 'imap.gmail.com' : provider === 'outlook' ? 'outlook.office365.com' : '',
-    );
+    const imapHost = this.loose(input?.imapHost, provider === 'gmail' ? 'imap.gmail.com' : provider === 'outlook' ? 'outlook.office365.com' : '');
     const enableInboxSync = input?.enableInboxSync === true;
     const imapUsername = this.loose(input?.imapUsername, username);
     const imapPassword = this.loose(input?.imapPassword, password);
-
     if (enableInboxSync && !imapHost) throw new BadRequestException('IMAP host is required when inbox sync is enabled.');
     if (enableInboxSync && !imapUsername) throw new BadRequestException('IMAP username is required when inbox sync is enabled.');
     if (enableInboxSync && !imapPassword) throw new BadRequestException('IMAP password is required when inbox sync is enabled.');
-
     return {
       providerName,
       host: this.loose(input?.host),
@@ -197,14 +208,7 @@ export class SettingsService {
   private normalizeCommunicationProvider(input: any) {
     const providerName = this.loose(input?.providerName, 'Twilio');
     const provider = providerName.toLowerCase();
-    const baseUrl = this.loose(
-      input?.baseUrl,
-      provider === 'plivo' ? 'https://api.plivo.com'
-        : provider === 'ringcentral' ? 'https://platform.ringcentral.com'
-          : provider === 'twilio' ? 'https://api.twilio.com'
-            : '',
-    );
-
+    const baseUrl = this.loose(input?.baseUrl, provider === 'plivo' ? 'https://api.plivo.com' : provider === 'ringcentral' ? 'https://platform.ringcentral.com' : provider === 'twilio' ? 'https://api.twilio.com' : '');
     return {
       providerName,
       accountId: this.loose(input?.accountId),
@@ -221,27 +225,51 @@ export class SettingsService {
     };
   }
 
-  private clampInt(value: any, fallback: number, min: number, max: number) {
-    const parsed = Number.parseInt(`${value ?? ''}`, 10);
-    return Number.isFinite(parsed) ? Math.min(max, Math.max(min, parsed)) : fallback;
-  }
-
   private normalizeAgencySettings(input: any) {
     const fallback = this.defaultAgencySettings();
     const profile = input?.profile ?? {};
-    const templates = Array.isArray(input?.communicationTemplates) && input.communicationTemplates.length
+    const sourceTemplates = Array.isArray(input?.communicationTemplates) && input.communicationTemplates.length
       ? input.communicationTemplates
       : fallback.communicationTemplates;
-
+    const templates = sourceTemplates.map((item: any, index: number) => {
+      const fallbackItem = fallback.communicationTemplates[index] ?? fallback.communicationTemplates[0];
+      return {
+        id: this.text(item?.id, fallbackItem.id),
+        name: this.text(item?.name, fallbackItem.name),
+        subject: this.text(item?.subject, fallbackItem.subject),
+        body: this.text(item?.body, fallbackItem.body),
+        channels: Array.isArray(item?.channels) && item.channels.length ? [...new Set(item.channels)] : fallbackItem.channels,
+        variableTokens: this.stringList(item?.variableTokens, fallbackItem.variableTokens),
+        sequenceType: ['Direct', 'FollowUp1', 'FollowUp2', 'FollowUp3'].includes(item?.sequenceType) ? item.sequenceType : (fallbackItem.sequenceType ?? 'Direct'),
+        gapDays: this.clampInt(item?.gapDays, fallbackItem.gapDays ?? 0, 0, 365),
+        isActive: item?.isActive !== false,
+        attachPropertyDocuments: item?.attachPropertyDocuments !== false,
+        audience: item?.audience === 'OwnerFeedback' ? 'OwnerFeedback' : item?.audience === 'Realtor' || item?.id === 'showing-confirmation' ? 'Realtor' : 'Lead',
+      };
+    });
+    const defaultOwnerTemplate = fallback.communicationTemplates.find((item: any) => item.audience === 'OwnerFeedback');
+    if (defaultOwnerTemplate && !templates.some((item: any) => item.audience === 'OwnerFeedback')) templates.push(defaultOwnerTemplate);
+    const automationInput = input?.showingFeedbackAutomation ?? {};
+    const defaultAutomation = fallback.showingFeedbackAutomation;
+    const channels = Array.isArray(automationInput.channels)
+      ? automationInput.channels.filter((item: any) => ['Email', 'SMS'].includes(item))
+      : defaultAutomation.channels;
+    const rawState = automationInput.deliveryState && typeof automationInput.deliveryState === 'object'
+      ? automationInput.deliveryState
+      : {};
+    const deliveryState = Object.fromEntries(Object.entries(rawState).map(([propertyId, state]: [string, any]) => [propertyId, {
+      lastError: this.loose(state?.lastError).slice(0, 500),
+      lastFeedbackId: Math.max(0, Number(state?.lastFeedbackId) || 0),
+      lastSentAt: state?.lastSentAt ? new Date(state.lastSentAt).toISOString() : null,
+      processingStartedAt: state?.processingStartedAt ? new Date(state.processingStartedAt).toISOString() : null,
+      processingThroughId: Math.max(0, Number(state?.processingThroughId) || 0),
+    }]));
     return {
       profile: {
         agencyName: this.text(profile.agencyName, fallback.profile.agencyName),
         taxId: this.loose(profile.taxId),
         standardCommissionPercent: this.loose(profile.standardCommissionPercent, fallback.profile.standardCommissionPercent),
-        logo: {
-          url: this.loose(profile.logo?.url),
-          objectName: this.nullText(profile.logo?.objectName),
-        },
+        logo: { url: this.loose(profile.logo?.url), objectName: this.nullText(profile.logo?.objectName) },
         officeLocations: this.stringList(profile.officeLocations, fallback.profile.officeLocations),
         contactEmail: this.text(profile.contactEmail, fallback.profile.contactEmail),
         defaultPhoneCountry: normalizePhoneCountry(profile.defaultPhoneCountry ?? fallback.profile.defaultPhoneCountry),
@@ -251,27 +279,33 @@ export class SettingsService {
           url: this.loose((profile.socialLinks ?? []).find((item: any) => (item?.platform ?? '').toLowerCase() === platform)?.url),
         })),
       },
-      communicationTemplates: templates.map((item: any, index: number) => {
-        const fallbackItem = fallback.communicationTemplates[index] ?? fallback.communicationTemplates[0];
-        return {
-          id: this.text(item?.id, fallbackItem.id),
-          name: this.text(item?.name, fallbackItem.name),
-          subject: this.text(item?.subject, fallbackItem.subject),
-          body: this.text(item?.body, fallbackItem.body),
-          channels: Array.isArray(item?.channels) && item.channels.length ? [...new Set(item.channels)] : fallbackItem.channels,
-          variableTokens: this.stringList(item?.variableTokens, fallbackItem.variableTokens),
-          sequenceType: ['Direct', 'FollowUp1', 'FollowUp2', 'FollowUp3'].includes(item?.sequenceType) ? item.sequenceType : (fallbackItem.sequenceType ?? 'Direct'),
-          gapDays: this.clampInt(item?.gapDays, fallbackItem.gapDays ?? 0, 0, 365),
-          isActive: item?.isActive !== false,
-          attachPropertyDocuments: item?.attachPropertyDocuments !== false,
-          audience: item?.audience === 'OwnerFeedback'
-            ? 'OwnerFeedback'
-            : item?.audience === 'Realtor' || item?.id === 'showing-confirmation'
-              ? 'Realtor'
-              : 'Lead',
-        };
-      }),
+      communicationTemplates: templates,
+      showingFeedbackAutomation: {
+        enabled: automationInput.enabled === true,
+        gapDays: this.clampInt(automationInput.gapDays, defaultAutomation.gapDays, 0, 365),
+        channels: channels.length ? [...new Set(channels)] : defaultAutomation.channels,
+        templateId: this.loose(automationInput.templateId, defaultAutomation.templateId),
+        compressWithAi: automationInput.compressWithAi !== false,
+        maxFeedback: this.clampInt(automationInput.maxFeedback, defaultAutomation.maxFeedback, 1, 50),
+        deliveryState,
+      },
     };
+  }
+
+  private publicFeedbackAutomation(value: any) {
+    return {
+      enabled: value.enabled,
+      gapDays: value.gapDays,
+      channels: value.channels,
+      templateId: value.templateId,
+      compressWithAi: value.compressWithAi,
+      maxFeedback: value.maxFeedback,
+    };
+  }
+
+  private clampInt(value: any, fallback: number, min: number, max: number) {
+    const parsed = Number.parseInt(`${value ?? ''}`, 10);
+    return Number.isFinite(parsed) ? Math.min(max, Math.max(min, parsed)) : fallback;
   }
 
   private text(value: any, fallback: string) {
@@ -290,9 +324,7 @@ export class SettingsService {
   }
 
   private stringList(value: any, fallback: string[]) {
-    const items = Array.isArray(value)
-      ? [...new Set(value.map((item) => `${item ?? ''}`.trim()).filter(Boolean))]
-      : [];
+    const items = Array.isArray(value) ? [...new Set(value.map((item) => `${item ?? ''}`.trim()).filter(Boolean))] : [];
     return items.length ? items : fallback;
   }
 
@@ -309,6 +341,15 @@ export class SettingsService {
         defaultPhoneCountry: 'US',
         socialLinks: ['facebook', 'instagram', 'linkedin', 'x', 'youtube', 'tiktok'].map((platform) => ({ platform, url: '' })),
       },
+      showingFeedbackAutomation: {
+        enabled: false,
+        gapDays: 2,
+        channels: ['Email'],
+        templateId: 'owner-feedback-summary',
+        compressWithAi: true,
+        maxFeedback: 10,
+        deliveryState: {},
+      },
       communicationTemplates: [
         {
           id: 'new-lead-welcome',
@@ -317,10 +358,7 @@ export class SettingsService {
           body: "Hello {{client_name}}, Thank you for your interest in {{property_address}}. My name is {{agent_name}} and I'll be your primary point of contact. When is a good time for a quick call? Best regards, {{agency_name}}",
           channels: ['Email', 'SMS'],
           variableTokens: ['{{client_name}}', '{{property_address}}', '{{agent_name}}', '{{agency_name}}'],
-          sequenceType: 'Direct',
-          gapDays: 0,
-          isActive: true,
-          attachPropertyDocuments: true,
+          sequenceType: 'Direct', gapDays: 0, isActive: true, attachPropertyDocuments: true, audience: 'Lead',
         },
         {
           id: 'showing-confirmation',
@@ -329,62 +367,47 @@ export class SettingsService {
           body: 'Hi {{client_name}}, your showing for {{property_address}} is confirmed for {{showing_time}}. Reach out to {{agent_name}} if you need to reschedule.',
           channels: ['Email', 'SMS'],
           variableTokens: ['{{client_name}}', '{{property_address}}', '{{showing_time}}', '{{agent_name}}'],
-          sequenceType: 'FollowUp1',
-          gapDays: 2,
-          isActive: true,
-          attachPropertyDocuments: true,
+          sequenceType: 'FollowUp1', gapDays: 2, isActive: true, attachPropertyDocuments: true, audience: 'Realtor',
         },
         {
-          id: 'contract-executed',
-          name: 'Contract Executed',
-          subject: 'Contract executed for {{property_address}}',
+          id: 'contract-executed', name: 'Contract Executed', subject: 'Contract executed for {{property_address}}',
           body: 'Hello {{client_name}}, the contract for {{property_address}} has been executed successfully. {{agent_name}} will guide you through the next steps and timeline.',
-          channels: ['Email'],
-          variableTokens: ['{{client_name}}', '{{property_address}}', '{{agent_name}}'],
-          sequenceType: 'FollowUp2',
-          gapDays: 5,
-          isActive: true,
-          attachPropertyDocuments: true,
+          channels: ['Email'], variableTokens: ['{{client_name}}', '{{property_address}}', '{{agent_name}}'],
+          sequenceType: 'FollowUp2', gapDays: 5, isActive: true, attachPropertyDocuments: true, audience: 'Lead',
         },
         {
-          id: 'closing-reminder',
-          name: 'Closing Reminder',
-          subject: 'Closing reminder for {{property_address}}',
+          id: 'closing-reminder', name: 'Closing Reminder', subject: 'Closing reminder for {{property_address}}',
           body: 'Hello {{client_name}}, this is a reminder that your closing for {{property_address}} is scheduled on {{closing_date}}. Please bring the requested documents and contact {{agent_name}} with any questions.',
-          channels: ['Email', 'SMS'],
-          variableTokens: ['{{client_name}}', '{{property_address}}', '{{closing_date}}', '{{agent_name}}'],
+          channels: ['Email', 'SMS'], variableTokens: ['{{client_name}}', '{{property_address}}', '{{closing_date}}', '{{agent_name}}'], audience: 'Lead',
         },
         {
-          id: 'follow-up-after-visit',
-          name: 'Follow-Up After Visit',
-          subject: 'Thanks for visiting {{property_address}}',
+          id: 'follow-up-after-visit', name: 'Follow-Up After Visit', subject: 'Thanks for visiting {{property_address}}',
           body: 'Hi {{client_name}}, thank you for viewing {{property_address}}. What questions can {{agent_name}} answer before your next step?',
-          channels: ['Email', 'SMS', 'WhatsApp'],
-          variableTokens: ['{{client_name}}', '{{property_address}}', '{{agent_name}}'],
+          channels: ['Email', 'SMS', 'WhatsApp'], variableTokens: ['{{client_name}}', '{{property_address}}', '{{agent_name}}'], audience: 'Lead',
         },
         {
-          id: 'document-request',
-          name: 'Document Request',
-          subject: 'Documents needed for {{property_address}}',
+          id: 'document-request', name: 'Document Request', subject: 'Documents needed for {{property_address}}',
           body: 'Hello {{client_name}}, please send {{document_list}} so {{agent_name}} can keep your deal moving for {{property_address}}.',
-          channels: ['Email', 'SMS'],
-          variableTokens: ['{{client_name}}', '{{property_address}}', '{{agent_name}}', '{{document_list}}'],
+          channels: ['Email', 'SMS'], variableTokens: ['{{client_name}}', '{{property_address}}', '{{agent_name}}', '{{document_list}}'], audience: 'Lead',
         },
         {
-          id: 'deal-update',
-          name: 'Deal Update',
-          subject: 'Deal update for {{property_address}}',
+          id: 'deal-update', name: 'Deal Update', subject: 'Deal update for {{property_address}}',
           body: 'Hi {{client_name}}, your deal for {{property_address}} is now at {{deal_stage}}. {{agent_name}} will follow up with the next action.',
-          channels: ['Email', 'SMS', 'WhatsApp'],
-          variableTokens: ['{{client_name}}', '{{property_address}}', '{{agent_name}}', '{{deal_stage}}'],
+          channels: ['Email', 'SMS', 'WhatsApp'], variableTokens: ['{{client_name}}', '{{property_address}}', '{{agent_name}}', '{{deal_stage}}'], audience: 'Lead',
         },
         {
-          id: 'closing-congratulations',
-          name: 'Closing Congratulations',
-          subject: 'Congratulations on closing {{property_address}}',
+          id: 'closing-congratulations', name: 'Closing Congratulations', subject: 'Congratulations on closing {{property_address}}',
           body: 'Congratulations {{client_name}}! Closing for {{property_address}} is complete. {{agency_name}} and {{agent_name}} are grateful to be part of the move.',
-          channels: ['Email', 'WhatsApp'],
-          variableTokens: ['{{client_name}}', '{{property_address}}', '{{agent_name}}', '{{agency_name}}'],
+          channels: ['Email', 'WhatsApp'], variableTokens: ['{{client_name}}', '{{property_address}}', '{{agent_name}}', '{{agency_name}}'], audience: 'Lead',
+        },
+        {
+          id: 'owner-feedback-summary',
+          name: 'Automatic Owner Feedback Summary',
+          subject: 'Showing feedback for {{property_address}}',
+          body: 'Hello, here is the showing feedback received for {{property_address}} from {{fromdate}} to {{todate}}.\n\n{{feedback_summary}}\n\n{{feedback1}}\n{{feedback2}}\n{{feedback3}}\n{{feedback4}}\n{{feedback5}}',
+          channels: ['Email', 'SMS'],
+          variableTokens: ['{{property_address}}', '{{fromdate}}', '{{todate}}', '{{feedback_summary}}', '{{feedback1}}'],
+          sequenceType: 'Direct', gapDays: 0, isActive: true, attachPropertyDocuments: false, audience: 'OwnerFeedback',
         },
       ],
     };
