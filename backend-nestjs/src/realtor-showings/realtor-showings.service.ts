@@ -2,10 +2,12 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { normalizePhoneNumber } from '../common/phone-normalizer';
+import { parseDateTimeInZone } from '../common/time-zone';
 import { LeadHistoryEntry, leadHistoryStatusDb } from '../leads/entities/lead-history.entity';
 import { Lead, LeadFollowUpStatus, LeadPriority, LeadStage } from '../leads/entities/lead.entity';
 import { LeadOutreachService } from '../leads/lead-outreach.service';
 import { Property } from '../properties/entities/property.entity';
+import { SchedulingSettingsService } from '../settings/scheduling-settings.service';
 import { SettingsService } from '../settings/settings.service';
 import { RealtorShowing } from './entities/realtor-showing.entity';
 
@@ -15,6 +17,8 @@ type ImportMapping = {
   realtorPhone?: string;
   property?: string;
   showingAt?: string;
+  showingDate?: string;
+  showingTime?: string;
 };
 
 @Injectable()
@@ -26,6 +30,7 @@ export class RealtorShowingsService {
     @InjectRepository(LeadHistoryEntry) private readonly historyRepo: Repository<LeadHistoryEntry>,
     private readonly outreachService: LeadOutreachService,
     private readonly settingsService: SettingsService,
+    private readonly schedulingSettingsService: SchedulingSettingsService,
   ) {}
 
   async findAll(search?: string) {
@@ -52,6 +57,7 @@ export class RealtorShowingsService {
     const mapping: ImportMapping = payload.mapping ?? {};
     const properties = await this.propertyRepo.find();
     const settings = await this.settingsService.getAdminSettings();
+    const scheduling = await this.schedulingSettingsService.getSettings();
     const templates = settings.communicationTemplates ?? [];
     const defaultPhoneCountry = payload.defaultPhoneCountry || settings.profile?.defaultPhoneCountry;
     const created: RealtorShowing[] = [];
@@ -67,7 +73,8 @@ export class RealtorShowingsService {
         if (!realtorEmail && !realtorPhone) throw new Error('Email or phone required.');
 
         const match = this.bestPropertyMatch(propertyText, properties);
-        const showingAt = this.dateValue(this.value(sourceData, mapping.showingAt));
+        const showingLocalValue = this.mappedDateTime(sourceData, mapping);
+        const showingAt = this.dateValue(showingLocalValue, scheduling.timeZone);
         const lead = await this.findOrCreateRealtorLead({
           email: realtorEmail,
           name: realtorName,
@@ -75,7 +82,7 @@ export class RealtorShowingsService {
           property: match.property?.title || propertyText,
           timeline: showingAt?.toISOString() ?? '',
         });
-        const outreachAt = this.dateValue(payload.outreachAt);
+        const outreachAt = this.dateValue(payload.outreachAt, scheduling.timeZone);
         const showing = await this.showingRepo.save(this.showingRepo.create({
           directTemplateId: `${payload.directTemplateId ?? ''}`,
           emailEnabled: !!payload.emailEnabled,
@@ -154,10 +161,11 @@ export class RealtorShowingsService {
     if (!showing) throw new NotFoundException('Realtor showing not found.');
     if (!showing.lead) throw new BadRequestException('Showing does not have a linked realtor lead.');
 
+    const timeZone = await this.schedulingSettingsService.getTimeZone();
     showing.emailEnabled = !!payload.emailEnabled;
     showing.smsEnabled = !!payload.smsEnabled;
     showing.directTemplateId = `${payload.directTemplateId ?? ''}`;
-    showing.outreachAt = this.dateValue(payload.outreachAt);
+    showing.outreachAt = this.dateValue(payload.outreachAt, timeZone);
     showing.followUpEnabled = !!payload.followUpEnabled;
     showing.followUpTemplateId = `${payload.followUpTemplateId ?? ''}`;
     showing.followUpGapDays = Math.max(0, Number(payload.followUpGapDays ?? 0) || 0);
@@ -214,7 +222,7 @@ export class RealtorShowingsService {
       return;
     }
     const followUpAt = new Date(showing.outreachAt ?? new Date());
-    followUpAt.setDate(followUpAt.getDate() + showing.followUpGapDays);
+    followUpAt.setUTCDate(followUpAt.getUTCDate() + showing.followUpGapDays);
     for (const kind of channels) {
       try {
         await this.outreachService.sendOutreach({
@@ -317,14 +325,21 @@ export class RealtorShowingsService {
     return column ? `${record[column] ?? ''}`.trim() : '';
   }
 
+  private mappedDateTime(record: Record<string, string>, mapping: ImportMapping) {
+    const combined = this.value(record, mapping.showingAt);
+    if (combined) return combined;
+
+    const date = this.value(record, mapping.showingDate);
+    const time = this.value(record, mapping.showingTime);
+    return date && time ? `${date}T${time}` : date;
+  }
+
   private normalize(value: string) {
     return `${value ?? ''}`.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
   }
 
-  private dateValue(value: any) {
-    if (!value) return null;
-    const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? null : date;
+  private dateValue(value: any, timeZone: string) {
+    return parseDateTimeInZone(value, timeZone);
   }
 
   private automationCreators(showingId: number) {
