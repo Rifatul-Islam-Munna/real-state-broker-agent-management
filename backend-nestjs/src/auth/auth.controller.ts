@@ -28,7 +28,11 @@ export class AuthController {
   @ApiOperation({ summary: 'Register a new agent account' })
   async register(@Body() registerDto: any) {
     return this.authService.register({
-      ...registerDto,
+      firstName: `${registerDto.firstName ?? ''}`.trim(),
+      lastName: `${registerDto.lastName ?? ''}`.trim(),
+      email: `${registerDto.email ?? ''}`.trim(),
+      password: `${registerDto.password ?? ''}`,
+      phone: `${registerDto.phone ?? ''}`.trim(),
       role: UserRole.Agent,
     });
   }
