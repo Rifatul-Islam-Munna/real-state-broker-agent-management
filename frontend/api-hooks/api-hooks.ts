@@ -1,6 +1,4 @@
-// @ts-nocheck
-
-type ApiError = {
+export type ApiError = {
   message: string
   statusCode: number
 }
@@ -8,20 +6,14 @@ type ApiError = {
 const proxyBaseUrl = "/api/proxy"
 
 function extractValidationMessage(errors: unknown): string | null {
-  if (!errors) {
-    return null
-  }
+  if (!errors) return null
 
   if (Array.isArray(errors)) {
     for (const item of errors) {
-      if (typeof item === "string" && item.trim().length > 0) {
-        return item
-      }
+      if (typeof item === "string" && item.trim().length > 0) return item
 
       const nestedMessage = extractValidationMessage(item)
-      if (nestedMessage) {
-        return nestedMessage
-      }
+      if (nestedMessage) return nestedMessage
     }
 
     return null
@@ -30,9 +22,7 @@ function extractValidationMessage(errors: unknown): string | null {
   if (typeof errors === "object") {
     for (const value of Object.values(errors as Record<string, unknown>)) {
       const nestedMessage = extractValidationMessage(value)
-      if (nestedMessage) {
-        return nestedMessage
-      }
+      if (nestedMessage) return nestedMessage
     }
   }
 
@@ -43,83 +33,77 @@ function extractValidationMessage(errors: unknown): string | null {
   return null
 }
 
-function extractErrorMessage(payload: any, fallback = "Something went wrong"): string {
-  if (!payload) {
-    return fallback
+function extractErrorMessage(payload: unknown, fallback = "Something went wrong"): string {
+  if (!payload) return fallback
+  if (typeof payload === "string") return payload.trim() || fallback
+  if (typeof payload !== "object") return fallback
+
+  const record = payload as Record<string, unknown>
+  const message = record.message
+
+  if (typeof message === "string" && message.trim().length > 0) {
+    return message
   }
 
-  if (typeof payload === "string" && payload.trim().length > 0) {
-    return payload
+  if (Array.isArray(message)) {
+    const firstMessage = message.find(
+      (item): item is string => typeof item === "string" && item.trim().length > 0,
+    )
+    if (firstMessage) return firstMessage
   }
 
-  if (typeof payload?.message === "string" && payload.message.trim().length > 0) {
-    return payload.message
+  if (message && typeof message === "object") {
+    const nestedMessage = extractErrorMessage(message, "")
+    if (nestedMessage) return nestedMessage
   }
 
-  if (Array.isArray(payload?.message)) {
-    const firstMessage = payload.message.find((item: unknown) => typeof item === "string" && item.trim().length > 0)
-    if (firstMessage) {
-      return firstMessage
-    }
+  if (typeof record.detail === "string" && record.detail.trim().length > 0) {
+    return record.detail
   }
 
-  if (payload?.message && typeof payload.message === "object") {
-    const nestedMessage = extractErrorMessage(payload.message, "")
-    if (nestedMessage) {
-      return nestedMessage
-    }
-  }
+  const validationMessage = extractValidationMessage(record.errors)
+  if (validationMessage) return validationMessage
 
-  if (typeof payload?.detail === "string" && payload.detail.trim().length > 0) {
-    return payload.detail
-  }
-
-  const validationMessage = extractValidationMessage(payload?.errors)
-  if (validationMessage) {
-    return validationMessage
-  }
-
-  if (typeof payload?.title === "string" && payload.title.trim().length > 0) {
-    return payload.title
+  if (typeof record.title === "string" && record.title.trim().length > 0) {
+    return record.title
   }
 
   return fallback
 }
 
 function getFallbackMessage(statusCode: number) {
-  if (statusCode === 404) {
-    return "Data not found."
-  }
-
+  if (statusCode === 404) return "Data not found."
   return `Request failed with status ${statusCode}`
 }
 
-function extractStatusCode(payload: any, fallback = 500): number {
-  const candidates = [payload?.statusCode, payload?.status]
+function extractStatusCode(payload: unknown, fallback = 500): number {
+  if (!payload || typeof payload !== "object") return fallback
+
+  const record = payload as Record<string, unknown>
+  const candidates = [record.statusCode, record.status]
 
   for (const candidate of candidates) {
     const numericStatus = Number(candidate)
-    if (Number.isFinite(numericStatus) && numericStatus > 0) {
-      return numericStatus
-    }
+    if (Number.isFinite(numericStatus) && numericStatus > 0) return numericStatus
   }
 
   return fallback
 }
 
-async function readErrorPayload(response: Response) {
+async function readResponsePayload(response: Response): Promise<unknown> {
+  const text = await response.text()
+  if (!text.trim()) return null
+
   const contentType = response.headers.get("content-type") ?? ""
-
-  try {
-    if (contentType.includes("application/json")) {
-      return await response.json()
+  if (contentType.includes("application/json")) {
+    try {
+      return JSON.parse(text)
+    } catch {
+      return text
     }
-
-    const text = await response.text()
-    return text.trim().length > 0 ? text : null
-  } catch {
-    return null
   }
+
+  return text
 }
 
 function redirectToLogin() {
@@ -132,7 +116,7 @@ async function request<T>(
   method: "GET" | "POST" | "PATCH" | "DELETE",
   url: string,
   payload?: unknown,
-): Promise<T> {
+): Promise<T | null> {
   const response = await fetch(`${proxyBaseUrl}${url}`, {
     method,
     headers: payload !== undefined ? { "Content-Type": "application/json" } : undefined,
@@ -140,60 +124,57 @@ async function request<T>(
     cache: "no-store",
   })
 
-  if (response.ok) {
-    if (response.status === 204) {
-      return null as T
-    }
+  const responsePayload = await readResponsePayload(response)
 
-    return await response.json()
+  if (response.ok) {
+    return responsePayload as T | null
   }
 
-  if (response.status === 401 || response.status === 403) {
+  if (response.status === 401) {
     redirectToLogin()
   }
 
-  const errorPayload = await readErrorPayload(response)
   throw {
-    message: extractErrorMessage(errorPayload, getFallbackMessage(response.status)),
-    statusCode: extractStatusCode(errorPayload, response.status),
+    message: extractErrorMessage(responsePayload, getFallbackMessage(response.status)),
+    statusCode: extractStatusCode(responsePayload, response.status),
   } satisfies ApiError
 }
 
-function toApiError(error: unknown): ApiError | null {
-  if (!error) {
-    return null
+function toApiError(error: unknown): ApiError {
+  if (error instanceof Error) {
+    return { message: error.message || "Something went wrong", statusCode: 500 }
   }
 
   if (typeof error === "object" && error !== null) {
-    const message = "message" in error ? String((error as { message?: unknown }).message ?? "Something went wrong") : "Something went wrong"
-    const statusCode = "statusCode" in error ? Number((error as { statusCode?: unknown }).statusCode ?? 500) : 500
-    return { message, statusCode: Number.isFinite(statusCode) ? statusCode : 500 }
-  }
+    const record = error as Record<string, unknown>
+    const statusCode = Number(record.statusCode ?? 500)
 
-  if (error instanceof Error) {
-    return { message: error.message, statusCode: 500 }
+    return {
+      message: String(record.message ?? "Something went wrong"),
+      statusCode: Number.isFinite(statusCode) ? statusCode : 500,
+    }
   }
 
   return { message: "Something went wrong", statusCode: 500 }
 }
 
-export const PostRequestAxios = async <T>(
+export const PostRequestAxios = async <TResponse, TPayload = unknown>(
   url: string,
-  payload: any,
-): Promise<[T | null, ApiError | null]> => {
+  payload: TPayload,
+): Promise<[TResponse | null, ApiError | null]> => {
   try {
-    return [await request<T>("POST", url, payload), null]
+    return [await request<TResponse>("POST", url, payload), null]
   } catch (error) {
     return [null, toApiError(error)]
   }
 }
 
-export const PatchRequestAxios = async <T>(
+export const PatchRequestAxios = async <TResponse, TPayload = unknown>(
   url: string,
-  payload: T,
-): Promise<[T | null, ApiError | null]> => {
+  payload: TPayload,
+): Promise<[TResponse | null, ApiError | null]> => {
   try {
-    return [await request<T>("PATCH", url, payload), null]
+    return [await request<TResponse>("PATCH", url, payload), null]
   } catch (error) {
     return [null, toApiError(error)]
   }
@@ -206,7 +187,9 @@ export const GetRequestNormal = async <T>(
 ): Promise<T> => {
   void _revalidate
   void _revalidateTags
-  return request<T>("GET", url)
+
+  const response = await request<T>("GET", url)
+  return response as T
 }
 
 export const DeleteRequestAxios = async <T>(
