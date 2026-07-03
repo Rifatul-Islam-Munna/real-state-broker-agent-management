@@ -9,6 +9,7 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
+import { Property } from '../../properties/entities/property.entity';
 import { DealPipeline } from '../../deals/entities/deal-pipeline.entity';
 import { ContactRequest } from '../../contact/entities/contact.entity';
 import { MailInboxItem } from '../../mail/entities/mail.entity';
@@ -61,6 +62,13 @@ export class Lead {
 
   @Column({ name: 'property_name', default: '' })
   property: string;
+
+  @Column({ type: 'int', nullable: true })
+  propertyId: number | null;
+
+  @ManyToOne(() => Property, { onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'property_id' })
+  linkedProperty: Property | null;
 
   @Column({ default: '' })
   budget: string;
