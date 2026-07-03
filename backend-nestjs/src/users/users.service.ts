@@ -2,7 +2,7 @@ import { BadRequestException, Injectable, Logger, NotFoundException, OnModuleIni
 import { InjectRepository } from '@nestjs/typeorm';
 import { DeepPartial, Repository, IsNull } from 'typeorm';
 import { User } from './entities/user.entity';
-import { UserRole } from './enums/user-role.enum';
+import { AllAgentRoutePermissions, UserRole } from './enums/user-role.enum';
 import * as bcrypt from 'bcrypt';
 
 @Injectable()
@@ -90,25 +90,90 @@ export class UsersService implements OnModuleInit {
     if (!dto.lastName?.trim()) throw new BadRequestException('Last name is required');
     if (!dto.email?.trim()) throw new BadRequestException('Email is required');
     if (!dto.password || dto.password.length < 6) throw new BadRequestException('Password must be at least 6 characters');
+
     const email = dto.email.toLowerCase().trim();
+    const phone = `${dto.phone ?? ''}`.trim() || null;
     if (await this.usersRepository.exists({ where: { email } })) throw new BadRequestException('Email already exists');
-    if (dto.phone && await this.usersRepository.exists({ where: { phone: dto.phone } })) throw new BadRequestException('Phone already exists');
-    const { password, useCustomAgentRoutePermissions, ...rest } = dto;
+    if (phone && await this.usersRepository.exists({ where: { phone } })) throw new BadRequestException('Phone already exists');
+
+    const useCustomPermissions = !!dto.useCustomAgentRoutePermissions;
     const agent = this.usersRepository.create({
-      ...rest,
+      firstName: dto.firstName.trim(),
+      lastName: dto.lastName.trim(),
       email,
-      passwordHash: await bcrypt.hash(password, 10),
+      passwordHash: await bcrypt.hash(dto.password, 10),
+      phone,
+      avatarUrl: `${dto.avatarUrl ?? ''}`.trim() || null,
+      agencyName: `${dto.agencyName ?? ''}`.trim() || null,
+      licenseNumber: `${dto.licenseNumber ?? ''}`.trim() || null,
+      commissionRate: dto.commissionRate ?? null,
+      bio: `${dto.bio ?? ''}`.trim() || null,
+      isActive: dto.isActive !== false,
+      isVerifiedAgent: !!dto.isVerifiedAgent,
       role: UserRole.Agent,
-      hasCustomAgentRoutePermissions: !!useCustomAgentRoutePermissions,
-      agentRoutePermissions: useCustomAgentRoutePermissions ? (dto.agentRoutePermissions ?? []) : [],
+      hasCustomAgentRoutePermissions: useCustomPermissions,
+      agentRoutePermissions: useCustomPermissions
+        ? this.normalizeAgentPermissions(dto.agentRoutePermissions)
+        : [],
     } as DeepPartial<User>);
+
     return this.mapAgent(await this.usersRepository.save(agent));
   }
 
   async updateAgent(dto: any) {
-    const agent = await this.usersRepository.findOne({ where: { id: dto.id, role: UserRole.Agent } });
+    const agent = await this.usersRepository.findOne({
+      where: { id: Number(dto.id), role: UserRole.Agent, deletedAt: IsNull() },
+      relations: ['properties'],
+    });
     if (!agent) throw new BadRequestException('Agent not found');
-    Object.assign(agent, dto);
+
+    const firstName = `${dto.firstName ?? agent.firstName}`.trim();
+    const lastName = `${dto.lastName ?? agent.lastName}`.trim();
+    const email = `${dto.email ?? agent.email}`.trim().toLowerCase();
+    const phone = `${dto.phone ?? ''}`.trim() || null;
+
+    if (!firstName) throw new BadRequestException('First name is required');
+    if (!lastName) throw new BadRequestException('Last name is required');
+    if (!email) throw new BadRequestException('Email is required');
+
+    const emailOwner = await this.usersRepository.findOne({ where: { email } });
+    if (emailOwner && emailOwner.id !== agent.id) {
+      throw new BadRequestException('Email already exists');
+    }
+
+    if (phone) {
+      const phoneOwner = await this.usersRepository.findOne({ where: { phone } });
+      if (phoneOwner && phoneOwner.id !== agent.id) {
+        throw new BadRequestException('Phone already exists');
+      }
+    }
+
+    agent.firstName = firstName;
+    agent.lastName = lastName;
+    agent.email = email;
+    agent.phone = phone;
+    agent.avatarUrl = `${dto.avatarUrl ?? ''}`.trim() || null;
+    agent.agencyName = `${dto.agencyName ?? ''}`.trim() || null;
+    agent.licenseNumber = `${dto.licenseNumber ?? ''}`.trim() || null;
+    agent.commissionRate = dto.commissionRate ?? null;
+    agent.bio = `${dto.bio ?? ''}`.trim() || null;
+    agent.isActive = dto.isActive !== false;
+    agent.isVerifiedAgent = !!dto.isVerifiedAgent;
+
+    if (`${dto.password ?? ''}`.trim()) {
+      if (`${dto.password}`.length < 6) {
+        throw new BadRequestException('Password must be at least 6 characters');
+      }
+      agent.passwordHash = await bcrypt.hash(`${dto.password}`, 10);
+    }
+
+    if (typeof dto.useCustomAgentRoutePermissions === 'boolean') {
+      agent.hasCustomAgentRoutePermissions = dto.useCustomAgentRoutePermissions;
+      agent.agentRoutePermissions = agent.hasCustomAgentRoutePermissions
+        ? this.normalizeAgentPermissions(dto.agentRoutePermissions)
+        : [];
+    }
+
     return this.mapAgent(await this.usersRepository.save(agent));
   }
 
@@ -124,7 +189,9 @@ export class UsersService implements OnModuleInit {
     const agent = await this.usersRepository.findOne({ where: { id: dto.agentId, role: UserRole.Agent, deletedAt: IsNull() }, relations: ['properties'] });
     if (!agent) throw new NotFoundException('Agent not found');
     agent.hasCustomAgentRoutePermissions = !!dto.useCustomAgentRoutePermissions;
-    agent.agentRoutePermissions = agent.hasCustomAgentRoutePermissions ? (dto.agentRoutePermissions ?? []) : [];
+    agent.agentRoutePermissions = agent.hasCustomAgentRoutePermissions
+      ? this.normalizeAgentPermissions(dto.agentRoutePermissions)
+      : [];
     return this.mapAgent(await this.usersRepository.save(agent));
   }
 
@@ -170,6 +237,12 @@ export class UsersService implements OnModuleInit {
     if (user.role !== UserRole.Agent) return [];
     if (!user.hasCustomAgentRoutePermissions) return ['dashboard', 'properties', 'deal-pipeline', 'lead', 'mail', 'settings'];
     return user.agentRoutePermissions ?? [];
+  }
+
+  private normalizeAgentPermissions(value: unknown) {
+    if (!Array.isArray(value)) return [];
+    const allowed = new Set(AllAgentRoutePermissions);
+    return Array.from(new Set(value.map((item) => `${item}`.trim()).filter((item) => allowed.has(item))));
   }
 
   private async ensureDefaultAdmin() {
