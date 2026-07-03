@@ -6,23 +6,26 @@ import {
   Patch,
   Delete,
   Body,
-  Param,
   Query,
   UseGuards,
   HttpCode,
   Req,
 } from '@nestjs/common';
 import { PropertiesService } from './properties.service';
+import { PublicPropertiesService } from './public-properties.service';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @ApiTags('Properties')
 @Controller('properties')
 export class PropertiesController {
-  constructor(private readonly propertiesService: PropertiesService) {}
+  constructor(
+    private readonly propertiesService: PropertiesService,
+    private readonly publicPropertiesService: PublicPropertiesService,
+  ) {}
 
   @Get()
-  @ApiOperation({ summary: 'Fetch a property by id, slug, or paginated list' })
+  @ApiOperation({ summary: 'Fetch a public property by id, slug, or paginated list' })
   async find(
     @Query('id') id?: number,
     @Query('slug') slug?: string,
@@ -34,9 +37,9 @@ export class PropertiesController {
     @Query('status') status?: string,
     @Query('agent') agent?: string,
   ) {
-    if (id) return this.propertiesService.findOne(id);
-    if (slug) return this.propertiesService.findBySlug(slug);
-    return this.propertiesService.findAll(page, pageSize, search, propertyType, listingType, status, agent);
+    if (id) return this.publicPropertiesService.findOne(Number(id));
+    if (slug) return this.publicPropertiesService.findBySlug(slug);
+    return this.publicPropertiesService.findAll(page, pageSize, search, propertyType, listingType, status, agent);
   }
 
   @Get('filters')
