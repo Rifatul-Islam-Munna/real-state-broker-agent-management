@@ -24,12 +24,11 @@ import { DatabaseModule } from './lib/database.module';
 import { SmsModule } from './sms/sms.module';
 import { RealtorShowingsModule } from './realtor-showings/realtor-showings.module';
 import { ShowingFeedbackModule } from './showing-feedback/showing-feedback.module';
+import { DevSeedService } from './dev-seed.service';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({
-      isGlobal: true,
-    }),
+    ConfigModule.forRoot({ isGlobal: true }),
     DatabaseModule,
     ScheduleModule.forRoot(),
     UsersModule,
@@ -55,6 +54,6 @@ import { ShowingFeedbackModule } from './showing-feedback/showing-feedback.modul
     PredictionModule,
   ],
   controllers: [],
-  providers: [AppService],
+  providers: [AppService, DevSeedService],
 })
 export class AppModule {}
