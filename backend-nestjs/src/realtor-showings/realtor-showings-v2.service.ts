@@ -67,7 +67,7 @@ export class RealtorShowingsV2Service extends RealtorShowingsService {
         const realtorEmail = this.cell(sourceData, mapping.realtorEmail).toLowerCase();
         const realtorPhone = normalizePhoneNumber(this.cell(sourceData, mapping.realtorPhone), defaultCountry);
         if (!realtorEmail && !realtorPhone) throw new Error('Email or phone required.');
-        const showingAt = parseDateTimeInZone(this.mappedDateTime(sourceData, mapping), scheduling.timeZone);
+        const showingAt = parseDateTimeInZone(this.combinedDateTime(sourceData, mapping), scheduling.timeZone);
         const lead = await this.findOrCreateLead({
           email: realtorEmail,
           name: this.cell(sourceData, mapping.realtorName),
@@ -197,7 +197,7 @@ export class RealtorShowingsV2Service extends RealtorShowingsService {
   }
   private clean(input: any) { return Object.fromEntries(Object.entries(input ?? {}).map(([key, value]) => [`${key}`.trim(), `${value ?? ''}`.trim()])); }
   private cell(record: Record<string, string>, column?: string) { return column ? `${record[column] ?? ''}`.trim() : ''; }
-  private mappedDateTime(record: Record<string, string>, mapping: Mapping) {
+  private combinedDateTime(record: Record<string, string>, mapping: Mapping) {
     const combined = this.cell(record, mapping.showingAt);
     if (combined) return combined;
     const date = this.cell(record, mapping.showingDate);
