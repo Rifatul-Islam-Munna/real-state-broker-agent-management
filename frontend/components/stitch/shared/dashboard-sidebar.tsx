@@ -76,18 +76,18 @@ export function DashboardSidebar({
 
   return (
     <Sidebar collapsible="offcanvas" variant="sidebar">
-      <SidebarHeader className="border-b border-sidebar-border p-3">
+      <SidebarHeader className="border-b border-sidebar-border/80 p-4">
         <PortalBrandLink
           agencyName={agencyName}
           className="min-w-0 text-sidebar-foreground"
           href={homeHref}
-          iconWrapperClassName="bg-sidebar-accent p-2 text-sidebar-accent-foreground"
+          iconWrapperClassName="bg-sidebar-primary p-2 text-sidebar-primary-foreground shadow-sm"
           logoUrl={logoUrl}
-          nameClassName="text-sidebar-foreground group-data-[collapsible=icon]:hidden"
+          nameClassName="text-sidebar-foreground font-bold tracking-tight group-data-[collapsible=icon]:hidden"
         />
       </SidebarHeader>
 
-      <SidebarContent>
+      <SidebarContent className="py-2">
         <ScrollArea className="min-h-0 flex-1">
           <nav aria-label="Dashboard">
             {navigation.length === 0 ? (
@@ -109,13 +109,13 @@ export function DashboardSidebar({
                 if (items.length === 0) return null
 
                 return (
-                  <SidebarGroup key={group.label}>
-                    <SidebarGroupLabel>
+                  <SidebarGroup className="px-3 py-2" key={group.label}>
+                    <SidebarGroupLabel className="px-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-sidebar-foreground/55">
                       {group.label}
                     </SidebarGroupLabel>
-                    <SidebarSeparator />
+                    <SidebarSeparator className="mx-2 opacity-60" />
                     <SidebarGroupContent>
-                      <SidebarMenu>
+                      <SidebarMenu className="gap-1">
                         {items.map((item) => {
                           const isActive =
                             pathname === item.href || pathname.startsWith(`${item.href}/`)
@@ -123,6 +123,7 @@ export function DashboardSidebar({
                           return (
                             <SidebarMenuItem key={item.href}>
                               <SidebarMenuButton
+                                className="h-10 rounded-xl px-3 font-medium"
                                 isActive={isActive}
                                 render={<Link href={item.href} />}
                                 tooltip={item.label}
@@ -142,12 +143,12 @@ export function DashboardSidebar({
           </nav>
         </ScrollArea>
       </SidebarContent>
-      <SidebarFooter className="border-t border-sidebar-border">
-        <SidebarGroup>
+      <SidebarFooter className="border-t border-sidebar-border/80 p-3">
+        <SidebarGroup className="p-0">
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem>
-                <SidebarMenuButton tooltip={role}>
+                <SidebarMenuButton className="h-10 rounded-xl px-3" tooltip={role}>
                   <AppIcon name={role === "Admin" ? "verified" : "badge"} />
                   <span>{role}</span>
                 </SidebarMenuButton>
