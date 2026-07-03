@@ -41,7 +41,7 @@ export function AdminDashboardPage({
     "Account"
 
   return (
-    <div className="bg-slate-100 dark:bg-background-dark">
+    <div className="min-h-full bg-muted/20">
       <MainContentSection
         currentUserName={resolvedUserName}
         errorMessage={resolvedError}
