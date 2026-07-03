@@ -1,4 +1,6 @@
 import "./globals.css"
+import "./contrast.css"
+
 import { ThemeProvider } from "@/components/theme-provider"
 import { Toaster } from "@/components/ui/sileo"
 import QueryClint from "@/lib/QueryClint"
