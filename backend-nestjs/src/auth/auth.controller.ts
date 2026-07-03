@@ -3,6 +3,7 @@ import { AuthService } from './auth.service';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { UsersService } from '../users/users.service';
+import { UserRole } from '../users/enums/user-role.enum';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -24,9 +25,12 @@ export class AuthController {
 
   @Post('register')
   @HttpCode(201)
-  @ApiOperation({ summary: 'Register a new user' })
+  @ApiOperation({ summary: 'Register a new agent account' })
   async register(@Body() registerDto: any) {
-    return this.authService.register(registerDto);
+    return this.authService.register({
+      ...registerDto,
+      role: UserRole.Agent,
+    });
   }
 
   @Post('refresh')
