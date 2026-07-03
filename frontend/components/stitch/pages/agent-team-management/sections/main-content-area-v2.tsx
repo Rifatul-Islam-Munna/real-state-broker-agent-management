@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react"
 
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -40,6 +41,7 @@ export function MainContentAreaSection() {
   const [sortBy, setSortBy] = useState<SortKey>("created")
   const [dialogState, setDialogState] = useState<AgentDialogState>(null)
   const [pendingDeleteAgent, setPendingDeleteAgent] = useState<AgentUserOption | null>(null)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   const agentUsersQuery = useAgentUsers({ includeInactive: true })
   const createAgentMutation = useCreateAgentUser()
@@ -164,7 +166,25 @@ export function MainContentAreaSection() {
   }
 
   async function handleDeleteAgent(agent: AgentUserOption) {
-    await deleteAgentMutation.mutateAsync({ id: `${agent.id}` })
+    setDeleteError(null)
+    const response = await deleteAgentMutation.mutateAsync({ id: `${agent.id}` })
+
+    if (response.error) {
+      setDeleteError(response.error.message)
+      return
+    }
+
+    setPendingDeleteAgent(null)
+  }
+
+  function openDeleteDialog(agent: AgentUserOption) {
+    setDeleteError(null)
+    setPendingDeleteAgent(agent)
+  }
+
+  function closeDeleteDialog() {
+    if (deleteAgentMutation.isPending) return
+    setDeleteError(null)
     setPendingDeleteAgent(null)
   }
 
@@ -183,7 +203,7 @@ export function MainContentAreaSection() {
           errorMessage={agentUsersQuery.error?.message ?? null}
           isDeleting={deleteAgentMutation.isPending}
           isLoading={isInitialLoading}
-          onDelete={setPendingDeleteAgent}
+          onDelete={openDeleteDialog}
           onEdit={(agent) => setDialogState({ mode: "edit", agent })}
           onSortChange={setSortBy}
           onVerificationFilterChange={setVerificationFilter}
@@ -212,7 +232,7 @@ export function MainContentAreaSection() {
 
       <Dialog
         open={Boolean(pendingDeleteAgent)}
-        onOpenChange={(open) => (!open ? setPendingDeleteAgent(null) : undefined)}
+        onOpenChange={(open) => (!open ? closeDeleteDialog() : undefined)}
       >
         <DialogContent className="max-w-md">
           <DialogHeader>
@@ -223,9 +243,17 @@ export function MainContentAreaSection() {
                 : "This action changes the agent account and assignments."}
             </DialogDescription>
           </DialogHeader>
+
+          {deleteError ? (
+            <Alert variant="destructive">
+              <AlertDescription>{deleteError}</AlertDescription>
+            </Alert>
+          ) : null}
+
           <DialogFooter>
             <Button
-              onClick={() => setPendingDeleteAgent(null)}
+              disabled={deleteAgentMutation.isPending}
+              onClick={closeDeleteDialog}
               type="button"
               variant="outline"
             >
