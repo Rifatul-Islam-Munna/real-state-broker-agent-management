@@ -49,12 +49,27 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     if (path.startsWith('/deals')) return 'deal-pipeline';
     if (path.startsWith('/mail-inbox')) return 'mail';
     if (path.startsWith('/dashboard') || path.startsWith('/reports')) return 'dashboard';
-    if (path.startsWith('/agency-settings') || path.startsWith('/settings') || path.startsWith('/homepage-settings') || path.startsWith('/marketing-settings')) return 'settings';
+    if (
+      path.startsWith('/agency-settings') ||
+      path.startsWith('/settings') ||
+      path.startsWith('/homepage-settings') ||
+      path.startsWith('/marketing-settings')
+    ) {
+      return 'settings';
+    }
     return null;
   }
 
   private isAdminOnly(path: string, method: string) {
-    if (path.startsWith('/agency-settings') || path.startsWith('/settings/integrations') || path.startsWith('/homepage-settings') || path.startsWith('/marketing-settings')) return true;
+    if (
+      path.startsWith('/agency-settings') ||
+      path.startsWith('/settings/integrations') ||
+      path.startsWith('/settings/scheduling') ||
+      path.startsWith('/homepage-settings') ||
+      path.startsWith('/marketing-settings')
+    ) {
+      return true;
+    }
     if (path.startsWith('/brokerage/approvals') || path.startsWith('/lead-assignment-rules')) return true;
     if (path.startsWith('/documents')) return true;
     if (path === '/blogs/admin' || (path.startsWith('/blogs') && method !== 'GET')) return true;
