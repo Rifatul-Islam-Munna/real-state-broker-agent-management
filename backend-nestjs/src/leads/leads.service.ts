@@ -4,6 +4,7 @@ import { DeepPartial, Repository } from 'typeorm';
 import { Lead, leadStages } from './entities/lead.entity';
 import { numericEnumValue } from '../common/numeric-enum';
 import { LeadHistoryEntry } from './entities/lead-history.entity';
+import { LeadIntakeAutomationService } from './lead-intake-automation.service';
 import { paginated, toInt } from '../common/api-contract';
 import { MailInboxItem } from '../mail/entities/mail.entity';
 import { ContactRequest } from '../contact/entities/contact.entity';
@@ -15,44 +16,26 @@ import { normalizePhoneNumber } from '../common/phone-normalizer';
 @Injectable()
 export class LeadsService {
   constructor(
-    @InjectRepository(Lead)
-    private leadsRepository: Repository<Lead>,
-    @InjectRepository(LeadHistoryEntry)
-    private historyRepository: Repository<LeadHistoryEntry>,
-    @InjectRepository(MailInboxItem)
-    private mailRepository: Repository<MailInboxItem>,
-    @InjectRepository(ContactRequest)
-    private contactRepository: Repository<ContactRequest>,
+    @InjectRepository(Lead) private leadsRepository: Repository<Lead>,
+    @InjectRepository(LeadHistoryEntry) private historyRepository: Repository<LeadHistoryEntry>,
+    @InjectRepository(MailInboxItem) private mailRepository: Repository<MailInboxItem>,
+    @InjectRepository(ContactRequest) private contactRepository: Repository<ContactRequest>,
     private brokerageService: BrokerageService,
     private settingsService: SettingsService,
+    private leadIntakeAutomation: LeadIntakeAutomationService,
   ) {}
 
   async findAll(page = 1, pageSize = 20, search?: string, stage?: string): Promise<any> {
-    page = toInt(page, 1);
-    pageSize = toInt(pageSize, 20);
-    const qb = this.leadsRepository.createQueryBuilder('lead')
-      .leftJoinAndSelect('lead.assignedAgent', 'assignedAgent')
-      .leftJoinAndSelect('lead.deals', 'deals');
-
-    if (search) {
-      qb.andWhere('(lead.name ILIKE :search OR lead.email ILIKE :search OR lead.property_name ILIKE :search OR lead.source ILIKE :search OR lead.agent ILIKE :search)', { search: `%${search}%` });
-    }
+    page = toInt(page, 1); pageSize = toInt(pageSize, 20);
+    const qb = this.leadsRepository.createQueryBuilder('lead').leftJoinAndSelect('lead.assignedAgent', 'assignedAgent').leftJoinAndSelect('lead.deals', 'deals');
+    if (search) qb.andWhere('(lead.name ILIKE :search OR lead.email ILIKE :search OR lead.property_name ILIKE :search OR lead.source ILIKE :search OR lead.agent ILIKE :search)', { search: `%${search}%` });
     if (stage) qb.andWhere('lead.stage = :stage', { stage: numericEnumValue(leadStages, stage) });
-
-    const [rows, total] = await qb
-      .orderBy('lead.lastActivityAt', 'DESC')
-      .skip((page - 1) * pageSize)
-      .take(pageSize)
-      .getManyAndCount();
-
+    const [rows, total] = await qb.orderBy('lead.lastActivityAt', 'DESC').skip((page - 1) * pageSize).take(pageSize).getManyAndCount();
     return paginated(rows.map((lead) => this.mapLead(lead)), total, page, pageSize);
   }
 
   async findOne(id: number): Promise<any> {
-    const lead = await this.leadsRepository.findOne({
-      where: { id },
-      relations: ['assignedAgent', 'deals'],
-    });
+    const lead = await this.leadsRepository.findOne({ where: { id }, relations: ['assignedAgent', 'deals'] });
     if (!lead) throw new NotFoundException('Lead not found');
     return this.mapLead(lead);
   }
@@ -65,6 +48,7 @@ export class LeadsService {
     }
     const saved = await this.leadsRepository.save(lead);
     if (autoAssign) await this.brokerageService.logAudit({ entityType: AuditEntityType.Lead, entityId: saved.id, action: AuditAction.Create, newValue: saved.name, actor, note: saved.source });
+    await this.leadIntakeAutomation.dispatch(saved.id).catch(() => null);
     return this.findOne(saved.id);
   }
 
@@ -96,11 +80,7 @@ export class LeadsService {
   }
 
   async getHistory(leadId: number) {
-    const [stored, mail, contacts] = await Promise.all([
-      this.historyRepository.find({ where: { leadId } }),
-      this.mailRepository.find({ where: { leadId } }),
-      this.contactRepository.find({ where: { leadId } }),
-    ]);
+    const [stored, mail, contacts] = await Promise.all([this.historyRepository.find({ where: { leadId } }), this.mailRepository.find({ where: { leadId } }), this.contactRepository.find({ where: { leadId } })]);
     return [
       ...stored.map((item) => this.mapHistory(item)),
       ...mail.map((item) => ({ id: -item.id, leadId, kind: 'MailInbox', direction: 'Incoming', status: String(item.status) === 'Replied' ? 'Completed' : 'Received', title: item.subject || 'Incoming email', summary: item.subject || 'Inbound email linked to this lead.', body: item.message, provider: 'Mail Inbox', createdBy: item.name || item.email, scheduledAt: null, occurredAt: item.createdAt, createdAt: item.createdAt, updatedAt: item.updatedAt })),
@@ -137,6 +117,7 @@ export class LeadsService {
       phone: normalizePhoneNumber(dto.phone, defaultPhoneCountry),
       summary: `${dto.summary ?? ''}`,
       property: `${dto.property ?? ''}`,
+      propertyId: dto.propertyId ? Number(dto.propertyId) : null,
       budget: `${dto.budget ?? ''}`,
       agent: `${dto.agent ?? ''}`.trim(),
       source: `${dto.source ?? ''}`.trim(),
@@ -153,38 +134,16 @@ export class LeadsService {
     const deals = [...(lead.deals ?? [])].sort((a, b) => Number(new Date(b.createdAt)) - Number(new Date(a.createdAt)));
     const linkedDeal = deals[0];
     const nextActionDate = lead.nextActionDate ? new Date(lead.nextActionDate) : null;
-    const overdue = !!nextActionDate
-      && nextActionDate < new Date()
-      && ['Open', 'Scheduled'].includes(String(lead.followUpStatus))
-      && !['Deal', 'Canceled'].includes(String(lead.stage));
-
+    const overdue = !!nextActionDate && nextActionDate < new Date() && ['Open', 'Scheduled'].includes(String(lead.followUpStatus)) && !['Deal', 'Canceled'].includes(String(lead.stage));
     return {
-      id: lead.id,
-      name: lead.name,
-      email: lead.email,
-      phone: lead.phone,
-      summary: lead.summary,
-      property: lead.property,
-      budget: lead.budget,
-      stage: lead.stage,
-      priority: lead.priority,
-      agent: lead.agent,
-      agentId: lead.agentId ?? null,
+      id: lead.id, name: lead.name, email: lead.email, phone: lead.phone, summary: lead.summary,
+      property: lead.property, propertyId: lead.propertyId ?? null, budget: lead.budget, stage: lead.stage, priority: lead.priority,
+      agent: lead.agent, agentId: lead.agentId ?? null,
       assignedAgentName: lead.assignedAgent ? `${lead.assignedAgent.firstName ?? ''} ${lead.assignedAgent.lastName ?? ''}`.trim() : null,
-      source: lead.source,
-      interest: lead.interest,
-      timeline: lead.timeline,
-      inBoard: lead.inBoard,
-      nextActionDate: lead.nextActionDate ?? null,
-      nextActionType: lead.nextActionType,
-      followUpStatus: lead.followUpStatus,
-      isFollowUpOverdue: overdue,
-      notes: lead.notes ?? [],
-      createdAt: lead.createdAt,
-      updatedAt: lead.updatedAt,
-      lastActivityAt: lead.lastActivityAt,
-      linkedDealId: linkedDeal?.id ?? null,
-      linkedDealTitle: linkedDeal?.title ?? null,
+      source: lead.source, interest: lead.interest, timeline: lead.timeline, inBoard: lead.inBoard,
+      nextActionDate: lead.nextActionDate ?? null, nextActionType: lead.nextActionType, followUpStatus: lead.followUpStatus,
+      isFollowUpOverdue: overdue, notes: lead.notes ?? [], createdAt: lead.createdAt, updatedAt: lead.updatedAt,
+      lastActivityAt: lead.lastActivityAt, linkedDealId: linkedDeal?.id ?? null, linkedDealTitle: linkedDeal?.title ?? null,
     };
   }
 }
