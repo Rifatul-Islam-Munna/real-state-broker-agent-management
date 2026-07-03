@@ -1,6 +1,6 @@
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { PassportStrategy } from '@nestjs/passport';
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Request } from 'express';
 import { UsersService } from '../../users/users.service';
@@ -22,12 +22,17 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: any) {
-    const user = await this.usersService.findById(payload.sub);
+    const user = await this.usersService.findById(Number(payload.sub));
+
+    if (!user || !user.isActive || user.deletedAt) {
+      throw new UnauthorizedException('Account is inactive or no longer available.');
+    }
+
     return {
-      userId: payload.sub,
-      email: payload.email,
-      role: payload.role,
-      agentRoutePermissions: user ? this.usersService.effectivePermissionsForAuth(user) : [],
+      userId: user.id,
+      email: user.email,
+      role: user.role,
+      agentRoutePermissions: this.usersService.effectivePermissionsForAuth(user),
     };
   }
 }
