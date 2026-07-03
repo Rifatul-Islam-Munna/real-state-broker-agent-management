@@ -15,7 +15,7 @@ import { getPublicAgencySettings } from "@/lib/public-real-estate-data"
 const navItems = [
   {
     href: "/property-search",
-    label: "All Property",
+    label: "Properties",
   },
   {
     href: "/agents",
@@ -37,24 +37,24 @@ export async function PublicPrimaryNavbar() {
   const logoUrl = publicAgencySettings.profile.logo.url
 
   return (
-    <header className="border-b border-primary/10 bg-white px-4 py-4 md:px-20">
-      <div className="mx-auto flex max-w-7xl items-center justify-between gap-4">
-        <div className="flex items-center gap-8">
-          <Link aria-label={agencyName || "Home"} href="/" className="flex items-center gap-2 text-primary">
+    <header className="sticky top-0 z-40 border-b bg-background/90 backdrop-blur-xl">
+      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
+        <div className="flex min-w-0 items-center gap-8">
+          <Link aria-label={agencyName || "Home"} href="/" className="flex min-w-0 items-center gap-2.5 text-foreground">
             {logoUrl ? (
-              <img alt={agencyName || "Agency logo"} className="h-10 w-auto max-w-28 object-contain" src={logoUrl} />
+              <img alt={agencyName || "Agency logo"} className="h-9 w-auto max-w-32 object-contain" src={logoUrl} />
             ) : null}
             {agencyName ? (
-              <h1 className="text-xl font-800 tracking-tighter uppercase">
+              <h1 className="truncate text-base font-bold tracking-tight">
                 {agencyName}
               </h1>
             ) : null}
           </Link>
-          <nav className="hidden items-center gap-6 md:flex">
+          <nav className="hidden items-center gap-1 md:flex">
             {navItems.map((item) => (
               <Link
                 key={item.label}
-                className="text-sm font-semibold transition-colors hover:text-primary"
+                className="rounded-xl px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
                 href={item.href}
               >
                 {item.label}
@@ -62,15 +62,15 @@ export async function PublicPrimaryNavbar() {
             ))}
           </nav>
         </div>
-        <div className="hidden items-center gap-4 md:flex">
+        <div className="hidden items-center gap-2 md:flex">
           <Link
-            className="border-2 border-primary px-4 py-2 text-sm font-bold text-primary"
+            className="rounded-xl border bg-background px-4 py-2 text-sm font-semibold text-foreground shadow-xs transition-colors hover:bg-accent"
             href={authHref}
           >
             {authLabel}
           </Link>
           <Link
-            className="bg-primary px-6 py-2 text-sm font-bold text-white"
+            className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
             href={publicContactUsPageMeta.routePath}
           >
             {"Contact Us"}
@@ -80,37 +80,37 @@ export async function PublicPrimaryNavbar() {
           <Sheet>
             <SheetTrigger
               aria-label="Open navigation"
-              className="inline-flex size-11 items-center justify-center rounded-xl border-2 border-primary text-primary"
+              className="inline-flex size-10 items-center justify-center rounded-xl border bg-background text-foreground shadow-xs"
             >
-              <AppIcon className="text-2xl" name="menu" />
+              <AppIcon className="text-xl" name="menu" />
             </SheetTrigger>
             <SheetContent
-              className="w-[min(22rem,88vw)] border-l border-primary/10 bg-white p-0"
+              className="w-[min(22rem,90vw)] border-l bg-background p-0"
               side="right"
             >
-              <SheetHeader className="border-b border-primary/10 px-6 py-5 text-left">
+              <SheetHeader className="border-b px-5 py-5 text-left">
                 <SheetTitle className="sr-only">
                   {"Navigation"}
                 </SheetTitle>
-                <Link aria-label={agencyName || "Home"} href="/" className="flex items-center gap-2 text-primary">
+                <Link aria-label={agencyName || "Home"} href="/" className="flex items-center gap-2.5 text-foreground">
                   {logoUrl ? (
-                    <img alt={agencyName || "Agency logo"} className="h-10 w-auto max-w-28 object-contain" src={logoUrl} />
+                    <img alt={agencyName || "Agency logo"} className="h-9 w-auto max-w-32 object-contain" src={logoUrl} />
                   ) : null}
                   {agencyName ? (
-                    <span className="text-xl font-800 tracking-tighter uppercase">
+                    <span className="text-base font-bold tracking-tight">
                       {agencyName}
                     </span>
                   ) : null}
                 </Link>
               </SheetHeader>
-              <div className="flex flex-col gap-6 px-6 py-6">
-                <nav className="flex flex-col gap-3">
+              <div className="flex flex-col gap-5 px-5 py-5">
+                <nav className="flex flex-col gap-2">
                   {navItems.map((item) => (
                     <SheetClose
                       key={`${item.label}-sheet`}
                       render={
                         <Link
-                          className="rounded-xl border border-primary/10 px-4 py-3 text-sm font-semibold text-slate-700 transition-colors hover:border-primary hover:text-primary"
+                          className="rounded-xl px-4 py-3 text-sm font-medium text-foreground transition-colors hover:bg-accent"
                           href={item.href}
                         />
                       }
@@ -119,11 +119,11 @@ export async function PublicPrimaryNavbar() {
                     </SheetClose>
                   ))}
                 </nav>
-                <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-2 border-t pt-5">
                   <SheetClose
                     render={
                       <Link
-                        className="border-2 border-primary px-4 py-3 text-center text-sm font-bold text-primary"
+                        className="rounded-xl border px-4 py-3 text-center text-sm font-semibold text-foreground"
                         href={authHref}
                       />
                     }
@@ -133,7 +133,7 @@ export async function PublicPrimaryNavbar() {
                   <SheetClose
                     render={
                       <Link
-                        className="bg-primary px-6 py-3 text-center text-sm font-bold text-white"
+                        className="rounded-xl bg-primary px-4 py-3 text-center text-sm font-semibold text-primary-foreground"
                         href={publicContactUsPageMeta.routePath}
                       />
                     }
