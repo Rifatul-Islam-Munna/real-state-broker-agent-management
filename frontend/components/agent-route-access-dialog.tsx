@@ -3,9 +3,19 @@
 import { useEffect, useState } from "react"
 
 import type { AgentUserOption, UpdateAgentRoutePermissionsInput } from "@/@types/real-estate-api"
-import { agentRouteAccessItems } from "@/lib/agent-route-access"
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import { AppIcon } from "@/components/ui/app-icon"
+import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { agentRouteAccessItems } from "@/lib/agent-route-access"
 
 type AgentRouteAccessDialogProps = {
   agent: AgentUserOption | null
@@ -27,93 +37,80 @@ export function AgentRouteAccessDialog({
   const [useCustomAccess, setUseCustomAccess] = useState(false)
 
   useEffect(() => {
-    if (!agent || !open) {
-      return
-    }
+    if (!agent || !open) return
 
     setSelectedPermissions(agent.agentRoutePermissions ?? [])
     setUseCustomAccess(agent.hasCustomAgentRoutePermissions ?? false)
     setSubmitError(null)
   }, [agent, open])
 
-  if (!agent) {
-    return null
-  }
+  if (!agent) return null
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[calc(100dvh-2rem)] max-w-3xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-0">
-        <div className="border-b border-slate-200 px-6 py-5">
-          <DialogTitle className="text-xl font-black tracking-tight text-slate-900">
-            {"Agent Route Access"}
-          </DialogTitle>
-          <DialogDescription className="mt-2 text-sm leading-6 text-slate-500">
-            {`Choose which agent portal routes ${agent.fullName} can open. Admin access stays unrestricted.`}
+      <DialogContent className="max-w-3xl">
+        <DialogHeader>
+          <DialogTitle>{"Agent route access"}</DialogTitle>
+          <DialogDescription>
+            {`Choose which dashboard routes ${agent.fullName} can open. Admin access stays unrestricted.`}
           </DialogDescription>
-        </div>
+        </DialogHeader>
 
-        <div className="space-y-6 px-6 py-6">
-          <div className="grid gap-4 md:grid-cols-2">
-            <button
-              className={`rounded-2xl border px-5 py-4 text-left transition-colors ${
-                !useCustomAccess
-                  ? "border-primary bg-primary/5 text-primary"
-                  : "border-slate-200 bg-white text-slate-700"
-              }`}
+        <div className="space-y-5">
+          <div className="grid gap-3 md:grid-cols-2">
+            <Button
+              className="h-auto items-start justify-start p-4 text-left"
               onClick={() => {
                 setUseCustomAccess(false)
                 setSubmitError(null)
               }}
               type="button"
+              variant={!useCustomAccess ? "default" : "outline"}
             >
-              <p className="text-xs font-black uppercase tracking-[0.22em]">
-                {"Full Access"}
-              </p>
-              <p className="mt-2 text-sm leading-6">
-                {"Agent can open every current agent route."}
-              </p>
-            </button>
+              <span>
+                <span className="block font-semibold">{"Full access"}</span>
+                <span className="mt-1 block text-xs font-normal opacity-75">
+                  {"Agent can open every current agent route."}
+                </span>
+              </span>
+            </Button>
 
-            <button
-              className={`rounded-2xl border px-5 py-4 text-left transition-colors ${
-                useCustomAccess
-                  ? "border-primary bg-primary/5 text-primary"
-                  : "border-slate-200 bg-white text-slate-700"
-              }`}
+            <Button
+              className="h-auto items-start justify-start p-4 text-left"
               onClick={() => {
                 setUseCustomAccess(true)
                 setSubmitError(null)
               }}
               type="button"
+              variant={useCustomAccess ? "default" : "outline"}
             >
-              <p className="text-xs font-black uppercase tracking-[0.22em]">
-                {"Custom Access"}
-              </p>
-              <p className="mt-2 text-sm leading-6">
-                {"Admin picks exactly which agent portal routes stay visible and usable."}
-              </p>
-            </button>
+              <span>
+                <span className="block font-semibold">{"Custom access"}</span>
+                <span className="mt-1 block text-xs font-normal opacity-75">
+                  {"Choose exactly which dashboard routes remain visible."}
+                </span>
+              </span>
+            </Button>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-3 md:grid-cols-2">
             {agentRouteAccessItems.map((item) => {
               const isChecked = selectedPermissions.includes(item.permission)
 
               return (
                 <label
-                  key={item.permission}
-                  className={`flex items-start gap-4 rounded-2xl border px-5 py-4 ${
+                  className={`flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition-colors ${
                     useCustomAccess
-                      ? "border-slate-200 bg-slate-50"
-                      : "border-slate-100 bg-slate-50/60 opacity-70"
+                      ? "bg-card hover:bg-muted/35"
+                      : "cursor-not-allowed bg-muted/35 opacity-60"
                   }`}
+                  key={item.permission}
                 >
-                  <input
+                  <Checkbox
                     checked={isChecked}
-                    className="mt-1 rounded border-slate-300 text-primary focus:ring-primary"
+                    className="mt-0.5"
                     disabled={!useCustomAccess}
-                    onChange={(event) => {
-                      const checked = event.target.checked
+                    onCheckedChange={(checked) => {
                       setSelectedPermissions((current) =>
                         checked
                           ? [...current, item.permission]
@@ -121,41 +118,33 @@ export function AgentRouteAccessDialog({
                       )
                       setSubmitError(null)
                     }}
-                    type="checkbox"
                   />
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <AppIcon className="text-lg text-primary" name={item.icon} />
-                      <p className="text-sm font-bold text-slate-900">
-                        {item.label}
-                      </p>
-                    </div>
-                    <p className="mt-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                  <span className="min-w-0">
+                    <span className="flex items-center gap-2 font-semibold">
+                      <AppIcon className="text-primary" name={item.icon} />
+                      {item.label}
+                    </span>
+                    <span className="mt-1 block truncate text-xs text-muted-foreground">
                       {item.href}
-                    </p>
-                  </div>
+                    </span>
+                  </span>
                 </label>
               )
             })}
           </div>
 
           {submitError ? (
-            <p className="text-sm font-semibold text-rose-600">
-              {submitError}
-            </p>
+            <Alert variant="destructive">
+              <AlertDescription>{submitError}</AlertDescription>
+            </Alert>
           ) : null}
         </div>
 
-        <div className="flex items-center justify-end gap-3 border-t border-slate-200 px-6 py-5">
-          <button
-            className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 transition-colors hover:border-primary hover:text-primary"
-            onClick={() => onOpenChange(false)}
-            type="button"
-          >
+        <DialogFooter>
+          <Button onClick={() => onOpenChange(false)} type="button" variant="outline">
             {"Close"}
-          </button>
-          <button
-            className="rounded-xl bg-primary px-5 py-2 text-sm font-bold text-white transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-70"
+          </Button>
+          <Button
             disabled={isSubmitting}
             onClick={async () => {
               if (useCustomAccess && selectedPermissions.length === 0) {
@@ -178,9 +167,9 @@ export function AgentRouteAccessDialog({
             }}
             type="button"
           >
-            {isSubmitting ? "Saving..." : "Save Access"}
-          </button>
-        </div>
+            {isSubmitting ? "Saving..." : "Save access"}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )
