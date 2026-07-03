@@ -24,24 +24,25 @@ export function PagePagination({
   totalPages,
   onPageChange,
 }: PagePaginationProps) {
-  if (totalPages <= 1) {
-    return null
-  }
+  if (totalPages <= 1) return null
 
   const pages = getVisiblePageNumbers(currentPage, totalPages)
+  const isFirstPage = currentPage <= 1
+  const isLastPage = currentPage >= totalPages
 
   return (
     <Pagination className="justify-end">
       <PaginationContent>
         <PaginationItem>
           <PaginationPrevious
+            aria-disabled={isFirstPage}
+            className={isFirstPage ? "pointer-events-none opacity-45" : undefined}
             href="#"
             onClick={(event) => {
               event.preventDefault()
-              if (currentPage > 1) {
-                onPageChange(currentPage - 1)
-              }
+              if (!isFirstPage) onPageChange(currentPage - 1)
             }}
+            tabIndex={isFirstPage ? -1 : undefined}
           />
         </PaginationItem>
         {pages.map((page, index) => {
@@ -72,13 +73,14 @@ export function PagePagination({
         })}
         <PaginationItem>
           <PaginationNext
+            aria-disabled={isLastPage}
+            className={isLastPage ? "pointer-events-none opacity-45" : undefined}
             href="#"
             onClick={(event) => {
               event.preventDefault()
-              if (currentPage < totalPages) {
-                onPageChange(currentPage + 1)
-              }
+              if (!isLastPage) onPageChange(currentPage + 1)
             }}
+            tabIndex={isLastPage ? -1 : undefined}
           />
         </PaginationItem>
       </PaginationContent>
