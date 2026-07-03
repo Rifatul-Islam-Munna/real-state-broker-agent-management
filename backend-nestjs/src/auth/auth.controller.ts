@@ -31,7 +31,7 @@ export class AuthController {
     const lastName = `${registerDto.lastName ?? ''}`.trim();
     const email = `${registerDto.email ?? ''}`.trim();
     const password = `${registerDto.password ?? ''}`;
-    const phone = `${registerDto.phone ?? ''}`.trim();
+    const phone = `${registerDto.phone ?? ''}`.trim() || null;
 
     if (!firstName) throw new BadRequestException('First name is required');
     if (!lastName) throw new BadRequestException('Last name is required');
