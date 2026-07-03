@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { ShowingFeedbackEntryService } from './showing-feedback-entry.service';
 import { ShowingFeedbackQueryService } from './showing-feedback-query.service';
 import { ShowingFeedbackService } from './showing-feedback.service';
 
@@ -10,6 +11,7 @@ import { ShowingFeedbackService } from './showing-feedback.service';
 export class ShowingFeedbackV2Controller {
   constructor(
     private readonly feedback: ShowingFeedbackService,
+    private readonly entries: ShowingFeedbackEntryService,
     private readonly queries: ShowingFeedbackQueryService,
   ) {}
 
@@ -40,13 +42,13 @@ export class ShowingFeedbackV2Controller {
   @Post()
   @ApiOperation({ summary: 'Create one showing feedback entry manually' })
   createManual(@Body() payload: any) {
-    return this.feedback.createManual(payload);
+    return this.entries.createManual(payload);
   }
 
   @Post('import')
   @ApiOperation({ summary: 'Import mapped showing feedback CSV rows' })
   importRows(@Body() payload: any) {
-    return this.feedback.importRows(payload);
+    return this.entries.importRows(payload);
   }
 
   @Post('preview')
