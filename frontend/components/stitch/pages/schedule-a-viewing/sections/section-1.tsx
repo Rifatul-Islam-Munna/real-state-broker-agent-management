@@ -4,6 +4,8 @@ import { useMemo, useState } from "react"
 import { sileo } from "sileo"
 
 import { AppIcon } from "@/components/ui/app-icon"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import {
   Select,
@@ -20,13 +22,9 @@ import {
 } from "@/hooks/use-real-estate-api"
 import { formatDateTimeLabel, propertyHeroImage } from "@/lib/admin-portal"
 
-function toDateInputValue(date: Date) {
-  return date.toISOString().slice(0, 10)
-}
-
 export function Section1Section() {
   const [selectedPropertyId, setSelectedPropertyId] = useState("")
-  const [selectedDate, setSelectedDate] = useState(toDateInputValue(new Date(Date.now() + 86_400_000)))
+  const [selectedDate, setSelectedDate] = useState("")
   const [selectedSlot, setSelectedSlot] = useState("")
   const [formState, setFormState] = useState({
     contactEmail: "",
@@ -42,9 +40,14 @@ export function Section1Section() {
   })
   const createShowingBooking = useCreateShowingBooking()
 
-  const properties = propertiesQuery.data?.items ?? []
+  const properties = useMemo(
+    () => propertiesQuery.data?.items ?? [],
+    [propertiesQuery.data?.items],
+  )
   const selectedProperty = useMemo(
-    () => properties.find((property) => `${property.id}` === selectedPropertyId) ?? null,
+    () =>
+      properties.find((property) => `${property.id}` === selectedPropertyId) ??
+      null,
     [properties, selectedPropertyId],
   )
   const availableSlots = availabilityQuery.data ?? []
@@ -52,6 +55,11 @@ export function Section1Section() {
   async function handleSubmit() {
     if (!selectedPropertyId) {
       sileo.error({ title: "Choose property" })
+      return
+    }
+
+    if (!selectedDate) {
+      sileo.error({ title: "Choose date" })
       return
     }
 
@@ -81,36 +89,47 @@ export function Section1Section() {
       startAt: selectedSlot,
     })
 
-    if (response.error) {
-      return
-    }
+    if (response.error) return
 
     setFormState({ contactEmail: "", contactName: "", contactPhone: "", notes: "" })
     setSelectedSlot("")
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background-light p-4 md:p-8 dark:bg-background-dark">
-      <div className="grid w-full max-w-6xl border border-primary/10 bg-white dark:bg-slate-900 lg:grid-cols-[1.1fr_0.9fr]">
-        <div className="border-b border-primary/10 p-6 md:p-10 lg:border-b-0 lg:border-r">
-          <div className="mb-8 flex items-center gap-2 text-primary">
-            <AppIcon className="text-3xl" name="calendar_month" />
-            <h1 className="text-2xl font-bold tracking-tight">{"Schedule a Viewing"}</h1>
+    <div className="min-h-screen bg-muted/20 p-4 md:p-8">
+      <Card className="mx-auto grid w-full max-w-6xl gap-0 overflow-hidden p-0 shadow-xl lg:grid-cols-[1.1fr_0.9fr]">
+        <div className="border-b p-6 md:p-10 lg:border-b-0 lg:border-r">
+          <div className="mb-8 flex items-center gap-3">
+            <span className="flex size-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <AppIcon className="text-2xl" name="calendar_month" />
+            </span>
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight">{"Schedule a viewing"}</h1>
+              <p className="text-sm text-muted-foreground">
+                {"Choose a property, date, and available appointment time."}
+              </p>
+            </div>
           </div>
 
           <div className="space-y-6">
-            <label className="flex flex-col gap-2 text-sm font-bold text-slate-700 dark:text-slate-300">
+            <label className="flex flex-col gap-2 text-sm font-semibold">
               {"Property"}
               <Select
                 modal={false}
                 onValueChange={(value) => {
-                  setSelectedPropertyId(value ?? "")
+                  setSelectedPropertyId(value)
                   setSelectedSlot("")
                 }}
                 value={selectedPropertyId}
               >
-                <SelectTrigger className="h-auto border-primary/10 bg-slate-50 px-4 py-3 dark:bg-slate-800">
-                  <SelectValue placeholder={propertiesQuery.isLoading ? "Loading properties..." : "Choose property"} />
+                <SelectTrigger className="w-full">
+                  <SelectValue
+                    placeholder={
+                      propertiesQuery.isLoading
+                        ? "Loading properties..."
+                        : "Choose property"
+                    }
+                  />
                 </SelectTrigger>
                 <SelectContent>
                   {properties.map((property) => (
@@ -123,24 +142,32 @@ export function Section1Section() {
             </label>
 
             {selectedProperty ? (
-              <div className="flex gap-4 border border-primary/10 bg-background-light p-4 dark:bg-background-dark">
-                <div
-                  className="size-24 shrink-0 bg-cover bg-center"
-                  style={{ backgroundImage: `url("${propertyHeroImage(selectedProperty)}")` }}
-                />
-                <div>
-                  <h2 className="text-lg font-bold text-primary">{selectedProperty.title}</h2>
-                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{selectedProperty.exactLocation || selectedProperty.location}</p>
-                  <p className="mt-2 text-xs font-bold uppercase tracking-wide text-slate-400">{selectedProperty.agent?.fullName ?? "Auto assignment"}</p>
-                </div>
-              </div>
+              <Card size="sm">
+                <CardContent className="flex gap-4 pt-1">
+                  <div
+                    className="size-24 shrink-0 rounded-xl bg-cover bg-center"
+                    style={{
+                      backgroundImage: `url("${propertyHeroImage(selectedProperty)}")`,
+                    }}
+                  />
+                  <div className="min-w-0">
+                    <h2 className="truncate text-lg font-semibold">
+                      {selectedProperty.title}
+                    </h2>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {selectedProperty.exactLocation || selectedProperty.location}
+                    </p>
+                    <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      {selectedProperty.agent?.fullName ?? "Auto assignment"}
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
             ) : null}
 
-            <label className="flex flex-col gap-2 text-sm font-bold text-slate-700 dark:text-slate-300">
+            <label className="flex flex-col gap-2 text-sm font-semibold">
               {"Date"}
               <Input
-                className="h-auto border-primary/10 bg-slate-50 px-4 py-3 dark:bg-slate-800"
-                min={toDateInputValue(new Date())}
                 onChange={(event) => {
                   setSelectedDate(event.target.value)
                   setSelectedSlot("")
@@ -151,25 +178,31 @@ export function Section1Section() {
             </label>
 
             <div>
-              <h3 className="mb-4 text-sm font-bold text-slate-700 dark:text-slate-300">{"Available Slots"}</h3>
+              <h3 className="mb-3 text-sm font-semibold">{"Available slots"}</h3>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                 {availabilityQuery.isLoading ? (
-                  <p className="col-span-full text-sm font-semibold text-slate-500">{"Loading slots..."}</p>
+                  <p className="col-span-full text-sm text-muted-foreground">
+                    {"Loading slots..."}
+                  </p>
                 ) : availableSlots.length === 0 ? (
-                  <p className="col-span-full text-sm font-semibold text-slate-500">{"Choose a property and date."}</p>
+                  <p className="col-span-full text-sm text-muted-foreground">
+                    {"Choose a property and date."}
+                  </p>
                 ) : (
                   availableSlots.map((slot) => (
-                    <button
-                      key={slot.startAt}
-                      className={slot.startAt === selectedSlot
-                        ? "border border-primary bg-primary px-3 py-3 text-sm font-bold text-white"
-                        : "border border-primary/10 px-3 py-3 text-sm font-bold text-primary disabled:cursor-not-allowed disabled:opacity-40"}
+                    <Button
                       disabled={!slot.isAvailable}
+                      key={slot.startAt}
                       onClick={() => setSelectedSlot(slot.startAt)}
+                      size="sm"
                       type="button"
+                      variant={slot.startAt === selectedSlot ? "default" : "outline"}
                     >
-                      {formatDateTimeLabel(slot.startAt).split(",").slice(-1)[0]?.trim() ?? slot.startAt}
-                    </button>
+                      {formatDateTimeLabel(slot.startAt)
+                        .split(",")
+                        .slice(-1)[0]
+                        ?.trim() ?? slot.startAt}
+                    </Button>
                   ))
                 )}
               </div>
@@ -177,46 +210,68 @@ export function Section1Section() {
           </div>
         </div>
 
-        <div className="p-6 md:p-10">
-          <h3 className="mb-6 text-xl font-bold text-slate-800 dark:text-slate-100">{"Your Information"}</h3>
-          <div className="space-y-5">
+        <Card className="rounded-none border-0 py-0 shadow-none">
+          <CardHeader className="px-6 pt-6 md:px-10 md:pt-10">
+            <CardTitle>{"Your information"}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-5 px-6 pb-6 md:px-10 md:pb-10">
             <Input
-              className="h-auto border-primary/10 bg-slate-50 px-4 py-3 dark:bg-slate-800"
-              onChange={(event) => setFormState((current) => ({ ...current, contactName: event.target.value }))}
+              onChange={(event) =>
+                setFormState((current) => ({
+                  ...current,
+                  contactName: event.target.value,
+                }))
+              }
               placeholder="Full name"
               value={formState.contactName}
             />
             <Input
-              className="h-auto border-primary/10 bg-slate-50 px-4 py-3 dark:bg-slate-800"
-              onChange={(event) => setFormState((current) => ({ ...current, contactEmail: event.target.value }))}
+              onChange={(event) =>
+                setFormState((current) => ({
+                  ...current,
+                  contactEmail: event.target.value,
+                }))
+              }
               placeholder="Email address"
               type="email"
               value={formState.contactEmail}
             />
             <Input
-              className="h-auto border-primary/10 bg-slate-50 px-4 py-3 dark:bg-slate-800"
-              onChange={(event) => setFormState((current) => ({ ...current, contactPhone: event.target.value }))}
+              onChange={(event) =>
+                setFormState((current) => ({
+                  ...current,
+                  contactPhone: event.target.value,
+                }))
+              }
               placeholder="Phone number"
               value={formState.contactPhone}
             />
             <Textarea
-              className="min-h-28 border-primary/10 bg-slate-50 px-4 py-3 dark:bg-slate-800"
-              onChange={(event) => setFormState((current) => ({ ...current, notes: event.target.value }))}
+              className="min-h-28"
+              onChange={(event) =>
+                setFormState((current) => ({
+                  ...current,
+                  notes: event.target.value,
+                }))
+              }
               placeholder="Message for the agent"
               value={formState.notes}
             />
-            <button
-              className="flex w-full items-center justify-center gap-2 bg-primary px-6 py-4 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-70"
+            <Button
+              className="w-full"
               disabled={createShowingBooking.isPending}
               onClick={() => void handleSubmit()}
+              size="lg"
               type="button"
             >
-              <span>{createShowingBooking.isPending ? "Booking..." : "Confirm Schedule"}</span>
+              <span>
+                {createShowingBooking.isPending ? "Booking..." : "Confirm schedule"}
+              </span>
               <AppIcon name="arrow_forward" />
-            </button>
-          </div>
-        </div>
-      </div>
+            </Button>
+          </CardContent>
+        </Card>
+      </Card>
     </div>
   )
 }
