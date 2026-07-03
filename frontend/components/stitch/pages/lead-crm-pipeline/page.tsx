@@ -107,8 +107,9 @@ export function LeadCrmPipelinePage() {
 
     if (response.error) return response.error.message
 
-    if (response.data) {
-      setLocalLeads((current) => [response.data, ...current])
+    const createdLead = response.data
+    if (createdLead) {
+      setLocalLeads((current) => [createdLead, ...current])
     }
 
     return null
@@ -125,11 +126,10 @@ export function LeadCrmPipelinePage() {
 
     if (response.error) return response.error.message
 
-    if (response.data) {
+    const updatedLead = response.data
+    if (updatedLead) {
       setLocalLeads((current) =>
-        current.map((lead) =>
-          lead.id === response.data?.id ? response.data ?? lead : lead,
-        ),
+        current.map((lead) => (lead.id === updatedLead.id ? updatedLead : lead)),
       )
     }
 
@@ -191,11 +191,10 @@ export function LeadCrmPipelinePage() {
       return
     }
 
-    if (response.data) {
+    const updatedLead = response.data
+    if (updatedLead) {
       setLocalLeads((current) =>
-        current.map((lead) =>
-          lead.id === response.data?.id ? response.data ?? lead : lead,
-        ),
+        current.map((lead) => (lead.id === updatedLead.id ? updatedLead : lead)),
       )
     }
   }
@@ -224,11 +223,10 @@ export function LeadCrmPipelinePage() {
       return
     }
 
-    if (response.data) {
+    const updatedLead = response.data
+    if (updatedLead) {
       setLocalLeads((current) =>
-        current.map((lead) =>
-          lead.id === response.data?.id ? response.data ?? lead : lead,
-        ),
+        current.map((lead) => (lead.id === updatedLead.id ? updatedLead : lead)),
       )
     }
   }
@@ -237,7 +235,9 @@ export function LeadCrmPipelinePage() {
     const response = await convertLeadToDealMutation.mutateAsync({ leadId })
 
     if (response.error) return response.error.message
-    if (!response.data) return "The deal was not returned by the server."
+
+    const convertedDeal = response.data
+    if (!convertedDeal) return "The deal was not returned by the server."
 
     setLocalLeads((current) =>
       current.map((lead) =>
@@ -245,15 +245,15 @@ export function LeadCrmPipelinePage() {
           ? {
               ...lead,
               inBoard: false,
-              linkedDealId: response.data.id,
-              linkedDealTitle: response.data.title,
+              linkedDealId: convertedDeal.id,
+              linkedDealTitle: convertedDeal.title,
               stage: "Deal",
             }
           : lead,
       ),
     )
 
-    router.push(`${portalRoutes.deals}?dealId=${response.data.id}`)
+    router.push(`${portalRoutes.deals}?dealId=${convertedDeal.id}`)
     return null
   }
 
