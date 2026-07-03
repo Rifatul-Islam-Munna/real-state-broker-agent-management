@@ -4,8 +4,10 @@ import Link from "next/link"
 import { useMemo, useState } from "react"
 
 import { PagePagination } from "@/components/stitch/shared/page-pagination"
-import { useContactRequests, useConvertContactRequestToLead } from "@/hooks/use-real-estate-api"
-import { formatDateTimeLabel } from "@/lib/admin-portal"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import {
   Select,
@@ -14,6 +16,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { useContactRequests, useConvertContactRequestToLead } from "@/hooks/use-real-estate-api"
+import { formatDateTimeLabel } from "@/lib/admin-portal"
 
 const PAGE_SIZE = 10
 
@@ -40,7 +44,7 @@ export function ContactInboxApiPage() {
   const stats = useMemo(
     () => [
       {
-        label: "New Contacts",
+        label: "New contacts",
         value: `${contactRequests.filter((item) => item.status === "New").length}`,
       },
       {
@@ -56,133 +60,140 @@ export function ContactInboxApiPage() {
   )
 
   return (
-    <div className="bg-background-light font-sans text-slate-900 dark:bg-background-dark dark:text-slate-100">
-      <main className="flex min-h-screen w-full flex-col overflow-x-hidden">
-        <section className="border-b border-slate-200 bg-white px-4 py-5 dark:border-white/10 dark:bg-background-dark md:px-6">
-          <h1 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">{"Contact Us Inbox"}</h1>
-          <p className="mt-2 max-w-2xl text-sm text-slate-500 dark:text-slate-400">
-            {"Public contact form submissions land here. Review the inquiry, then convert the contact into a lead when it is worth moving into CRM."}
-          </p>
-          <div className="mt-5 flex flex-col gap-3 md:flex-row">
-            <Input
-              className="h-auto border-slate-200 bg-slate-50 px-4 py-3 text-sm dark:border-white/10 dark:bg-white/5"
-              onChange={(event) => {
-                setSearchTerm(event.target.value)
-                setPage(1)
-              }}
-              placeholder="Search contacts or messages"
-              value={searchTerm}
-            />
-            <Select
-              modal={false}
-              onValueChange={(value) => {
-                setStatusFilter(
-                  !value || value === "all" ? "" : (value as "New" | "Reviewing" | "Converted"),
-                )
-                setPage(1)
-              }}
-              value={statusFilter || "all"}
-            >
-              <SelectTrigger className="h-auto min-w-44 border-slate-200 bg-slate-50 px-4 py-3 text-sm dark:border-white/10 dark:bg-white/5">
-                <SelectValue placeholder="All Statuses" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">
-                  {"All Statuses"}
-                </SelectItem>
-                <SelectItem value="New">
-                  {"New"}
-                </SelectItem>
-                <SelectItem value="Reviewing">
-                  {"Reviewing"}
-                </SelectItem>
-                <SelectItem value="Converted">
-                  {"Converted"}
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </section>
+    <main className="min-h-full bg-muted/20 p-4 sm:p-6 lg:p-8">
+      <div className="mx-auto max-w-[1600px] space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-2xl">{"Contact inbox"}</CardTitle>
+            <CardDescription className="max-w-2xl">
+              {"Review public contact submissions and move qualified inquiries into the lead pipeline."}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col gap-3 md:flex-row">
+              <Input
+                className="md:max-w-xl"
+                onChange={(event) => {
+                  setSearchTerm(event.target.value)
+                  setPage(1)
+                }}
+                placeholder="Search contacts or messages"
+                value={searchTerm}
+              />
+              <Select
+                modal={false}
+                onValueChange={(value) => {
+                  setStatusFilter(
+                    !value || value === "all" ? "" : (value as "New" | "Reviewing" | "Converted"),
+                  )
+                  setPage(1)
+                }}
+                value={statusFilter || "all"}
+              >
+                <SelectTrigger className="w-full md:w-48">
+                  <SelectValue placeholder="All statuses" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">{"All statuses"}</SelectItem>
+                  <SelectItem value="New">{"New"}</SelectItem>
+                  <SelectItem value="Reviewing">{"Reviewing"}</SelectItem>
+                  <SelectItem value="Converted">{"Converted"}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </CardContent>
+        </Card>
 
-        <section className="grid gap-4 border-b border-slate-200 bg-background-light px-4 py-4 dark:border-white/10 dark:bg-background-dark sm:grid-cols-3 md:px-6">
+        <section className="grid gap-4 sm:grid-cols-3">
           {stats.map((stat) => (
-            <article key={stat.label} className="border border-slate-200 bg-white p-5 dark:border-white/10 dark:bg-slate-900">
-              <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-400">{stat.label}</p>
-              <p className="mt-3 text-3xl font-black text-slate-900 dark:text-white">{stat.value}</p>
-            </article>
+            <Card key={stat.label}>
+              <CardHeader>
+                <CardDescription>{stat.label}</CardDescription>
+                <CardTitle className="text-3xl">{stat.value}</CardTitle>
+              </CardHeader>
+            </Card>
           ))}
         </section>
 
-        <section className="space-y-4 px-4 py-6 md:px-6">
+        <section className="space-y-4">
           {isInitialLoading ? (
-            <article className="border border-slate-200 bg-white p-5 text-center dark:border-white/10 dark:bg-slate-900">
-              <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">{"Loading contact requests..."}</p>
-            </article>
+            <Alert>
+              <AlertDescription>{"Loading contact requests..."}</AlertDescription>
+            </Alert>
           ) : contactRequestsQuery.error ? (
-            <article className="border border-slate-200 bg-white p-5 text-center dark:border-white/10 dark:bg-slate-900">
-              <p className="text-sm font-semibold text-rose-600">{contactRequestsQuery.error.message}</p>
-            </article>
+            <Alert variant="destructive">
+              <AlertDescription>{contactRequestsQuery.error.message}</AlertDescription>
+            </Alert>
           ) : contactRequests.length === 0 ? (
-            <article className="border border-slate-200 bg-white p-5 text-center dark:border-white/10 dark:bg-slate-900">
-              <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">{"No contact requests match the current filters."}</p>
-            </article>
+            <div className="rounded-2xl border border-dashed bg-card p-10 text-center text-sm text-muted-foreground">
+              {"No contact requests match the current filters."}
+            </div>
           ) : (
             contactRequests.map((item) => (
-              <article key={item.id} className="border border-slate-200 bg-white p-5 dark:border-white/10 dark:bg-slate-900">
-                <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr_auto] xl:items-center">
+              <Card key={item.id}>
+                <CardContent className="grid gap-5 pt-1 xl:grid-cols-[minmax(0,1.2fr)_minmax(220px,0.8fr)_auto] xl:items-center">
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
-                      <h2 className="text-base font-bold text-slate-900 dark:text-white">{item.name}</h2>
-                      <span className="border border-primary/20 bg-primary/5 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-primary">{item.inquiryType}</span>
-                      <span className="border border-slate-200 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-600 dark:border-white/10 dark:text-slate-300">{item.status}</span>
+                      <h2 className="text-base font-semibold">{item.name}</h2>
+                      <Badge variant="secondary">{item.inquiryType}</Badge>
+                      <Badge variant={item.status === "Converted" ? "default" : "outline"}>
+                        {item.status}
+                      </Badge>
                     </div>
-                    {(item.propertyTitle || item.agentName) ? (
+                    {item.propertyTitle || item.agentName ? (
                       <div className="mt-3 flex flex-wrap gap-2">
                         {item.propertyTitle ? (
-                          <span className="border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-semibold text-slate-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-300">
-                            {`Property: ${item.propertyTitle}`}
-                          </span>
+                          <Badge variant="outline">{`Property: ${item.propertyTitle}`}</Badge>
                         ) : null}
                         {item.agentName ? (
-                          <span className="border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-semibold text-slate-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-300">
-                            {`Agent: ${item.agentName}`}
-                          </span>
+                          <Badge variant="outline">{`Agent: ${item.agentName}`}</Badge>
                         ) : null}
                       </div>
                     ) : null}
-                    <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">{item.message}</p>
+                    <p className="mt-4 text-sm leading-6 text-muted-foreground">{item.message}</p>
                   </div>
-                  <div>
-                    <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">{"Contact"}</p>
-                    <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-white">{item.email}</p>
-                    <p className="text-sm text-slate-500 dark:text-slate-400">{item.phone}</p>
-                    <p className="mt-2 text-xs font-bold uppercase tracking-wide text-slate-400">{formatDateTimeLabel(item.createdAt)}</p>
+
+                  <div className="rounded-xl bg-muted/45 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      {"Contact"}
+                    </p>
+                    <p className="mt-2 break-all text-sm font-semibold">{item.email}</p>
+                    <p className="text-sm text-muted-foreground">{item.phone}</p>
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      {formatDateTimeLabel(item.createdAt)}
+                    </p>
                   </div>
+
                   <div className="flex flex-wrap gap-2 xl:justify-end">
                     {item.leadId ? (
-                      <Link className="border border-primary bg-primary px-4 py-2 text-xs font-bold uppercase tracking-wide text-white" href="/dashboard/leads">
-                        {"Open Lead CRM"}
-                      </Link>
+                      <Button render={<Link href="/dashboard/leads" />} size="sm">
+                        {"Open lead CRM"}
+                      </Button>
                     ) : (
-                      <button
-                        className="border border-primary bg-primary px-4 py-2 text-xs font-bold uppercase tracking-wide text-white disabled:cursor-not-allowed disabled:opacity-70"
+                      <Button
                         disabled={convertContactRequestToLead.isPending}
                         onClick={() => void convertContactRequestToLead.mutateAsync({ contactRequestId: item.id })}
+                        size="sm"
                         type="button"
                       >
-                        {"Convert To Lead"}
-                      </button>
+                        {convertContactRequestToLead.isPending ? "Converting..." : "Convert to lead"}
+                      </Button>
                     )}
                   </div>
-                </div>
-              </article>
+                </CardContent>
+              </Card>
             ))
           )}
         </section>
-        <div className="border-t border-slate-200 px-4 py-4 dark:border-white/10 md:px-6">
-          <PagePagination currentPage={page} onPageChange={setPage} totalPages={contactRequestsQuery.data?.totalPages ?? 1} />
+
+        <div className="rounded-2xl border bg-card p-3 shadow-sm">
+          <PagePagination
+            currentPage={page}
+            onPageChange={setPage}
+            totalPages={contactRequestsQuery.data?.totalPages ?? 1}
+          />
         </div>
-      </main>
-    </div>
+      </div>
+    </main>
   )
 }
