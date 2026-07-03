@@ -1,76 +1,90 @@
-// @ts-nocheck
 import { useMutation } from "@tanstack/react-query"
 import { sileo } from "sileo"
 
-import { DeleteRequestAxios, PatchRequestAxios, PostRequestAxios } from "./api-hooks"
+import {
+  type ApiError,
+  DeleteRequestAxios,
+  PatchRequestAxios,
+  PostRequestAxios,
+} from "./api-hooks"
 
 type HttpMethod = "POST" | "PATCH" | "DELETE"
 
-interface UseApiMutationConfig<TData = any, TVariables = any> {
+type MutationResult<TData> = {
+  data: TData | null
+  error: ApiError | null
+}
+
+interface UseApiMutationConfig<TData, TVariables> {
   url: string
   method: HttpMethod
   mutationKey?: string[]
   successMessage?: string
-  onSuccess?: (data: TData) => void
-  onError?: (error: Error) => void
+  onSuccess?: (data: TData | null) => void
+  onError?: (error: ApiError) => void
 }
 
-export function useCommonMutationApi<TData = any, TVariables = any>(
+export function useCommonMutationApi<TData = unknown, TVariables = unknown>(
   config: UseApiMutationConfig<TData, TVariables>,
 ) {
   const { url, method, mutationKey, successMessage, onSuccess, onError } = config
 
-  const getMutationFn = () => {
-    switch (method) {
-      case "POST":
-        return async (data: TVariables) => {
-          const [response, error] = await PostRequestAxios<TData>(url, data)
-          return { data: response, error }
-        }
-      case "PATCH":
-        return async (data: TVariables) => {
-          const [response, error] = await PatchRequestAxios<TData>(url, data)
-          return { data: response, error }
-        }
-      case "DELETE":
-        return async (variables: TVariables | string) => {
-          const id = typeof variables === "string" ? variables : (variables as any)?.id
-          const [response, error] = await DeleteRequestAxios<TData>(`${url}?id=${id}`)
-          return { data: response, error }
-        }
-      default:
-        throw new Error(`Unsupported method: ${method}`)
+  async function runMutation(variables: TVariables): Promise<MutationResult<TData>> {
+    if (method === "POST") {
+      const [data, error] = await PostRequestAxios<TData, TVariables>(url, variables)
+      return { data, error }
     }
+
+    if (method === "PATCH") {
+      const [data, error] = await PatchRequestAxios<TData, TVariables>(url, variables)
+      return { data, error }
+    }
+
+    const id =
+      typeof variables === "string"
+        ? variables
+        : (variables as { id?: string | number } | null | undefined)?.id
+
+    if (id === undefined || id === null || `${id}`.trim().length === 0) {
+      return {
+        data: null,
+        error: { message: "A valid item ID is required.", statusCode: 400 },
+      }
+    }
+
+    const [data, error] = await DeleteRequestAxios<TData>(
+      `${url}?id=${encodeURIComponent(String(id))}`,
+    )
+    return { data, error }
   }
 
-  return useMutation({
+  return useMutation<MutationResult<TData>, Error, TVariables>({
     mutationKey,
-    mutationFn: async (variables: TVariables) => {
-      const mutationFn = getMutationFn()
-      return await mutationFn(variables as any)
-    },
+    mutationFn: runMutation,
     onSuccess: (result) => {
-      if (result?.data) {
-        sileo.success({
-          title: successMessage || "Success",
-        })
+      if (!result.error) {
+        sileo.success({ title: successMessage || "Success" })
         onSuccess?.(result.data)
         return
       }
 
-      const message = result?.error?.message || "Unknown error"
       sileo.error({
         title: "Request failed",
-        description: message,
+        description: result.error.message,
       })
-      onError?.({ message } as Error)
+      onError?.(result.error)
     },
-    onError: (error: Error) => {
+    onError: (error) => {
+      const apiError: ApiError = {
+        message: error.message || "Something went wrong",
+        statusCode: 500,
+      }
+
       sileo.error({
         title: "Request failed",
-        description: error.message,
+        description: apiError.message,
       })
-      onError?.(error)
+      onError?.(apiError)
     },
   })
 }
