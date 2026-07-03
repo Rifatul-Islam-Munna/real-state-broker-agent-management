@@ -26,26 +26,26 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
   const { agencyName, logoUrl } = resolvePortalBranding(publicAgencySettings.profile)
 
   return (
-    <SidebarProvider className="min-h-screen bg-background-light text-slate-900 dark:bg-background-dark dark:text-slate-100">
+    <SidebarProvider className="min-h-screen bg-background text-foreground">
       <DashboardSidebar
         agencyName={agencyName}
         agentRoutePermissions={user.agentRoutePermissions}
         logoUrl={logoUrl}
         role={user.role}
       />
-      <SidebarInset className="min-w-0 bg-background-light dark:bg-background-dark">
-        <div className="border-b border-primary/10 bg-white px-4 py-3 dark:bg-slate-900 md:hidden">
+      <SidebarInset className="min-w-0 bg-muted/20">
+        <div className="border-b bg-background/95 px-4 py-3 backdrop-blur md:hidden">
           <div className="flex items-center justify-between gap-4">
             <PortalBrandLink
               agencyName={agencyName}
-              className="min-w-0 flex-1 text-primary"
+              className="min-w-0 flex-1 text-foreground"
               href={homeHref}
-              iconWrapperClassName="size-10 rounded-xl border border-primary/10 bg-white p-2"
+              iconWrapperClassName="size-10 rounded-xl bg-primary p-2 text-primary-foreground shadow-sm"
               logoUrl={logoUrl}
-              nameClassName="text-base font-black tracking-tight text-slate-900 dark:text-white"
+              nameClassName="text-base font-bold tracking-tight text-foreground"
             />
             <SidebarTrigger
-              className="border border-primary/10 text-primary hover:bg-primary/5"
+              className="shadow-xs"
               render={<Button variant="outline" size="icon-sm" />}
             />
           </div>
@@ -57,7 +57,7 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
             userName={user.fullName}
           />
         </div>
-        <div className="min-w-0">{children}</div>
+        <div className="min-w-0 flex-1">{children}</div>
       </SidebarInset>
     </SidebarProvider>
   )
