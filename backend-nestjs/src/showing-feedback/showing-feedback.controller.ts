@@ -24,7 +24,25 @@ export class ShowingFeedbackController {
     @Query('fromDate') fromDate?: string,
     @Query('toDate') toDate?: string,
   ) {
-    return this.showingFeedbackService.findAll(Number(propertyId), Number(page), Number(pageSize), fromDate, toDate);
+    return this.showingFeedbackService.findAll(
+      Number(propertyId),
+      Number(page),
+      Number(pageSize),
+      fromDate,
+      toDate,
+    );
+  }
+
+  @Post()
+  @ApiOperation({ summary: 'Create one showing feedback entry manually' })
+  createManual(@Body() payload: any) {
+    return this.showingFeedbackService.createManual(payload);
+  }
+
+  @Post('import')
+  @ApiOperation({ summary: 'Import mapped showing feedback CSV rows' })
+  importRows(@Body() payload: any) {
+    return this.showingFeedbackService.importRows(payload);
   }
 
   @Post('preview')
