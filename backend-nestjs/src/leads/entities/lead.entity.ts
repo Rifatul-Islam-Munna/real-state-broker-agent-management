@@ -94,7 +94,7 @@ export class Lead {
   inBoard: boolean;
 
   @Column({ type: 'timestamp', nullable: true })
-  nextActionDate: Date;
+  nextActionDate: Date | null;
 
   @Column({ default: '' })
   nextActionType: string;
