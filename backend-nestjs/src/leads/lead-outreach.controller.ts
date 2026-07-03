@@ -1,12 +1,26 @@
-import { Controller, Get, Post, Body, Query, UseGuards, Res, NotFoundException } from '@nestjs/common';
-import { LeadOutreachService } from './lead-outreach.service';
-import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import {
+  Body,
+  Controller,
+  Get,
+  NotFoundException,
+  Post,
+  Query,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { parseDateTimeInZone } from '../common/time-zone';
+import { SchedulingSettingsService } from '../settings/scheduling-settings.service';
+import { LeadOutreachService } from './lead-outreach.service';
 
 @ApiTags('Leads')
 @Controller('lead-outreach')
 export class LeadOutreachController {
-  constructor(private readonly outreachService: LeadOutreachService) {}
+  constructor(
+    private readonly outreachService: LeadOutreachService,
+    private readonly schedulingSettingsService: SchedulingSettingsService,
+  ) {}
 
   @Get('templates')
   @UseGuards(JwtAuthGuard)
@@ -35,10 +49,13 @@ export class LeadOutreachController {
     @Query('title') title: string | undefined,
     @Res() res: any,
   ) {
-    const xml = await this.outreachService.getCallScript(historyEntryId, provider, message, title);
-    if (!xml) {
-      throw new NotFoundException();
-    }
+    const xml = await this.outreachService.getCallScript(
+      historyEntryId,
+      provider,
+      message,
+      title,
+    );
+    if (!xml) throw new NotFoundException();
     return res.type('application/xml; charset=utf-8').send(xml);
   }
 
@@ -46,13 +63,25 @@ export class LeadOutreachController {
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Send outreach' })
   async sendOutreach(@Body() dto: any) {
-    return this.outreachService.sendOutreach(dto);
+    return this.outreachService.sendOutreach(await this.normalizeSchedule(dto));
   }
 
   @Post('bulk')
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Send bulk outreach' })
   async sendBulkOutreach(@Body() dto: any) {
-    return this.outreachService.sendBulkOutreach(dto);
+    return this.outreachService.sendBulkOutreach(await this.normalizeSchedule(dto));
+  }
+
+  private async normalizeSchedule(dto: any) {
+    if (!dto?.scheduledAt) return dto;
+
+    const timeZone = await this.schedulingSettingsService.getTimeZone();
+    const scheduledAt = parseDateTimeInZone(dto.scheduledAt, timeZone);
+
+    return {
+      ...dto,
+      scheduledAt: scheduledAt?.toISOString() ?? null,
+    };
   }
 }
