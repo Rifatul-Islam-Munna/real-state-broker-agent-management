@@ -13,7 +13,6 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { dashboardRoutes } from "@/lib/dashboard-routes"
@@ -47,10 +46,7 @@ export function DashboardTopbar({ userName, role, avatarUrl }: DashboardTopbarPr
   return (
     <header className="sticky top-0 z-30 border-b border-border/70 bg-background/90 backdrop-blur-xl">
       <div className="flex min-h-18 items-center gap-4 px-4 sm:px-6 lg:px-8">
-        <SidebarTrigger
-          className="shadow-xs"
-          render={<Button variant="outline" size="icon-sm" />}
-        />
+        <SidebarTrigger className="shadow-xs" size="icon-sm" variant="outline" />
         <div className="min-w-0 flex-1">
           <Breadcrumb>
             <BreadcrumbList>
