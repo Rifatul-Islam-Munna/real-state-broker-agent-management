@@ -4,7 +4,18 @@ import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { apiReference } from '@scalar/nestjs-api-reference';
 
+function validateProductionConfiguration() {
+  if (process.env.NODE_ENV !== 'production') return;
+
+  const jwtSecret = `${process.env.JWT_SECRET ?? ''}`.trim();
+  if (jwtSecret.length < 32) {
+    throw new Error('JWT_SECRET must contain at least 32 characters in production.');
+  }
+}
+
 async function bootstrap() {
+  validateProductionConfiguration();
+
   const app = await NestFactory.create(AppModule);
 
   app.setGlobalPrefix('api');
