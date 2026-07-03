@@ -159,7 +159,7 @@ export class RealtorShowingsV2Service extends RealtorShowingsService {
   }
 
   private bestMatch(input: string, properties: Property[]) {
-    const requested = this.normalize(input);
+    const requested = this.normalizeText(input);
     if (!requested) return { property: null as Property | null, score: 0 };
     const exact = properties.find((property) => this.candidates(property).includes(requested));
     if (exact) return { property: exact, score: 1 };
@@ -193,7 +193,7 @@ export class RealtorShowingsV2Service extends RealtorShowingsService {
   }
 
   private candidates(property: Property) {
-    return [property.title, property.location, property.exactLocation].map((value) => this.normalize(value)).filter(Boolean);
+    return [property.title, property.location, property.exactLocation].map((value) => this.normalizeText(value)).filter(Boolean);
   }
   private clean(input: any) { return Object.fromEntries(Object.entries(input ?? {}).map(([key, value]) => [`${key}`.trim(), `${value ?? ''}`.trim()])); }
   private cell(record: Record<string, string>, column?: string) { return column ? `${record[column] ?? ''}`.trim() : ''; }
@@ -204,5 +204,5 @@ export class RealtorShowingsV2Service extends RealtorShowingsService {
     const time = this.cell(record, mapping.showingTime);
     return date && time ? `${date}T${time}` : date;
   }
-  private normalize(value: unknown) { return `${value ?? ''}`.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim(); }
+  private normalizeText(value: unknown) { return `${value ?? ''}`.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim(); }
 }
