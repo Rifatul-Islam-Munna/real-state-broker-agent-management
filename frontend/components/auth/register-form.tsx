@@ -3,7 +3,10 @@
 import Link from "next/link"
 import { useActionState, useState } from "react"
 
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import {
   Select,
   SelectContent,
@@ -11,6 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Separator } from "@/components/ui/separator"
 import { registerAction, type AuthActionState } from "@/lib/auth-actions"
 
 const initialState: AuthActionState = { error: null }
@@ -22,85 +26,38 @@ export function RegisterForm() {
   return (
     <form action={action} className="space-y-5">
       <input name="role" type="hidden" value={role} />
-      <div className="grid gap-5 md:grid-cols-2">
+
+      <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
-          <label className="text-sm font-bold text-slate-700" htmlFor="firstName">
-            {"First Name"}
-          </label>
-          <Input
-            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition-colors focus:border-primary"
-            id="firstName"
-            name="firstName"
-            placeholder="Estate"
-            required
-            type="text"
-          />
+          <Label htmlFor="firstName">{"First name"}</Label>
+          <Input id="firstName" name="firstName" placeholder="Estate" required type="text" />
         </div>
         <div className="space-y-2">
-          <label className="text-sm font-bold text-slate-700" htmlFor="lastName">
-            {"Last Name"}
-          </label>
-          <Input
-            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition-colors focus:border-primary"
-            id="lastName"
-            name="lastName"
-            placeholder="Admin"
-            required
-            type="text"
-          />
+          <Label htmlFor="lastName">{"Last name"}</Label>
+          <Input id="lastName" name="lastName" placeholder="Admin" required type="text" />
         </div>
       </div>
-      <div className="grid gap-5 md:grid-cols-2">
+
+      <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
-          <label className="text-sm font-bold text-slate-700" htmlFor="email">
-            {"Email"}
-          </label>
-          <Input
-            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition-colors focus:border-primary"
-            id="email"
-            name="email"
-            placeholder="admin@estateblue.com"
-            required
-            type="email"
-          />
+          <Label htmlFor="email">{"Email address"}</Label>
+          <Input id="email" name="email" placeholder="admin@estateblue.com" required type="email" />
         </div>
         <div className="space-y-2">
-          <label className="text-sm font-bold text-slate-700" htmlFor="phone">
-            {"Phone"}
-          </label>
-          <Input
-            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition-colors focus:border-primary"
-            id="phone"
-            name="phone"
-            placeholder="+1 555 000 0000"
-            type="tel"
-          />
+          <Label htmlFor="phone">{"Phone"}</Label>
+          <Input id="phone" name="phone" placeholder="+1 555 000 0000" type="tel" />
         </div>
       </div>
-      <div className="grid gap-5 md:grid-cols-2">
+
+      <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
-          <label className="text-sm font-bold text-slate-700" htmlFor="password">
-            {"Password"}
-          </label>
-          <Input
-            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition-colors focus:border-primary"
-            id="password"
-            name="password"
-            placeholder="Choose a secure password"
-            required
-            type="password"
-          />
+          <Label htmlFor="password">{"Password"}</Label>
+          <Input id="password" name="password" placeholder="Choose a secure password" required type="password" />
         </div>
         <div className="space-y-2">
-          <label className="text-sm font-bold text-slate-700" htmlFor="role">
-            {"Role"}
-          </label>
-          <Select
-            modal={false}
-            onValueChange={(value) => setRole(value ?? "Admin")}
-            value={role}
-          >
-            <SelectTrigger className="h-12 w-full rounded-2xl border-slate-200 bg-white px-4 text-sm text-slate-700">
+          <Label htmlFor="role">{"Role"}</Label>
+          <Select modal={false} onValueChange={(value) => setRole(value ?? "Admin")} value={role}>
+            <SelectTrigger className="w-full">
               <SelectValue placeholder="Select role" />
             </SelectTrigger>
             <SelectContent>
@@ -110,21 +67,22 @@ export function RegisterForm() {
           </Select>
         </div>
       </div>
+
       {state.error ? (
-        <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
-          {state.error}
-        </p>
+        <Alert variant="destructive">
+          <AlertDescription>{state.error}</AlertDescription>
+        </Alert>
       ) : null}
-      <button
-        className="w-full rounded-2xl bg-primary px-4 py-3 text-sm font-black uppercase tracking-[0.16em] text-white transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-70"
-        disabled={pending}
-        type="submit"
-      >
-        {pending ? "Creating Account..." : "Create Account"}
-      </button>
-      <p className="text-center text-sm text-slate-500">
+
+      <Button className="w-full" disabled={pending} size="lg" type="submit">
+        {pending ? "Creating account..." : "Create account"}
+      </Button>
+
+      <Separator />
+
+      <p className="text-center text-sm text-muted-foreground">
         {"Already have an account? "}
-        <Link className="font-bold text-primary" href="/login">
+        <Link className="font-semibold text-primary hover:underline" href="/login">
           {"Sign in"}
         </Link>
       </p>
