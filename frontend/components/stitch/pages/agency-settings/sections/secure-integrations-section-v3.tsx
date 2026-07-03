@@ -103,17 +103,17 @@ export function SecureIntegrationsSectionV3() {
       </div>
 
       <IntegrationCommunicationSheet
-        config={status?.communicationConfig}
+        config={status?.communicationConfig as any}
         onOpenChange={(open) => setActive(open ? "communication" : null)}
         open={active === "communication"}
       />
       <IntegrationMailSheet
-        config={status?.smtpConfig}
+        config={status?.smtpConfig as any}
         onOpenChange={(open) => setActive(open ? "smtp" : null)}
         open={active === "smtp"}
       />
       <IntegrationAiSheet
-        config={status?.aiProviderConfig}
+        config={status?.aiProviderConfig as any}
         onOpenChange={(open) => setActive(open ? "ai" : null)}
         open={active === "ai"}
       />
