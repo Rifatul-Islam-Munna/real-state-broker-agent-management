@@ -1,0 +1,7 @@
+:root {
+  --muted-foreground: oklch(0.445 0.03 264.364);
+}
+
+.dark {
+  --muted-foreground: oklch(0.79 0.022 264.4);
+}
