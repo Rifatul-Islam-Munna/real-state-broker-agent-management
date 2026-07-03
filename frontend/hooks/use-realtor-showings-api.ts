@@ -18,6 +18,36 @@ import type {
 import { useQueryWrapper } from "@/api-hooks/react-query-wrapper"
 import { useCommonMutationApi } from "@/api-hooks/use-api-mutation"
 
+export type ShowingFeedbackManualInput = {
+  propertyId: number
+  realtorName: string
+  realtorEmail: string
+  realtorPhone: string
+  channel: "Email" | "Sms"
+  sentiment: "positive" | "neutral" | "negative"
+  feedbackText: string
+  showingAt: string
+  firstMessageAt: string
+  receivedAt?: string | null
+}
+
+export type ShowingFeedbackImportInput = {
+  rows: Array<Record<string, string>>
+  mapping: {
+    property: string
+    realtorName: string
+    realtorContact: string
+    realtorEmail: string
+    realtorPhone: string
+    channel: string
+    feedbackText: string
+    sentiment: string
+    showingAt: string
+    firstMessageAt: string
+    receivedAt: string
+  }
+}
+
 export function useRealtorShowings(search = "") {
   const query = search.trim() ? `?search=${encodeURIComponent(search.trim())}` : ""
   return useQueryWrapper<RealtorShowingItem[]>(
@@ -100,6 +130,36 @@ export function useShowingFeedback(params: {
     0,
     "showing-feedback",
   )
+}
+
+function useInvalidateFeedback() {
+  const queryClient = useQueryClient()
+  return () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["showing-feedback"] }),
+      queryClient.invalidateQueries({ queryKey: ["showing-feedback-properties"] }),
+      queryClient.invalidateQueries({ queryKey: ["realtor-showings"] }),
+    ])
+}
+
+export function useCreateShowingFeedback() {
+  const invalidate = useInvalidateFeedback()
+  return useCommonMutationApi<ShowingFeedbackItem, ShowingFeedbackManualInput>({
+    method: "POST",
+    onSuccess: () => void invalidate(),
+    successMessage: "Showing feedback saved",
+    url: "/showing-feedback",
+  })
+}
+
+export function useImportShowingFeedback() {
+  const invalidate = useInvalidateFeedback()
+  return useCommonMutationApi<RealtorShowingImportResult, ShowingFeedbackImportInput>({
+    method: "POST",
+    onSuccess: () => void invalidate(),
+    successMessage: "Showing feedback imported",
+    url: "/showing-feedback/import",
+  })
 }
 
 export function usePreviewShowingFeedbackReport() {
