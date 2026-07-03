@@ -4,6 +4,7 @@ import { Lead } from './entities/lead.entity';
 import { LeadHistoryEntry } from './entities/lead-history.entity';
 import { LeadsService } from './leads.service';
 import { LeadOutreachService } from './lead-outreach.service';
+import { LeadIntakeAutomationService } from './lead-intake-automation.service';
 import { LeadsController } from './leads.controller';
 import { LeadHistoryController } from './lead-history.controller';
 import { LeadOutreachController } from './lead-outreach.controller';
@@ -21,20 +22,8 @@ import { Property } from '../properties/entities/property.entity';
 
 @Module({
   imports: [TypeOrmModule.forFeature([Lead, LeadHistoryEntry, DealPipeline, MailInboxItem, ContactRequest, DocumentRepositoryItem, Property]), SettingsModule, BrokerageModule, SmsModule],
-  providers: [
-    LeadsService,
-    LeadOutreachService,
-    LeadQualificationPredictionService,
-    MailboxLeadIntelligenceService,
-    LeadOutreachBackgroundService,
-  ],
+  providers: [LeadsService, LeadOutreachService, LeadIntakeAutomationService, LeadQualificationPredictionService, MailboxLeadIntelligenceService, LeadOutreachBackgroundService],
   controllers: [LeadsController, LeadHistoryController, LeadOutreachController],
-  exports: [
-    LeadsService,
-    LeadOutreachService,
-    LeadQualificationPredictionService,
-    MailboxLeadIntelligenceService,
-    LeadOutreachBackgroundService,
-  ],
+  exports: [LeadsService, LeadOutreachService, LeadIntakeAutomationService, LeadQualificationPredictionService, MailboxLeadIntelligenceService, LeadOutreachBackgroundService],
 })
 export class LeadsModule {}
