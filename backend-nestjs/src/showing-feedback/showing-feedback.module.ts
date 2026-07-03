@@ -8,6 +8,7 @@ import { SmsModule } from '../sms/sms.module';
 import { ShowingFeedback } from './entities/showing-feedback.entity';
 import { ShowingFeedbackController } from './showing-feedback.controller';
 import { ShowingFeedbackService } from './showing-feedback.service';
+import { ShowingFeedbackQueryService } from './showing-feedback-query.service';
 
 @Module({
   imports: [
@@ -16,7 +17,7 @@ import { ShowingFeedbackService } from './showing-feedback.service';
     forwardRef(() => SmsModule),
   ],
   controllers: [ShowingFeedbackController],
-  providers: [ShowingFeedbackService],
+  providers: [ShowingFeedbackService, ShowingFeedbackQueryService],
   exports: [ShowingFeedbackService],
 })
 export class ShowingFeedbackModule {}
