@@ -3,7 +3,6 @@ import { redirect } from "next/navigation"
 import { DashboardSidebar } from "@/components/stitch/shared/dashboard-sidebar"
 import { DashboardTopbar } from "@/components/stitch/shared/dashboard-topbar"
 import { PortalBrandLink } from "@/components/stitch/shared/portal-brand-link"
-import { Button } from "@/components/ui/button"
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import { requireSession } from "@/lib/auth-actions"
 import { canOpenDashboardRoute, getDashboardHomePath } from "@/lib/dashboard-routes"
@@ -44,10 +43,7 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
               logoUrl={logoUrl}
               nameClassName="text-base font-bold tracking-tight text-foreground"
             />
-            <SidebarTrigger
-              className="shadow-xs"
-              render={<Button variant="outline" size="icon-sm" />}
-            />
+            <SidebarTrigger className="shadow-xs" size="icon-sm" variant="outline" />
           </div>
         </div>
         <div className="hidden md:block">
