@@ -1,8 +1,8 @@
-import { Controller, Get, Patch, Body, UseGuards } from '@nestjs/common';
-import { SettingsService } from './settings.service';
-import { SchedulingSettingsService } from './scheduling-settings.service';
-import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { Body, Controller, Get, Patch, UseGuards } from '@nestjs/common';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { SchedulingSettingsService } from './scheduling-settings.service';
+import { SettingsService } from './settings.service';
 
 @ApiTags('Settings')
 @Controller()
@@ -23,7 +23,10 @@ export class SettingsController {
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Update editable agency settings' })
   async updateAgencySettings(@Body() dto: any) {
-    return this.settingsService.updateSettings(dto);
+    const scheduling = await this.schedulingSettingsService.getSettings();
+    const updated = await this.settingsService.updateSettings(dto);
+    await this.schedulingSettingsService.updateSettings(scheduling);
+    return updated;
   }
 
   @Get('public/agency-settings')
