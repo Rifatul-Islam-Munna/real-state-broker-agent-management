@@ -60,19 +60,17 @@ export class RealtorShowingsV2Service extends RealtorShowingsService {
     for (let index = 0; index < rows.length; index++) {
       try {
         const sourceData = this.clean(rows[index]);
-        const propertyText = this.value(sourceData, mapping.property);
+        const propertyText = this.cell(sourceData, mapping.property);
         const match = this.bestMatch(propertyText, liveProperties);
         const blockedMatch = this.bestMatch(propertyText, unavailable);
-        if (!match.property && blockedMatch.score >= 0.9) {
-          throw new Error('Matched property is paused, sold, rented, closed, or unpublished.');
-        }
-        const realtorEmail = this.value(sourceData, mapping.realtorEmail).toLowerCase();
-        const realtorPhone = normalizePhoneNumber(this.value(sourceData, mapping.realtorPhone), defaultCountry);
+        if (!match.property && blockedMatch.score >= 0.9) throw new Error('Matched property is paused, sold, rented, closed, or unpublished.');
+        const realtorEmail = this.cell(sourceData, mapping.realtorEmail).toLowerCase();
+        const realtorPhone = normalizePhoneNumber(this.cell(sourceData, mapping.realtorPhone), defaultCountry);
         if (!realtorEmail && !realtorPhone) throw new Error('Email or phone required.');
         const showingAt = parseDateTimeInZone(this.mappedDateTime(sourceData, mapping), scheduling.timeZone);
         const lead = await this.findOrCreateLead({
           email: realtorEmail,
-          name: this.value(sourceData, mapping.realtorName),
+          name: this.cell(sourceData, mapping.realtorName),
           phone: realtorPhone,
           property: match.property?.title || propertyText,
           propertyId: match.property?.id ?? null,
@@ -91,7 +89,7 @@ export class RealtorShowingsV2Service extends RealtorShowingsService {
           propertyMatchScore: match.score,
           propertyText,
           realtorEmail,
-          realtorName: this.value(sourceData, mapping.realtorName) || realtorEmail.split('@')[0] || realtorPhone,
+          realtorName: this.cell(sourceData, mapping.realtorName) || realtorEmail.split('@')[0] || realtorPhone,
           realtorPhone,
           showingAt,
           smsEnabled: !!payload.smsEnabled,
@@ -99,11 +97,8 @@ export class RealtorShowingsV2Service extends RealtorShowingsService {
         }));
         createdCount++;
         if (showing.emailEnabled || showing.smsEnabled) {
-          try {
-            await super.updateAutomation(showing.id, payload);
-          } catch (error: any) {
-            failures.push(`Row ${index + 2} outreach: ${error?.message ?? 'Scheduling failed.'}`);
-          }
+          try { await super.updateAutomation(showing.id, payload); }
+          catch (error: any) { failures.push(`Row ${index + 2} outreach: ${error?.message ?? 'Scheduling failed.'}`); }
         }
       } catch (error: any) {
         failures.push(`Row ${index + 2}: ${error?.message ?? 'Import failed.'}`);
@@ -201,12 +196,12 @@ export class RealtorShowingsV2Service extends RealtorShowingsService {
     return [property.title, property.location, property.exactLocation].map((value) => this.normalize(value)).filter(Boolean);
   }
   private clean(input: any) { return Object.fromEntries(Object.entries(input ?? {}).map(([key, value]) => [`${key}`.trim(), `${value ?? ''}`.trim()])); }
-  private value(record: Record<string, string>, column?: string) { return column ? `${record[column] ?? ''}`.trim() : ''; }
+  private cell(record: Record<string, string>, column?: string) { return column ? `${record[column] ?? ''}`.trim() : ''; }
   private mappedDateTime(record: Record<string, string>, mapping: Mapping) {
-    const combined = this.value(record, mapping.showingAt);
+    const combined = this.cell(record, mapping.showingAt);
     if (combined) return combined;
-    const date = this.value(record, mapping.showingDate);
-    const time = this.value(record, mapping.showingTime);
+    const date = this.cell(record, mapping.showingDate);
+    const time = this.cell(record, mapping.showingTime);
     return date && time ? `${date}T${time}` : date;
   }
   private normalize(value: unknown) { return `${value ?? ''}`.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim(); }
