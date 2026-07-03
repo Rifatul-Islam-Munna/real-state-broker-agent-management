@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Patch, UseGuards } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { IntegrationWorkspaceService } from './integration-workspace.service';
 import { SchedulingSettingsService } from './scheduling-settings.service';
 import { SettingsService } from './settings.service';
 
@@ -10,6 +11,7 @@ export class SettingsController {
   constructor(
     private readonly settingsService: SettingsService,
     private readonly schedulingSettingsService: SchedulingSettingsService,
+    private readonly integrationWorkspaceService: IntegrationWorkspaceService,
   ) {}
 
   @Get('agency-settings')
@@ -51,16 +53,16 @@ export class SettingsController {
 
   @Get('settings/integrations/workspace')
   @UseGuards(JwtAuthGuard)
-  @ApiOperation({ summary: 'Get integration workspace status' })
+  @ApiOperation({ summary: 'Get sanitized integration workspace status' })
   async getWorkspace() {
-    return this.settingsService.getWorkspaceStatus();
+    return this.integrationWorkspaceService.getStatus();
   }
 
   @Patch('settings/integrations/workspace')
   @UseGuards(JwtAuthGuard)
-  @ApiOperation({ summary: 'Update integration workspace' })
+  @ApiOperation({ summary: 'Update integration workspace safely' })
   async updateWorkspace(@Body() dto: any) {
-    return this.settingsService.updateWorkspace(dto);
+    return this.integrationWorkspaceService.update(dto);
   }
 
   @Get('settings/scheduling')
