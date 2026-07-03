@@ -14,6 +14,12 @@ import type {
 } from "@/@types/real-estate-api"
 
 type QueryParams = Record<string, string | number | boolean | undefined | null>
+type LeadOutreachBulkComposerInput = Omit<
+  LeadOutreachBulkDispatchInput,
+  "audienceType"
+> & {
+  audienceType: LeadOutreachBulkDispatchInput["audienceType"] | "SingleLead"
+}
 
 const defaultQueryOptions = {
   placeholderData: keepPreviousData,
@@ -69,7 +75,10 @@ export function useDispatchLeadOutreach() {
 export function useDispatchBulkLeadOutreach() {
   const invalidate = useInvalidate(["lead-history", "lead-outreach-schedule", "lead", "leads", "deals"])
 
-  return useCommonMutationApi<LeadOutreachBulkDispatchResult, LeadOutreachBulkDispatchInput>({
+  return useCommonMutationApi<
+    LeadOutreachBulkDispatchResult,
+    LeadOutreachBulkComposerInput
+  >({
     method: "POST",
     onSuccess: () => void invalidate(),
     successMessage: "Bulk outreach saved",
