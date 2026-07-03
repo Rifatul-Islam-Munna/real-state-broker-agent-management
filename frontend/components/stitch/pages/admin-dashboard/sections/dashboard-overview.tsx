@@ -97,7 +97,7 @@ export function DashboardOverview({
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {cards.map((item) => (
           <Card key={item.title}>
-            <CardHeader className="flex-row items-start justify-between space-y-0">
+            <CardHeader className="flex flex-row items-start justify-between space-y-0">
               <div>
                 <CardDescription>{item.title}</CardDescription>
                 <CardTitle className="mt-2 text-3xl">{item.value}</CardTitle>
