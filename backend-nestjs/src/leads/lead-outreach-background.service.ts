@@ -2,17 +2,16 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, LessThan } from 'typeorm';
+import { zonedDateParts } from '../common/time-zone';
+import { SchedulingSettingsService } from '../settings/scheduling-settings.service';
 import { Lead, LeadFollowUpStatus } from './entities/lead.entity';
 import { LeadHistoryEntry } from './entities/lead-history.entity';
 import { LeadOutreachService } from './lead-outreach.service';
 
-/**
- * Lead Outreach Background Service
- * Handles scheduled follow-ups, reminders, and automated outreach campaigns
- */
 @Injectable()
 export class LeadOutreachBackgroundService {
   private readonly logger = new Logger(LeadOutreachBackgroundService.name);
+  private lastMorningOutreachDate = '';
 
   constructor(
     @InjectRepository(Lead)
@@ -20,16 +19,12 @@ export class LeadOutreachBackgroundService {
     @InjectRepository(LeadHistoryEntry)
     private historyRepo: Repository<LeadHistoryEntry>,
     private outreachService: LeadOutreachService,
+    private schedulingSettingsService: SchedulingSettingsService,
   ) {}
 
-  /**
-   * Run every hour: Check for overdue follow-ups
-   */
   @Cron('0 * * * *')
   async checkOverdueFollowUps(): Promise<void> {
     try {
-      this.logger.log('Checking for overdue follow-ups...');
-
       const now = new Date();
       const overdueLeads = await this.leadRepo.find({
         where: {
@@ -40,94 +35,104 @@ export class LeadOutreachBackgroundService {
 
       for (const lead of overdueLeads) {
         await this.markLeadAsOverdue(lead.id);
-        this.logger.log(`Lead ${lead.id} marked as overdue`);
       }
 
-      this.logger.log(`Completed: ${overdueLeads.length} overdue leads found`);
+      if (overdueLeads.length > 0) {
+        this.logger.log(`${overdueLeads.length} lead follow-up(s) marked overdue.`);
+      }
     } catch (error) {
       this.logger.error('Error in checkOverdueFollowUps:', error);
     }
   }
 
-  /**
-   * Run daily at 9 AM: Send morning outreach
-   */
-  @Cron('0 9 * * *')
+  @Cron('* * * * *')
   async sendMorningOutreach(): Promise<void> {
     try {
-      this.logger.log('Sending morning outreach campaigns...');
+      const settings = await this.schedulingSettingsService.getSettings();
+      const now = zonedDateParts(new Date(), settings.timeZone);
 
-      // Get leads that need morning outreach
+      if (
+        now.hour !== settings.morningOutreachHour ||
+        now.minute > 4 ||
+        this.lastMorningOutreachDate === now.dateKey
+      ) {
+        return;
+      }
+
+      this.lastMorningOutreachDate = now.dateKey;
       const leadsNeedingOutreach = await this.getLeadsNeedingOutreach();
 
       for (const lead of leadsNeedingOutreach) {
         await this.queueOutreach(lead, 'email');
       }
 
-      this.logger.log(`Morning outreach queued for ${leadsNeedingOutreach.length} leads`);
+      this.logger.log(
+        `Morning outreach queued for ${leadsNeedingOutreach.length} lead(s) at ${settings.morningOutreachHour}:00 ${settings.timeZone}.`,
+      );
     } catch (error) {
       this.logger.error('Error in sendMorningOutreach:', error);
     }
   }
 
-  /**
-   * Run every 6 hours: Process outreach queue
-   */
-  @Cron('0 */6 * * *')
+  @Cron('* * * * *')
   async processOutreachQueue(): Promise<void> {
     try {
-      this.logger.log('Processing outreach queue...');
-
       const dueItems = await this.historyRepo.find({
         relations: ['lead'],
         where: {
           scheduledAt: LessThan(new Date()),
           status: 'Scheduled' as any,
         },
-        take: 50,
+        take: 100,
       });
 
       for (const item of dueItems) {
         await this.sendScheduledHistoryItem(item);
       }
 
-      this.logger.log(`Processed ${dueItems.length} outreach items`);
+      if (dueItems.length > 0) {
+        this.logger.log(`Processed ${dueItems.length} scheduled outreach item(s).`);
+      }
     } catch (error) {
       this.logger.error('Error in processOutreachQueue:', error);
     }
   }
 
   private async sendScheduledHistoryItem(item: LeadHistoryEntry): Promise<void> {
-    const current = await this.historyRepo.findOne({ where: { id: item.id }, relations: ['lead'] });
+    const current = await this.historyRepo.findOne({
+      where: { id: item.id },
+      relations: ['lead'],
+    });
     if (!current || current.status !== 'Scheduled') return;
-    item = current;
+
     const now = new Date();
-    if (item.kind === 'Sms' && item.lead?.inBoard && !item.createdBy.startsWith('Realtor Showing #')) {
-      item.status = 'Failed' as any;
-      item.summary = 'SMS auto-send canceled because lead is already on the board.';
-      item.occurredAt = now;
-      await this.historyRepo.save(item);
+    if (
+      current.kind === 'Sms' &&
+      current.lead?.inBoard &&
+      !current.createdBy.startsWith('Realtor Showing #')
+    ) {
+      current.status = 'Failed' as any;
+      current.summary = 'SMS auto-send canceled because lead is already on the board.';
+      current.occurredAt = now;
+      await this.historyRepo.save(current);
       return;
     }
 
     const result = await this.outreachService.sendOutreach({
-      leadId: item.leadId,
-      kind: item.kind,
-      title: item.title,
-      message: item.body || item.summary || item.title,
-      createdBy: item.createdBy || 'Scheduler',
+      leadId: current.leadId,
+      kind: current.kind,
+      title: current.title,
+      message: current.body || current.summary || current.title,
+      createdBy: current.createdBy || 'Scheduler',
       attachPropertyDocuments: true,
     });
-    item.status = result.status as any;
-    item.summary = result.summary;
-    item.provider = result.provider;
-    item.occurredAt = now;
-    await this.historyRepo.save(item);
+    current.status = result.status as any;
+    current.summary = result.summary;
+    current.provider = result.provider;
+    current.occurredAt = now;
+    await this.historyRepo.save(current);
   }
 
-  /**
-   * Mark lead as requiring follow-up
-   */
   async setFollowUpReminder(
     leadId: number,
     nextActionDate: Date,
@@ -151,13 +156,10 @@ export class LeadOutreachBackgroundService {
     return this.leadRepo.save(lead);
   }
 
-  /**
-   * Get leads that need outreach
-   */
   async getLeadsNeedingOutreach(): Promise<Lead[]> {
     const now = new Date();
     const tomorrow = new Date(now);
-    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
 
     return this.leadRepo.find({
       where: {
@@ -168,9 +170,6 @@ export class LeadOutreachBackgroundService {
     });
   }
 
-  /**
-   * Queue outreach for a lead
-   */
   async queueOutreach(
     lead: Lead,
     channel: 'email' | 'sms' | 'call',
@@ -181,10 +180,8 @@ export class LeadOutreachBackgroundService {
     status: string;
     queuedAt: Date;
   }> {
-    // In production, this would queue to a message broker (RabbitMQ, SQS, etc.)
-    this.logger.log(
-      `Queued ${channel} outreach for lead ${lead.id}`,
-    );
+    void template;
+    this.logger.log(`Queued ${channel} outreach for lead ${lead.id}`);
 
     return {
       leadId: lead.id,
@@ -194,9 +191,6 @@ export class LeadOutreachBackgroundService {
     };
   }
 
-  /**
-   * Get pending outreach items
-   */
   async getPendingOutreach(): Promise<
     Array<{
       id: number;
@@ -205,13 +199,9 @@ export class LeadOutreachBackgroundService {
       template: string;
     }>
   > {
-    // Mock implementation - in production, fetch from queue storage
     return [];
   }
 
-  /**
-   * Send outreach (email, SMS, etc.)
-   */
   async sendOutreach(item: {
     id: number;
     leadId: number;
@@ -226,24 +216,15 @@ export class LeadOutreachBackgroundService {
         return false;
       }
 
-      // Mock send - in production, integrate with email/SMS service
-      this.logger.log(
-        `Sending ${item.channel} to ${lead.email || lead.phone}`,
-      );
-
-      // Mark follow-up as completed
+      this.logger.log(`Sending ${item.channel} to ${lead.email || lead.phone}`);
       await this.markFollowUpCompleted(lead.id, item.channel);
-
       return true;
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error(`Error sending outreach: ${error.message}`);
       return false;
     }
   }
 
-  /**
-   * Mark follow-up as completed
-   */
   async markFollowUpCompleted(leadId: number, channel: string): Promise<Lead> {
     const lead = await this.leadRepo.findOne({ where: { id: leadId } });
 
@@ -252,11 +233,13 @@ export class LeadOutreachBackgroundService {
     }
 
     lead.followUpStatus = LeadFollowUpStatus.Completed;
-    lead.notes = [...(lead.notes ?? []), `[Outreach sent via ${channel}] ${new Date().toISOString()}`];
+    lead.notes = [
+      ...(lead.notes ?? []),
+      `[Outreach sent via ${channel}] ${new Date().toISOString()}`,
+    ];
 
-    // Set next follow-up automatically (7 days if no response)
     const nextAction = new Date();
-    nextAction.setDate(nextAction.getDate() + 7);
+    nextAction.setUTCDate(nextAction.getUTCDate() + 7);
     lead.nextActionDate = nextAction;
     lead.nextActionType = 'FollowUpIfNoResponse';
     lead.followUpStatus = 'Scheduled' as any;
@@ -264,9 +247,6 @@ export class LeadOutreachBackgroundService {
     return this.leadRepo.save(lead);
   }
 
-  /**
-   * Mark lead as overdue
-   */
   async markLeadAsOverdue(leadId: number): Promise<Lead> {
     const lead = await this.leadRepo.findOne({ where: { id: leadId } });
 
@@ -275,25 +255,24 @@ export class LeadOutreachBackgroundService {
     }
 
     lead.followUpStatus = 'Open' as any;
-    lead.notes = [...(lead.notes ?? []), `[Marked overdue] ${new Date().toISOString()}`];
+    lead.notes = [
+      ...(lead.notes ?? []),
+      `[Marked overdue] ${new Date().toISOString()}`,
+    ];
 
     return this.leadRepo.save(lead);
   }
 
-  /**
-   * Get overdue leads
-   */
   async getOverdueLeads(agencyId?: number): Promise<Lead[]> {
-    const query = this.leadRepo.createQueryBuilder('lead')
+    void agencyId;
+    const query = this.leadRepo
+      .createQueryBuilder('lead')
       .where('lead.next_action_date < :now', { now: new Date() })
       .andWhere('lead.follow_up_status IN (0, 1)');
 
     return query.orderBy('lead.nextActionDate', 'ASC').getMany();
   }
 
-  /**
-   * Bulk set follow-ups for campaigns
-   */
   async setBulkFollowUps(
     leadIds: number[],
     nextActionDate: Date,
@@ -306,7 +285,7 @@ export class LeadOutreachBackgroundService {
       try {
         await this.setFollowUpReminder(leadId, nextActionDate, actionType);
         processedCount++;
-      } catch (error) {
+      } catch (error: any) {
         this.logger.error(`Error setting follow-up for lead ${leadId}:`, error.message);
         errorCount++;
       }
