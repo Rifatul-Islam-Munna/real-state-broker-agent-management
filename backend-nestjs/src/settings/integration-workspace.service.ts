@@ -1,0 +1,155 @@
+import { BadRequestException, Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { AgencyIntegrationSettings } from './entities/integration-settings.entity';
+
+@Injectable()
+export class IntegrationWorkspaceService {
+  constructor(
+    @InjectRepository(AgencyIntegrationSettings)
+    private readonly repository: Repository<AgencyIntegrationSettings>,
+  ) {}
+
+  async getStatus() {
+    const row = await this.repository.findOne({ where: { id: 1 } });
+    const communication = this.parse(row?.twilioPayload);
+    const smtp = this.parse(row?.smtpPayload);
+    const ai = this.parse(row?.aiProviderPayload);
+
+    return {
+      hasCommunicationConfig: this.communicationValid(communication),
+      communicationUpdatedAt: row?.twilioUpdatedAt ?? null,
+      communicationProviderName: communication?.providerName ?? null,
+      communicationSmsSyncEnabled: !!communication?.enableSmsSync,
+      communicationSmsSyncIntervalMinutes: communication?.enableSmsSync
+        ? communication.syncIntervalMinutes ?? 5
+        : null,
+      communicationConfig: communication
+        ? this.withSecretFlags(communication, ['authToken'])
+        : null,
+      hasSmtpConfig: this.smtpValid(smtp),
+      smtpUpdatedAt: row?.smtpUpdatedAt ?? null,
+      smtpProviderName: smtp?.providerName ?? null,
+      mailboxSyncEnabled: !!smtp?.enableInboxSync,
+      mailboxSyncIntervalMinutes: smtp?.enableInboxSync
+        ? smtp.syncIntervalMinutes ?? 10
+        : null,
+      smtpConfig: smtp
+        ? this.withSecretFlags(smtp, ['password', 'imapPassword'])
+        : null,
+      hasAiProviderConfig: this.aiValid(ai),
+      aiProviderUpdatedAt: row?.aiProviderUpdatedAt ?? null,
+      aiProviderName: ai?.providerName ?? null,
+      aiProviderConfig: ai ? this.withSecretFlags(ai, ['apiKey']) : null,
+      updatedAt: row?.updatedAt ?? null,
+    };
+  }
+
+  async update(input: any) {
+    let row = await this.repository.findOne({ where: { id: 1 } });
+    if (!row) row = this.repository.create({ id: 1 });
+    const now = new Date();
+
+    if (input?.clearCommunication) {
+      row.twilioPayload = null;
+      row.twilioUpdatedAt = null;
+    } else if (input?.communication) {
+      const value = this.merge(
+        this.parse(row.twilioPayload),
+        input.communication,
+        ['authToken'],
+      );
+      if (!this.communicationValid(value)) {
+        throw new BadRequestException(
+          'Account ID, auth token, and from number are required.',
+        );
+      }
+      row.twilioPayload = JSON.stringify(value);
+      row.twilioUpdatedAt = now;
+    }
+
+    if (input?.clearSmtp) {
+      row.smtpPayload = null;
+      row.smtpUpdatedAt = null;
+    } else if (input?.smtp) {
+      const value = this.merge(this.parse(row.smtpPayload), input.smtp, [
+        'password',
+        'imapPassword',
+      ]);
+      if (!this.smtpValid(value)) {
+        throw new BadRequestException(
+          'SMTP host, username, password, and from email are required.',
+        );
+      }
+      if (
+        value.enableInboxSync &&
+        (!value.imapHost || !value.imapUsername || !value.imapPassword)
+      ) {
+        throw new BadRequestException(
+          'IMAP host, username, and password are required for inbox sync.',
+        );
+      }
+      row.smtpPayload = JSON.stringify(value);
+      row.smtpUpdatedAt = now;
+    }
+
+    if (input?.clearAiProvider) {
+      row.aiProviderPayload = null;
+      row.aiProviderUpdatedAt = null;
+    } else if (input?.aiProvider) {
+      const value = this.merge(this.parse(row.aiProviderPayload), input.aiProvider, [
+        'apiKey',
+      ]);
+      if (!this.aiValid(value)) {
+        throw new BadRequestException(
+          'AI base URL, model, and provider credentials are required.',
+        );
+      }
+      row.aiProviderPayload = JSON.stringify(value);
+      row.aiProviderUpdatedAt = now;
+    }
+
+    await this.repository.save(row);
+    return this.getStatus();
+  }
+
+  private merge(existing: any, incoming: any, secretKeys: string[]) {
+    const merged = { ...(existing ?? {}), ...(incoming ?? {}) };
+    for (const key of secretKeys) {
+      if (!`${incoming?.[key] ?? ''}`.trim()) merged[key] = existing?.[key] ?? '';
+    }
+    return merged;
+  }
+
+  private withSecretFlags(value: any, secretKeys: string[]) {
+    const safe = { ...value };
+    for (const key of secretKeys) {
+      safe[`has${key[0].toUpperCase()}${key.slice(1)}`] = !!value[key];
+      delete safe[key];
+    }
+    return safe;
+  }
+
+  private communicationValid(value: any) {
+    return !!(value?.providerName && value?.accountId && value?.authToken && value?.fromNumber);
+  }
+
+  private smtpValid(value: any) {
+    return !!(value?.host && value?.username && value?.password && value?.fromEmail);
+  }
+
+  private aiValid(value: any) {
+    if (!value?.providerName || !value?.baseUrl || !value?.model) return false;
+    return `${value.providerName}`.toLowerCase() === 'ollama' || !!value.apiKey;
+  }
+
+  private parse(value?: string | null) {
+    if (!value) return null;
+    try {
+      const parsed = JSON.parse(value);
+      return parsed && typeof parsed === 'object' ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+}
