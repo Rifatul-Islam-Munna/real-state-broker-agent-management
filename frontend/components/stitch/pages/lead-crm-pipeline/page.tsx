@@ -188,6 +188,13 @@ export function LeadCrmPipelinePage() {
       inBoard,
     })
 
+    if (response.error) {
+      setLocalLeads((current) =>
+        current.map((lead) => (lead.id === leadId ? existingLead : lead)),
+      )
+      return
+    }
+
     if (response.data) {
       setLocalLeads((current) =>
         current.map((lead) =>
@@ -213,6 +220,13 @@ export function LeadCrmPipelinePage() {
       inBoard: true,
       stage,
     })
+
+    if (response.error) {
+      setLocalLeads((current) =>
+        current.map((lead) => (lead.id === leadId ? existingLead : lead)),
+      )
+      return
+    }
 
     if (response.data) {
       setLocalLeads((current) =>
