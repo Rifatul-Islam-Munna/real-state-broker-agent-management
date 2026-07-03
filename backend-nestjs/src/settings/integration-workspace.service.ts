@@ -76,6 +76,10 @@ export class IntegrationWorkspaceService {
         'password',
         'imapPassword',
       ]);
+      if (value.enableInboxSync) {
+        value.imapUsername = value.imapUsername || value.username;
+        value.imapPassword = value.imapPassword || value.password;
+      }
       if (!this.smtpValid(value)) {
         throw new BadRequestException(
           'SMTP host, username, password, and from email are required.',
@@ -116,7 +120,9 @@ export class IntegrationWorkspaceService {
   private merge(existing: any, incoming: any, secretKeys: string[]) {
     const merged = { ...(existing ?? {}), ...(incoming ?? {}) };
     for (const key of secretKeys) {
-      if (!`${incoming?.[key] ?? ''}`.trim()) merged[key] = existing?.[key] ?? '';
+      if (!`${incoming?.[key] ?? ''}`.trim()) {
+        merged[key] = existing?.[key] ?? '';
+      }
     }
     return merged;
   }
@@ -131,11 +137,21 @@ export class IntegrationWorkspaceService {
   }
 
   private communicationValid(value: any) {
-    return !!(value?.providerName && value?.accountId && value?.authToken && value?.fromNumber);
+    return !!(
+      value?.providerName &&
+      value?.accountId &&
+      value?.authToken &&
+      value?.fromNumber
+    );
   }
 
   private smtpValid(value: any) {
-    return !!(value?.host && value?.username && value?.password && value?.fromEmail);
+    return !!(
+      value?.host &&
+      value?.username &&
+      value?.password &&
+      value?.fromEmail
+    );
   }
 
   private aiValid(value: any) {
