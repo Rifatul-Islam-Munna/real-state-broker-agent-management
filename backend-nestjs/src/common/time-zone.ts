@@ -57,6 +57,20 @@ export function parseDateTimeInZone(value: unknown, timeZone: string): Date | nu
   return Number.isNaN(result.getTime()) ? null : result;
 }
 
+export function dateRangeInZone(
+  fromDate: string,
+  toDate: string,
+  timeZone: string,
+) {
+  const start = parseDateTimeInZone(`${fromDate}T00:00:00`, timeZone);
+  const endExclusive = parseDateTimeInZone(
+    `${addDaysToDateKey(toDate, 1)}T00:00:00`,
+    timeZone,
+  );
+
+  return start && endExclusive ? { start, endExclusive } : null;
+}
+
 export function zonedDateParts(date: Date, timeZone: string) {
   const formatter = new Intl.DateTimeFormat('en-CA', {
     timeZone: normalizeTimeZone(timeZone),
@@ -84,6 +98,15 @@ export function zonedDateParts(date: Date, timeZone: string) {
     second: Number(parts.second),
     year: Number(parts.year),
   };
+}
+
+function addDaysToDateKey(value: string, days: number) {
+  const match = `${value ?? ''}`.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return '';
+  const [, year, month, day] = match;
+  const date = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
 }
 
 function timeZoneOffsetMilliseconds(date: Date, timeZone: string) {
