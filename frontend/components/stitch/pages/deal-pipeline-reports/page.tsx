@@ -118,8 +118,9 @@ export function DealPipelineReportsPage() {
 
     if (response.error) return response.error.message
 
-    if (response.data) {
-      setLocalDeals((current) => [response.data, ...current])
+    const createdDeal = response.data
+    if (createdDeal) {
+      setLocalDeals((current) => [createdDeal, ...current])
     }
 
     return null
@@ -136,11 +137,10 @@ export function DealPipelineReportsPage() {
 
     if (response.error) return response.error.message
 
-    if (response.data) {
+    const updatedDeal = response.data
+    if (updatedDeal) {
       setLocalDeals((current) =>
-        current.map((deal) =>
-          deal.id === response.data?.id ? response.data ?? deal : deal,
-        ),
+        current.map((deal) => (deal.id === updatedDeal.id ? updatedDeal : deal)),
       )
     }
 
@@ -195,11 +195,10 @@ export function DealPipelineReportsPage() {
       return
     }
 
-    if (response.data) {
+    const updatedDeal = response.data
+    if (updatedDeal) {
       setLocalDeals((current) =>
-        current.map((deal) =>
-          deal.id === response.data?.id ? response.data ?? deal : deal,
-        ),
+        current.map((deal) => (deal.id === updatedDeal.id ? updatedDeal : deal)),
       )
     }
   }
