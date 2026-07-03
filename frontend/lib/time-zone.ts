@@ -14,6 +14,21 @@ export function formatDateTimeInZone(
   }).format(date)
 }
 
+export function dateKeyInZone(timeZone: string, value: Date = new Date()) {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-CA", {
+      day: "2-digit",
+      month: "2-digit",
+      timeZone,
+      year: "numeric",
+    })
+      .formatToParts(value)
+      .filter((part) => part.type !== "literal")
+      .map((part) => [part.type, part.value]),
+  )
+  return `${parts.year}-${parts.month}-${parts.day}`
+}
+
 export function toDateTimeLocalInZone(
   value: string | Date | null | undefined,
   timeZone: string,
