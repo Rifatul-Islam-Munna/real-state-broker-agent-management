@@ -6,7 +6,7 @@ import { RealtorShowing } from '../realtor-showings/entities/realtor-showing.ent
 import { SettingsModule } from '../settings/settings.module';
 import { SmsModule } from '../sms/sms.module';
 import { ShowingFeedback } from './entities/showing-feedback.entity';
-import { ShowingFeedbackController } from './showing-feedback.controller';
+import { ShowingFeedbackV2Controller } from './showing-feedback-v2.controller';
 import { ShowingFeedbackService } from './showing-feedback.service';
 import { ShowingFeedbackQueryService } from './showing-feedback-query.service';
 
@@ -16,7 +16,7 @@ import { ShowingFeedbackQueryService } from './showing-feedback-query.service';
     SettingsModule,
     forwardRef(() => SmsModule),
   ],
-  controllers: [ShowingFeedbackController],
+  controllers: [ShowingFeedbackV2Controller],
   providers: [ShowingFeedbackService, ShowingFeedbackQueryService],
   exports: [ShowingFeedbackService],
 })
