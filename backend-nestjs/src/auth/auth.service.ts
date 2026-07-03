@@ -13,11 +13,11 @@ export class AuthService {
   ) {}
 
   async validateUser(email: string, pass: string): Promise<any> {
-    const user = await this.usersService.findOneByEmail(email);
+    const user = await this.usersService.findOneByEmail(`${email ?? ''}`);
     if (user && !user.isActive) {
       throw new BadRequestException('Account is deactivated');
     }
-    if (user && (await bcrypt.compare(pass, user.passwordHash))) {
+    if (user && (await bcrypt.compare(`${pass ?? ''}`, user.passwordHash))) {
       const { passwordHash, ...result } = user;
       return result;
     }
@@ -25,6 +25,10 @@ export class AuthService {
   }
 
   async login(user: User) {
+    if (!user.isActive) {
+      throw new UnauthorizedException('Account is deactivated');
+    }
+
     const payload = {
       sub: user.id,
       email: user.email,
@@ -49,30 +53,43 @@ export class AuthService {
       role: user.role,
       accessToken,
       refreshToken,
-      accessTokenExpiry: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000), // 10 days
+      accessTokenExpiry: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000),
     };
   }
 
   async register(registerDto: any) {
-    const email = String(registerDto.email ?? '').toLowerCase().trim();
+    const email = `${registerDto.email ?? ''}`.toLowerCase().trim();
+    const phone = `${registerDto.phone ?? ''}`.trim() || null;
+    const password = `${registerDto.password ?? ''}`;
+
     if (await this.usersService.existsByEmail(email)) {
       throw new BadRequestException('Email already exists');
     }
-    if (registerDto.phone && await this.usersService.existsByPhone(registerDto.phone)) {
+    if (phone && await this.usersService.existsByPhone(phone)) {
       throw new BadRequestException('Phone already exists');
     }
-    const hashedPassword = await bcrypt.hash(registerDto.password, 10);
+
     const user = await this.usersService.create({
-      ...registerDto,
+      firstName: `${registerDto.firstName ?? ''}`.trim(),
+      lastName: `${registerDto.lastName ?? ''}`.trim(),
       email,
-      passwordHash: hashedPassword,
+      phone,
+      role: registerDto.role,
+      isActive: true,
+      passwordHash: await bcrypt.hash(password, 10),
     });
+
     return this.login(user);
   }
 
   async refresh(refreshToken: string) {
-    const user = await this.usersService.findOneByRefreshToken(refreshToken);
-    if (!user || user.refreshTokenExpiry < new Date()) {
+    const user = await this.usersService.findOneByRefreshToken(`${refreshToken ?? ''}`);
+    if (
+      !user ||
+      !user.isActive ||
+      !user.refreshTokenExpiry ||
+      user.refreshTokenExpiry < new Date()
+    ) {
       throw new UnauthorizedException('Invalid or expired refresh token');
     }
     return this.login(user);
