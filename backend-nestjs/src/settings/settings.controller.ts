@@ -1,12 +1,16 @@
 import { Controller, Get, Patch, Body, UseGuards } from '@nestjs/common';
 import { SettingsService } from './settings.service';
+import { SchedulingSettingsService } from './scheduling-settings.service';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @ApiTags('Settings')
 @Controller()
 export class SettingsController {
-  constructor(private readonly settingsService: SettingsService) {}
+  constructor(
+    private readonly settingsService: SettingsService,
+    private readonly schedulingSettingsService: SchedulingSettingsService,
+  ) {}
 
   @Get('agency-settings')
   @UseGuards(JwtAuthGuard)
@@ -46,13 +50,27 @@ export class SettingsController {
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Get integration workspace status' })
   async getWorkspace() {
-      return this.settingsService.getWorkspaceStatus();
+    return this.settingsService.getWorkspaceStatus();
   }
 
   @Patch('settings/integrations/workspace')
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Update integration workspace' })
   async updateWorkspace(@Body() dto: any) {
-      return this.settingsService.updateWorkspace(dto);
+    return this.settingsService.updateWorkspace(dto);
+  }
+
+  @Get('settings/scheduling')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Get agency timezone and scheduling preferences' })
+  async getSchedulingSettings() {
+    return this.schedulingSettingsService.getSettings();
+  }
+
+  @Patch('settings/scheduling')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Update agency timezone and scheduling preferences' })
+  async updateSchedulingSettings(@Body() dto: any) {
+    return this.schedulingSettingsService.updateSettings(dto);
   }
 }
