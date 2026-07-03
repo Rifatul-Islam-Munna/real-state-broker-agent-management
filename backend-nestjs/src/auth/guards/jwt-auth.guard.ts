@@ -31,7 +31,21 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
 
   private permissionForPath(path: string): string | null {
     if (path.startsWith('/properties')) return 'properties';
-    if (path.startsWith('/leads') || path.startsWith('/lead-history') || path.startsWith('/lead-outreach') || path.startsWith('/showings') || path.startsWith('/website-inquiries')) return 'lead';
+    if (
+      path.startsWith('/leads') ||
+      path.startsWith('/lead-history') ||
+      path.startsWith('/lead-outreach') ||
+      path.startsWith('/showings') ||
+      path.startsWith('/realtor-showings') ||
+      path.startsWith('/showing-feedback') ||
+      path.startsWith('/website-inquiries') ||
+      path.startsWith('/contact-requests') ||
+      path.startsWith('/property-chat') ||
+      path.startsWith('/text-messages') ||
+      path.startsWith('/sms')
+    ) {
+      return 'lead';
+    }
     if (path.startsWith('/deals')) return 'deal-pipeline';
     if (path.startsWith('/mail-inbox')) return 'mail';
     if (path.startsWith('/dashboard') || path.startsWith('/reports')) return 'dashboard';
