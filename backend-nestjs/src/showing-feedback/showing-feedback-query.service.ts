@@ -1,6 +1,6 @@
 import { BadRequestException, forwardRef, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { MoreThan, Repository } from 'typeorm';
 import { dateRangeInZone } from '../common/time-zone';
 import { Property } from '../properties/entities/property.entity';
 import { SchedulingSettingsService } from '../settings/scheduling-settings.service';
@@ -52,17 +52,57 @@ export class ShowingFeedbackQueryService {
 
   async sendReport(payload: any) {
     const context = await this.reportContext(payload);
-    const rendered = await this.renderReport(context, payload?.summarize === true);
-    const channels = Array.isArray(payload?.channels) ? payload.channels : [];
-    if (!channels.includes('Email') && !channels.includes('Sms')) throw new BadRequestException('Choose Email, SMS, or both.');
+    return this.deliver(context, payload?.channels, payload?.summarize === true, 'Showing Feedback');
+  }
+
+  async sendAutomaticReport(payload: any) {
+    const propertyId = Number(payload?.propertyId);
+    const afterFeedbackId = Math.max(0, Number(payload?.afterFeedbackId) || 0);
+    const maxFeedback = Math.min(50, Math.max(1, Number(payload?.maxFeedback) || 10));
+    const property = await this.propertyRepo.findOne({ where: { id: propertyId } });
+    if (!property) throw new NotFoundException('Property not found.');
+    const feedback = await this.feedbackRepo.find({
+      where: { propertyId, id: MoreThan(afterFeedbackId) },
+      order: { id: 'ASC' },
+      take: maxFeedback,
+    });
+    if (!feedback.length) return null;
+    const settings = await this.settingsService.getAdminSettings();
+    const template = (settings.communicationTemplates ?? []).find((item: any) =>
+      item.id === payload?.templateId && item.audience === 'OwnerFeedback' && item.isActive !== false,
+    );
+    if (!template) throw new BadRequestException('Automatic owner feedback template is missing or paused.');
+    const zone = await this.schedulingSettingsService.getTimeZone();
+    const fromDate = this.dateKey(feedback[0].receivedAt, zone);
+    const toDate = this.dateKey(feedback[feedback.length - 1].receivedAt, zone);
+    const result = await this.deliver(
+      { property, feedback, fromDate, toDate, template },
+      payload?.channels,
+      payload?.compressWithAi === true,
+      'Automatic Showing Feedback',
+    );
+    return {
+      ...result,
+      firstFeedbackId: feedback[0].id,
+      latestFeedbackId: feedback[feedback.length - 1].id,
+    };
+  }
+
+  private async deliver(context: any, rawChannels: any, summarize: boolean, actor: string) {
+    const rendered = await this.renderReport(context, summarize);
+    const channels = Array.isArray(rawChannels) ? rawChannels : [];
+    const wantsEmail = channels.includes('Email');
+    const wantsSms = channels.includes('Sms') || channels.includes('SMS');
+    if (!wantsEmail && !wantsSms) throw new BadRequestException('Choose Email, SMS, or both.');
     const sent: string[] = [];
-    if (channels.includes('Email')) {
+    if (wantsEmail) {
       if (!context.property.ownerEmail) throw new BadRequestException('Property owner email is missing.');
-      await this.sendEmail(context.property.ownerEmail, rendered.subject, rendered.body); sent.push('Email');
+      await this.sendEmail(context.property.ownerEmail, rendered.subject, rendered.body);
+      sent.push('Email');
     }
-    if (channels.includes('Sms')) {
+    if (wantsSms) {
       if (!context.property.ownerPhone) throw new BadRequestException('Property owner phone is missing.');
-      const result = await this.smsService.send({ body: rendered.body, to: context.property.ownerPhone }, 'Showing Feedback');
+      const result = await this.smsService.send({ body: rendered.body, to: context.property.ownerPhone }, actor);
       if (result.status === 'Failed') throw new BadRequestException('Owner SMS failed.');
       sent.push('SMS');
     }
@@ -138,5 +178,9 @@ export class ShowingFeedbackQueryService {
     const nodemailer = require('nodemailer');
     const transporter = nodemailer.createTransport({ host: config.host, port: config.port ?? 587, secure: !!config.useSsl && Number(config.port ?? 587) === 465, auth: { user: config.username, pass: config.password } });
     await transporter.sendMail({ from: config.fromName ? `"${config.fromName}" <${config.fromEmail || config.username}>` : config.fromEmail || config.username, html: body.replace(/\n/g, '<br>'), subject, text: body, to });
+  }
+
+  private dateKey(value: Date, timeZone: string) {
+    return new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(value);
   }
 }
