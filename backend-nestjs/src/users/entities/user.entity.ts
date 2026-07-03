@@ -33,7 +33,7 @@ export class User {
   passwordHash: string;
 
   @Column({ length: 20, nullable: true })
-  phone: string;
+  phone: string | null;
 
   @Column({ type: 'text', nullable: true })
   avatarUrl: string | null;
@@ -54,13 +54,13 @@ export class User {
   refreshToken: string | null;
 
   @Column({ type: 'timestamp', nullable: true, select: false })
-  refreshTokenExpiry: Date;
+  refreshTokenExpiry: Date | null;
 
   @Column({ type: 'text', nullable: true, select: false })
   passwordResetToken: string | null;
 
   @Column({ type: 'timestamp', nullable: true, select: false })
-  passwordResetExpiry: Date;
+  passwordResetExpiry: Date | null;
 
   @Column({ type: 'text', nullable: true, select: false })
   emailVerificationToken: string | null;
@@ -72,10 +72,10 @@ export class User {
   agencyName: string | null;
 
   @Column({ type: 'text', nullable: true })
-  bio: string;
+  bio: string | null;
 
   @Column({ type: 'decimal', precision: 5, scale: 2, nullable: true })
-  commissionRate: number;
+  commissionRate: number | null;
 
   @Column({ default: false })
   isVerifiedAgent: boolean;
@@ -105,10 +105,10 @@ export class User {
   updatedAt: Date;
 
   @Column({ type: 'timestamp', nullable: true })
-  lastLoginAt: Date;
+  lastLoginAt: Date | null;
 
   @Column({ type: 'timestamp', nullable: true })
-  deletedAt: Date;
+  deletedAt: Date | null;
 
   @OneToMany(() => Property, (property) => property.agent)
   properties: Property[];
