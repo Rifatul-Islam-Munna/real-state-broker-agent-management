@@ -20,7 +20,7 @@ import type { DealFormValues } from "./sections/deal-shared"
 
 const PAGE_SIZE = 10
 
-function buildDealPayload(values: DealFormValues, deal?: DealItem) {
+function buildDealWriteFields(values: DealFormValues) {
   return {
     agent: values.agent?.trim() ?? "",
     agentId: values.agentId ? Number(values.agentId) : null,
@@ -41,20 +41,23 @@ function buildDealPayload(values: DealFormValues, deal?: DealItem) {
     commissionRate: parseNumberFromValue(values.commissionRate ?? "") || 3,
     commissionStatus: values.commissionStatus ?? "Estimated",
     commissionPayoutNote: values.commissionPayoutNote?.trim() ?? "",
-    createdAt: deal?.createdAt ?? new Date().toISOString(),
     deadline: values.deadline?.trim() ?? "",
     expectedClosingDate: values.expectedClosingDate
       ? new Date(values.expectedClosingDate).toISOString()
       : null,
-    id: deal?.id ?? 0,
     note: values.note?.trim() ?? "",
     sourceLeadId: values.sourceLeadId ? Number(values.sourceLeadId) : null,
-    sourceLeadName: deal?.sourceLeadName ?? null,
     stage: (values.stage ?? "OfferMade") as DealStage,
     title: values.title?.trim() ?? "",
     type: (values.type ?? "Residential") as DealType,
-    updatedAt: deal?.updatedAt ?? new Date().toISOString(),
     value: parseNumberFromValue(values.value ?? ""),
+  }
+}
+
+function buildDealUpdatePayload(values: DealFormValues, deal: DealItem): DealItem {
+  return {
+    ...deal,
+    ...buildDealWriteFields(values),
   }
 }
 
@@ -111,12 +114,12 @@ export function DealPipelineReportsPage() {
   }, [dealsQuery.data?.items])
 
   async function handleCreateDeal(values: DealFormValues) {
-    const response = await createDealMutation.mutateAsync(buildDealPayload(values))
+    const response = await createDealMutation.mutateAsync(buildDealWriteFields(values))
 
     if (response.error) return response.error.message
 
     if (response.data) {
-      setLocalDeals((current) => [response.data as DealItem, ...current])
+      setLocalDeals((current) => [response.data, ...current])
     }
 
     return null
@@ -128,7 +131,7 @@ export function DealPipelineReportsPage() {
     if (!existingDeal) return "Deal not found."
 
     const response = await updateDealMutation.mutateAsync(
-      buildDealPayload(values, existingDeal),
+      buildDealUpdatePayload(values, existingDeal),
     )
 
     if (response.error) return response.error.message
