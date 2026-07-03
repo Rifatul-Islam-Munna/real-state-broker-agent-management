@@ -21,7 +21,10 @@ import { LeadHistoryPage } from "@/components/stitch/pages/lead-history/page"
 import { LeadOutreachSchedulePage } from "@/components/stitch/pages/lead-history/lead-outreach-schedule-page"
 
 import { type LeadFormValues, Section1Section, Section2Section } from "./sections"
-import type { LeadOutreachComposerValues, LeadOutreachMode } from "./sections/lead-outreach-types"
+import type {
+  LeadOutreachComposerValues,
+  LeadOutreachMode,
+} from "./sections/lead-outreach-types"
 
 const PAGE_SIZE = 10
 
@@ -48,7 +51,9 @@ function mapLeadValuesToPayload(values: LeadFormValues, lead?: LeadItem) {
     stage: (values.stage ?? "New") as LeadStage,
     summary: values.summary?.trim() ?? "",
     timeline: values.timeline?.trim() ?? "",
-    nextActionDate: values.nextActionDate ? new Date(values.nextActionDate).toISOString() : null,
+    nextActionDate: values.nextActionDate
+      ? new Date(values.nextActionDate).toISOString()
+      : null,
     nextActionType: values.nextActionType?.trim() ?? "",
     followUpStatus: values.followUpStatus ?? "Open",
     isFollowUpOverdue: lead?.isFollowUpOverdue ?? false,
@@ -90,7 +95,8 @@ export function LeadCrmPipelinePage() {
     localLeads.length > 0 || (leadsQuery.data?.items?.length ?? 0) === 0
       ? localLeads
       : leadsQuery.data?.items ?? []
-  const isInitialLoading = !leadsQuery.data && (leadsQuery.isLoading || leadsQuery.isFetching)
+  const isInitialLoading =
+    !leadsQuery.data && (leadsQuery.isLoading || leadsQuery.isFetching)
 
   useEffect(() => {
     setLocalLeads(leadsQuery.data?.items ?? [])
@@ -99,9 +105,7 @@ export function LeadCrmPipelinePage() {
   async function handleCreateLead(values: LeadFormValues) {
     const response = await createLeadMutation.mutateAsync(mapLeadValuesToPayload(values))
 
-    if (response.error) {
-      return response.error.message
-    }
+    if (response.error) return response.error.message
 
     if (response.data) {
       setLocalLeads((current) => [response.data as LeadItem, ...current])
@@ -113,19 +117,19 @@ export function LeadCrmPipelinePage() {
   async function handleUpdateLead(leadId: number, values: LeadFormValues) {
     const existingLead = localLeads.find((lead) => lead.id === leadId)
 
-    if (!existingLead) {
-      return "Lead not found."
-    }
+    if (!existingLead) return "Lead not found."
 
-    const response = await updateLeadMutation.mutateAsync(mapLeadValuesToPayload(values, existingLead))
+    const response = await updateLeadMutation.mutateAsync(
+      mapLeadValuesToPayload(values, existingLead),
+    )
 
-    if (response.error) {
-      return response.error.message
-    }
+    if (response.error) return response.error.message
 
     if (response.data) {
       setLocalLeads((current) =>
-        current.map((lead) => (lead.id === response.data?.id ? response.data ?? lead : lead)),
+        current.map((lead) =>
+          lead.id === response.data?.id ? response.data ?? lead : lead,
+        ),
       )
     }
 
@@ -135,9 +139,7 @@ export function LeadCrmPipelinePage() {
   async function handleCancelLead(leadId: number, reason: string) {
     const existingLead = localLeads.find((lead) => lead.id === leadId)
 
-    if (!existingLead) {
-      return "Lead not found."
-    }
+    if (!existingLead) return "Lead not found."
 
     return handleUpdateLead(leadId, {
       ...mapLeadValuesToPayloadToForm(existingLead),
@@ -147,12 +149,14 @@ export function LeadCrmPipelinePage() {
     })
   }
 
-  async function handleCommunicate(leadId: number, mode: LeadOutreachMode, values: LeadOutreachComposerValues) {
+  async function handleCommunicate(
+    leadId: number,
+    mode: LeadOutreachMode,
+    values: LeadOutreachComposerValues,
+  ) {
     const existingLead = localLeads.find((lead) => lead.id === leadId)
 
-    if (!existingLead) {
-      return "Lead not found."
-    }
+    if (!existingLead) return "Lead not found."
 
     const response = await dispatchLeadOutreachMutation.mutateAsync({
       leadId,
@@ -165,9 +169,7 @@ export function LeadCrmPipelinePage() {
       createdBy: portalRoutes.kind === "agent" ? "Agent" : "Admin",
     })
 
-    if (response.error) {
-      return response.error.message
-    }
+    if (response.error) return response.error.message
 
     return null
   }
@@ -175,9 +177,7 @@ export function LeadCrmPipelinePage() {
   async function handleSetLeadBoard(leadId: number, inBoard: boolean) {
     const existingLead = localLeads.find((lead) => lead.id === leadId)
 
-    if (!existingLead) {
-      return
-    }
+    if (!existingLead) return
 
     setLocalLeads((current) =>
       current.map((lead) => (lead.id === leadId ? { ...lead, inBoard } : lead)),
@@ -190,7 +190,9 @@ export function LeadCrmPipelinePage() {
 
     if (response.data) {
       setLocalLeads((current) =>
-        current.map((lead) => (lead.id === response.data?.id ? response.data ?? lead : lead)),
+        current.map((lead) =>
+          lead.id === response.data?.id ? response.data ?? lead : lead,
+        ),
       )
     }
   }
@@ -198,9 +200,7 @@ export function LeadCrmPipelinePage() {
   async function handleStageChange(leadId: number, stage: LeadStage) {
     const existingLead = localLeads.find((lead) => lead.id === leadId)
 
-    if (!existingLead) {
-      return
-    }
+    if (!existingLead) return
 
     setLocalLeads((current) =>
       current.map((lead) =>
@@ -216,7 +216,9 @@ export function LeadCrmPipelinePage() {
 
     if (response.data) {
       setLocalLeads((current) =>
-        current.map((lead) => (lead.id === response.data?.id ? response.data ?? lead : lead)),
+        current.map((lead) =>
+          lead.id === response.data?.id ? response.data ?? lead : lead,
+        ),
       )
     }
   }
@@ -224,9 +226,7 @@ export function LeadCrmPipelinePage() {
   async function handleConvertLeadToDeal(leadId: number) {
     const response = await convertLeadToDealMutation.mutateAsync({ leadId })
 
-    if (response.error) {
-      return response.error.message
-    }
+    if (response.error) return response.error.message
 
     setLocalLeads((current) =>
       current.map((lead) =>
@@ -249,67 +249,44 @@ export function LeadCrmPipelinePage() {
     return null
   }
 
-  if (view === "history") {
-    return <LeadHistoryPage />
-  }
-
-  if (view === "schedule") {
-    return <LeadOutreachSchedulePage />
-  }
+  if (view === "history") return <LeadHistoryPage />
+  if (view === "schedule") return <LeadOutreachSchedulePage />
 
   return (
-    <div className="bg-background-light font-sans text-slate-900 dark:bg-background-dark dark:text-slate-100">
-      <div className="flex min-h-screen w-full flex-col overflow-x-hidden">
-        <div className="border-b border-primary/10 bg-white px-4 py-4 dark:border-white/10 dark:bg-slate-950 md:px-6">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-400">{"Lead Workspace"}</p>
-              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                {"Open the dedicated lead timeline page to pick any lead and review the full call, SMS, email, and chat history."}
-              </p>
-            </div>
-            <a
-              className="inline-flex items-center justify-center border border-primary bg-primary px-4 py-2 text-xs font-bold uppercase tracking-wide text-white"
-              href={portalRoutes.leadHistory}
-            >
-              {"Open Lead History"}
-            </a>
-          </div>
-        </div>
-        <Section1Section
-          onAddLeadClick={() => setCreateDialogVersion((current) => current + 1)}
-          onSearchChange={(value) => {
-            setSearchTerm(value)
-            setPage(1)
-          }}
-          searchTerm={searchTerm}
-        />
-        <Section2Section
-          agentOptions={sortAgentOptions(agentOptionsQuery.data ?? [])}
-          createDialogVersion={createDialogVersion}
-          currentPage={page}
-          errorMessage={leadsQuery.error?.message ?? null}
-          isLoading={isInitialLoading}
-          isMutating={
-            createLeadMutation.isPending ||
-            dispatchLeadOutreachMutation.isPending ||
-            updateLeadMutation.isPending ||
-            convertLeadToDealMutation.isPending
-          }
-          leads={displayedLeads}
-          onCancelLead={handleCancelLead}
-          onCommunicate={handleCommunicate}
-          onConvertLeadToDeal={handleConvertLeadToDeal}
-          onCreateLead={handleCreateLead}
-          onPageChange={setPage}
-          onSetLeadBoard={handleSetLeadBoard}
-          onStageChange={handleStageChange}
-          onUpdateLead={handleUpdateLead}
-          propertyOptions={propertyOptionsQuery.data?.items ?? []}
-          totalPages={leadsQuery.data?.totalPages ?? 1}
-          totalResults={leadsQuery.data?.totalCount ?? displayedLeads.length}
-        />
-      </div>
+    <div className="min-h-full bg-muted/20 text-foreground">
+      <Section1Section
+        onAddLeadClick={() => setCreateDialogVersion((current) => current + 1)}
+        onSearchChange={(value) => {
+          setSearchTerm(value)
+          setPage(1)
+        }}
+        searchTerm={searchTerm}
+      />
+      <Section2Section
+        agentOptions={sortAgentOptions(agentOptionsQuery.data ?? [])}
+        createDialogVersion={createDialogVersion}
+        currentPage={page}
+        errorMessage={leadsQuery.error?.message ?? null}
+        isLoading={isInitialLoading}
+        isMutating={
+          createLeadMutation.isPending ||
+          dispatchLeadOutreachMutation.isPending ||
+          updateLeadMutation.isPending ||
+          convertLeadToDealMutation.isPending
+        }
+        leads={displayedLeads}
+        onCancelLead={handleCancelLead}
+        onCommunicate={handleCommunicate}
+        onConvertLeadToDeal={handleConvertLeadToDeal}
+        onCreateLead={handleCreateLead}
+        onPageChange={setPage}
+        onSetLeadBoard={handleSetLeadBoard}
+        onStageChange={handleStageChange}
+        onUpdateLead={handleUpdateLead}
+        propertyOptions={propertyOptionsQuery.data?.items ?? []}
+        totalPages={leadsQuery.data?.totalPages ?? 1}
+        totalResults={leadsQuery.data?.totalCount ?? displayedLeads.length}
+      />
     </div>
   )
 }
@@ -344,9 +321,3 @@ function sortAgentOptions(items: AgentUserOption[]) {
 function mapLeadValuesToPayloadToForm(lead: LeadItem): LeadFormValues {
   return mapLeadValuesToForm(lead)
 }
-
-
-
-
-
-
