@@ -8,6 +8,7 @@ import { SettingsModule } from '../settings/settings.module';
 import { RealtorShowing } from './entities/realtor-showing.entity';
 import { RealtorShowingsController } from './realtor-showings.controller';
 import { RealtorShowingsService } from './realtor-showings.service';
+import { RealtorShowingsV2Service } from './realtor-showings-v2.service';
 
 @Module({
   imports: [
@@ -16,6 +17,6 @@ import { RealtorShowingsService } from './realtor-showings.service';
     SettingsModule,
   ],
   controllers: [RealtorShowingsController],
-  providers: [RealtorShowingsService],
+  providers: [{ provide: RealtorShowingsService, useClass: RealtorShowingsV2Service }],
 })
 export class RealtorShowingsModule {}
