@@ -1,4 +1,13 @@
-import { Body, Controller, Get, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RealtorShowingsService } from './realtor-showings.service';
@@ -18,24 +27,62 @@ export class RealtorShowingsController {
   @Post('import')
   @ApiOperation({ summary: 'Import realtor showings from mapped CSV rows' })
   importRows(@Body() payload: any) {
-    return this.realtorShowingsService.importRows(payload);
+    return this.realtorShowingsService.importRows(
+      this.validateAutomation(payload),
+    );
   }
 
   @Post()
   @ApiOperation({ summary: 'Create one realtor showing manually' })
   createManual(@Body() payload: any) {
-    return this.realtorShowingsService.createManual(payload);
+    return this.realtorShowingsService.createManual(
+      this.validateAutomation(payload),
+    );
   }
 
   @Patch('property')
   @ApiOperation({ summary: 'Manually match a realtor showing to a property' })
   updateProperty(@Body() payload: { id: number; propertyId?: number | null }) {
-    return this.realtorShowingsService.updateProperty(Number(payload.id), payload.propertyId ? Number(payload.propertyId) : null);
+    return this.realtorShowingsService.updateProperty(
+      Number(payload.id),
+      payload.propertyId ? Number(payload.propertyId) : null,
+    );
   }
 
   @Patch('automation')
   @ApiOperation({ summary: 'Update and reschedule outreach for one realtor showing' })
   updateAutomation(@Body() payload: any) {
-    return this.realtorShowingsService.updateAutomation(Number(payload.id), payload);
+    const normalized = this.validateAutomation(payload);
+    return this.realtorShowingsService.updateAutomation(
+      Number(normalized.id),
+      normalized,
+    );
+  }
+
+  private validateAutomation(payload: any) {
+    const followUpEnabled = payload?.followUpEnabled === true;
+    const followUpTemplateId = `${payload?.followUpTemplateId ?? ''}`.trim();
+    const followUpGapDays = Math.max(
+      0,
+      Number(payload?.followUpGapDays ?? 0) || 0,
+    );
+
+    if (followUpEnabled && !followUpTemplateId) {
+      throw new BadRequestException(
+        'Choose a follow-up template or disable follow-up.',
+      );
+    }
+    if (followUpEnabled && followUpGapDays < 1) {
+      throw new BadRequestException(
+        'Follow-up gap must be at least one day.',
+      );
+    }
+
+    return {
+      ...payload,
+      followUpEnabled,
+      followUpTemplateId,
+      followUpGapDays,
+    };
   }
 }
