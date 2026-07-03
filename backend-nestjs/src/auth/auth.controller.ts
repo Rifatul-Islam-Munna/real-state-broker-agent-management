@@ -27,12 +27,27 @@ export class AuthController {
   @HttpCode(201)
   @ApiOperation({ summary: 'Register a new agent account' })
   async register(@Body() registerDto: any) {
+    const firstName = `${registerDto.firstName ?? ''}`.trim();
+    const lastName = `${registerDto.lastName ?? ''}`.trim();
+    const email = `${registerDto.email ?? ''}`.trim();
+    const password = `${registerDto.password ?? ''}`;
+    const phone = `${registerDto.phone ?? ''}`.trim();
+
+    if (!firstName) throw new BadRequestException('First name is required');
+    if (!lastName) throw new BadRequestException('Last name is required');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      throw new BadRequestException('Enter a valid email address');
+    }
+    if (password.length < 6) {
+      throw new BadRequestException('Password must be at least 6 characters');
+    }
+
     return this.authService.register({
-      firstName: `${registerDto.firstName ?? ''}`.trim(),
-      lastName: `${registerDto.lastName ?? ''}`.trim(),
-      email: `${registerDto.email ?? ''}`.trim(),
-      password: `${registerDto.password ?? ''}`,
-      phone: `${registerDto.phone ?? ''}`.trim(),
+      firstName,
+      lastName,
+      email,
+      password,
+      phone,
       role: UserRole.Agent,
     });
   }
