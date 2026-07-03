@@ -250,7 +250,7 @@ export function ShowingFeedbackPageV2() {
                   {selectedProperty?.propertyTitle ?? "Feedback registry"}
                 </CardTitle>
                 <CardDescription>
-                  {"Date filters use the first message date linked to the showing."}
+                  {"Date filters use the actual reply-received date in the agency timezone."}
                 </CardDescription>
               </div>
               <div className="grid grid-cols-2 gap-2">
@@ -274,13 +274,14 @@ export function ShowingFeedbackPageV2() {
               ) : (
                 <>
                   <div className="overflow-x-auto">
-                    <Table className="min-w-[820px]">
+                    <Table className="min-w-[980px]">
                       <TableHeader>
                         <TableRow>
-                          <TableHead>{"First message"}</TableHead>
+                          <TableHead>{"Reply received"}</TableHead>
                           <TableHead>{"Realtor"}</TableHead>
                           <TableHead>{"Channel"}</TableHead>
                           <TableHead>{"Sentiment"}</TableHead>
+                          <TableHead>{"Classifier"}</TableHead>
                           <TableHead>{"Feedback"}</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -288,7 +289,7 @@ export function ShowingFeedbackPageV2() {
                         {(feedbackQuery.data?.items ?? []).map((item) => (
                           <TableRow key={item.id}>
                             <TableCell className="whitespace-nowrap font-medium text-foreground">
-                              {formatDateTimeInZone(item.firstMessageAt, timeZone)}
+                              {formatDateTimeInZone(item.receivedAt, timeZone)}
                             </TableCell>
                             <TableCell>
                               <p className="font-medium text-foreground">{item.realtorName || "Realtor"}</p>
@@ -296,6 +297,10 @@ export function ShowingFeedbackPageV2() {
                             </TableCell>
                             <TableCell><Badge variant="outline">{item.channel === "Sms" ? "SMS" : "Email"}</Badge></TableCell>
                             <TableCell><Badge variant={item.sentiment === "negative" ? "destructive" : "secondary"}>{item.sentiment}</Badge></TableCell>
+                            <TableCell>
+                              <Badge variant="outline">{item.classifier || "Unknown"}</Badge>
+                              <p className="mt-1 text-xs text-muted-foreground">{`${Math.round((item.confidence ?? 0) * 100)}% confidence`}</p>
+                            </TableCell>
                             <TableCell className="max-w-[430px] whitespace-pre-wrap text-foreground">{item.feedbackText}</TableCell>
                           </TableRow>
                         ))}
