@@ -43,7 +43,9 @@ function buildDealPayload(values: DealFormValues, deal?: DealItem) {
     commissionPayoutNote: values.commissionPayoutNote?.trim() ?? "",
     createdAt: deal?.createdAt ?? new Date().toISOString(),
     deadline: values.deadline?.trim() ?? "",
-    expectedClosingDate: values.expectedClosingDate ? new Date(values.expectedClosingDate).toISOString() : null,
+    expectedClosingDate: values.expectedClosingDate
+      ? new Date(values.expectedClosingDate).toISOString()
+      : null,
     id: deal?.id ?? 0,
     note: values.note?.trim() ?? "",
     sourceLeadId: values.sourceLeadId ? Number(values.sourceLeadId) : null,
@@ -68,12 +70,16 @@ function mapDealToFormValues(deal: DealItem): DealFormValues {
     stage: deal.stage ?? "OfferMade",
     type: deal.type ?? "Residential",
     deadline: deal.deadline ?? "",
-    expectedClosingDate: deal.expectedClosingDate ? deal.expectedClosingDate.slice(0, 10) : "",
+    expectedClosingDate: deal.expectedClosingDate
+      ? deal.expectedClosingDate.slice(0, 10)
+      : "",
     note: deal.note ?? "",
     agent: deal.agent ?? "",
     agentId: deal.agentId ? `${deal.agentId}` : "",
     sourceLeadId: deal.sourceLeadId ? `${deal.sourceLeadId}` : "",
-    checklistItems: (deal.checklistItems ?? []).map((item) => `${item.isCompleted ? "[x]" : "[ ]"} ${item.title}`).join("\n"),
+    checklistItems: (deal.checklistItems ?? [])
+      .map((item) => `${item.isCompleted ? "[x]" : "[ ]"} ${item.title}`)
+      .join("\n"),
   }
 }
 
@@ -97,7 +103,8 @@ export function DealPipelineReportsPage() {
     localDeals.length > 0 || (dealsQuery.data?.items?.length ?? 0) === 0
       ? localDeals
       : dealsQuery.data?.items ?? []
-  const isInitialLoading = !dealsQuery.data && (dealsQuery.isLoading || dealsQuery.isFetching)
+  const isInitialLoading =
+    !dealsQuery.data && (dealsQuery.isLoading || dealsQuery.isFetching)
 
   useEffect(() => {
     setLocalDeals(dealsQuery.data?.items ?? [])
@@ -106,9 +113,7 @@ export function DealPipelineReportsPage() {
   async function handleCreateDeal(values: DealFormValues) {
     const response = await createDealMutation.mutateAsync(buildDealPayload(values))
 
-    if (response.error) {
-      return response.error.message
-    }
+    if (response.error) return response.error.message
 
     if (response.data) {
       setLocalDeals((current) => [response.data as DealItem, ...current])
@@ -120,19 +125,19 @@ export function DealPipelineReportsPage() {
   async function handleUpdateDeal(dealId: number, values: DealFormValues) {
     const existingDeal = localDeals.find((deal) => deal.id === dealId)
 
-    if (!existingDeal) {
-      return "Deal not found."
-    }
+    if (!existingDeal) return "Deal not found."
 
-    const response = await updateDealMutation.mutateAsync(buildDealPayload(values, existingDeal))
+    const response = await updateDealMutation.mutateAsync(
+      buildDealPayload(values, existingDeal),
+    )
 
-    if (response.error) {
-      return response.error.message
-    }
+    if (response.error) return response.error.message
 
     if (response.data) {
       setLocalDeals((current) =>
-        current.map((deal) => (deal.id === response.data?.id ? response.data ?? deal : deal)),
+        current.map((deal) =>
+          deal.id === response.data?.id ? response.data ?? deal : deal,
+        ),
       )
     }
 
@@ -142,9 +147,7 @@ export function DealPipelineReportsPage() {
   async function handleCancelDeal(dealId: number, reason: string) {
     const existingDeal = localDeals.find((deal) => deal.id === dealId)
 
-    if (!existingDeal) {
-      return "Deal not found."
-    }
+    if (!existingDeal) return "Deal not found."
 
     return handleUpdateDeal(dealId, {
       ...mapDealToFormValues(existingDeal),
@@ -153,12 +156,14 @@ export function DealPipelineReportsPage() {
     })
   }
 
-  async function handleCommunicate(dealId: number, mode: "email" | "message", message: string) {
+  async function handleCommunicate(
+    dealId: number,
+    mode: "email" | "message",
+    message: string,
+  ) {
     const existingDeal = localDeals.find((deal) => deal.id === dealId)
 
-    if (!existingDeal) {
-      return "Deal not found."
-    }
+    if (!existingDeal) return "Deal not found."
 
     return handleUpdateDeal(dealId, {
       ...mapDealToFormValues(existingDeal),
@@ -169,9 +174,7 @@ export function DealPipelineReportsPage() {
   async function handleStageChange(dealId: number, stage: DealStage) {
     const existingDeal = localDeals.find((deal) => deal.id === dealId)
 
-    if (!existingDeal) {
-      return
-    }
+    if (!existingDeal) return
 
     setLocalDeals((current) =>
       current.map((deal) => (deal.id === dealId ? { ...deal, stage } : deal)),
@@ -182,35 +185,42 @@ export function DealPipelineReportsPage() {
       stage,
     })
 
+    if (response.error) {
+      setLocalDeals((current) =>
+        current.map((deal) => (deal.id === dealId ? existingDeal : deal)),
+      )
+      return
+    }
+
     if (response.data) {
       setLocalDeals((current) =>
-        current.map((deal) => (deal.id === response.data?.id ? response.data ?? deal : deal)),
+        current.map((deal) =>
+          deal.id === response.data?.id ? response.data ?? deal : deal,
+        ),
       )
     }
   }
 
   return (
-    <div className="bg-background-light font-sans text-slate-900 dark:bg-background-dark dark:text-slate-100">
-      <div className="flex min-h-screen w-full flex-col overflow-x-hidden">
-        <Section2Section
-          agentOptions={sortAgentOptions(agentOptionsQuery.data ?? [])}
-          createDialogVersion={0}
-          currentPage={page}
-          deals={displayedDeals}
-          errorMessage={dealsQuery.error?.message ?? null}
-          isLoading={isInitialLoading}
-          isMutating={createDealMutation.isPending || updateDealMutation.isPending}
-          leadOptions={leadOptionsQuery.data?.items ?? []}
-          onCancelDeal={handleCancelDeal}
-          onCommunicate={handleCommunicate}
-          onCreateDeal={handleCreateDeal}
-          onPageChange={setPage}
-          onStageChange={handleStageChange}
-          onUpdateDeal={handleUpdateDeal}
-          totalPages={dealsQuery.data?.totalPages ?? 1}
-          totalResults={dealsQuery.data?.totalCount ?? displayedDeals.length}
-        />
-      </div>
+    <div className="min-h-full bg-muted/20 text-foreground">
+      <Section2Section
+        agentOptions={sortAgentOptions(agentOptionsQuery.data ?? [])}
+        createDialogVersion={0}
+        currentPage={page}
+        deals={displayedDeals}
+        errorMessage={dealsQuery.error?.message ?? null}
+        isLoading={isInitialLoading}
+        isMutating={createDealMutation.isPending || updateDealMutation.isPending}
+        leadOptions={leadOptionsQuery.data?.items ?? []}
+        onCancelDeal={handleCancelDeal}
+        onCommunicate={handleCommunicate}
+        onCreateDeal={handleCreateDeal}
+        onPageChange={setPage}
+        onStageChange={handleStageChange}
+        onUpdateDeal={handleUpdateDeal}
+        totalPages={dealsQuery.data?.totalPages ?? 1}
+        totalResults={dealsQuery.data?.totalCount ?? displayedDeals.length}
+      />
     </div>
   )
 }
