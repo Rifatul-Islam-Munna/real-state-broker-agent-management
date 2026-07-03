@@ -45,10 +45,10 @@ export function DashboardTopbar({ userName, role, avatarUrl }: DashboardTopbarPr
   const title = currentRoute?.label ?? "Dashboard"
 
   return (
-    <header className="sticky top-0 border-b border-border/70 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-      <div className="flex min-h-16 items-center gap-3 px-4 lg:px-6">
+    <header className="sticky top-0 z-30 border-b border-border/70 bg-background/90 backdrop-blur-xl">
+      <div className="flex min-h-18 items-center gap-4 px-4 sm:px-6 lg:px-8">
         <SidebarTrigger
-          className="border border-border text-foreground"
+          className="shadow-xs"
           render={<Button variant="outline" size="icon-sm" />}
         />
         <div className="min-w-0 flex-1">
@@ -69,7 +69,7 @@ export function DashboardTopbar({ userName, role, avatarUrl }: DashboardTopbarPr
               ) : null}
             </BreadcrumbList>
           </Breadcrumb>
-          <h1 className="mt-1 truncate text-lg font-semibold tracking-tight text-foreground">
+          <h1 className="mt-1 truncate text-xl font-semibold tracking-tight text-foreground">
             {title}
           </h1>
         </div>
@@ -77,14 +77,14 @@ export function DashboardTopbar({ userName, role, avatarUrl }: DashboardTopbarPr
           <Badge variant={role === "Admin" ? "default" : "secondary"}>
             {role}
           </Badge>
-          <Separator orientation="vertical" className="h-8" />
-          <div className="flex items-center gap-2">
-            <Avatar>
+          <Separator orientation="vertical" className="h-9" />
+          <div className="flex items-center gap-3">
+            <Avatar className="size-9 shadow-sm ring-2 ring-background">
               {avatarUrl ? <AvatarImage alt={userName} src={avatarUrl} /> : null}
               <AvatarFallback>{initialsFromName(userName)}</AvatarFallback>
             </Avatar>
             <div className="hidden min-w-0 lg:block">
-              <p className="truncate text-sm font-medium text-foreground">{userName}</p>
+              <p className="truncate text-sm font-semibold text-foreground">{userName}</p>
               <p className="text-xs text-muted-foreground">{"Workspace access"}</p>
             </div>
           </div>
