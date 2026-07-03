@@ -50,7 +50,7 @@ import {
 } from "@/hooks/use-realtor-showings-api"
 import { useProperties } from "@/hooks/use-real-estate-api"
 import { useSchedulingSettings } from "@/hooks/use-scheduling-settings"
-import { formatDateTimeLabel } from "@/lib/admin-portal"
+import { formatDateTimeInZone } from "@/lib/time-zone"
 
 import { ShowingFeedbackEntryDialogsV2 } from "./showing-feedback-entry-dialogs-v2"
 
@@ -232,7 +232,7 @@ export function ShowingFeedbackPageV2() {
                         <span>{`${property.feedbackCount} feedback`}</span>
                         <span>
                           {property.latestFeedbackAt
-                            ? formatDateTimeLabel(property.latestFeedbackAt)
+                            ? formatDateTimeInZone(property.latestFeedbackAt, timeZone)
                             : ""}
                         </span>
                       </span>
@@ -288,7 +288,7 @@ export function ShowingFeedbackPageV2() {
                         {(feedbackQuery.data?.items ?? []).map((item) => (
                           <TableRow key={item.id}>
                             <TableCell className="whitespace-nowrap font-medium text-foreground">
-                              {formatDateTimeLabel(item.firstMessageAt)}
+                              {formatDateTimeInZone(item.firstMessageAt, timeZone)}
                             </TableCell>
                             <TableCell>
                               <p className="font-medium text-foreground">{item.realtorName || "Realtor"}</p>
@@ -324,7 +324,7 @@ export function ShowingFeedbackPageV2() {
       />
 
       <Sheet open={reportOpen} onOpenChange={setReportOpen}>
-        <SheetContent className="sm:w-[38rem] sm:max-w-[38rem]">
+        <SheetContent className="shadow-none sm:w-[38rem] sm:max-w-[38rem]">
           <SheetHeader className="border-b">
             <SheetTitle>{"Owner feedback report"}</SheetTitle>
             <SheetDescription>
