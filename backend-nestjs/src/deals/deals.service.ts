@@ -1,7 +1,11 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { DealPipeline, DealChecklistItem, dealStages } from './entities/deal-pipeline.entity';
+import { DeepPartial, Repository } from 'typeorm';
+import {
+  DealPipeline,
+  DealChecklistItem,
+  dealStages,
+} from './entities/deal-pipeline.entity';
 import { numericEnumValue } from '../common/numeric-enum';
 import { LeadsService } from '../leads/leads.service';
 import { paginated, toInt } from '../common/api-contract';
@@ -48,14 +52,30 @@ export class DealsService {
   }
 
   async create(createDto: any): Promise<any> {
-    const deal = this.dealRepository.create(createDto as object);
-    return this.mapDeal(await this.dealRepository.save(deal));
+    const { checklistItems, ...fields } = this.writeFields(createDto);
+    const deal = this.dealRepository.create(fields as DeepPartial<DealPipeline>);
+    const saved = await this.dealRepository.save(deal);
+
+    if (Array.isArray(checklistItems)) {
+      await this.replaceChecklist(saved.id, checklistItems);
+    }
+
+    return this.findOne(saved.id);
   }
 
   async update(id: number, updateDto: any): Promise<any> {
-    const deal = await this.findOne(id);
-    Object.assign(deal, updateDto);
-    return this.mapDeal(await this.dealRepository.save(deal));
+    const deal = await this.dealRepository.findOne({ where: { id } });
+    if (!deal) throw new NotFoundException('Deal not found');
+
+    const { checklistItems, ...fields } = this.writeFields(updateDto);
+    Object.assign(deal, fields);
+    await this.dealRepository.save(deal);
+
+    if (Array.isArray(checklistItems)) {
+      await this.replaceChecklist(id, checklistItems);
+    }
+
+    return this.findOne(id);
   }
 
   async delete(id: number): Promise<DealPipeline> {
@@ -66,13 +86,53 @@ export class DealsService {
 
   async convertFromLead(dto: any) {
     const lead = await this.leadsService.findOne(dto.leadId);
-    const deal = await this.create({
+    return this.create({
       title: `Deal for ${lead.name}`,
       client: lead.name,
       sourceLeadId: lead.id,
       agentId: lead.agentId,
     });
-    return deal;
+  }
+
+  private writeFields(dto: any) {
+    const {
+      id: _id,
+      createdAt: _createdAt,
+      updatedAt: _updatedAt,
+      sourceLeadName: _sourceLeadName,
+      dealOwnerName: _dealOwnerName,
+      checklistItems,
+      ...fields
+    } = dto ?? {};
+
+    if ('expectedClosingDate' in fields) {
+      fields.expectedClosingDate = fields.expectedClosingDate
+        ? new Date(fields.expectedClosingDate)
+        : null;
+    }
+
+    return { checklistItems, ...fields };
+  }
+
+  private async replaceChecklist(dealPipelineId: number, items: any[]) {
+    await this.checklistRepository.delete({ dealPipelineId });
+
+    const checklistItems = items
+      .map((item, index) => ({
+        dealPipelineId,
+        title: `${item?.title ?? ''}`.trim(),
+        isCompleted: !!item?.isCompleted,
+        sortOrder: Number.isFinite(Number(item?.sortOrder))
+          ? Number(item.sortOrder)
+          : index + 1,
+      }))
+      .filter((item) => item.title.length > 0);
+
+    if (checklistItems.length === 0) return;
+
+    await this.checklistRepository.save(
+      checklistItems.map((item) => this.checklistRepository.create(item)),
+    );
   }
 
   private mapDeal(deal: DealPipeline) {
