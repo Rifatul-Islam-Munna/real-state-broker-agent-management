@@ -18,16 +18,11 @@ type OutreachDocument = {
 @Injectable()
 export class LeadOutreachService {
   constructor(
-    @InjectRepository(Lead)
-    private leadRepo: Repository<Lead>,
-    @InjectRepository(LeadHistoryEntry)
-    private historyRepo: Repository<LeadHistoryEntry>,
-    @InjectRepository(DealPipeline)
-    private dealRepo: Repository<DealPipeline>,
-    @InjectRepository(DocumentRepositoryItem)
-    private documentRepo: Repository<DocumentRepositoryItem>,
-    @InjectRepository(Property)
-    private propertyRepo: Repository<Property>,
+    @InjectRepository(Lead) private leadRepo: Repository<Lead>,
+    @InjectRepository(LeadHistoryEntry) private historyRepo: Repository<LeadHistoryEntry>,
+    @InjectRepository(DealPipeline) private dealRepo: Repository<DealPipeline>,
+    @InjectRepository(DocumentRepositoryItem) private documentRepo: Repository<DocumentRepositoryItem>,
+    @InjectRepository(Property) private propertyRepo: Repository<Property>,
     private settingsService: SettingsService,
     private smsService: SmsService,
   ) {}
@@ -41,32 +36,21 @@ export class LeadOutreachService {
     const qb = this.historyRepo.createQueryBuilder('history')
       .leftJoinAndSelect('history.lead', 'lead')
       .where('history.kind IN (:...kinds)', { kinds: ['Email', 'Sms', 'Call'].map(leadHistoryKindDb) });
-
     if (leadId) qb.andWhere('history.lead_id = :leadId', { leadId });
     if (kind) qb.andWhere('history.kind = :kind', { kind: leadHistoryKindDb(kind) });
     if (status) qb.andWhere('history.status = :status', { status: leadHistoryStatusDb(status) });
-
-    const rows = await qb
-      .orderBy('CASE WHEN history.status = 1 THEN 0 ELSE 1 END', 'ASC')
+    const rows = await qb.orderBy('CASE WHEN history.status = 1 THEN 0 ELSE 1 END', 'ASC')
       .addOrderBy('history.scheduledAt', 'ASC', 'NULLS LAST')
       .addOrderBy('history.createdAt', 'ASC')
       .addOrderBy('history.id', 'ASC')
       .getMany();
-
     return rows.map((entry) => this.mapSchedule(entry));
   }
 
   async getCallScript(historyEntryId?: number, provider?: string, message?: string, title?: string) {
     const body = message || (historyEntryId ? (await this.historyRepo.findOne({ where: { id: historyEntryId } }))?.body : '') || title || '';
-    if (!body.trim()) {
-      return null;
-    }
-    const safe = body
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&apos;');
+    if (!body.trim()) return null;
+    const safe = body.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
     return (provider ?? '').toLowerCase() === 'plivo'
       ? `<Response><Speak>${safe}</Speak></Response>`
       : `<Response><Say>${safe}</Say></Response>`;
@@ -74,9 +58,7 @@ export class LeadOutreachService {
 
   async sendOutreach(dto: any) {
     if (!dto.leadId) throw new BadRequestException('Lead id is required.');
-    if (!['Email', 'Sms', 'Call'].includes(dto.kind ?? 'Email')) {
-      throw new BadRequestException('Only email, SMS, and call outreach are supported.');
-    }
+    if (!['Email', 'Sms', 'Call'].includes(dto.kind ?? 'Email')) throw new BadRequestException('Only email, SMS, and call outreach are supported.');
     if (!dto.message?.trim()) throw new BadRequestException('Add a message before sending or scheduling outreach.');
     if ((dto.kind ?? 'Email') === 'Email' && !dto.title?.trim()) throw new BadRequestException('Email subject is required.');
 
@@ -95,7 +77,9 @@ export class LeadOutreachService {
       ? await this.findPropertyDocuments(lead.property)
       : [];
     const mediaUrls = [...this.stringList(dto.mediaUrls), ...propertyDocuments.map((doc) => doc.fileUrl)];
-    if (kind === 'Sms' && lead.inBoard && !`${dto.createdBy ?? ''}`.startsWith('Realtor Showing #')) {
+    const source = `${dto.createdBy ?? ''}`;
+    const trustedSmsSequence = source.startsWith('Realtor Showing #') || source.startsWith('Lead Intake:');
+    if (kind === 'Sms' && lead.inBoard && !trustedSmsSequence) {
       shouldSchedule = false;
       status = 'Failed';
       sendFailure = ' SMS auto-send canceled because lead is already on the board.';
@@ -116,9 +100,9 @@ export class LeadOutreachService {
       ? this.scheduledSummary(lead, kind, scheduledAt!)
       : status === 'Failed' && sendFailure.trim()
         ? `${kind === 'Email' ? 'Email delivery failed' : kind === 'Sms' ? 'SMS delivery failed' : 'Call failed'} for ${lead.name}.${sendFailure}`
-      : hasTarget
-        ? `${kind === 'Email' ? 'Email sent to' : kind === 'Sms' ? 'SMS sent to' : 'Call triggered to'} ${kind === 'Email' ? lead.email : lead.phone} via ${provider}.${sendFailure}`
-        : `${kind === 'Email' ? 'Email delivery failed because the lead does not have an email address.' : kind === 'Sms' ? 'SMS delivery failed because the lead does not have a phone number.' : 'Call could not be triggered because the lead does not have a phone number.'}`;
+        : hasTarget
+          ? `${kind === 'Email' ? 'Email sent to' : kind === 'Sms' ? 'SMS sent to' : 'Call triggered to'} ${kind === 'Email' ? lead.email : lead.phone} via ${provider}.${sendFailure}`
+          : `${kind === 'Email' ? 'Email delivery failed because the lead does not have an email address.' : kind === 'Sms' ? 'SMS delivery failed because the lead does not have a phone number.' : 'Call could not be triggered because the lead does not have a phone number.'}`;
 
     const entry = this.historyRepo.create({
       leadId: lead.id,
@@ -147,21 +131,15 @@ export class LeadOutreachService {
     if (status === 'Sent' && ['Email', 'Sms'].includes(kind) && dto.templateId) {
       await this.queueFollowUpTemplates(lead, kind, dto.templateId, provider, dto.createdBy?.trim() || 'CRM', now);
     }
-    if (
-      status === 'Sent'
-      && ['Email', 'Sms'].includes(kind)
-      && !`${dto.createdBy ?? ''}`.startsWith('Realtor Showing #')
-    ) {
+    if (status === 'Sent' && ['Email', 'Sms'].includes(kind) && !source.startsWith('Realtor Showing #')) {
       await this.cancelRealtorFollowUpsAfterManualMessage(lead.id, now);
     }
-
     return this.mapHistory(saved);
   }
 
   async sendBulkOutreach(dto: any) {
     const targets = await this.resolveAudience(dto);
     if (targets.length === 0) throw new BadRequestException('No matching leads were found for the selected audience.');
-
     const failures: string[] = [];
     let savedCount = 0;
     for (const lead of targets) {
@@ -173,7 +151,6 @@ export class LeadOutreachService {
         failures.push(`${lead.name}: ${error.message}`);
       }
     }
-
     return {
       audienceType: dto.audienceType ?? 'LeadStage',
       audienceLabel: dto.leadStage ?? dto.dealStage ?? '',
@@ -287,7 +264,6 @@ export class LeadOutreachService {
       .andWhere('history.status IN (:...statuses)', { statuses: ['Sent', 'Completed'].map(leadHistoryStatusDb) })
       .getExists();
     if (!initialMessageExists) return;
-
     await this.historyRepo.createQueryBuilder()
       .update(LeadHistoryEntry)
       .set({
@@ -307,7 +283,6 @@ export class LeadOutreachService {
   }
 
   private async queueFollowUpTemplates(lead: Lead, kind: string, templateId: string, provider: string, createdBy: string, now: Date) {
-    if (kind === 'Sms' && lead.inBoard) return;
     const settings = await this.settingsService.getAdminSettings();
     const templates = settings.communicationTemplates ?? [];
     const source = templates.find((item: any) => item.id === templateId);
