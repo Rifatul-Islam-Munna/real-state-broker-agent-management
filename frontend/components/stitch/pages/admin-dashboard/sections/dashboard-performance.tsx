@@ -33,7 +33,7 @@ export function DashboardPerformance({
 }: DashboardPerformanceProps) {
   return (
     <Card>
-      <CardHeader className="flex-row items-center justify-between space-y-0">
+      <CardHeader className="flex flex-row items-center justify-between space-y-0">
         <div>
           <CardTitle>{"Top-performing agents"}</CardTitle>
           <CardDescription>
