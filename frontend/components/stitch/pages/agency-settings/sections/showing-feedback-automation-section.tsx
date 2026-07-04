@@ -3,13 +3,35 @@
 import type { AgencyCommunicationTemplateItem } from "@/@types/real-estate-api"
 import { AppIcon } from "@/components/ui/app-icon"
 import { Badge } from "@/components/ui/badge"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import type { ShowingFeedbackAutomationSettings } from "@/lib/agency-settings"
+
+const weekDays = [
+  { label: "Sunday", value: 0 },
+  { label: "Monday", value: 1 },
+  { label: "Tuesday", value: 2 },
+  { label: "Wednesday", value: 3 },
+  { label: "Thursday", value: 4 },
+  { label: "Friday", value: 5 },
+  { label: "Saturday", value: 6 },
+]
 
 export function ShowingFeedbackAutomationSection({
   onChange,
@@ -21,7 +43,8 @@ export function ShowingFeedbackAutomationSection({
   templates: AgencyCommunicationTemplateItem[]
 }) {
   const ownerTemplates = templates.filter(
-    (template) => template.audience === "OwnerFeedback" && template.isActive !== false,
+    (template) =>
+      template.audience === "OwnerFeedback" && template.isActive !== false
   )
 
   function patch(next: Partial<ShowingFeedbackAutomationSettings>) {
@@ -35,142 +58,250 @@ export function ShowingFeedbackAutomationSection({
     patch({ channels: channels.length ? channels : [channel] })
   }
 
+  const selectedDay = weekDays.find(
+    (day) => day.value === Math.min(6, Math.max(0, settings.gapDays))
+  )
+
   return (
-    <Card className="shadow-none">
-      <CardHeader className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="flex gap-3">
-          <span className="flex size-10 shrink-0 items-center justify-center rounded-xl border bg-muted/30">
-            <AppIcon name="rate_review" />
-          </span>
-          <div>
-            <CardTitle className="text-lg">{"Automatic showing feedback reports"}</CardTitle>
-            <CardDescription className="mt-1 max-w-3xl leading-6">
-              {"Classify realtor replies locally first, keep positive and negative feedback, then send only negative owner reports automatically."}
-            </CardDescription>
+    <Card className="overflow-hidden shadow-none">
+      <CardHeader className="border-b bg-muted/15">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="flex gap-3">
+            <span className="flex size-11 shrink-0 items-center justify-center rounded-xl border bg-background">
+              <AppIcon name="rate_review" />
+            </span>
+            <div>
+              <CardTitle className="text-lg">
+                {"Weekly owner feedback automation"}
+              </CardTitle>
+              <CardDescription className="mt-1 max-w-3xl leading-6">
+                {
+                  "Collect replies from email and SMS, classify them as positive or negative, then send a property owner report every week on the selected day."
+                }
+              </CardDescription>
+            </div>
           </div>
+          <Badge
+            className="w-fit"
+            variant={settings.enabled ? "secondary" : "outline"}
+          >
+            {settings.enabled ? "Automation active" : "Automation paused"}
+          </Badge>
         </div>
-        <Badge variant={settings.enabled ? "secondary" : "outline"}>
-          {settings.enabled ? "Automation active" : "Automation paused"}
-        </Badge>
       </CardHeader>
-      <CardContent className="space-y-5">
-        <label className="flex cursor-pointer items-start gap-3 rounded-xl border p-4">
+
+      <CardContent className="space-y-6 p-5 sm:p-6">
+        <label className="flex cursor-pointer items-start gap-3 rounded-xl border bg-background p-4">
           <Checkbox
             checked={settings.enabled}
-            onCheckedChange={(value) => patch({ enabled: value === true })}
+            onCheckedChange={(value) =>
+              patch({
+                enabled: value === true,
+                aiFallbackMinConfidence:
+                  value === true ? 0 : settings.aiFallbackMinConfidence,
+              })
+            }
           />
           <span>
-            <span className="block text-sm font-semibold">{"Enable automatic owner reports"}</span>
+            <span className="block text-sm font-semibold">
+              {"Enable weekly automatic owner reports"}
+            </span>
             <span className="mt-1 block text-xs leading-5 text-muted-foreground">
-              {"The worker checks every 10 minutes. A zero-day gap sends on the next worker run."}
+              {
+                "The worker runs every 10 minutes. It sends once on the chosen weekday, in the agency timezone, only when new positive or negative feedback exists."
+              }
             </span>
           </span>
         </label>
 
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,0.7fr)_minmax(0,1.5fr)]">
           <div className="space-y-2">
-            <Label>{"Wait after first unsent reply"}</Label>
-            <div className="relative">
-              <Input
-                min={0}
-                max={365}
-                onChange={(event) => patch({ gapDays: Math.min(365, Math.max(0, Number(event.target.value) || 0)) })}
-                type="number"
-                value={settings.gapDays}
-              />
-              <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-muted-foreground">{"days"}</span>
-            </div>
+            <Label>{"Weekly report day"}</Label>
+            <Select
+              onValueChange={(value) => patch({ gapDays: Number(value) })}
+              value={String(selectedDay?.value ?? 1)}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Choose weekday" />
+              </SelectTrigger>
+              <SelectContent>
+                {weekDays.map((day) => (
+                  <SelectItem key={day.value} value={String(day.value)}>
+                    {day.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs leading-5 text-muted-foreground">
+              {`The next report is eligible on ${selectedDay?.label ?? "Monday"}.`}
+            </p>
           </div>
+
           <div className="space-y-2">
             <Label>{"Maximum feedback per report"}</Label>
             <Input
               min={1}
               max={50}
-              onChange={(event) => patch({ maxFeedback: Math.min(50, Math.max(1, Number(event.target.value) || 1)) })}
+              onChange={(event) =>
+                patch({
+                  maxFeedback: Math.min(
+                    50,
+                    Math.max(1, Number(event.target.value) || 1)
+                  ),
+                })
+              }
               type="number"
               value={settings.maxFeedback}
             />
+            <p className="text-xs leading-5 text-muted-foreground">
+              {
+                "Older unsent feedback remains queued for a later weekly report."
+              }
+            </p>
           </div>
-          <div className="space-y-2 md:col-span-2">
-            <Label>{"Active owner report template"}</Label>
-            <Select onValueChange={(value) => patch({ templateId: value })} value={settings.templateId}>
-              <SelectTrigger className="w-full"><SelectValue placeholder="Choose owner template" /></SelectTrigger>
+
+          <div className="space-y-2">
+            <Label>{"Owner report template"}</Label>
+            <Select
+              onValueChange={(value) => patch({ templateId: value })}
+              value={settings.templateId}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Choose owner template" />
+              </SelectTrigger>
               <SelectContent>
                 {ownerTemplates.map((template) => (
-                  <SelectItem key={template.id} value={template.id}>{template.name}</SelectItem>
+                  <SelectItem key={template.id} value={template.id}>
+                    {template.name}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
             {ownerTemplates.length === 0 ? (
-              <p className="text-xs text-destructive">{"Create and activate an Owner Feedback template before enabling automation."}</p>
-            ) : null}
+              <p className="text-xs leading-5 text-destructive">
+                {
+                  "Create and activate an Owner Feedback template before enabling automation."
+                }
+              </p>
+            ) : (
+              <p className="text-xs leading-5 text-muted-foreground">
+                {
+                  "Reports keep positive and negative feedback in separate sections while remaining compatible with existing feedback tokens."
+                }
+              </p>
+            )}
           </div>
         </div>
 
-        <div className="grid gap-3 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-3">
           <Toggle
             checked={settings.channels.includes("Email")}
-            description="Send the rendered report to the property owner email."
+            description="Send the rendered weekly report to the property owner email."
             label="Email"
             onChange={(checked) => toggleChannel("Email", checked)}
           />
           <Toggle
             checked={settings.channels.includes("SMS")}
-            description="Send the report to the property owner phone through the configured SMS provider."
+            description="Send the same report to the property owner phone through the configured SMS provider."
             label="SMS"
             onChange={(checked) => toggleChannel("SMS", checked)}
           />
           <Toggle
             checked={settings.compressWithAi}
-            description="Use the configured AI provider to compress the feedback into a concise owner summary."
-            label="Use AI compression"
+            description="Create concise positive and negative summaries before rendering the selected template."
+            label="AI summary"
             onChange={(checked) => patch({ compressWithAi: checked })}
           />
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-2">
-          <div className="space-y-2">
-            <Label>{"Negative feedback knowledge"}</Label>
-            <Textarea
-              className="min-h-36"
-              onChange={(event) => patch({ negativeKnowledge: event.target.value })}
-              placeholder="One example or rule per line"
-              value={settings.negativeKnowledge}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>{"Positive feedback knowledge"}</Label>
-            <Textarea
-              className="min-h-36"
-              onChange={(event) => patch({ positiveKnowledge: event.target.value })}
-              placeholder="One example or rule per line"
-              value={settings.positiveKnowledge}
-            />
+        <div className="rounded-xl border bg-muted/20 p-4">
+          <div className="flex items-start gap-3">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-lg border bg-background">
+              <AppIcon name="psychology" />
+            </span>
+            <div>
+              <p className="text-sm font-semibold text-foreground">
+                {"Hybrid reply classification"}
+              </p>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                {
+                  "Clear replies are classified locally. Uncertain, mixed, or unusual replies are reviewed by the configured AI provider. A reply still stops every pending email and SMS follow-up immediately, even when it is only an acknowledgement and not usable feedback."
+                }
+              </p>
+            </div>
           </div>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-2">
-            <Label>{"Auto-classify confidence"}</Label>
-            <Input
-              min={1}
-              max={100}
-              onChange={(event) => patch({ autoClassifyMinConfidence: Math.min(100, Math.max(1, Number(event.target.value) || 1)) })}
-              type="number"
-              value={settings.autoClassifyMinConfidence}
-            />
+        <details className="rounded-xl border bg-background">
+          <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-foreground">
+            {"Advanced classifier controls"}
+          </summary>
+          <div className="space-y-5 border-t p-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label>{"Local auto-classify confidence"}</Label>
+                <Input
+                  min={1}
+                  max={100}
+                  onChange={(event) =>
+                    patch({
+                      autoClassifyMinConfidence: Math.min(
+                        100,
+                        Math.max(1, Number(event.target.value) || 1)
+                      ),
+                    })
+                  }
+                  type="number"
+                  value={settings.autoClassifyMinConfidence}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>{"AI fallback floor"}</Label>
+                <Input
+                  min={0}
+                  max={100}
+                  onChange={(event) =>
+                    patch({
+                      aiFallbackMinConfidence: Math.min(
+                        100,
+                        Math.max(0, Number(event.target.value) || 0)
+                      ),
+                    })
+                  }
+                  type="number"
+                  value={settings.aiFallbackMinConfidence}
+                />
+                <p className="text-xs text-muted-foreground">
+                  {"Use 0 to let AI review every uncertain reply."}
+                </p>
+              </div>
+            </div>
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div className="space-y-2">
+                <Label>{"Optional negative examples"}</Label>
+                <Textarea
+                  className="min-h-32"
+                  onChange={(event) =>
+                    patch({ negativeKnowledge: event.target.value })
+                  }
+                  placeholder="One optional example per line"
+                  value={settings.negativeKnowledge}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>{"Optional positive examples"}</Label>
+                <Textarea
+                  className="min-h-32"
+                  onChange={(event) =>
+                    patch({ positiveKnowledge: event.target.value })
+                  }
+                  placeholder="One optional example per line"
+                  value={settings.positiveKnowledge}
+                />
+              </div>
+            </div>
           </div>
-          <div className="space-y-2">
-            <Label>{"AI fallback from confidence"}</Label>
-            <Input
-              min={0}
-              max={100}
-              onChange={(event) => patch({ aiFallbackMinConfidence: Math.min(100, Math.max(0, Number(event.target.value) || 0)) })}
-              type="number"
-              value={settings.aiFallbackMinConfidence}
-            />
-          </div>
-        </div>
+        </details>
       </CardContent>
     </Card>
   )
@@ -188,11 +319,16 @@ function Toggle({
   onChange: (checked: boolean) => void
 }) {
   return (
-    <label className="flex cursor-pointer items-start gap-3 rounded-xl border p-4">
-      <Checkbox checked={checked} onCheckedChange={(value) => onChange(value === true)} />
+    <label className="flex min-h-28 cursor-pointer items-start gap-3 rounded-xl border bg-background p-4">
+      <Checkbox
+        checked={checked}
+        onCheckedChange={(value) => onChange(value === true)}
+      />
       <span>
         <span className="block text-sm font-semibold">{label}</span>
-        <span className="mt-1 block text-xs leading-5 text-muted-foreground">{description}</span>
+        <span className="mt-1 block text-xs leading-5 text-muted-foreground">
+          {description}
+        </span>
       </span>
     </label>
   )
