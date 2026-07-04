@@ -46,7 +46,11 @@ const routeGroups = [
   },
   {
     label: "Realtors",
-    hrefs: ["/dashboard/realtor-showings", "/dashboard/showing-feedback", "/dashboard/settings#feedback-ai"],
+    hrefs: [
+      "/dashboard/realtor-showings",
+      "/dashboard/showing-feedback",
+      "/dashboard/showing-feedback-automation",
+    ],
   },
   {
     label: "Content",
