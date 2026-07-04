@@ -1,9 +1,9 @@
 "use client"
 
+import Link from "next/link"
 import { useMemo, useState } from "react"
 
 import type { ShowingFeedbackPropertySummary } from "@/@types/real-estate-api"
-import { ShowingFeedbackAutomationPanel } from "@/components/stitch/pages/agency-settings/sections/showing-feedback-automation-panel"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { AppIcon } from "@/components/ui/app-icon"
 import { Badge } from "@/components/ui/badge"
@@ -70,15 +70,15 @@ export function ShowingFeedbackDashboard() {
           <CardHeader className="gap-5 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <CardTitle className="text-2xl">Showing feedback</CardTitle>
+                <CardTitle className="text-2xl">Showing feedback registry</CardTitle>
                 <Badge variant="outline">{timeZone}</Badge>
               </div>
               <CardDescription className="mt-2 max-w-3xl leading-6">
-                Review replies by property and sentiment, manage the automatic
-                weekly report, and send owner summaries from one workspace.
+                Review every property reply, separate positive and negative
+                feedback, and prepare manual owner reports.
               </CardDescription>
             </div>
-            <div className="grid w-full gap-2 sm:grid-cols-3 lg:w-auto">
+            <div className="grid w-full gap-2 sm:grid-cols-2 lg:w-auto lg:grid-cols-4">
               <ActionButton
                 icon="add"
                 label="Add feedback"
@@ -97,6 +97,16 @@ export function ShowingFeedbackDashboard() {
                 label="Owner report"
                 onClick={() => setReportOpen(true)}
               />
+              <Button
+                className="min-w-44"
+                render={<Link href="/dashboard/showing-feedback-automation" />}
+                size="lg"
+                type="button"
+                variant="outline"
+              >
+                <AppIcon name="schedule_send" />
+                Weekly automation
+              </Button>
             </div>
           </CardHeader>
         </Card>
@@ -117,8 +127,6 @@ export function ShowingFeedbackDashboard() {
           <Metric icon="thumb_up" label="Positive" value={totals.positive} />
           <Metric icon="thumb_down" label="Negative" value={totals.negative} />
         </section>
-
-        <ShowingFeedbackAutomationPanel />
 
         <FeedbackRegistry
           fromDate={fromDate}
