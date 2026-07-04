@@ -16,9 +16,10 @@ async function forward(request: NextRequest, context: ProxyRouteContext) {
   const accessToken = cookieStore.get("access_token")?.value
   const targetUrl = `${baseUrl}/${path.join("/")}${request.nextUrl.search}`
   const contentType = request.headers.get("content-type")
-  const body = request.method === "GET" || request.method === "HEAD"
-    ? undefined
-    : await request.text()
+  const body =
+    request.method === "GET" || request.method === "HEAD"
+      ? undefined
+      : await request.arrayBuffer()
 
   const response = await fetch(targetUrl, {
     method: request.method,
@@ -30,12 +31,16 @@ async function forward(request: NextRequest, context: ProxyRouteContext) {
     cache: "no-store",
   })
 
-  const responseBody = await response.text()
+  const responseBody = await response.arrayBuffer()
   const responseContentType = response.headers.get("content-type")
+  const contentDisposition = response.headers.get("content-disposition")
 
   return new NextResponse(responseBody, {
     status: response.status,
-    headers: responseContentType ? { "Content-Type": responseContentType } : undefined,
+    headers: {
+      ...(responseContentType ? { "Content-Type": responseContentType } : {}),
+      ...(contentDisposition ? { "Content-Disposition": contentDisposition } : {}),
+    },
   })
 }
 
