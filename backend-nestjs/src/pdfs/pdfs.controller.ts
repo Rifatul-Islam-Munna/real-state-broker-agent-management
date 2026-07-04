@@ -7,14 +7,20 @@ import {
   Patch,
   Post,
   Query,
+  Req,
   UploadedFile,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBody, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
+import type { Request } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PdfsService } from './pdfs.service';
+
+type AuthenticatedRequest = Request & {
+  user?: { userId?: number; email?: string; role?: string };
+};
 
 @ApiTags('PDFs')
 @Controller('pdfs')
@@ -109,8 +115,11 @@ export class PdfsController {
 
   @Post('generate')
   @ApiOperation({ summary: 'Generate and store a completed PDF on the server' })
-  generatePdf(@Body() dto: any) {
-    return this.pdfsService.generatePdf(dto);
+  generatePdf(@Body() dto: any, @Req() request: AuthenticatedRequest) {
+    return this.pdfsService.generatePdf({
+      ...dto,
+      generatedBy: request.user?.email ?? '',
+    });
   }
 
   @Get('generations')
