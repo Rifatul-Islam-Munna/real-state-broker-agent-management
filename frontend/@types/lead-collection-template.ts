@@ -8,6 +8,7 @@ export type LeadCollectionTemplateSourceType =
 
 export type LeadCollectionSubjectMatchMode = "Contains" | "Exact" | "Regex"
 export type LeadCollectionFieldTransform = "Text" | "Email" | "Phone" | "Number" | "Date"
+export type LeadCollectionFieldSource = "EmailBody" | "LinkedPage"
 
 export type LeadCollectionExternalPageConfig = {
   enabled: boolean
@@ -20,6 +21,7 @@ export type LeadCollectionExternalPageConfig = {
 export type LeadCollectionFieldMapping = {
   field: string
   label: string
+  source?: LeadCollectionFieldSource
   sampleValue: string
   selectionStart: number
   selectionEnd: number
