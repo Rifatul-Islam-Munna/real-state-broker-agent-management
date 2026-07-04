@@ -7,6 +7,7 @@ import { paginated, toInt } from '../common/api-contract';
 import { SettingsService } from '../settings/settings.service';
 import { Lead, LeadFollowUpStatus } from '../leads/entities/lead.entity';
 import { LeadHistoryEntry, leadHistoryStatusDb } from '../leads/entities/lead-history.entity';
+import { PdfsService } from '../pdfs/pdfs.service';
 
 @Injectable()
 export class MailService {
@@ -19,6 +20,7 @@ export class MailService {
     private historyRepo: Repository<LeadHistoryEntry>,
     private leadsService: LeadsService,
     private settingsService: SettingsService,
+    private pdfsService: PdfsService,
   ) {}
 
   async findAll(page = 1, pageSize = 20, search?: string, status?: string) {
@@ -48,12 +50,18 @@ export class MailService {
     const to = `${dto.to ?? dto.email ?? ''}`.trim().toLowerCase();
     const subject = `${dto.subject ?? ''}`.trim();
     const message = `${dto.message ?? dto.body ?? ''}`.trim();
-    const attachmentUrls = this.stringList(dto.attachmentUrls);
     if (!to) throw new BadRequestException('Recipient email is required.');
     if (!subject) throw new BadRequestException('Subject is required.');
-    if (!message && attachmentUrls.length === 0) throw new BadRequestException('Message or attachment is required.');
     const config = await this.settingsService.getSmtpConfig();
     if (!config?.host || !config?.username || !config?.password) throw new BadRequestException('SMTP mail is not configured.');
+    const lead = await this.leadRepo.createQueryBuilder('lead')
+      .where('LOWER(lead.email) = :email', { email: to })
+      .getOne();
+    const generatedPdfUrls = dto.pdfTemplateId
+      ? await this.generatePdfUrls(dto.pdfTemplateId, lead)
+      : [];
+    const attachmentUrls = [...this.stringList(dto.attachmentUrls), ...generatedPdfUrls];
+    if (!message && attachmentUrls.length === 0) throw new BadRequestException('Message or attachment is required.');
     const nodemailer = require('nodemailer');
     const transporter = nodemailer.createTransport({
       host: config.host,
@@ -69,9 +77,6 @@ export class MailService {
       html: message.replace(/\n/g, '<br>'),
       attachments: attachmentUrls.map((url) => ({ filename: url.split('/').pop() || 'attachment', path: url })),
     });
-    const lead = await this.leadRepo.createQueryBuilder('lead')
-      .where('LOWER(lead.email) = :email', { email: to })
-      .getOne();
     const item = this.mailRepo.create({
       email: to,
       kind: 'Direct',
@@ -218,5 +223,16 @@ export class MailService {
 
   private messageBodyWithAttachments(message: string, attachmentUrls: string[]) {
     return [message, ...attachmentUrls.map((url) => `Attachment: ${url}`)].filter(Boolean).join('\n');
+  }
+
+  private async generatePdfUrls(templateId: number | string, lead: Lead | null) {
+    const result = await this.pdfsService.generatePdf({
+      allowMissing: true,
+      generatedBy: 'Mail Inbox',
+      leadId: lead?.id ?? null,
+      propertyId: lead?.propertyId ?? null,
+      templateId: Number(templateId),
+    });
+    return [result.downloadUrl];
   }
 }

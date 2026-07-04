@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { DocumentRepositoryItem, documentAccessDb } from './entities/document.entity';
+import { DocumentRepositoryItem, DocumentType, documentAccessDb, documentTypeDb } from './entities/document.entity';
 import { paginated, toInt } from '../common/api-contract';
 
 @Injectable()
@@ -20,7 +20,7 @@ export class DocumentsService {
     }
     if (accessLevel) qb.andWhere('doc.access_level = :accessLevel', { accessLevel: documentAccessDb(accessLevel) });
     if (category) qb.andWhere('LOWER(doc.category) = :category', { category: category.trim().toLowerCase() });
-    if (documentType) qb.andWhere('doc.document_type = :documentType', { documentType: documentType === 'System' ? 0 : documentType === 'Property' ? 1 : 2 });
+    if (documentType) qb.andWhere('doc.document_type = :documentType', { documentType: documentTypeDb(documentType) });
     if (propertyId) qb.andWhere('doc.property_id = :propertyId', { propertyId });
     if (typeof isTemplate === 'boolean') qb.andWhere('doc.is_template = :isTemplate', { isTemplate });
     if (typeof requiresSignature === 'boolean') qb.andWhere('doc.requires_signature = :requiresSignature', { requiresSignature });
@@ -68,7 +68,7 @@ export class DocumentsService {
     if (!fileUrl) throw new BadRequestException('Document file URL is required.');
     if (!mimeType) throw new BadRequestException('Document MIME type is required.');
     if (Number(dto.sizeBytes) <= 0) throw new BadRequestException('Document size must be greater than zero.');
-    const documentType = ['System', 'Property', 'Other'].includes(dto.documentType) ? dto.documentType : 'Other';
+    const documentType = Object.values(DocumentType).includes(dto.documentType) ? dto.documentType : DocumentType.Other;
     return { ...dto, title, fileName, fileUrl, fileObjectName: `${dto.fileObjectName ?? ''}`.trim() || null, mimeType, sizeBytes: Number(dto.sizeBytes), category: `${dto.category ?? ''}`.trim() || 'General', documentType, propertyId: documentType === 'Property' && dto.propertyId ? Number(dto.propertyId) : null, propertyTitle: documentType === 'Property' ? `${dto.propertyTitle ?? ''}`.trim() : '', folder: `${dto.folder ?? ''}`.trim() || 'Repository', description: `${dto.description ?? ''}`.trim(), versionLabel: `${dto.versionLabel ?? ''}`.trim() || 'v1.0', tags: [...new Set((dto.tags ?? []).map((item: any) => `${item ?? ''}`.trim()).filter(Boolean))], accessLevel: dto.accessLevel ?? 'AdminOnly', isTemplate: !!dto.isTemplate, requiresSignature: !!dto.requiresSignature };
   }
 }

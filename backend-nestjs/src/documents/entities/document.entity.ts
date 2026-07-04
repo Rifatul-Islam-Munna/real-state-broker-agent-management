@@ -7,7 +7,14 @@ import {
 } from 'typeorm';
 
 export enum DocumentAccessLevel { AdminOnly = 'AdminOnly', AgentAccess = 'AgentAccess', Public = 'Public' }
-export enum DocumentType { System = 'System', Property = 'Property', Other = 'Other' }
+export enum DocumentType {
+  System = 'System',
+  Property = 'Property',
+  Other = 'Other',
+  Lead = 'Lead',
+  Realtor = 'Realtor',
+  OwnerFeedback = 'OwnerFeedback',
+}
 const accessValues = Object.values(DocumentAccessLevel);
 export const documentAccessDb = (value: string | number) => typeof value === 'number' ? value : Math.max(0, accessValues.indexOf(value as DocumentAccessLevel));
 const documentTypeValues = Object.values(DocumentType);

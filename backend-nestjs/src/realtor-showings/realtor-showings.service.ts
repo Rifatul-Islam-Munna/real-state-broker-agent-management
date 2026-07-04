@@ -200,10 +200,15 @@ export class RealtorShowingsService {
     for (const kind of channels) {
       try {
         await this.outreachService.sendOutreach({
+          attachPropertyDocuments: direct?.attachPropertyDocuments !== false,
+          attachmentDocumentCategory: direct?.attachmentDocumentCategory,
+          attachmentDocumentType: direct?.attachmentDocumentType,
+          attachmentMode: direct?.attachmentMode,
           createdBy: this.automationCreators(showing.id)[0],
           kind,
           leadId: lead.id,
           message: this.resolveTokens(direct?.body || 'Hi {{client_name}}, this is a reminder for the showing at {{property_address}}.', lead),
+          pdfTemplateId: direct?.pdfTemplateId,
           scheduledAt: showing.outreachAt?.toISOString() ?? null,
           title: this.resolveTokens(direct?.subject || 'Property showing follow-up', lead),
         });
@@ -226,10 +231,15 @@ export class RealtorShowingsService {
     for (const kind of channels) {
       try {
         await this.outreachService.sendOutreach({
+          attachPropertyDocuments: followUp.attachPropertyDocuments !== false,
+          attachmentDocumentCategory: followUp.attachmentDocumentCategory,
+          attachmentDocumentType: followUp.attachmentDocumentType,
+          attachmentMode: followUp.attachmentMode,
           createdBy: this.automationCreators(showing.id)[1],
           kind,
           leadId: lead.id,
           message: this.resolveTokens(followUp.body || '', lead),
+          pdfTemplateId: followUp.pdfTemplateId,
           scheduledAt: followUpAt.toISOString(),
           title: this.resolveTokens(followUp.subject || followUp.name || 'Showing follow-up', lead),
         });

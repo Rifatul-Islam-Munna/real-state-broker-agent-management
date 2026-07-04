@@ -65,10 +65,14 @@ export class LeadIntakeAutomationService {
         try {
           const result = await this.outreach.sendOutreach({
             attachPropertyDocuments: template.attachPropertyDocuments !== false,
+            attachmentDocumentCategory: template.attachmentDocumentCategory,
+            attachmentDocumentType: template.attachmentDocumentType,
+            attachmentMode: template.attachmentMode,
             createdBy,
             kind,
             leadId: lead.id,
             message: this.render(template.body, lead),
+            pdfTemplateId: template.pdfTemplateId,
             templateId: template.id,
             title: this.render(template.subject || template.name, lead),
           });

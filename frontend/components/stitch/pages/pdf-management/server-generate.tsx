@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 
 import type { PdfResolveResult } from "@/@types/pdf-management"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useAgentUsers, useLeads, useProperties } from "@/hooks/use-real-estate-api"
 import {
@@ -20,11 +21,28 @@ import {
 
 import { PdfShell } from "./shell"
 
+type ReportRange = "custom" | "daily" | "weekly" | "monthly"
+type ReportSource = "" | "leads" | "showings" | "feedback"
+
+const reportTableLabels: Record<Exclude<ReportSource, "">, string> = {
+  leads: "Lead table",
+  showings: "Showing table",
+  feedback: "Feedback table",
+}
+
 export function PdfServerGenerationWorkspace({ initialTemplateId }: { initialTemplateId?: number }) {
   const [templateId, setTemplateId] = useState(initialTemplateId ? String(initialTemplateId) : "")
   const [propertyId, setPropertyId] = useState("")
   const [leadId, setLeadId] = useState("")
   const [agentId, setAgentId] = useState("")
+  const [reportSource, setReportSource] = useState<ReportSource>("")
+  const [reportRange, setReportRange] = useState<ReportRange>("custom")
+  const [reportFromDate, setReportFromDate] = useState("")
+  const [reportToDate, setReportToDate] = useState("")
+  const [templateSearch, setTemplateSearch] = useState("")
+  const [propertySearch, setPropertySearch] = useState("")
+  const [leadSearch, setLeadSearch] = useState("")
+  const [agentSearch, setAgentSearch] = useState("")
   const [manualValues, setManualValues] = useState<Record<string, string>>({})
   const [resolved, setResolved] = useState<PdfResolveResult | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
@@ -56,6 +74,40 @@ export function PdfServerGenerationWorkspace({ initialTemplateId }: { initialTem
     })
   }
 
+  function formatDateInput(date: Date) {
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, "0")
+    const day = String(date.getDate()).padStart(2, "0")
+    return `${year}-${month}-${day}`
+  }
+
+  function updateReportRange(value: ReportRange) {
+    clearPreview()
+    setResolved(null)
+    setReportRange(value)
+    const today = new Date()
+    const from = new Date(today)
+    const to = new Date(today)
+    if (value === "daily") {
+      setReportFromDate(formatDateInput(today))
+      setReportToDate(formatDateInput(today))
+      return
+    }
+    if (value === "weekly") {
+      from.setDate(today.getDate() - today.getDay())
+      to.setDate(from.getDate() + 6)
+      setReportFromDate(formatDateInput(from))
+      setReportToDate(formatDateInput(to))
+      return
+    }
+    if (value === "monthly") {
+      from.setDate(1)
+      to.setMonth(today.getMonth() + 1, 0)
+      setReportFromDate(formatDateInput(from))
+      setReportToDate(formatDateInput(to))
+    }
+  }
+
   async function loadExactPreview(overrides: Record<string, string>) {
     const response = await fetch("/api/proxy/pdfs/preview", {
       method: "POST",
@@ -66,6 +118,9 @@ export function PdfServerGenerationWorkspace({ initialTemplateId }: { initialTem
         leadId: leadId ? Number(leadId) : null,
         agentId: agentId ? Number(agentId) : null,
         manualValues: overrides,
+        reportSource: hasReportTables ? reportSource : "",
+        reportFromDate: reportFromDate || null,
+        reportToDate: reportToDate || null,
       }),
     })
     if (!response.ok) {
@@ -97,6 +152,9 @@ export function PdfServerGenerationWorkspace({ initialTemplateId }: { initialTem
       leadId: leadId ? Number(leadId) : null,
       agentId: agentId ? Number(agentId) : null,
       manualValues: overrides,
+      reportSource: hasReportTables ? reportSource : "",
+      reportFromDate: reportFromDate || null,
+      reportToDate: reportToDate || null,
     })
     if (result.error || !result.data) {
       setError(result.error?.message ?? "Unable to resolve the PDF.")
@@ -121,6 +179,9 @@ export function PdfServerGenerationWorkspace({ initialTemplateId }: { initialTem
       leadId: leadId ? Number(leadId) : null,
       agentId: agentId ? Number(agentId) : null,
       manualValues,
+      reportSource: hasReportTables ? reportSource : "",
+      reportFromDate: reportFromDate || null,
+      reportToDate: reportToDate || null,
     })
     if (result.error || !result.data) {
       setError(result.error?.message ?? "Unable to generate the PDF.")
@@ -144,6 +205,40 @@ export function PdfServerGenerationWorkspace({ initialTemplateId }: { initialTem
   const leads = leadsQuery.data?.items ?? []
   const agents = agentsQuery.data ?? []
   const missingVariables = resolved?.missingVariables ?? []
+  const reportTableOptions = useMemo(() => {
+    const schemas = Array.isArray(selectedTemplate?.templateJson?.schemas)
+      ? selectedTemplate.templateJson.schemas.flat()
+      : []
+    return [...new Set(schemas
+      .map((schema) => {
+        const name = `${schema?.name ?? ""}`.trim()
+        const key = name.match(/^\{\{\s*([^}]+?)\s*\}\}$/)?.[1]?.trim() ?? name
+        if (schema?.type !== "table") return null
+        if (key === "report.leads.table") return "leads"
+        if (key === "report.showings.table") return "showings"
+        if (key === "report.feedback.table") return "feedback"
+        return null
+      })
+      .filter(Boolean) as Array<Exclude<ReportSource, "">>)]
+  }, [selectedTemplate?.templateJson])
+  const hasReportTables = reportTableOptions.length > 0
+  const filteredTemplates = templateOptions.filter((item) =>
+    `${item.name} ${item.category}`.toLowerCase().includes(templateSearch.trim().toLowerCase()),
+  )
+  const filteredProperties = properties.filter((item) =>
+    `${item.title} ${item.location ?? ""}`.toLowerCase().includes(propertySearch.trim().toLowerCase()),
+  )
+  const filteredLeads = leads.filter((item) =>
+    `${item.name} ${item.email ?? ""} ${item.phone ?? ""} ${item.property ?? ""}`.toLowerCase().includes(leadSearch.trim().toLowerCase()),
+  )
+  const filteredAgents = agents.filter((item) =>
+    item.fullName.toLowerCase().includes(agentSearch.trim().toLowerCase()),
+  )
+
+  useEffect(() => {
+    if (!hasReportTables || !reportSource || reportTableOptions.includes(reportSource)) return
+    setReportSource("")
+  }, [hasReportTables, reportSource, reportTableOptions])
 
   useEffect(() => {
     if (!initialTemplateId || !templateId || autoResolvedTemplateId === templateId || resolveMutation.isPending) return
@@ -164,21 +259,82 @@ export function PdfServerGenerationWorkspace({ initialTemplateId }: { initialTem
             <CardHeader><CardTitle>Autofill source</CardTitle><CardDescription>Select the records used by this document.</CardDescription></CardHeader>
             <CardContent className="space-y-4">
               <Select modal={false} onValueChange={(value) => { clearPreview(); setResolved(null); setTemplateId(value) }} value={templateId}>
+                <Label className="text-xs">Template</Label>
                 <SelectTrigger className="w-full"><SelectValue placeholder="Choose template" /></SelectTrigger>
-                <SelectContent>{templateOptions.map((item) => <SelectItem key={item.id} value={String(item.id)}>{item.name}</SelectItem>)}</SelectContent>
+                <SelectContent>
+                  <Input className="mb-2 h-8" onChange={(event) => setTemplateSearch(event.target.value)} placeholder="Search template" value={templateSearch} />
+                  {filteredTemplates.map((item) => <SelectItem key={item.id} value={String(item.id)}>{item.name}</SelectItem>)}
+                </SelectContent>
               </Select>
               <Select modal={false} onValueChange={(value) => { clearPreview(); setResolved(null); setPropertyId(value === "none" ? "" : value) }} value={propertyId || "none"}>
+                <Label className="text-xs">Property</Label>
                 <SelectTrigger className="w-full"><SelectValue placeholder="Choose property" /></SelectTrigger>
-                <SelectContent><SelectItem value="none">No property</SelectItem>{properties.map((item) => <SelectItem key={item.id} value={String(item.id)}>{item.title}</SelectItem>)}</SelectContent>
+                <SelectContent>
+                  <Input className="mb-2 h-8" onChange={(event) => setPropertySearch(event.target.value)} placeholder="Search property" value={propertySearch} />
+                  <SelectItem value="none">No property</SelectItem>
+                  {filteredProperties.map((item) => <SelectItem key={item.id} value={String(item.id)}>{item.title}</SelectItem>)}
+                </SelectContent>
               </Select>
               <Select modal={false} onValueChange={(value) => { clearPreview(); setResolved(null); setLeadId(value === "none" ? "" : value) }} value={leadId || "none"}>
+                <Label className="text-xs">Tenant or lead</Label>
                 <SelectTrigger className="w-full"><SelectValue placeholder="Choose tenant or lead" /></SelectTrigger>
-                <SelectContent><SelectItem value="none">No tenant or lead</SelectItem>{leads.map((item) => <SelectItem key={item.id} value={String(item.id)}>{item.name}</SelectItem>)}</SelectContent>
+                <SelectContent>
+                  <Input className="mb-2 h-8" onChange={(event) => setLeadSearch(event.target.value)} placeholder="Search lead" value={leadSearch} />
+                  <SelectItem value="none">No tenant or lead</SelectItem>
+                  {filteredLeads.map((item) => <SelectItem key={item.id} value={String(item.id)}>{item.name}</SelectItem>)}
+                </SelectContent>
               </Select>
               <Select modal={false} onValueChange={(value) => { clearPreview(); setResolved(null); setAgentId(value === "none" ? "" : value) }} value={agentId || "none"}>
+                <Label className="text-xs">Agent</Label>
                 <SelectTrigger className="w-full"><SelectValue placeholder="Choose agent" /></SelectTrigger>
-                <SelectContent><SelectItem value="none">Use assigned agent</SelectItem>{agents.map((item) => <SelectItem key={item.id} value={String(item.id)}>{item.fullName}</SelectItem>)}</SelectContent>
+                <SelectContent>
+                  <Input className="mb-2 h-8" onChange={(event) => setAgentSearch(event.target.value)} placeholder="Search agent" value={agentSearch} />
+                  <SelectItem value="none">Use assigned agent</SelectItem>
+                  {filteredAgents.map((item) => <SelectItem key={item.id} value={String(item.id)}>{item.fullName}</SelectItem>)}
+                </SelectContent>
               </Select>
+              {hasReportTables ? (
+                <>
+                  <Select modal={false} onValueChange={(value) => { clearPreview(); setResolved(null); setReportSource(value === "none" ? "" : (value as ReportSource)) }} value={reportSource || "none"}>
+                    <Label className="text-xs">Report table</Label>
+                    <SelectTrigger className="w-full"><SelectValue placeholder="Report table data" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">No report table</SelectItem>
+                      {reportTableOptions.map((source) => (
+                        <SelectItem key={source} value={source}>{reportTableLabels[source]}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select modal={false} onValueChange={(value) => updateReportRange(value as ReportRange)} value={reportRange}>
+                    <Label className="text-xs">Report date range</Label>
+                    <SelectTrigger className="w-full"><SelectValue placeholder="Report date range" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="daily">Daily</SelectItem>
+                      <SelectItem value="weekly">Weekly</SelectItem>
+                      <SelectItem value="monthly">Monthly</SelectItem>
+                      <SelectItem value="custom">Date to date</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-1">
+                      <Label className="text-xs">From date</Label>
+                      <Input
+                        onChange={(event) => { clearPreview(); setResolved(null); setReportRange("custom"); setReportFromDate(event.target.value) }}
+                        type="date"
+                        value={reportFromDate}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">To date</Label>
+                      <Input
+                        onChange={(event) => { clearPreview(); setResolved(null); setReportRange("custom"); setReportToDate(event.target.value) }}
+                        type="date"
+                        value={reportToDate}
+                      />
+                    </div>
+                  </div>
+                </>
+              ) : null}
               <Button disabled={!templateId || resolveMutation.isPending} onClick={() => void resolvePdf()}>
                 <AppIcon name="visibility" />
                 Resolve and preview

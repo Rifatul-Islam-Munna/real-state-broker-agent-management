@@ -14,6 +14,7 @@ import { LeadHistoryEntry } from '../leads/entities/lead-history.entity';
 import { Property } from '../properties/entities/property.entity';
 import { SettingsModule } from '../settings/settings.module';
 import { ShowingFeedbackModule } from '../showing-feedback/showing-feedback.module';
+import { PdfsModule } from '../pdfs/pdfs.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { ShowingFeedbackModule } from '../showing-feedback/showing-feedback.modu
     LeadsModule,
     SettingsModule,
     ShowingFeedbackModule,
+    PdfsModule,
   ],
   providers: [
     MailService,

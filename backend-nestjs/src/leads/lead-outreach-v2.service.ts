@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { DealPipeline } from '../deals/entities/deal-pipeline.entity';
 import { DocumentRepositoryItem } from '../documents/entities/document.entity';
 import { MailInboxItem, MailInboxKind, MailInboxStatus } from '../mail/entities/mail.entity';
+import { PdfsService } from '../pdfs/pdfs.service';
 import { Property } from '../properties/entities/property.entity';
 import { SettingsService } from '../settings/settings.service';
 import { SmsService } from '../sms/sms.service';
@@ -22,8 +23,9 @@ export class LeadOutreachV2Service extends LeadOutreachService {
     @InjectRepository(MailInboxItem) private readonly mailRepo: Repository<MailInboxItem>,
     private readonly v2Settings: SettingsService,
     smsService: SmsService,
+    pdfsService: PdfsService,
   ) {
-    super(v2LeadRepo, v2HistoryRepo, dealRepo, documentRepo, propertyRepo, v2Settings, smsService);
+    super(v2LeadRepo, v2HistoryRepo, dealRepo, documentRepo, propertyRepo, v2Settings, smsService, pdfsService);
   }
 
   override async sendOutreach(dto: any) {

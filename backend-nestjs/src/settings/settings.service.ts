@@ -244,7 +244,11 @@ export class SettingsService {
         gapDays: this.clampInt(item?.gapDays, fallbackItem.gapDays ?? 0, 0, 365),
         isActive: item?.isActive !== false,
         attachPropertyDocuments: item?.attachPropertyDocuments !== false,
+        attachmentDocumentCategory: this.loose(item?.attachmentDocumentCategory),
+        attachmentDocumentType: ['System', 'Property', 'Other', 'Lead', 'Realtor', 'OwnerFeedback'].includes(item?.attachmentDocumentType) ? item.attachmentDocumentType : '',
+        attachmentMode: ['none', 'property', 'pdf', 'document'].includes(item?.attachmentMode) ? item.attachmentMode : (item?.attachPropertyDocuments !== false ? 'property' : 'none'),
         audience: item?.audience === 'OwnerFeedback' ? 'OwnerFeedback' : item?.audience === 'Realtor' || item?.id === 'showing-confirmation' ? 'Realtor' : 'Lead',
+        pdfTemplateId: this.loose(item?.pdfTemplateId),
       };
     });
     const defaultOwnerTemplate = fallback.communicationTemplates.find((item: any) => item.audience === 'OwnerFeedback');
@@ -358,7 +362,7 @@ export class SettingsService {
           body: "Hello {{client_name}}, Thank you for your interest in {{property_address}}. My name is {{agent_name}} and I'll be your primary point of contact. When is a good time for a quick call? Best regards, {{agency_name}}",
           channels: ['Email', 'SMS'],
           variableTokens: ['{{client_name}}', '{{property_address}}', '{{agent_name}}', '{{agency_name}}'],
-          sequenceType: 'Direct', gapDays: 0, isActive: true, attachPropertyDocuments: true, audience: 'Lead',
+          sequenceType: 'Direct', gapDays: 0, isActive: true, attachPropertyDocuments: true, attachmentMode: 'property', attachmentDocumentType: '', attachmentDocumentCategory: '', pdfTemplateId: '', audience: 'Lead',
         },
         {
           id: 'showing-confirmation',
@@ -367,13 +371,13 @@ export class SettingsService {
           body: 'Hi {{client_name}}, your showing for {{property_address}} is confirmed for {{showing_time}}. Reach out to {{agent_name}} if you need to reschedule.',
           channels: ['Email', 'SMS'],
           variableTokens: ['{{client_name}}', '{{property_address}}', '{{showing_time}}', '{{agent_name}}'],
-          sequenceType: 'FollowUp1', gapDays: 2, isActive: true, attachPropertyDocuments: true, audience: 'Realtor',
+          sequenceType: 'FollowUp1', gapDays: 2, isActive: true, attachPropertyDocuments: true, attachmentMode: 'property', attachmentDocumentType: '', attachmentDocumentCategory: '', pdfTemplateId: '', audience: 'Realtor',
         },
         {
           id: 'contract-executed', name: 'Contract Executed', subject: 'Contract executed for {{property_address}}',
           body: 'Hello {{client_name}}, the contract for {{property_address}} has been executed successfully. {{agent_name}} will guide you through the next steps and timeline.',
           channels: ['Email'], variableTokens: ['{{client_name}}', '{{property_address}}', '{{agent_name}}'],
-          sequenceType: 'FollowUp2', gapDays: 5, isActive: true, attachPropertyDocuments: true, audience: 'Lead',
+          sequenceType: 'FollowUp2', gapDays: 5, isActive: true, attachPropertyDocuments: true, attachmentMode: 'property', attachmentDocumentType: '', attachmentDocumentCategory: '', pdfTemplateId: '', audience: 'Lead',
         },
         {
           id: 'closing-reminder', name: 'Closing Reminder', subject: 'Closing reminder for {{property_address}}',
@@ -407,7 +411,7 @@ export class SettingsService {
           body: 'Hello, here is the showing feedback received for {{property_address}} from {{fromdate}} to {{todate}}.\n\n{{feedback_summary}}\n\n{{feedback1}}\n{{feedback2}}\n{{feedback3}}\n{{feedback4}}\n{{feedback5}}',
           channels: ['Email', 'SMS'],
           variableTokens: ['{{property_address}}', '{{fromdate}}', '{{todate}}', '{{feedback_summary}}', '{{feedback1}}'],
-          sequenceType: 'Direct', gapDays: 0, isActive: true, attachPropertyDocuments: false, audience: 'OwnerFeedback',
+          sequenceType: 'Direct', gapDays: 0, isActive: true, attachPropertyDocuments: false, attachmentMode: 'none', attachmentDocumentType: '', attachmentDocumentCategory: '', pdfTemplateId: '', audience: 'OwnerFeedback',
         },
       ],
     };

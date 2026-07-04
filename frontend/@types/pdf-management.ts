@@ -77,6 +77,9 @@ export type PdfResolveInput = {
   leadId?: number | null
   agentId?: number | null
   manualValues?: Record<string, string>
+  reportSource?: "" | "leads" | "showings" | "feedback"
+  reportFromDate?: string | null
+  reportToDate?: string | null
 }
 
 export type PdfMissingVariable = {

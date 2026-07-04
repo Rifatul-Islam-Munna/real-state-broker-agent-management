@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react"
 import type {
   AgencyCommunicationChannel,
   AgencyCommunicationTemplateItem,
+  DocumentType,
 } from "@/@types/real-estate-api"
 import { AppIcon } from "@/components/ui/app-icon"
 import { Badge } from "@/components/ui/badge"
@@ -35,8 +36,15 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet"
 import { Textarea } from "@/components/ui/textarea"
+import { usePdfTemplates } from "@/hooks/use-pdfs-api"
+import {
+  defaultDocumentCategories,
+  documentTypeOptions,
+  formatDocumentType,
+} from "@/components/stitch/pages/document-management-templates/sections/document-repository-shared"
 
 type TemplateAudience = "Lead" | "Realtor" | "OwnerFeedback"
+type AttachmentMode = "none" | "property" | "pdf" | "document"
 type EditorState =
   | { mode: "create"; audience: TemplateAudience }
   | { mode: "edit"; id: string }
@@ -66,6 +74,9 @@ function newTemplate(audience: TemplateAudience): AgencyCommunicationTemplateIte
   return {
     audience,
     attachPropertyDocuments: !owner,
+    attachmentDocumentCategory: "",
+    attachmentDocumentType: "",
+    attachmentMode: owner ? "none" : "property",
     body: owner
       ? "Showing feedback for {{property_address}} from {{fromdate}} to {{todate}}:\n\n{{feedback_summary}}\n{{feedback1}}\n{{feedback2}}\n{{feedback3}}"
       : "Hi {{client_name}}, thanks for your interest in {{property_address}}. Reply here and our team will help with the next step.",
@@ -79,6 +90,7 @@ function newTemplate(audience: TemplateAudience): AgencyCommunicationTemplateIte
       ? "Showing feedback: {{property_address}}"
       : "Property update: {{property_address}}",
     variableTokens: owner ? ownerTokens : leadTokens,
+    pdfTemplateId: "",
   }
 }
 
@@ -249,6 +261,14 @@ function TemplateSheet({
   template: AgencyCommunicationTemplateItem | null
 }) {
   const [draft, setDraft] = useState<AgencyCommunicationTemplateItem | null>(template)
+  const [pdfSearch, setPdfSearch] = useState("")
+  const pdfTemplatesQuery = usePdfTemplates({ page: 1, pageSize: 200, isActive: true })
+  const pdfTemplates = useMemo(() => {
+    const search = pdfSearch.trim().toLowerCase()
+    return (pdfTemplatesQuery.data?.items ?? [])
+      .filter((item) => item.status !== "Archived")
+      .filter((item) => !search || `${item.name} ${item.category}`.toLowerCase().includes(search))
+  }, [pdfSearch, pdfTemplatesQuery.data?.items])
 
   useEffect(() => {
     setDraft(template)
@@ -269,6 +289,20 @@ function TemplateSheet({
         channels: checked
           ? Array.from(new Set([...(current.channels ?? []), channel]))
           : (current.channels ?? []).filter((item) => item !== channel),
+      }
+    })
+  }
+
+  function setAttachmentMode(mode: AttachmentMode) {
+    setDraft((current) => {
+      if (!current) return current
+      return {
+        ...current,
+        attachPropertyDocuments: mode === "property",
+        attachmentDocumentCategory: mode === "document" ? (current.attachmentDocumentCategory ?? "") : "",
+        attachmentDocumentType: mode === "document" ? (current.attachmentDocumentType ?? "") : "",
+        attachmentMode: mode,
+        pdfTemplateId: mode === "pdf" ? (current.pdfTemplateId ?? "") : "",
       }
     })
   }
@@ -343,11 +377,6 @@ function TemplateSheet({
                 label="Template active"
                 onChange={(checked) => update("isActive", checked)}
               />
-              <Toggle
-                checked={draft.attachPropertyDocuments !== false}
-                label="Attach property documents"
-                onChange={(checked) => update("attachPropertyDocuments", checked)}
-              />
               {(["Email", "SMS", "WhatsApp"] as AgencyCommunicationChannel[]).map((channel) => (
                 <Toggle
                   checked={(draft.channels ?? []).includes(channel)}
@@ -356,6 +385,78 @@ function TemplateSheet({
                   onChange={(checked) => toggleChannel(channel, checked)}
                 />
               ))}
+            </div>
+
+            <div className="space-y-3 rounded-xl border p-3">
+              <div className="space-y-2">
+                <Label>{"Attachment"}</Label>
+                <Select
+                  onValueChange={(value) => setAttachmentMode(value as AttachmentMode)}
+                  value={draft.attachmentMode ?? (draft.attachPropertyDocuments !== false ? "property" : "none")}
+                >
+                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">{"No attachment"}</SelectItem>
+                    <SelectItem value="property">{"Auto attach property documents"}</SelectItem>
+                    <SelectItem value="pdf">{"Auto generate custom PDF"}</SelectItem>
+                    <SelectItem value="document">{"Attach saved document category"}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {(draft.attachmentMode ?? (draft.attachPropertyDocuments !== false ? "property" : "none")) === "pdf" ? (
+                <div className="space-y-2">
+                  <Label>{"PDF template"}</Label>
+                  <Select
+                    onValueChange={(value) => update("pdfTemplateId", value === "none" ? "" : value)}
+                    value={draft.pdfTemplateId || "none"}
+                  >
+                    <SelectTrigger className="w-full"><SelectValue placeholder="Choose PDF template" /></SelectTrigger>
+                    <SelectContent>
+                      <Input className="mb-2 h-8" onChange={(event) => setPdfSearch(event.target.value)} placeholder="Search PDF template" value={pdfSearch} />
+                      <SelectItem value="none">{"No PDF selected"}</SelectItem>
+                      {pdfTemplates.map((item) => (
+                        <SelectItem key={item.id} value={String(item.id)}>{`${item.name} - ${item.category}`}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : null}
+
+              {(draft.attachmentMode ?? (draft.attachPropertyDocuments !== false ? "property" : "none")) === "document" ? (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>{"Document type"}</Label>
+                    <Select
+                      onValueChange={(value) => update("attachmentDocumentType", value === "any" ? "" : (value as DocumentType))}
+                      value={draft.attachmentDocumentType || "any"}
+                    >
+                      <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="any">{"Any type"}</SelectItem>
+                        {documentTypeOptions.map((item) => (
+                          <SelectItem key={item} value={item}>{formatDocumentType(item)}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>{"Category"}</Label>
+                    <Select
+                      onValueChange={(value) => update("attachmentDocumentCategory", value === "any" ? "" : value)}
+                      value={draft.attachmentDocumentCategory || "any"}
+                    >
+                      <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="any">{"Any category"}</SelectItem>
+                        {defaultDocumentCategories.map((item) => (
+                          <SelectItem key={item} value={item}>{item}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              ) : null}
             </div>
 
             <div className="space-y-2">

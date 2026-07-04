@@ -939,6 +939,16 @@ export function useConvertMailInboxToLead() {
   })
 }
 
+export function useMailInboxItem(id?: number) {
+  return useQueryWrapper<MailInboxItem>(
+    ["mail-inbox-item", id],
+    `/mail-inbox?id=${id ?? ""}`,
+    { ...defaultQueryOptions, enabled: Number.isFinite(id) && Number(id) > 0 },
+    0,
+    "mail-inbox-item",
+  )
+}
+
 export function useManagedProperties(params?: QueryParams) {
   return useQueryWrapper<PaginatedResult<PropertyItem>>(
     ["managed-properties", params],
@@ -967,6 +977,16 @@ export function useSmsMessages(params?: QueryParams) {
     defaultQueryOptions,
     0,
     "sms-messages",
+  )
+}
+
+export function useSmsMessageItem(id?: number) {
+  return useQueryWrapper<SmsMessageItem>(
+    ["sms-message-item", id],
+    `/sms-inbox?id=${id ?? ""}`,
+    { ...defaultQueryOptions, enabled: Number.isFinite(id) && Number(id) > 0 },
+    0,
+    "sms-message-item",
   )
 }
 

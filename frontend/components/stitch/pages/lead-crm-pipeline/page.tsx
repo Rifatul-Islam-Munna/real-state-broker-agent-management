@@ -161,8 +161,13 @@ export function LeadCrmPipelinePage() {
       kind: mode === "email" ? "Email" : mode === "message" ? "Sms" : "Call",
       title: values.title.trim(),
       message: values.message.trim(),
+      attachmentDocumentCategory: values.attachmentDocumentCategory,
+      attachmentDocumentType: values.attachmentDocumentType,
+      attachmentMode: values.attachmentMode,
       attachPropertyDocuments: values.attachPropertyDocuments !== false,
+      mediaUrls: values.mediaUrls,
       templateId: values.templateId,
+      pdfTemplateId: values.pdfTemplateId,
       scheduledAt: values.scheduledAt || undefined,
       createdBy: portalRoutes.kind === "agent" ? "Agent" : "Admin",
     })

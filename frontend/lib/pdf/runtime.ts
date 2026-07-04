@@ -2,6 +2,14 @@ import type { Template } from "@pdfme/common"
 
 export const PDF_RUNTIME_VERSION = 2
 
+export const PDF_PAGE_SIZES = [
+  { label: "A4 portrait", value: "a4-portrait", width: 210, height: 297 },
+  { label: "A4 landscape", value: "a4-landscape", width: 297, height: 210 },
+  { label: "Letter portrait", value: "letter-portrait", width: 216, height: 279 },
+  { label: "Letter landscape", value: "letter-landscape", width: 279, height: 216 },
+  { label: "Legal portrait", value: "legal-portrait", width: 216, height: 356 },
+]
+
 export function createBlankTemplate(): Template {
   return {
     basePdf: { width: 210, height: 297, padding: [10, 10, 10, 10] },
@@ -56,6 +64,12 @@ export function addTextField(template: Template, key: string, label: string) {
 export function addBlankPage(template: Template) {
   const next = cloneTemplate(template)
   next.schemas = [...(next.schemas.length ? next.schemas : [[]]), []]
+  return next
+}
+
+export function setTemplatePageSize(template: Template, width: number, height: number) {
+  const next = cloneTemplate(template)
+  next.basePdf = { width, height, padding: [10, 10, 10, 10] } as never
   return next
 }
 

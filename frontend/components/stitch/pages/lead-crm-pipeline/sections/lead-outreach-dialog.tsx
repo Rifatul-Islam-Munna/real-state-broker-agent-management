@@ -12,8 +12,9 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { usePortalCurrentUser, type LeadItem } from "@/hooks/use-real-estate-api"
+import { useDocumentRepository, usePortalCurrentUser, type LeadItem } from "@/hooks/use-real-estate-api"
 import { useLeadOutreachTemplates } from "@/hooks/use-lead-outreach-api"
+import { usePdfTemplates } from "@/hooks/use-pdfs-api"
 
 import { leadButtonClass } from "./lead-shared"
 import type { LeadOutreachComposerValues, LeadOutreachMode } from "./lead-outreach-types"
@@ -54,7 +55,13 @@ export function LeadOutreachDialog({
 }) {
   const currentUserQuery = usePortalCurrentUser()
   const templatesQuery = useLeadOutreachTemplates()
+  const pdfTemplatesQuery = usePdfTemplates({ page: 1, pageSize: 200, isActive: true })
+  const documentsQuery = useDocumentRepository({ page: 1, pageSize: 300 })
   const [templateId, setTemplateId] = useState(emptyTemplateValue)
+  const [pdfTemplateId, setPdfTemplateId] = useState(emptyTemplateValue)
+  const [pdfSearch, setPdfSearch] = useState("")
+  const [documentSearch, setDocumentSearch] = useState("")
+  const [selectedDocumentIds, setSelectedDocumentIds] = useState<number[]>([])
   const [values, setValues] = useState<LeadOutreachComposerValues>({
     title: "",
     message: "",
@@ -68,6 +75,10 @@ export function LeadOutreachDialog({
     }
 
     setTemplateId(emptyTemplateValue)
+    setPdfTemplateId(emptyTemplateValue)
+    setPdfSearch("")
+    setDocumentSearch("")
+    setSelectedDocumentIds([])
     setValues({ title: "", message: "", scheduledAt: "" })
     setError(null)
   }, [lead?.id, mode, open])
@@ -91,6 +102,28 @@ export function LeadOutreachDialog({
       return false
     }).sort((left, right) => (sequenceRank[left.sequenceType ?? "Direct"] ?? 99) - (sequenceRank[right.sequenceType ?? "Direct"] ?? 99))
   }, [mode, templatesQuery.data])
+
+  const pdfTemplates = useMemo(() => {
+    const search = pdfSearch.trim().toLowerCase()
+    return (pdfTemplatesQuery.data?.items ?? [])
+      .filter((template) => template.status !== "Archived")
+      .filter((template) => !search || `${template.name} ${template.category}`.toLowerCase().includes(search))
+  }, [pdfSearch, pdfTemplatesQuery.data?.items])
+
+  const allDocuments = documentsQuery.data?.items ?? []
+  const documents = useMemo(() => {
+    const search = documentSearch.trim().toLowerCase()
+    return allDocuments
+      .filter((doc) => !search || `${doc.title} ${doc.category} ${doc.documentType}`.toLowerCase().includes(search))
+  }, [allDocuments, documentSearch])
+
+  const selectedDocumentUrls = useMemo(
+    () => allDocuments
+      .filter((doc) => selectedDocumentIds.includes(doc.id))
+      .map((doc) => doc.fileUrl)
+      .filter(Boolean),
+    [allDocuments, selectedDocumentIds],
+  )
 
   if (!lead || !mode) {
     return null
@@ -153,7 +186,11 @@ export function LeadOutreachDialog({
 
                 setValues((current) => ({
                   ...current,
+                  attachmentDocumentCategory: selectedTemplate.attachmentDocumentCategory ?? "",
+                  attachmentDocumentType: selectedTemplate.attachmentDocumentType ?? "",
+                  attachmentMode: selectedTemplate.attachmentMode ?? (selectedTemplate.attachPropertyDocuments !== false ? "property" : "none"),
                   attachPropertyDocuments: selectedTemplate.attachPropertyDocuments !== false,
+                  pdfTemplateId: selectedTemplate.pdfTemplateId ?? current.pdfTemplateId,
                   title: nextTitle,
                   message: resolveTemplateTokens(selectedTemplate.body, lead, agentName),
                   templateId: selectedTemplate.id,
@@ -169,6 +206,65 @@ export function LeadOutreachDialog({
                 {filteredTemplates.map((template) => (
                   <SelectItem key={template.id} value={template.id}>
                     {`${template.name} - ${template.sequenceType ?? "Direct"} (${template.gapDays ?? 0}d)`}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : null}
+
+          {mode !== "call" ? (
+            <div className="space-y-2 border border-slate-200 p-3 dark:border-white/10">
+              <p className="text-xs font-bold uppercase tracking-wide text-slate-500">{"Attach saved documents"}</p>
+              <Input
+                className="rounded-none border-slate-200 dark:border-white/10"
+                onChange={(event) => setDocumentSearch(event.target.value)}
+                placeholder="Search docs by title, category, type"
+                value={documentSearch}
+              />
+              <div className="max-h-44 space-y-2 overflow-auto pr-1">
+                {documents.map((doc) => (
+                  <label className="flex items-start gap-2 text-sm" key={doc.id}>
+                    <input
+                      checked={selectedDocumentIds.includes(doc.id)}
+                      className="mt-1"
+                      onChange={(event) => setSelectedDocumentIds((current) =>
+                        event.target.checked ? [...current, doc.id] : current.filter((id) => id !== doc.id),
+                      )}
+                      type="checkbox"
+                    />
+                    <span>
+                      <span className="font-semibold">{doc.title}</span>
+                      <span className="block text-xs text-slate-500">{`${doc.documentType} - ${doc.category}`}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {mode !== "call" ? (
+            <Select
+              modal={false}
+              onValueChange={(nextValue) => {
+                setPdfTemplateId(nextValue ?? emptyTemplateValue)
+                setError(null)
+              }}
+              value={pdfTemplateId}
+            >
+              <SelectTrigger className="rounded-none border-slate-200 bg-white dark:border-white/10 dark:bg-slate-900">
+                <SelectValue placeholder="Attach generated PDF" />
+              </SelectTrigger>
+              <SelectContent>
+                <Input
+                  className="mb-2 h-8 rounded-none"
+                  onChange={(event) => setPdfSearch(event.target.value)}
+                  placeholder="Search PDF template"
+                  value={pdfSearch}
+                />
+                <SelectItem value={emptyTemplateValue}>{"No generated PDF"}</SelectItem>
+                {pdfTemplates.map((template) => (
+                  <SelectItem key={template.id} value={String(template.id)}>
+                    {`${template.name} - ${template.category}`}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -224,8 +320,13 @@ export function LeadOutreachDialog({
                 title: values.title.trim(),
                 message: values.message.trim(),
                 scheduledAt: values.scheduledAt,
+                attachmentDocumentCategory: values.attachmentDocumentCategory,
+                attachmentDocumentType: values.attachmentDocumentType,
+                attachmentMode: values.attachmentMode,
                 attachPropertyDocuments: values.attachPropertyDocuments !== false,
+                mediaUrls: selectedDocumentUrls,
                 templateId: templateId === emptyTemplateValue ? undefined : templateId,
+                pdfTemplateId: pdfTemplateId === emptyTemplateValue ? values.pdfTemplateId : pdfTemplateId,
               })
 
               if (responseError) {
@@ -234,6 +335,8 @@ export function LeadOutreachDialog({
               }
 
               setTemplateId(emptyTemplateValue)
+              setPdfTemplateId(emptyTemplateValue)
+              setSelectedDocumentIds([])
               setValues({ title: "", message: "", scheduledAt: "" })
               setError(null)
               onOpenChange(false)

@@ -46,6 +46,12 @@ export class SmsService {
     return paginated(rows.map((item) => this.mapMessage(item)), total, page, pageSize);
   }
 
+  async findOne(id: number) {
+    const item = await this.smsRepo.findOne({ where: { id } });
+    if (!item) throw new BadRequestException('SMS message was not found.');
+    return this.mapMessage(item);
+  }
+
   async send(dto: any, createdBy = 'CRM') {
     const config = await this.getConfig();
     if (!config?.supportsSms) throw new BadRequestException('SMS provider is not configured.');

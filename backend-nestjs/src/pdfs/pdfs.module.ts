@@ -3,7 +3,9 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { FileUploadModule } from '../file-upload/file-upload.module';
 import { Lead } from '../leads/entities/lead.entity';
 import { Property } from '../properties/entities/property.entity';
+import { RealtorShowing } from '../realtor-showings/entities/realtor-showing.entity';
 import { AgencySettings } from '../settings/entities/settings.entity';
+import { ShowingFeedback } from '../showing-feedback/entities/showing-feedback.entity';
 import { User } from '../users/entities/user.entity';
 import { PdfGeneration } from './entities/pdf-generation.entity';
 import { PdfTemplate } from './entities/pdf-template.entity';
@@ -17,6 +19,8 @@ import { PdfsService } from './pdfs.service';
       PdfGeneration,
       Property,
       Lead,
+      RealtorShowing,
+      ShowingFeedback,
       User,
       AgencySettings,
     ]),

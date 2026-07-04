@@ -584,7 +584,11 @@ export function MainContentSection() {
         gapDays: Math.max(0, Number(item.gapDays ?? 0) || 0),
         isActive: item.isActive !== false,
         attachPropertyDocuments: item.attachPropertyDocuments !== false,
+        attachmentDocumentCategory: item.attachmentDocumentCategory ?? "",
+        attachmentDocumentType: item.attachmentDocumentType ?? "",
+        attachmentMode: item.attachmentMode ?? (item.attachPropertyDocuments !== false ? "property" : "none"),
         audience: item.audience === "OwnerFeedback" ? "OwnerFeedback" : item.audience === "Realtor" ? "Realtor" : "Lead",
+        pdfTemplateId: item.pdfTemplateId ?? "",
         variableTokens: (item.variableTokens ?? []).filter(Boolean),
       })),
       profile: {

@@ -31,6 +31,8 @@ import {
   addTextField,
   cloneTemplate,
   createBlankTemplate,
+  PDF_PAGE_SIZES,
+  setTemplatePageSize,
   templateFieldNames,
 } from "@/lib/pdf/runtime"
 
@@ -74,6 +76,7 @@ export function PdfTemplateEditorPage({ templateId }: { templateId?: number }) {
   const updateMutation = useUpdatePdfTemplate()
   const [value, setValue] = useState<PdfTemplateSaveInput>(initialTemplate)
   const [fieldSearch, setFieldSearch] = useState("")
+  const [variableGroup, setVariableGroup] = useState("All")
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [variablesOpen, setVariablesOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -109,11 +112,17 @@ export function PdfTemplateEditorPage({ templateId }: { templateId?: number }) {
   const variables = useMemo(() => {
     const items = variablesQuery.data?.variables ?? []
     const search = fieldSearch.trim().toLowerCase()
-    if (!search) return items
     return items.filter((item) =>
-      `${item.key} ${item.label} ${item.group}`.toLowerCase().includes(search),
+      (variableGroup === "All" || item.group === variableGroup) &&
+      (!search ||
+        `${item.key} ${item.label} ${item.group}`.toLowerCase().includes(search))
     )
-  }, [fieldSearch, variablesQuery.data?.variables])
+  }, [fieldSearch, variableGroup, variablesQuery.data?.variables])
+
+  const variableGroups = useMemo(() => {
+    const groups = (variablesQuery.data?.groups ?? []).map((item) => item.group)
+    return ["All", ...groups]
+  }, [variablesQuery.data?.groups])
 
   function toggleRequired(key: string) {
     setValue((current) => ({
@@ -186,6 +195,10 @@ export function PdfTemplateEditorPage({ templateId }: { templateId?: number }) {
   const pageCount = value.templateJson.schemas.length || 1
   const loadingSavedTemplate = Boolean(templateId) && templateQuery.isLoading && !templateQuery.data
   const savedTemplateError = templateQuery.error?.message
+  const pageSizeValue = (() => {
+    const basePdf = value.templateJson.basePdf as { width?: number; height?: number }
+    return PDF_PAGE_SIZES.find((size) => size.width === basePdf?.width && size.height === basePdf?.height)?.value ?? "custom"
+  })()
 
   return (
     <PdfShell
@@ -212,9 +225,21 @@ export function PdfTemplateEditorPage({ templateId }: { templateId?: number }) {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
+            <Button onClick={() => router.push("/dashboard/pdfs/templates")} variant="outline">
+              <AppIcon name="arrow_back" />
+              Back
+            </Button>
             <Button disabled={saving} onClick={() => void saveTemplate()}>
               <AppIcon name="save" />
               Save
+            </Button>
+            <Button
+              disabled={!value.id}
+              onClick={() => value.id && router.push(`/dashboard/pdfs/download?templateId=${value.id}`)}
+              variant="outline"
+            >
+              <AppIcon name="picture_as_pdf" />
+              Generate
             </Button>
             <Button
               onClick={() => setValue((current) => ({ ...current, templateJson: addBlankPage(current.templateJson) }))}
@@ -272,6 +297,25 @@ export function PdfTemplateEditorPage({ templateId }: { templateId?: number }) {
                   <SelectItem value="Archived">Archived</SelectItem>
                 </SelectContent>
               </Select>
+              <Select
+                disabled={value.sourceType === "UploadedPdf"}
+                modal={false}
+                onValueChange={(sizeValue) => {
+                  const size = PDF_PAGE_SIZES.find((item) => item.value === sizeValue)
+                  if (!size) return
+                  setValue((current) => ({
+                    ...current,
+                    templateJson: setTemplatePageSize(current.templateJson, size.width, size.height),
+                  }))
+                }}
+                value={pageSizeValue}
+              >
+                <SelectTrigger className="w-full"><SelectValue placeholder="Page size" /></SelectTrigger>
+                <SelectContent>
+                  {pageSizeValue === "custom" ? <SelectItem value="custom">Custom/imported PDF size</SelectItem> : null}
+                  {PDF_PAGE_SIZES.map((size) => <SelectItem key={size.value} value={size.value}>{size.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
               <Input
                 onChange={(event) => setValue((current) => ({ ...current, fileNamePattern: event.target.value }))}
                 placeholder="document-{{property.slug}}"
@@ -305,6 +349,18 @@ export function PdfTemplateEditorPage({ templateId }: { templateId?: number }) {
                   placeholder="Search variables"
                   value={fieldSearch}
                 />
+                <div className="flex flex-wrap gap-2">
+                  {variableGroups.map((group) => (
+                    <Button
+                      key={group}
+                      onClick={() => setVariableGroup(group)}
+                      size="sm"
+                      variant={variableGroup === group ? "default" : "outline"}
+                    >
+                      {group}
+                    </Button>
+                  ))}
+                </div>
                 <div className="grid gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
                   {(value.importedFields?.length ?? 0) > 0 ? (
                     <div className="space-y-3">

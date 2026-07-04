@@ -2,22 +2,35 @@
 
 import Link from "next/link"
 import { useMemo, useState } from "react"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 
 import { PagePagination } from "@/components/stitch/shared/page-pagination"
+import { AppIcon } from "@/components/ui/app-icon"
 import {
   useConvertMailInboxToLead,
   useMailInbox,
+  useMailInboxItem,
   useMailInboxSyncStatus,
+  useDocumentRepository,
   useRunMailInboxSync,
   useSendMailMessage,
 } from "@/hooks/use-real-estate-api"
+import type { MailInboxItem } from "@/@types/real-estate-api"
+import { usePdfTemplates } from "@/hooks/use-pdfs-api"
 import { formatDateTimeLabel } from "@/lib/admin-portal"
 import { getPortalRoutes } from "@/lib/portal-routes"
 import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
 import { uploadPropertyAsset } from "@/lib/upload-client"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import {
   Select,
   SelectContent,
@@ -34,6 +47,7 @@ function buildHistoryHref(baseHref: string, leadId: number) {
 
 export function ManagedMailInboxPage() {
   const pathname = usePathname()
+  const router = useRouter()
   const portalRoutes = getPortalRoutes(pathname)
   const [page, setPage] = useState(1)
   const [searchTerm, setSearchTerm] = useState("")
@@ -43,6 +57,10 @@ export function ManagedMailInboxPage() {
   const [mailSubject, setMailSubject] = useState("")
   const [mailMessage, setMailMessage] = useState("")
   const [mailFiles, setMailFiles] = useState<File[]>([])
+  const [mailDocumentSearch, setMailDocumentSearch] = useState("")
+  const [mailDocumentIds, setMailDocumentIds] = useState<number[]>([])
+  const [mailPdfTemplateId, setMailPdfTemplateId] = useState("")
+  const [mailPdfSearch, setMailPdfSearch] = useState("")
 
   const mailInboxQuery = useMailInbox({
     page,
@@ -51,6 +69,8 @@ export function ManagedMailInboxPage() {
     status: statusFilter || undefined,
   })
   const syncStatusQuery = useMailInboxSyncStatus()
+  const documentsQuery = useDocumentRepository({ page: 1, pageSize: 300 })
+  const pdfTemplatesQuery = usePdfTemplates({ page: 1, pageSize: 200, isActive: true })
   const runSyncMutation = useRunMailInboxSync()
   const convertMailInboxToLead = useConvertMailInboxToLead()
   const sendMail = useSendMailMessage()
@@ -59,6 +79,19 @@ export function ManagedMailInboxPage() {
     !mailInboxQuery.data && (mailInboxQuery.isLoading || mailInboxQuery.isFetching)
 
   const mailInbox = useMemo(() => mailInboxQuery.data?.items ?? [], [mailInboxQuery.data?.items])
+  const allDocuments = documentsQuery.data?.items ?? []
+  const documents = useMemo(() => {
+    const search = mailDocumentSearch.trim().toLowerCase()
+    return allDocuments.filter((doc) =>
+      !search || `${doc.title} ${doc.category} ${doc.documentType}`.toLowerCase().includes(search),
+    )
+  }, [allDocuments, mailDocumentSearch])
+  const pdfTemplates = useMemo(() => {
+    const search = mailPdfSearch.trim().toLowerCase()
+    return (pdfTemplatesQuery.data?.items ?? [])
+      .filter((template) => template.status !== "Archived")
+      .filter((template) => !search || `${template.name} ${template.category}`.toLowerCase().includes(search))
+  }, [mailPdfSearch, pdfTemplatesQuery.data?.items])
 
   const stats = useMemo(
     () => [
@@ -80,9 +113,14 @@ export function ManagedMailInboxPage() {
 
   async function handleSendMail() {
     const uploads = await Promise.all(mailFiles.map((file) => uploadPropertyAsset(file, "mail-attachments")))
+    const selectedDocUrls = allDocuments
+      .filter((doc) => mailDocumentIds.includes(doc.id))
+      .map((doc) => doc.fileUrl)
+      .filter(Boolean)
     const response = await sendMail.mutateAsync({
-      attachmentUrls: uploads.map((upload) => upload.url),
+      attachmentUrls: [...uploads.map((upload) => upload.url), ...selectedDocUrls],
       message: mailMessage.trim(),
+      pdfTemplateId: mailPdfTemplateId || undefined,
       subject: mailSubject.trim(),
       to: mailTo.trim(),
     })
@@ -92,7 +130,18 @@ export function ManagedMailInboxPage() {
       setMailMessage("")
       setMailSubject("")
       setMailTo("")
+      setMailDocumentIds([])
+      setMailDocumentSearch("")
+      setMailPdfTemplateId("")
+      setMailPdfSearch("")
     }
+  }
+
+  function openReply(mail: MailInboxItem) {
+    setMailTo(mail.email)
+    setMailSubject(mail.subject.toLowerCase().startsWith("re:") ? mail.subject : `Re: ${mail.subject}`)
+    setMailMessage("")
+    setIsComposeOpen(true)
   }
 
   return (
@@ -140,17 +189,19 @@ export function ManagedMailInboxPage() {
               </SelectContent>
             </Select>
             <button
-              className="border border-primary bg-primary px-4 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-70"
+              className="inline-flex items-center gap-2 border border-primary bg-primary px-4 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-70"
               onClick={() => setIsComposeOpen(true)}
               type="button"
             >
-              {"Send Mail"}
+              <AppIcon name="send" />
+              {"Send"}
             </button>
             <Link
-              className="border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 dark:border-white/10 dark:text-white"
+              className="inline-flex items-center gap-2 border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 dark:border-white/10 dark:text-white"
               href="/dashboard/lead-collection-templates"
             >
-              {"Lead Collect Templates"}
+              <AppIcon name="checklist" />
+              {"Parsers"}
             </Link>
           </div>
         </section>
@@ -231,7 +282,11 @@ export function ManagedMailInboxPage() {
             </article>
           ) : (
             mailInbox.map((item) => (
-              <article key={item.id} className="border border-slate-200 bg-white p-5 dark:border-white/10 dark:bg-slate-900">
+              <article
+                key={item.id}
+                className="cursor-pointer border border-slate-200 bg-white p-5 transition-colors hover:border-primary/40 hover:bg-primary/[0.02] dark:border-white/10 dark:bg-slate-900"
+                onClick={() => router.push(`/dashboard/mail/${item.id}`)}
+              >
                 <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr_auto] xl:items-center">
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
@@ -267,31 +322,41 @@ export function ManagedMailInboxPage() {
                     <p className="mt-2 text-xs font-bold uppercase tracking-wide text-slate-400">{formatDateTimeLabel(item.createdAt)}</p>
                   </div>
                   <div className="flex flex-wrap gap-2 xl:justify-end">
-                    <Link
-                      className="border border-slate-200 px-4 py-2 text-xs font-bold uppercase tracking-wide text-slate-700 dark:border-white/10 dark:text-white"
-                      href={`/dashboard/lead-collection-templates/new?mailInboxId=${item.id}`}
-                    >
-                      {"Create Parser"}
-                    </Link>
-                    {item.leadId ? (
-                      <>
-                        <Link className="border border-primary bg-primary px-4 py-2 text-xs font-bold uppercase tracking-wide text-white" href={`${portalRoutes.leads}?leadId=${item.leadId}`}>
-                          {"Open Lead CRM"}
-                        </Link>
-                        <Link className="border border-slate-200 px-4 py-2 text-xs font-bold uppercase tracking-wide text-slate-700 dark:border-white/10 dark:text-white" href={buildHistoryHref(portalRoutes.leadHistory, item.leadId)}>
-                          {"Open History"}
-                        </Link>
-                      </>
-                    ) : (
-                      <button
-                        className="border border-primary bg-primary px-4 py-2 text-xs font-bold uppercase tracking-wide text-white disabled:cursor-not-allowed disabled:opacity-70"
-                        disabled={convertMailInboxToLead.isPending}
-                        onClick={() => void convertMailInboxToLead.mutateAsync({ mailInboxId: item.id })}
-                        type="button"
+                    <DropdownMenu>
+                      <DropdownMenuTrigger
+                        className="inline-flex items-center gap-2 border border-slate-200 bg-white px-3 py-2 text-xs font-bold uppercase tracking-wide text-slate-700 hover:border-primary hover:text-primary dark:border-white/10 dark:bg-slate-900 dark:text-white"
+                        onClick={(event) => event.stopPropagation()}
                       >
-                        {"Convert To Lead"}
-                      </button>
-                    )}
+                        {"Actions"}
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-56">
+                        <DropdownMenuLabel>{"Mail actions"}</DropdownMenuLabel>
+                        <DropdownMenuItem onClick={() => router.push(`/dashboard/mail/${item.id}`)}>
+                          {"Open conversation"}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => openReply(item)}>
+                          {"Reply"}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => router.push(`/dashboard/lead-collection-templates/new?mailInboxId=${item.id}`)}>
+                          {"Create parser"}
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        {item.leadId ? (
+                          <>
+                            <DropdownMenuItem onClick={() => router.push(`${portalRoutes.leads}?leadId=${item.leadId}`)}>
+                              {"Open lead"}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => router.push(buildHistoryHref(portalRoutes.leadHistory, item.leadId!))}>
+                              {"Open history"}
+                            </DropdownMenuItem>
+                          </>
+                        ) : (
+                          <DropdownMenuItem onClick={() => void convertMailInboxToLead.mutateAsync({ mailInboxId: item.id })}>
+                            {"Convert to lead"}
+                          </DropdownMenuItem>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                 </div>
               </article>
@@ -322,9 +387,46 @@ export function ManagedMailInboxPage() {
                 <Input multiple onChange={(event) => setMailFiles(Array.from(event.target.files ?? []))} type="file" />
                 {mailFiles.length ? <span className="text-xs font-semibold text-slate-500">{`${mailFiles.length} file(s) selected`}</span> : null}
               </label>
+              <div className="flex flex-col gap-2">
+                <span className="text-sm font-bold text-slate-700">{"Saved documents"}</span>
+                <Input onChange={(event) => setMailDocumentSearch(event.target.value)} placeholder="Search docs by title, category, type" value={mailDocumentSearch} />
+                <div className="max-h-44 space-y-2 overflow-auto rounded-lg border p-3">
+                  {documents.map((doc) => (
+                    <label className="flex items-start gap-2 text-sm" key={doc.id}>
+                      <input
+                        checked={mailDocumentIds.includes(doc.id)}
+                        className="mt-1"
+                        onChange={(event) => setMailDocumentIds((current) =>
+                          event.target.checked ? [...current, doc.id] : current.filter((id) => id !== doc.id),
+                        )}
+                        type="checkbox"
+                      />
+                      <span>
+                        <span className="font-semibold">{doc.title}</span>
+                        <span className="block text-xs text-slate-500">{`${doc.documentType} - ${doc.category}`}</span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <div className="flex flex-col gap-2">
+                <span className="text-sm font-bold text-slate-700">{"Generated PDF template"}</span>
+                <Select modal={false} onValueChange={(value) => setMailPdfTemplateId(value === "none" ? "" : value)} value={mailPdfTemplateId || "none"}>
+                  <SelectTrigger><SelectValue placeholder="Choose PDF template" /></SelectTrigger>
+                  <SelectContent>
+                    <Input className="mb-2 h-8" onChange={(event) => setMailPdfSearch(event.target.value)} placeholder="Search PDF template" value={mailPdfSearch} />
+                    <SelectItem value="none">{"No generated PDF"}</SelectItem>
+                    {pdfTemplates.map((template) => (
+                      <SelectItem key={template.id} value={String(template.id)}>
+                        {`${template.name} - ${template.category}`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               <button
                 className="rounded-xl bg-primary px-5 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={sendMail.isPending || !mailTo.trim() || !mailSubject.trim() || (!mailMessage.trim() && mailFiles.length === 0)}
+                disabled={sendMail.isPending || !mailTo.trim() || !mailSubject.trim() || (!mailMessage.trim() && mailFiles.length === 0 && mailDocumentIds.length === 0 && !mailPdfTemplateId)}
                 onClick={() => void handleSendMail()}
                 type="button"
               >
@@ -335,6 +437,159 @@ export function ManagedMailInboxPage() {
         </Dialog>
       </main>
     </div>
+  )
+}
+
+export function MailInboxDetailPage({ mailId }: { mailId: number }) {
+  const pathname = usePathname()
+  const portalRoutes = getPortalRoutes(pathname)
+  const mailQuery = useMailInboxItem(mailId)
+  const documentsQuery = useDocumentRepository({ page: 1, pageSize: 300 })
+  const pdfTemplatesQuery = usePdfTemplates({ page: 1, pageSize: 200, isActive: true })
+  const sendMail = useSendMailMessage()
+  const [message, setMessage] = useState("")
+  const [files, setFiles] = useState<File[]>([])
+  const [documentSearch, setDocumentSearch] = useState("")
+  const [documentIds, setDocumentIds] = useState<number[]>([])
+  const [pdfTemplateId, setPdfTemplateId] = useState("")
+  const [pdfSearch, setPdfSearch] = useState("")
+  const [sentReplies, setSentReplies] = useState<Array<{ body: string; createdAt: string }>>([])
+
+  const mail = mailQuery.data
+  const allDocuments = documentsQuery.data?.items ?? []
+  const documents = useMemo(() => {
+    const search = documentSearch.trim().toLowerCase()
+    return allDocuments.filter((doc) => !search || `${doc.title} ${doc.category} ${doc.documentType}`.toLowerCase().includes(search))
+  }, [allDocuments, documentSearch])
+  const pdfTemplates = useMemo(() => {
+    const search = pdfSearch.trim().toLowerCase()
+    return (pdfTemplatesQuery.data?.items ?? [])
+      .filter((template) => template.status !== "Archived")
+      .filter((template) => !search || `${template.name} ${template.category}`.toLowerCase().includes(search))
+  }, [pdfSearch, pdfTemplatesQuery.data?.items])
+
+  async function sendReply() {
+    if (!mail) return
+    const uploads = await Promise.all(files.map((file) => uploadPropertyAsset(file, "mail-attachments")))
+    const selectedDocUrls = allDocuments
+      .filter((doc) => documentIds.includes(doc.id))
+      .map((doc) => doc.fileUrl)
+      .filter(Boolean)
+    const response = await sendMail.mutateAsync({
+      attachmentUrls: [...uploads.map((upload) => upload.url), ...selectedDocUrls],
+      message: message.trim(),
+      pdfTemplateId: pdfTemplateId || undefined,
+      subject: mail.subject.toLowerCase().startsWith("re:") ? mail.subject : `Re: ${mail.subject}`,
+      to: mail.email,
+    })
+    if (!response.error) {
+      setSentReplies((current) => [...current, { body: message.trim() || "Attachment sent.", createdAt: new Date().toISOString() }])
+      setMessage("")
+      setFiles([])
+      setDocumentIds([])
+      setDocumentSearch("")
+      setPdfTemplateId("")
+      setPdfSearch("")
+    }
+  }
+
+  return (
+    <main className="min-h-screen bg-background-light text-slate-900 dark:bg-background-dark dark:text-slate-100">
+      <section className="border-b border-slate-200 bg-white px-4 py-5 dark:border-white/10 dark:bg-slate-950 md:px-6">
+        <Link className="inline-flex items-center gap-2 text-sm font-bold text-primary" href="/dashboard/mail">
+          <AppIcon name="arrow_back" />
+          {"Back to inbox"}
+        </Link>
+        <div className="mt-4 flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.22em] text-slate-400">{"Mail conversation"}</p>
+            <h1 className="mt-2 text-2xl font-black tracking-tight">{mail?.subject ?? "Loading mail..."}</h1>
+            {mail ? <p className="mt-2 text-sm text-slate-500">{`${mail.name} <${mail.email}>`}</p> : null}
+          </div>
+          {mail ? (
+            <div className="flex flex-wrap gap-2">
+              <Link className="border border-slate-200 bg-white px-3 py-2 text-xs font-bold uppercase tracking-wide text-slate-700" href={`/dashboard/lead-collection-templates/new?mailInboxId=${mail.id}`}>
+                {"Create parser"}
+              </Link>
+              {mail.leadId ? (
+                <>
+                  <Link className="border border-slate-200 bg-white px-3 py-2 text-xs font-bold uppercase tracking-wide text-slate-700" href={`${portalRoutes.leads}?leadId=${mail.leadId}`}>{"Open lead"}</Link>
+                  <Link className="border border-slate-200 bg-white px-3 py-2 text-xs font-bold uppercase tracking-wide text-slate-700" href={buildHistoryHref(portalRoutes.leadHistory, mail.leadId)}>{"Open history"}</Link>
+                </>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      </section>
+
+      <section className="grid gap-5 px-4 py-6 md:px-6 xl:grid-cols-[minmax(0,1fr)_420px]">
+        <div className="min-h-[60dvh] rounded-2xl border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-slate-900">
+          {mailQuery.isLoading ? (
+            <p className="text-sm font-semibold text-slate-500">{"Loading mail..."}</p>
+          ) : mailQuery.error ? (
+            <p className="text-sm font-semibold text-rose-600">{mailQuery.error.message}</p>
+          ) : mail ? (
+            <div className="space-y-5">
+              <div className="max-w-[82%] rounded-2xl rounded-tl-sm border border-slate-200 bg-slate-50 p-4">
+                <div className="mb-3 flex flex-wrap items-center gap-2 text-xs font-bold uppercase tracking-wide text-slate-400">
+                  <span>{mail.name}</span>
+                  <span>{formatDateTimeLabel(mail.createdAt)}</span>
+                  <span>{mail.status}</span>
+                </div>
+                <p className="whitespace-pre-wrap text-sm leading-7 text-slate-700">{mail.message}</p>
+              </div>
+              {sentReplies.map((reply) => (
+                <div className="ml-auto max-w-[82%] rounded-2xl rounded-tr-sm bg-primary p-4 text-white" key={reply.createdAt}>
+                  <div className="mb-3 text-xs font-bold uppercase tracking-wide text-white/70">
+                    {`You - ${formatDateTimeLabel(reply.createdAt)}`}
+                  </div>
+                  <p className="whitespace-pre-wrap text-sm leading-7">{reply.body}</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm font-semibold text-slate-500">{"Mail not found."}</p>
+          )}
+        </div>
+
+        <aside className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-slate-900">
+          <h2 className="text-lg font-black">{"Reply"}</h2>
+          <div className="mt-4 space-y-4">
+            <Textarea className="min-h-40" onChange={(event) => setMessage(event.target.value)} placeholder="Write reply..." value={message} />
+            <Input multiple onChange={(event) => setFiles(Array.from(event.target.files ?? []))} type="file" />
+            {files.length ? <p className="text-xs font-semibold text-slate-500">{`${files.length} file(s) selected`}</p> : null}
+            <div className="space-y-2">
+              <p className="text-sm font-bold text-slate-700">{"Saved documents"}</p>
+              <Input onChange={(event) => setDocumentSearch(event.target.value)} placeholder="Search docs" value={documentSearch} />
+              <div className="max-h-40 space-y-2 overflow-auto rounded-xl border p-3">
+                {documents.map((doc) => (
+                  <label className="flex items-start gap-2 text-sm" key={doc.id}>
+                    <input checked={documentIds.includes(doc.id)} className="mt-1" onChange={(event) => setDocumentIds((current) => event.target.checked ? [...current, doc.id] : current.filter((id) => id !== doc.id))} type="checkbox" />
+                    <span><span className="font-semibold">{doc.title}</span><span className="block text-xs text-slate-500">{`${doc.documentType} - ${doc.category}`}</span></span>
+                  </label>
+                ))}
+              </div>
+            </div>
+            <Select modal={false} onValueChange={(value) => setPdfTemplateId(value === "none" ? "" : value)} value={pdfTemplateId || "none"}>
+              <SelectTrigger><SelectValue placeholder="Generated PDF template" /></SelectTrigger>
+              <SelectContent>
+                <Input className="mb-2 h-8" onChange={(event) => setPdfSearch(event.target.value)} placeholder="Search PDF template" value={pdfSearch} />
+                <SelectItem value="none">{"No generated PDF"}</SelectItem>
+                {pdfTemplates.map((template) => <SelectItem key={template.id} value={String(template.id)}>{`${template.name} - ${template.category}`}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <button
+              className="w-full rounded-xl bg-primary px-5 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={sendMail.isPending || !mail || (!message.trim() && files.length === 0 && documentIds.length === 0 && !pdfTemplateId)}
+              onClick={() => void sendReply()}
+              type="button"
+            >
+              {sendMail.isPending ? "Sending..." : "Send reply"}
+            </button>
+          </div>
+        </aside>
+      </section>
+    </main>
   )
 }
 

@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Lead } from './entities/lead.entity';
@@ -6,8 +6,9 @@ import { LeadHistoryEntry, leadHistoryKindDb, leadHistoryStatusDb } from './enti
 import { DealPipeline } from '../deals/entities/deal-pipeline.entity';
 import { SettingsService } from '../settings/settings.service';
 import { SmsService } from '../sms/sms.service';
-import { DocumentRepositoryItem } from '../documents/entities/document.entity';
+import { DocumentRepositoryItem, documentTypeDb } from '../documents/entities/document.entity';
 import { Property } from '../properties/entities/property.entity';
+import { PdfsService } from '../pdfs/pdfs.service';
 
 type OutreachDocument = {
   title: string;
@@ -25,6 +26,7 @@ export class LeadOutreachService {
     @InjectRepository(Property) private propertyRepo: Repository<Property>,
     private settingsService: SettingsService,
     private smsService: SmsService,
+    @Optional() private pdfsService?: PdfsService,
   ) {}
 
   async getTemplates() {
@@ -73,10 +75,12 @@ export class LeadOutreachService {
     const hasTarget = kind === 'Email' ? !!lead.email : !!lead.phone;
     let status = shouldSchedule ? 'Scheduled' : hasTarget ? (kind === 'Call' ? 'Completed' : 'Sent') : 'Failed';
     let sendFailure = '';
-    const propertyDocuments = dto.attachPropertyDocuments !== false && !shouldSchedule && ['Email', 'Sms'].includes(kind)
+    const attachmentMode = ['none', 'property', 'pdf', 'document'].includes(dto.attachmentMode)
+      ? dto.attachmentMode
+      : dto.attachPropertyDocuments !== false ? 'property' : 'none';
+    const propertyDocuments = attachmentMode === 'property' && !shouldSchedule && ['Email', 'Sms'].includes(kind)
       ? await this.findPropertyDocuments(lead.property)
       : [];
-    const mediaUrls = [...this.stringList(dto.mediaUrls), ...propertyDocuments.map((doc) => doc.fileUrl)];
     const source = `${dto.createdBy ?? ''}`;
     const trustedSmsSequence = source.startsWith('Realtor Showing #') || source.startsWith('Lead Intake:');
     if (kind === 'Sms' && lead.inBoard && !trustedSmsSequence) {
@@ -84,6 +88,14 @@ export class LeadOutreachService {
       status = 'Failed';
       sendFailure = ' SMS auto-send canceled because lead is already on the board.';
     }
+    const generatedPdfDocuments = dto.pdfTemplateId && !shouldSchedule && status !== 'Failed' && ['Email', 'Sms'].includes(kind)
+      ? await this.generatePdfDocument(dto.pdfTemplateId, lead, dto.createdBy)
+      : [];
+    const configuredDocuments = attachmentMode === 'document' && !shouldSchedule && status !== 'Failed' && ['Email', 'Sms'].includes(kind)
+      ? await this.findConfiguredDocuments(dto.attachmentDocumentType, dto.attachmentDocumentCategory)
+      : [];
+    const allDocuments = [...propertyDocuments, ...configuredDocuments, ...generatedPdfDocuments];
+    const mediaUrls = [...this.stringList(dto.mediaUrls), ...allDocuments.map((doc) => doc.fileUrl)];
     if (!shouldSchedule && kind === 'Sms' && hasTarget) {
       const sms = status === 'Failed'
         ? { status }
@@ -94,7 +106,7 @@ export class LeadOutreachService {
       }
     }
     if (!shouldSchedule && kind === 'Email' && hasTarget) {
-      await this.sendEmailViaSmtp(lead.email, dto.title, dto.message, propertyDocuments);
+      await this.sendEmailViaSmtp(lead.email, dto.title, dto.message, allDocuments);
     }
     const summary = shouldSchedule
       ? this.scheduledSummary(lead, kind, scheduledAt!)
@@ -111,7 +123,7 @@ export class LeadOutreachService {
       status,
       title: status === 'Failed' ? `${dto.title || `${kind} outreach`} failed` : (dto.title || `${kind} outreach`),
       summary,
-      body: this.bodyWithDocuments(dto.message.trim(), propertyDocuments),
+      body: this.bodyWithDocuments(dto.message.trim(), allDocuments),
       provider,
       createdBy: dto.createdBy?.trim() || 'CRM',
       scheduledAt: shouldSchedule ? scheduledAt : null,
@@ -228,6 +240,16 @@ export class LeadOutreachService {
     return [...repositoryDocs, ...embeddedDocs];
   }
 
+  private async findConfiguredDocuments(documentType?: string, category?: string) {
+    const qb = this.documentRepo.createQueryBuilder('doc');
+    const cleanType = `${documentType ?? ''}`.trim();
+    const cleanCategory = `${category ?? ''}`.trim();
+    if (cleanType) qb.andWhere('doc.document_type = :documentType', { documentType: documentTypeDb(cleanType) });
+    if (cleanCategory) qb.andWhere('LOWER(doc.category) = :category', { category: cleanCategory.toLowerCase() });
+    const docs = await qb.orderBy('doc.updatedAt', 'DESC').take(25).getMany();
+    return docs.map((doc) => ({ title: doc.title, fileName: doc.fileName, fileUrl: doc.fileUrl }));
+  }
+
   private async sendEmailViaSmtp(to: string, subject: string, message: string, docs: OutreachDocument[]) {
     const config = await this.settingsService.getSmtpConfig();
     if (!config?.host || !config?.username || !config?.password) return;
@@ -250,6 +272,22 @@ export class LeadOutreachService {
 
   private bodyWithDocuments(body: string, docs: OutreachDocument[]) {
     return [body, ...docs.map((doc) => `Attached document: ${doc.title} - ${doc.fileUrl}`)].filter(Boolean).join('\n');
+  }
+
+  private async generatePdfDocument(templateId: number | string, lead: Lead, generatedBy?: string): Promise<OutreachDocument[]> {
+    if (!this.pdfsService) return [];
+    const result = await this.pdfsService.generatePdf({
+      allowMissing: true,
+      generatedBy: `${generatedBy ?? 'CRM'}`.trim(),
+      leadId: lead.id,
+      propertyId: lead.propertyId ?? null,
+      templateId: Number(templateId),
+    });
+    return [{
+      title: result.generation.templateName || result.fileName,
+      fileName: result.fileName,
+      fileUrl: result.downloadUrl,
+    }];
   }
 
   private stringList(value: any) {

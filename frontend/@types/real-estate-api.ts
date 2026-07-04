@@ -348,6 +348,7 @@ export type SendMailMessageInput = {
   subject: string
   message: string
   attachmentUrls?: string[]
+  pdfTemplateId?: string
 }
 
 export type AgencyCommunicationChannel = "Email" | "SMS" | "WhatsApp"
@@ -388,6 +389,10 @@ export type AgencyCommunicationTemplateItem = {
   gapDays?: number
   isActive?: boolean
   attachPropertyDocuments?: boolean
+  attachmentMode?: "none" | "property" | "pdf" | "document"
+  attachmentDocumentType?: DocumentType | ""
+  attachmentDocumentCategory?: string
+  pdfTemplateId?: string
   audience?: "Lead" | "Realtor" | "OwnerFeedback"
 }
 
@@ -464,7 +469,7 @@ export type BlogPostDetail = BlogPostSummary & {
 }
 
 export type DocumentAccessLevel = "AdminOnly" | "AgentAccess" | "Public"
-export type DocumentType = "System" | "Property" | "Other"
+export type DocumentType = "System" | "Property" | "Other" | "Lead" | "Realtor" | "OwnerFeedback"
 
 export type DocumentRepositoryItem = {
   id: number
@@ -806,6 +811,9 @@ export type LeadOutreachDispatchInput = {
   attachPropertyDocuments?: boolean
   mediaUrls?: string[]
   templateId?: string
+  pdfTemplateId?: string
+  attachmentDocumentType?: DocumentType | ""
+  attachmentDocumentCategory?: string
   createdBy?: string | null
   scheduledAt?: string | null
 }
@@ -822,6 +830,9 @@ export type LeadOutreachBulkDispatchInput = {
   attachPropertyDocuments?: boolean
   mediaUrls?: string[]
   templateId?: string
+  pdfTemplateId?: string
+  attachmentDocumentType?: DocumentType | ""
+  attachmentDocumentCategory?: string
   createdBy?: string | null
   scheduledAt?: string | null
 }

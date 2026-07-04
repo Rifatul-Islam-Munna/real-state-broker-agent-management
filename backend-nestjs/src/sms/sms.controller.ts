@@ -11,7 +11,8 @@ export class SmsController {
   @Get('sms-inbox')
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Get synced SMS inbox' })
-  async findAll(@Query('page') page = 1, @Query('pageSize') pageSize = 20, @Query('search') search?: string, @Query('direction') direction?: string) {
+  async findAll(@Query('id') id?: number, @Query('page') page = 1, @Query('pageSize') pageSize = 20, @Query('search') search?: string, @Query('direction') direction?: string) {
+    if (id) return this.smsService.findOne(Number(id));
     return this.smsService.findAll(Number(page), Number(pageSize), search, direction);
   }
 

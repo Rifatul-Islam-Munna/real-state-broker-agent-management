@@ -92,7 +92,11 @@ export function cloneAgencySettings(settings: AgencySettings & { showingFeedback
   return {
     communicationTemplates: (settings.communicationTemplates ?? defaultAgencySettings.communicationTemplates).map((item) => ({
       ...item,
+      attachmentDocumentCategory: item.attachmentDocumentCategory ?? "",
+      attachmentDocumentType: item.attachmentDocumentType ?? "",
+      attachmentMode: item.attachmentMode ?? (item.attachPropertyDocuments !== false ? "property" : "none"),
       channels: [...(item.channels ?? [])],
+      pdfTemplateId: item.pdfTemplateId ?? "",
       variableTokens: [...(item.variableTokens ?? [])],
     })),
     profile: {

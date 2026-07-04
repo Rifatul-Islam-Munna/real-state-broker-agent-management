@@ -19,7 +19,9 @@ import { paginated, toInt } from '../common/api-contract';
 import { FileUploadService } from '../file-upload/file-upload.service';
 import { Lead } from '../leads/entities/lead.entity';
 import { Property } from '../properties/entities/property.entity';
+import { RealtorShowing } from '../realtor-showings/entities/realtor-showing.entity';
 import { AgencySettings } from '../settings/entities/settings.entity';
+import { ShowingFeedback } from '../showing-feedback/entities/showing-feedback.entity';
 import { User } from '../users/entities/user.entity';
 import { PdfGeneration } from './entities/pdf-generation.entity';
 import {
@@ -43,6 +45,9 @@ type ResolvePdfDto = {
   leadId?: number | null;
   agentId?: number | null;
   manualValues?: Record<string, unknown>;
+  reportSource?: 'leads' | 'showings' | 'feedback' | '';
+  reportFromDate?: string | null;
+  reportToDate?: string | null;
 };
 
 const SAFE_AGENT_FIELDS = [
@@ -80,6 +85,10 @@ export class PdfsService {
     private readonly propertyRepo: Repository<Property>,
     @InjectRepository(Lead)
     private readonly leadRepo: Repository<Lead>,
+    @InjectRepository(RealtorShowing)
+    private readonly realtorShowingRepo: Repository<RealtorShowing>,
+    @InjectRepository(ShowingFeedback)
+    private readonly showingFeedbackRepo: Repository<ShowingFeedback>,
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
     @InjectRepository(AgencySettings)
@@ -114,6 +123,8 @@ export class PdfsService {
       this.variable('property.neighborhoodInsights', 'Neighborhood insights', 'Property', 'list'),
       this.variable('property.preQuestions', 'Pre questions', 'Property', 'list'),
       this.variable('property.agentName', 'Assigned agent name', 'Property'),
+      this.variable('property.imageUrl', 'Primary image URL', 'Property', 'image'),
+      this.variable('property.firstImageUrl', 'First gallery image URL', 'Property', 'image'),
       this.variable('owner.name', 'Owner name', 'Owner'),
       this.variable('owner.email', 'Owner email', 'Owner'),
       this.variable('owner.phone', 'Owner phone', 'Owner'),
@@ -148,6 +159,13 @@ export class PdfsService {
       this.variable('agency.name', 'Agency name', 'Agency'),
       this.variable('agency.contactEmail', 'Agency contact email', 'Agency'),
       this.variable('agency.contactPhone', 'Agency contact phone', 'Agency'),
+      this.variable('report.fromDate', 'Report from date', 'Report', 'date'),
+      this.variable('report.toDate', 'Report to date', 'Report', 'date'),
+      this.variable('report.source', 'Report source', 'Report'),
+      this.variable('report.count', 'Report row count', 'Report', 'number'),
+      this.variable('report.leads.table', 'Lead report table', 'Report', 'table'),
+      this.variable('report.showings.table', 'Showing report table', 'Report', 'table'),
+      this.variable('report.feedback.table', 'Feedback report table', 'Report', 'table'),
     );
 
     const settings = await this.readAgencySettings();
@@ -367,13 +385,14 @@ export class PdfsService {
     if (dto.agentId && !agent) throw new NotFoundException('Agent not found.');
 
     const automaticValues = await this.buildResolvedValues(property, lead, agent);
+    const reportValues = await this.buildReportValues(dto);
     const manualValues = Object.fromEntries(
       Object.entries(dto.manualValues ?? {}).map(([key, value]) => [
         key,
-        this.stringifyValue(value),
+        value,
       ]),
     );
-    const values = { ...automaticValues, ...manualValues };
+    const values = { ...automaticValues, ...reportValues, ...manualValues };
     const variablesUsed = this.extractTemplateVariables(template.templateJson);
     const requiredVariables = [...new Set(template.requiredVariables ?? [])];
     const missingVariables = requiredVariables
@@ -580,6 +599,8 @@ export class PdfsService {
     const propertyData = property
       ? {
           ...property,
+          imageUrl: property.thumbnailUrl ?? property.imageUrls?.[0] ?? '',
+          firstImageUrl: property.imageUrls?.[0] ?? property.thumbnailUrl ?? '',
           agentName: property.agent
             ? `${property.agent.firstName} ${property.agent.lastName}`.trim()
             : '',
@@ -625,10 +646,141 @@ export class PdfsService {
     };
   }
 
+  private async buildReportValues(dto: ResolvePdfDto) {
+    const source = `${dto.reportSource ?? ''}`.trim();
+    const fromDate = this.startOfDay(dto.reportFromDate);
+    const toDate = this.endOfDay(dto.reportToDate);
+    const range = { fromDate, toDate };
+    const propertyId = dto.propertyId ? Number(dto.propertyId) : null;
+
+    if (source === 'leads') {
+      const rows = await this.reportLeads(range, propertyId);
+      return this.reportValueMap(source, dto, rows, rows, [], []);
+    }
+    if (source === 'showings') {
+      const rows = await this.reportShowings(range, propertyId);
+      return this.reportValueMap(source, dto, rows, [], rows, []);
+    }
+    if (source === 'feedback') {
+      const rows = await this.reportFeedback(range, propertyId);
+      return this.reportValueMap(source, dto, rows, [], [], rows);
+    }
+    return this.reportValueMap(source, dto, [], [], [], []);
+  }
+
+  private reportValueMap(
+    source: string,
+    dto: ResolvePdfDto,
+    rows: unknown[],
+    leads: unknown[],
+    showings: unknown[],
+    feedback: unknown[],
+  ) {
+    return {
+      'report.source': source,
+      'report.fromDate': `${dto.reportFromDate ?? ''}`,
+      'report.toDate': `${dto.reportToDate ?? ''}`,
+      'report.count': String(Math.max(0, rows.length - 1)),
+      'report.leads.table': leads,
+      'report.showings.table': showings,
+      'report.feedback.table': feedback,
+    };
+  }
+
+  private async reportLeads(range: { fromDate: Date | null; toDate: Date | null }, propertyId: number | null) {
+    const qb = this.leadRepo.createQueryBuilder('lead')
+      .leftJoinAndSelect('lead.linkedProperty', 'property')
+      .orderBy('lead.createdAt', 'DESC')
+      .take(500);
+    this.applyDateRange(qb, 'lead.created_at', range);
+    if (propertyId) qb.andWhere('lead.property_id = :propertyId', { propertyId });
+    const rows = await qb.getMany();
+    return [
+      ['Date', 'Lead', 'Phone', 'Email', 'Property', 'Stage', 'Source'],
+      ...rows.map((lead) => [
+        this.dateOnly(lead.createdAt),
+        lead.name,
+        lead.phone,
+        lead.email,
+        lead.linkedProperty?.title || lead.property,
+        lead.stage,
+        lead.source,
+      ]),
+    ];
+  }
+
+  private async reportShowings(range: { fromDate: Date | null; toDate: Date | null }, propertyId: number | null) {
+    const qb = this.realtorShowingRepo.createQueryBuilder('showing')
+      .leftJoinAndSelect('showing.property', 'property')
+      .orderBy('showing.showingAt', 'DESC', 'NULLS LAST')
+      .addOrderBy('showing.createdAt', 'DESC')
+      .take(500);
+    this.applyDateRange(qb, 'COALESCE(showing.showing_at, showing.created_at)', range);
+    if (propertyId) qb.andWhere('showing.property_id = :propertyId', { propertyId });
+    const rows = await qb.getMany();
+    return [
+      ['Showing date', 'Realtor', 'Phone', 'Email', 'Property', 'Match'],
+      ...rows.map((showing) => [
+        this.dateOnly(showing.showingAt ?? showing.createdAt),
+        showing.realtorName,
+        showing.realtorPhone,
+        showing.realtorEmail,
+        showing.property?.title || showing.propertyText,
+        showing.propertyMatchMethod,
+      ]),
+    ];
+  }
+
+  private async reportFeedback(range: { fromDate: Date | null; toDate: Date | null }, propertyId: number | null) {
+    const qb = this.showingFeedbackRepo.createQueryBuilder('feedback')
+      .leftJoinAndSelect('feedback.property', 'property')
+      .orderBy('feedback.receivedAt', 'DESC')
+      .take(500);
+    this.applyDateRange(qb, 'feedback.received_at', range);
+    if (propertyId) qb.andWhere('feedback.property_id = :propertyId', { propertyId });
+    const rows = await qb.getMany();
+    return [
+      ['Received', 'Property', 'Realtor', 'Sentiment', 'Feedback'],
+      ...rows.map((feedback) => [
+        this.dateOnly(feedback.receivedAt),
+        feedback.property?.title ?? '',
+        feedback.realtorName || feedback.realtorContact,
+        feedback.sentiment,
+        feedback.feedbackText,
+      ]),
+    ];
+  }
+
+  private applyDateRange(qb: any, field: string, range: { fromDate: Date | null; toDate: Date | null }) {
+    if (range.fromDate) qb.andWhere(`${field} >= :fromDate`, { fromDate: range.fromDate });
+    if (range.toDate) qb.andWhere(`${field} <= :toDate`, { toDate: range.toDate });
+  }
+
+  private startOfDay(value?: string | null) {
+    if (!value) return null;
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return null;
+    date.setHours(0, 0, 0, 0);
+    return date;
+  }
+
+  private endOfDay(value?: string | null) {
+    if (!value) return null;
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return null;
+    date.setHours(23, 59, 59, 999);
+    return date;
+  }
+
+  private dateOnly(value?: Date | null) {
+    if (!value) return '';
+    return value.toISOString().slice(0, 10);
+  }
+
   private flattenObject(
     source: Record<string, unknown>,
     prefix = '',
-    result: Record<string, string> = {},
+    result: Record<string, any> = {},
   ) {
     for (const [key, rawValue] of Object.entries(source ?? {})) {
       const path = prefix ? `${prefix}.${key}` : key;
@@ -671,19 +823,21 @@ export class PdfsService {
 
   private buildPdfmeInput(
     templateJson: Record<string, unknown>,
-    values: Record<string, string>,
+    values: Record<string, any>,
   ) {
     const schemas = Array.isArray(templateJson?.schemas)
       ? (templateJson.schemas as Array<Array<Record<string, unknown>>>)
       : [];
-    const input: Record<string, string> = {};
+    const input: Record<string, any> = {};
 
     for (const schema of schemas.flat()) {
       const name = `${schema?.name ?? ''}`.trim();
       if (!name) continue;
 
-      const resolvedValue = `${values[name] ?? ''}`;
-      if (resolvedValue.trim()) {
+      const lookupKey = this.exactMustacheKey(name) ?? name;
+      const rawValue = values[lookupKey];
+      const resolvedValue = this.inputValue(rawValue);
+      if (this.hasInputValue(resolvedValue)) {
         input[name] = resolvedValue;
         continue;
       }
@@ -696,11 +850,27 @@ export class PdfsService {
 
     for (const key of this.extractTemplateVariables(templateJson)) {
       if (input[key] !== undefined) continue;
-      const resolvedValue = `${values[key] ?? ''}`;
-      if (resolvedValue.trim()) input[key] = resolvedValue;
+      const resolvedValue = this.inputValue(values[key]);
+      if (this.hasInputValue(resolvedValue)) input[key] = resolvedValue;
     }
 
     return input;
+  }
+
+  private exactMustacheKey(value: string) {
+    const match = value.match(/^\{\{\s*([^}]+?)\s*\}\}$/);
+    return match?.[1]?.trim() || null;
+  }
+
+  private inputValue(value: unknown) {
+    if (Array.isArray(value)) return value;
+    if (value && typeof value === 'object') return JSON.stringify(value);
+    return this.stringifyValue(value);
+  }
+
+  private hasInputValue(value: unknown) {
+    if (Array.isArray(value)) return value.length > 0;
+    return `${value ?? ''}`.trim().length > 0;
   }
 
   private schemaContent(schema: Record<string, unknown>) {
@@ -764,11 +934,11 @@ export class PdfsService {
     return [];
   }
 
-  private materializeTemplate<T>(value: T, values: Record<string, string>, keyName = ''): T {
+  private materializeTemplate<T>(value: T, values: Record<string, any>, keyName = ''): T {
     if (typeof value === 'string') {
       if (keyName === 'name') return value as T;
       return value.replace(/\{\{\s*([^}]+?)\s*\}\}/g, (_match, key: string) => {
-        return values[key.trim()] ?? '';
+        return this.stringifyValue(values[key.trim()]);
       }) as T;
     }
     if (Array.isArray(value)) {
@@ -921,12 +1091,12 @@ export class PdfsService {
 
   private resolveFileName(
     pattern: string,
-    values: Record<string, string>,
+    values: Record<string, any>,
     fallback: string,
   ) {
     const replaced = `${pattern || fallback}`.replace(
       /\{\{\s*([^}]+?)\s*\}\}/g,
-      (_match, key: string) => values[key] ?? '',
+      (_match, key: string) => this.stringifyValue(values[key]),
     );
     const safe = replaced
       .trim()

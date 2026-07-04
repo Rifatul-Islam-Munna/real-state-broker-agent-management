@@ -10,16 +10,31 @@ export const documentAccessOptions: DocumentAccessLevel[] = [
   "AgentAccess",
   "Public",
 ]
-export const documentTypeOptions: DocumentType[] = ["System", "Property", "Other"]
+export const documentTypeOptions: DocumentType[] = [
+  "System",
+  "Property",
+  "Lead",
+  "Realtor",
+  "OwnerFeedback",
+  "Other",
+]
 export const defaultDocumentCategories = [
   "General",
   "Contracts",
   "Agreements",
   "Floor Plans",
   "Legal",
+  "Lead",
   "Marketing",
+  "Owner Feedback",
+  "Realtor",
   "Templates",
 ]
+
+export function formatDocumentType(value: DocumentType) {
+  if (value === "OwnerFeedback") return "Owner feedback"
+  return value
+}
 
 export type TemplateFilter = "all" | "template" | "standard"
 export type DocumentModalState =

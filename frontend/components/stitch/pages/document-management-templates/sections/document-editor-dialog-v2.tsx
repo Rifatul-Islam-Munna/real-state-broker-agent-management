@@ -34,6 +34,8 @@ import {
   documentAccessOptions,
   documentFileIcon,
   documentTypeOptions,
+  defaultDocumentCategories,
+  formatDocumentType,
   formatDocumentAccess,
   formatDocumentSize,
   validateDocumentForm,
@@ -170,13 +172,23 @@ export function DocumentEditorDialog({
 
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="document-category">{"Category"}</Label>
-                  <Input
-                    id="document-category"
-                    onChange={(event) => updateField("category", event.target.value)}
-                    placeholder="Contracts"
-                    value={formValues.category}
-                  />
+                  <Label>{"Category"}</Label>
+                  <Select
+                    modal={false}
+                    onValueChange={(value) => updateField("category", value)}
+                    value={formValues.category || "General"}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {defaultDocumentCategories.map((item) => (
+                        <SelectItem key={item} value={item}>
+                          {item}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="document-folder">{"Folder"}</Label>
@@ -210,7 +222,7 @@ export function DocumentEditorDialog({
                     <SelectContent>
                       {documentTypeOptions.map((item) => (
                         <SelectItem key={item} value={item}>
-                          {item}
+                          {formatDocumentType(item)}
                         </SelectItem>
                       ))}
                     </SelectContent>
