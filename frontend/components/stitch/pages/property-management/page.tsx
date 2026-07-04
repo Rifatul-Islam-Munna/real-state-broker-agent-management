@@ -13,6 +13,7 @@ import {
 } from "@/hooks/use-real-estate-api"
 import { propertyHeroImage } from "@/lib/admin-portal"
 
+import { PropertyDetailsSheet } from "./property-details-sheet"
 import {
   AddPropertyModalOverlaySection,
   type PropertyFormValues,
@@ -180,6 +181,7 @@ export function PropertyManagementPage() {
   const [page, setPage] = useState(1)
   const [searchTerm, setSearchTerm] = useState("")
   const [modalState, setModalState] = useState<PropertyModalState>(null)
+  const [detailsProperty, setDetailsProperty] = useState<PropertyItem | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
 
   const propertiesQuery = useManagedProperties({
@@ -285,6 +287,10 @@ export function PropertyManagementPage() {
     return createEmptyPropertyForm()
   }, [modalState])
 
+  function findProperty(propertyId: number) {
+    return rawProperties.find((item) => item.id === propertyId) ?? null
+  }
+
   async function handlePropertySubmit(values: PropertyFormValues) {
     setSubmitError(null)
 
@@ -331,12 +337,8 @@ export function PropertyManagementPage() {
           setPage(1)
         }}
         onEditPropertyClick={(propertyId) => {
-          const property = rawProperties.find((item) => item.id === propertyId)
-
-          if (!property) {
-            return
-          }
-
+          const property = findProperty(propertyId)
+          if (!property) return
           setSubmitError(null)
           setModalState({ mode: "edit", property })
         }}
@@ -352,6 +354,10 @@ export function PropertyManagementPage() {
         onTypeChange={(type) => {
           setActiveType(type)
           setPage(1)
+        }}
+        onViewPropertyClick={(propertyId) => {
+          const property = findProperty(propertyId)
+          if (property) setDetailsProperty(property)
         }}
         searchTerm={searchTerm}
         statusCards={statusCards}
@@ -369,6 +375,15 @@ export function PropertyManagementPage() {
           onClose={() => setModalState(null)}
           onSubmit={handlePropertySubmit}
           submitError={submitError}
+        />
+      ) : null}
+      {detailsProperty ? (
+        <PropertyDetailsSheet
+          onOpenChange={(open) => {
+            if (!open) setDetailsProperty(null)
+          }}
+          open
+          property={detailsProperty}
         />
       ) : null}
     </>
