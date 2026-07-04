@@ -2,14 +2,23 @@
 
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
-import { useAgencySettings, useUpdateAgencySettings } from "@/hooks/use-real-estate-api"
-import { cloneAgencySettings, defaultAgencySettings, type AgencyWorkspaceSettings } from "@/lib/agency-settings"
+import {
+  useAgencySettings,
+  useUpdateAgencySettings,
+} from "@/hooks/use-real-estate-api"
+import {
+  cloneAgencySettings,
+  defaultAgencySettings,
+  type AgencyWorkspaceSettings,
+} from "@/lib/agency-settings"
 import { ShowingFeedbackAutomationSection } from "./showing-feedback-automation-section"
 
 export function ShowingFeedbackAutomationPanel() {
   const query = useAgencySettings()
   const mutation = useUpdateAgencySettings()
-  const [values, setValues] = useState<AgencyWorkspaceSettings>(() => cloneAgencySettings(defaultAgencySettings))
+  const [values, setValues] = useState<AgencyWorkspaceSettings>(() =>
+    cloneAgencySettings(defaultAgencySettings)
+  )
 
   useEffect(() => {
     if (query.data) setValues(cloneAgencySettings(query.data))
@@ -21,17 +30,25 @@ export function ShowingFeedbackAutomationPanel() {
   }
 
   return (
-    <div className="space-y-4 scroll-mt-6" id="feedback-ai">
+    <section className="space-y-4 scroll-mt-6" id="feedback-automation">
       <ShowingFeedbackAutomationSection
-        onChange={(showingFeedbackAutomation) => setValues((current) => ({ ...current, showingFeedbackAutomation }))}
+        onChange={(showingFeedbackAutomation) =>
+          setValues((current) => ({ ...current, showingFeedbackAutomation }))
+        }
         settings={values.showingFeedbackAutomation}
         templates={values.communicationTemplates}
       />
       <div className="flex justify-end">
-        <Button disabled={mutation.isPending} onClick={() => void save()} type="button">
-          {mutation.isPending ? "Saving..." : "Save automation settings"}
+        <Button
+          className="min-w-44"
+          disabled={mutation.isPending || query.isLoading}
+          onClick={() => void save()}
+          size="lg"
+          type="button"
+        >
+          {mutation.isPending ? "Saving automation..." : "Save automation"}
         </Button>
       </div>
-    </div>
+    </section>
   )
 }
