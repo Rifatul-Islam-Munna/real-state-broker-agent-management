@@ -59,6 +59,9 @@ export class MailInboxItem {
   message: string;
 
   @Column({ type: 'text', default: '' })
+  htmlBody: string;
+
+  @Column({ type: 'text', default: '' })
   messageId: string;
 
   @Column({ type: 'text', default: '' })
@@ -72,6 +75,24 @@ export class MailInboxItem {
 
   @Column({ type: 'jsonb', default: {} })
   extractedLead: Record<string, any>;
+
+  @Column({ type: 'text', default: '' })
+  extractionMethod: string;
+
+  @Column({ type: 'double precision', default: 0 })
+  extractionConfidence: number;
+
+  @Column({ type: 'int', nullable: true })
+  leadCollectionTemplateId: number | null;
+
+  @Column({ type: 'text', default: '' })
+  leadCollectionTemplateName: string;
+
+  @Column({ default: false })
+  aiFallbackUsed: boolean;
+
+  @Column({ type: 'jsonb', default: {} })
+  extractionDetails: Record<string, any>;
 
   @Column({
     type: 'int',
