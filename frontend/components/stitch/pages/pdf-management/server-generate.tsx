@@ -5,8 +5,10 @@ import { useEffect, useState } from "react"
 import type { PdfResolveResult } from "@/@types/pdf-management"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { AppIcon } from "@/components/ui/app-icon"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useAgentUsers, useLeads, useProperties } from "@/hooks/use-real-estate-api"
 import {
@@ -15,6 +17,7 @@ import {
   useResolvePdfTemplate,
 } from "@/hooks/use-pdfs-api"
 
+import { PdfTemplateViewerCanvas } from "./pdfme-canvas"
 import { PdfShell } from "./shell"
 
 export function PdfServerGenerationWorkspace({ initialTemplateId }: { initialTemplateId?: number }) {
@@ -83,6 +86,7 @@ export function PdfServerGenerationWorkspace({ initialTemplateId }: { initialTem
   const properties = propertiesQuery.data?.items ?? []
   const leads = leadsQuery.data?.items ?? []
   const agents = agentsQuery.data ?? []
+  const missingVariables = resolved?.missingVariables ?? []
 
   return (
     <PdfShell
@@ -91,39 +95,98 @@ export function PdfServerGenerationWorkspace({ initialTemplateId }: { initialTem
     >
       {error ? <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert> : null}
       <div className="grid gap-6 xl:grid-cols-[390px_minmax(0,1fr)]">
+        <div className="space-y-4">
+          <Card>
+            <CardHeader><CardTitle>Autofill source</CardTitle><CardDescription>Select the records used by this document.</CardDescription></CardHeader>
+            <CardContent className="space-y-4">
+              <Select modal={false} onValueChange={setTemplateId} value={templateId}>
+                <SelectTrigger className="w-full"><SelectValue placeholder="Choose template" /></SelectTrigger>
+                <SelectContent>{templates.map((item) => <SelectItem key={item.id} value={String(item.id)}>{item.name}</SelectItem>)}</SelectContent>
+              </Select>
+              <Select modal={false} onValueChange={(value) => setPropertyId(value === "none" ? "" : value)} value={propertyId || "none"}>
+                <SelectTrigger className="w-full"><SelectValue placeholder="Choose property" /></SelectTrigger>
+                <SelectContent><SelectItem value="none">No property</SelectItem>{properties.map((item) => <SelectItem key={item.id} value={String(item.id)}>{item.title}</SelectItem>)}</SelectContent>
+              </Select>
+              <Select modal={false} onValueChange={(value) => setLeadId(value === "none" ? "" : value)} value={leadId || "none"}>
+                <SelectTrigger className="w-full"><SelectValue placeholder="Choose tenant or lead" /></SelectTrigger>
+                <SelectContent><SelectItem value="none">No tenant or lead</SelectItem>{leads.map((item) => <SelectItem key={item.id} value={String(item.id)}>{item.name}</SelectItem>)}</SelectContent>
+              </Select>
+              <Select modal={false} onValueChange={(value) => setAgentId(value === "none" ? "" : value)} value={agentId || "none"}>
+                <SelectTrigger className="w-full"><SelectValue placeholder="Choose agent" /></SelectTrigger>
+                <SelectContent><SelectItem value="none">Use assigned agent</SelectItem>{agents.map((item) => <SelectItem key={item.id} value={String(item.id)}>{item.fullName}</SelectItem>)}</SelectContent>
+              </Select>
+              <Button disabled={!templateId || resolveMutation.isPending} onClick={() => void resolvePdf()}>
+                <AppIcon name="preview" />
+                Resolve and preview
+              </Button>
+            </CardContent>
+          </Card>
+
+          {resolved ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Required information</CardTitle>
+                <CardDescription>
+                  {missingVariables.length
+                    ? `${missingVariables.length} values are missing. Enter them manually.`
+                    : "All required values were resolved by the backend."}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {missingVariables.length === 0 ? <Badge>Ready</Badge> : null}
+                {missingVariables.map((variable) => (
+                  <div className="space-y-1" key={variable.key}>
+                    <label className="text-xs font-medium" htmlFor={`manual-${variable.key}`}>
+                      {variable.label || variable.key}
+                    </label>
+                    <Input
+                      id={`manual-${variable.key}`}
+                      onChange={(event) => setManualValues((current) => ({
+                        ...current,
+                        [variable.key]: event.target.value,
+                      }))}
+                      placeholder={variable.key}
+                      value={manualValues[variable.key] ?? ""}
+                    />
+                  </div>
+                ))}
+                {missingVariables.length > 0 ? (
+                  <Button onClick={() => void resolvePdf()} variant="outline">
+                    Apply manual values
+                  </Button>
+                ) : null}
+                <Button
+                  className="w-full"
+                  disabled={generateMutation.isPending || missingVariables.length > 0}
+                  onClick={() => void generatePdf()}
+                >
+                  <AppIcon name="download" />
+                  Generate on server and download
+                </Button>
+              </CardContent>
+            </Card>
+          ) : null}
+        </div>
+
         <Card>
-          <CardHeader><CardTitle>Autofill source</CardTitle><CardDescription>Select the records used by this document.</CardDescription></CardHeader>
-          <CardContent className="space-y-4">
-            <Select modal={false} onValueChange={setTemplateId} value={templateId}>
-              <SelectTrigger className="w-full"><SelectValue placeholder="Choose template" /></SelectTrigger>
-              <SelectContent>{templates.map((item) => <SelectItem key={item.id} value={String(item.id)}>{item.name}</SelectItem>)}</SelectContent>
-            </Select>
-            <Select modal={false} onValueChange={(value) => setPropertyId(value === "none" ? "" : value)} value={propertyId || "none"}>
-              <SelectTrigger className="w-full"><SelectValue placeholder="Choose property" /></SelectTrigger>
-              <SelectContent><SelectItem value="none">No property</SelectItem>{properties.map((item) => <SelectItem key={item.id} value={String(item.id)}>{item.title}</SelectItem>)}</SelectContent>
-            </Select>
-            <Select modal={false} onValueChange={(value) => setLeadId(value === "none" ? "" : value)} value={leadId || "none"}>
-              <SelectTrigger className="w-full"><SelectValue placeholder="Choose tenant or lead" /></SelectTrigger>
-              <SelectContent><SelectItem value="none">No tenant or lead</SelectItem>{leads.map((item) => <SelectItem key={item.id} value={String(item.id)}>{item.name}</SelectItem>)}</SelectContent>
-            </Select>
-            <Select modal={false} onValueChange={(value) => setAgentId(value === "none" ? "" : value)} value={agentId || "none"}>
-              <SelectTrigger className="w-full"><SelectValue placeholder="Choose agent" /></SelectTrigger>
-              <SelectContent><SelectItem value="none">Use assigned agent</SelectItem>{agents.map((item) => <SelectItem key={item.id} value={String(item.id)}>{item.fullName}</SelectItem>)}</SelectContent>
-            </Select>
-            <Button disabled={!templateId || resolveMutation.isPending} onClick={() => void resolvePdf()}>
-              <AppIcon name="preview" />
-              Resolve and preview
-            </Button>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader><CardTitle>Preview</CardTitle><CardDescription>{resolved?.fileName ?? "Resolve a template to continue."}</CardDescription></CardHeader>
-          <CardContent className="flex min-h-[500px] items-center justify-center text-sm text-muted-foreground">
-            {resolved ? `${resolved.variablesUsed.length} fields resolved` : "No preview loaded"}
+          <CardHeader>
+            <CardTitle>Preview</CardTitle>
+            <CardDescription>{resolved?.fileName ?? "Resolve a template to continue."}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {resolved ? (
+              <PdfTemplateViewerCanvas
+                inputs={resolved.inputs}
+                template={resolved.template.templateJson}
+              />
+            ) : (
+              <div className="flex h-[500px] items-center justify-center rounded-xl border border-dashed text-sm text-muted-foreground">
+                No preview loaded
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
-      <span className="sr-only">{generateMutation.isPending ? "Generating" : "Ready"}{Object.keys(manualValues).length}{setManualValues ? "" : ""}{generatePdf ? "" : ""}</span>
     </PdfShell>
   )
 }
