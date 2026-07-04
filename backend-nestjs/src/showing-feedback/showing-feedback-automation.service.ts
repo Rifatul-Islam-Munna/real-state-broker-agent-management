@@ -105,32 +105,41 @@ export class ShowingFeedbackAutomationService {
       });
 
       try {
-        const result = await this.reports.sendAutomaticReport({
-          propertyId,
-          afterFeedbackId: Number(state.lastFeedbackId ?? 0),
-          maxFeedback: automation.maxFeedback,
-          channels: automation.channels,
-          templateId: automation.templateId,
-          compressWithAi: automation.compressWithAi,
-        });
-        if (!result) {
-          await this.settings.saveShowingFeedbackDeliveryState(propertyId, {
-            ...state,
-            processingStartedAt: null,
-            processingThroughId: 0,
+        const templateIds = await this.reportTemplateIds(automation.templateId);
+        let latestFeedbackId = feedback[feedback.length - 1].id;
+
+        for (const templateId of templateIds) {
+          const result = await this.reports.sendAutomaticReport({
+            propertyId,
+            afterFeedbackId: Number(state.lastFeedbackId ?? 0),
+            maxFeedback: automation.maxFeedback,
+            channels: automation.channels,
+            templateId,
+            compressWithAi: automation.compressWithAi,
           });
-          return;
+          if (!result) {
+            await this.settings.saveShowingFeedbackDeliveryState(propertyId, {
+              ...state,
+              processingStartedAt: null,
+              processingThroughId: 0,
+            });
+            return;
+          }
+          latestFeedbackId = Math.max(
+            latestFeedbackId,
+            Number(result.latestFeedbackId) || latestFeedbackId,
+          );
         }
 
         await this.settings.saveShowingFeedbackDeliveryState(propertyId, {
-          lastFeedbackId: result.latestFeedbackId,
+          lastFeedbackId: latestFeedbackId,
           lastSentAt: new Date(),
           lastError: '',
           processingStartedAt: null,
           processingThroughId: 0,
         });
         this.logger.log(
-          `Sent weekly showing feedback report for property ${propertyId} through feedback ${result.latestFeedbackId}.`,
+          `Sent ${templateIds.length} weekly showing feedback template(s) for property ${propertyId} through feedback ${latestFeedbackId}.`,
         );
       } catch (error: any) {
         await this.settings.saveShowingFeedbackDeliveryState(propertyId, {
@@ -152,6 +161,32 @@ export class ShowingFeedbackAutomationService {
         await runner.release();
       }
     }
+  }
+
+  private async reportTemplateIds(primaryTemplateId: string) {
+    const settings = await this.settings.getAdminSettings();
+    const sequenceRank: Record<string, number> = {
+      FollowUp1: 1,
+      FollowUp2: 2,
+      FollowUp3: 3,
+    };
+    const followUps = (settings.communicationTemplates ?? [])
+      .filter(
+        (template: any) =>
+          template.audience === 'OwnerFeedback' &&
+          template.isActive !== false &&
+          template.id !== primaryTemplateId &&
+          sequenceRank[template.sequenceType] !== undefined,
+      )
+      .sort((left: any, right: any) => {
+        const rank = sequenceRank[left.sequenceType] - sequenceRank[right.sequenceType];
+        if (rank !== 0) return rank;
+        return Number(left.gapDays ?? 0) - Number(right.gapDays ?? 0);
+      })
+      .map((template: any) => `${template.id ?? ''}`.trim())
+      .filter(Boolean);
+
+    return Array.from(new Set([primaryTemplateId, ...followUps].filter(Boolean)));
   }
 
   private reportDay(value: unknown) {
