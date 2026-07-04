@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { bestPropertyAddressMatch } from '../common/property-address-match';
 import { normalizePhoneNumber } from '../common/phone-normalizer';
 import { parseDateTimeInZone } from '../common/time-zone';
 import { LeadHistoryEntry, leadHistoryStatusDb } from '../leads/entities/lead-history.entity';
@@ -72,7 +73,7 @@ export class RealtorShowingsService {
         const propertyText = this.value(sourceData, mapping.property);
         if (!realtorEmail && !realtorPhone) throw new Error('Email or phone required.');
 
-        const match = this.bestPropertyMatch(propertyText, properties);
+        const match = bestPropertyAddressMatch(propertyText, properties, 0.36);
         const showingLocalValue = this.mappedDateTime(sourceData, mapping);
         const showingAt = this.dateValue(showingLocalValue, scheduling.timeZone);
         const lead = await this.findOrCreateRealtorLead({
@@ -289,34 +290,6 @@ export class RealtorShowingsService {
     }));
   }
 
-  private bestPropertyMatch(input: string, properties: Property[]) {
-    const normalizedInput = this.normalize(input);
-    if (!normalizedInput) return { property: null as Property | null, score: 0 };
-    let best: Property | null = null;
-    let bestScore = 0;
-    for (const property of properties) {
-      const candidates = [property.title, property.location, property.exactLocation]
-        .map((value) => this.normalize(value))
-        .filter(Boolean);
-      const score = Math.max(0, ...candidates.map((candidate) => this.similarity(normalizedInput, candidate)));
-      if (score > bestScore) {
-        best = property;
-        bestScore = score;
-      }
-    }
-    return bestScore >= 0.34 ? { property: best, score: Number(bestScore.toFixed(3)) } : { property: null, score: Number(bestScore.toFixed(3)) };
-  }
-
-  private similarity(left: string, right: string) {
-    if (left === right) return 1;
-    if (left.includes(right) || right.includes(left)) return 0.9;
-    const leftTokens = new Set(left.split(' ').filter((token) => token.length > 1));
-    const rightTokens = new Set(right.split(' ').filter((token) => token.length > 1));
-    const intersection = [...leftTokens].filter((token) => rightTokens.has(token)).length;
-    const union = new Set([...leftTokens, ...rightTokens]).size;
-    return union ? intersection / union : 0;
-  }
-
   private mapShowing(item: RealtorShowing) {
     const responded = item.lead?.followUpStatus === LeadFollowUpStatus.Completed;
     return {
@@ -342,10 +315,6 @@ export class RealtorShowingsService {
     const date = this.value(record, mapping.showingDate);
     const time = this.value(record, mapping.showingTime);
     return date && time ? `${date}T${time}` : date;
-  }
-
-  private normalize(value: string) {
-    return `${value ?? ''}`.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
   }
 
   private dateValue(value: any, timeZone: string) {
