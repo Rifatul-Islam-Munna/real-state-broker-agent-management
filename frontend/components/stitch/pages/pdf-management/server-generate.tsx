@@ -30,5 +30,47 @@ export function PdfServerGenerationWorkspace({ initialTemplateId }: { initialTem
     if (initialTemplateId) setTemplateId(String(initialTemplateId))
   }, [initialTemplateId])
 
+  async function resolvePdf(overrides = manualValues) {
+    if (!templateId) {
+      setResolved(null)
+      return
+    }
+    setError(null)
+    const result = await resolveMutation.mutateAsync({
+      templateId: Number(templateId),
+      propertyId: propertyId ? Number(propertyId) : null,
+      leadId: leadId ? Number(leadId) : null,
+      agentId: agentId ? Number(agentId) : null,
+      manualValues: overrides,
+    })
+    if (result.error || !result.data) {
+      setError(result.error?.message ?? "Unable to resolve the PDF.")
+      return
+    }
+    setResolved(result.data)
+  }
+
+  async function generatePdf() {
+    if (!templateId) return
+    setError(null)
+    const result = await generateMutation.mutateAsync({
+      templateId: Number(templateId),
+      propertyId: propertyId ? Number(propertyId) : null,
+      leadId: leadId ? Number(leadId) : null,
+      agentId: agentId ? Number(agentId) : null,
+      manualValues,
+    })
+    if (result.error || !result.data) {
+      setError(result.error?.message ?? "Unable to generate the PDF.")
+      return
+    }
+    const anchor = document.createElement("a")
+    anchor.href = result.data.downloadUrl
+    anchor.download = result.data.fileName
+    anchor.target = "_blank"
+    anchor.rel = "noopener noreferrer"
+    anchor.click()
+  }
+
   return null
 }
