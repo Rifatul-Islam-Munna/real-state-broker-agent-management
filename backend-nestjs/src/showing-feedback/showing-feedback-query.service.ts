@@ -148,6 +148,16 @@ export class ShowingFeedbackQueryService {
     });
     if (!property) throw new NotFoundException('Property not found.');
 
+    const automation =
+      await this.settingsService.getShowingFeedbackAutomation();
+    const zone = await this.schedulingSettingsService.getTimeZone();
+    const localDate = this.dateKey(new Date(), zone);
+    if (this.weekday(localDate) !== this.reportDay(automation.gapDays))
+      return null;
+    const state = automation.deliveryState?.[String(propertyId)] ?? {};
+    if (this.wasSentThisWeek(state.lastSentAt, this.weekKey(localDate), zone))
+      return null;
+
     const feedback = await this.feedbackRepo.find({
       where: {
         propertyId,
@@ -171,7 +181,6 @@ export class ShowingFeedbackQueryService {
         'Automatic owner feedback template is missing or paused.',
       );
 
-    const zone = await this.schedulingSettingsService.getTimeZone();
     const fromDate = this.dateKey(feedback[0].receivedAt, zone);
     const toDate = this.dateKey(feedback[feedback.length - 1].receivedAt, zone);
     const result = await this.deliver(
@@ -470,6 +479,33 @@ export class ShowingFeedbackQueryService {
       text: body,
       to,
     });
+  }
+
+  private reportDay(value: unknown) {
+    const parsed = Number.parseInt(`${value ?? ''}`, 10);
+    return Number.isFinite(parsed) ? Math.min(6, Math.max(0, parsed)) : 1;
+  }
+
+  private weekday(dateKey: string) {
+    return new Date(`${dateKey}T12:00:00Z`).getUTCDay();
+  }
+
+  private wasSentThisWeek(
+    value: unknown,
+    currentWeekKey: string,
+    zone: string,
+  ) {
+    if (!value) return false;
+    const sentAt = new Date(`${value}`);
+    if (Number.isNaN(sentAt.getTime())) return false;
+    return this.weekKey(this.dateKey(sentAt, zone)) === currentWeekKey;
+  }
+
+  private weekKey(dateKey: string) {
+    const date = new Date(`${dateKey}T12:00:00Z`);
+    const mondayOffset = (date.getUTCDay() + 6) % 7;
+    date.setUTCDate(date.getUTCDate() - mondayOffset);
+    return date.toISOString().slice(0, 10);
   }
 
   private dateKey(value: Date, timeZone: string) {
