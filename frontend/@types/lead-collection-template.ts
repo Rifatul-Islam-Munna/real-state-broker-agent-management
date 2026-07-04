@@ -51,7 +51,14 @@ export type LeadCollectionTemplateItem = {
 
 export type LeadCollectionTemplateSaveInput = Omit<
   LeadCollectionTemplateItem,
-  "id" | "matchCount" | "successCount" | "aiFallbackCount" | "lastMatchedAt" | "createdAt" | "updatedAt"
+  | "id"
+  | "mappings"
+  | "matchCount"
+  | "successCount"
+  | "aiFallbackCount"
+  | "lastMatchedAt"
+  | "createdAt"
+  | "updatedAt"
 > & {
   id?: number
   mappings: Array<Partial<LeadCollectionFieldMapping>>
