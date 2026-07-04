@@ -342,9 +342,9 @@ export class LeadCollectionTemplateService {
     if (typeof value === 'string') {
       try {
         const parsed = JSON.parse(value);
-        value = Array.isArray(parsed) ? parsed : value.split(',');
+        value = Array.isArray(parsed) ? parsed : String(value).split(',');
       } catch {
-        value = value.split(',');
+        value = String(value).split(',');
       }
     }
     return [
