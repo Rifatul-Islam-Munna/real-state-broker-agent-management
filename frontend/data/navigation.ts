@@ -55,6 +55,11 @@ export const adminNavigation = [
     icon: "badge",
   },
   {
+    href: "/dashboard/showing-feedback",
+    label: "Showing Feedback",
+    icon: "rate_review",
+  },
+  {
     href: "/dashboard/reports",
     label: "Reports",
     icon: "trending_up",
