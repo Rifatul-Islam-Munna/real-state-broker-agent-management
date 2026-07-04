@@ -1,9 +1,12 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { lookup } from 'node:dns/promises';
+import { isIP } from 'node:net';
 import { DataSource, Repository } from 'typeorm';
 import { paginated, toInt } from '../common/api-contract';
 import { Lead } from '../leads/entities/lead.entity';
@@ -40,13 +43,31 @@ const SAFE_WRITABLE_LEAD_FIELDS = new Set([
 ]);
 
 const DEFAULT_REQUIRED_FIELDS = ['name', 'email', 'phone', 'property'];
+const LINKED_PAGE_MAX_BYTES = 1_500_000;
+const LINKED_PAGE_TIMEOUT_MS = 8_000;
+const ZILLOW_HOST = /(^|\.)zillow\.com$/i;
+
+const PRIVATE_IPV4 = [
+  /^10\./,
+  /^127\./,
+  /^169\.254\./,
+  /^192\.168\./,
+  /^172\.(1[6-9]|2\d|3[01])\./,
+  /^0\./,
+];
 
 type TemplateDraft = Record<string, unknown> & {
   mappings?: Array<Partial<LeadCollectionFieldMapping>>;
 };
 
+type LinkedPageResult = {
+  url: string;
+  text: string;
+};
+
 @Injectable()
 export class LeadCollectionTemplateService {
+  private readonly logger = new Logger(LeadCollectionTemplateService.name);
   private cachedTemplates: LeadCollectionTemplate[] | null = null;
   private cacheExpiresAt = 0;
 
@@ -167,12 +188,16 @@ export class LeadCollectionTemplateService {
       const normalized = await this.normalizeTemplate(dto);
       template = this.templateRepo.create(normalized);
     }
-    return parseLeadCollectionTemplate(template, emailInput);
+    return this.parseTemplateWithLinkedPage(template, emailInput);
   }
 
   async extractFromEmail(input: LeadCollectionEmailInput) {
     const templates = await this.getActiveTemplates();
-    return parseLeadCollectionTemplates(templates, input);
+    const initial = parseLeadCollectionTemplates(templates, input);
+    if (!initial.templateId) return initial;
+    const template = templates.find((item) => item.id === initial.templateId);
+    if (!template) return initial;
+    return this.parseTemplateWithLinkedPage(template, input, initial);
   }
 
   async recordTemplateResult(result: LeadCollectionParseResult, aiFallbackUsed: boolean) {
@@ -202,6 +227,348 @@ export class LeadCollectionTemplateService {
       result.confidence >= result.threshold &&
       result.missingRequiredFields.length === 0
     );
+  }
+
+  private async parseTemplateWithLinkedPage(
+    template: LeadCollectionTemplate,
+    input: LeadCollectionEmailInput,
+    initial?: LeadCollectionParseResult,
+  ) {
+    const base = initial ?? parseLeadCollectionTemplate(template, input);
+    if (!this.isZillowTemplate(template, input)) return base;
+
+    const linked = await this.fetchBestLinkedLeadPage(input);
+    if (!linked) {
+      base.diagnostics.push('linked-page: no safe Zillow detail link could be loaded');
+      return base;
+    }
+
+    const linkedBlock = `\n\nLinked Zillow detail page (${linked.url})\n${linked.text}`;
+    const enrichedInput: LeadCollectionEmailInput = {
+      ...input,
+      htmlBody: input.htmlBody
+        ? `${input.htmlBody}<section data-lead-linked-page="true"><pre>${this.escapeHtml(linkedBlock)}</pre></section>`
+        : '',
+      textBody: `${input.textBody ?? ''}${linkedBlock}`,
+    };
+    const result = parseLeadCollectionTemplate(template, enrichedInput);
+    this.applyLinkedPageFallbacks(result, template, linked);
+    result.diagnostics.unshift(`linked-page: enriched from ${linked.url}`);
+    return result;
+  }
+
+  private applyLinkedPageFallbacks(
+    result: LeadCollectionParseResult,
+    template: LeadCollectionTemplate,
+    linked: LinkedPageResult,
+  ) {
+    const before = new Set(Object.keys(result.values));
+    const text = normalizeLeadCollectionText(linked.text);
+    if (!result.values.name) {
+      const name = this.firstLabeledValue(text, [
+        'contact name',
+        'lead name',
+        'prospect name',
+        'consumer name',
+        'name',
+      ]);
+      if (name && !this.looksLikeSystemName(name)) result.values.name = name;
+    }
+    if (!result.values.phone) {
+      const phone = this.firstPhone(text);
+      if (phone) result.values.phone = phone;
+    }
+    if (!result.values.email) {
+      const email = text.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)?.[0];
+      if (email) result.values.email = email.toLowerCase();
+    }
+    if (!result.values.property) {
+      const property = this.firstLabeledValue(text, [
+        'property address',
+        'listing address',
+        'property',
+        'listing',
+        'address',
+      ]);
+      if (property) result.values.property = property;
+    }
+
+    const requiredFields = [
+      ...new Set([
+        ...(template.requiredFields ?? []),
+        ...(template.mappings ?? [])
+          .filter((mapping) => mapping.required)
+          .map((mapping) => mapping.field),
+      ]),
+    ];
+    result.missingRequiredFields = requiredFields.filter(
+      (field) => !`${result.values[field] ?? ''}`.trim(),
+    );
+    result.extractedFields = Object.keys(result.values);
+    const added = result.extractedFields.filter((field) => !before.has(field));
+    if (added.length) {
+      result.confidence = this.roundScore(
+        Math.min(0.99, Math.max(result.confidence, result.confidence + added.length * 0.07)),
+      );
+      result.diagnostics.push(`linked-page: recovered ${added.join(', ')}`);
+    }
+  }
+
+  private isZillowTemplate(
+    template: LeadCollectionTemplate,
+    input: LeadCollectionEmailInput,
+  ) {
+    const haystack = [
+      template.name,
+      template.providerName,
+      ...(template.senderPatterns ?? []),
+      input.fromAddress,
+      input.subject,
+    ]
+      .join(' ')
+      .toLowerCase();
+    return haystack.includes('zillow') || haystack.includes('zillow.com');
+  }
+
+  private async fetchBestLinkedLeadPage(
+    input: LeadCollectionEmailInput,
+  ): Promise<LinkedPageResult | null> {
+    const links = this.extractZillowLinks(input)
+      .sort((left, right) => this.linkScore(right) - this.linkScore(left))
+      .slice(0, 3);
+
+    for (const url of links) {
+      try {
+        const page = await this.fetchLinkedPage(url);
+        if (page?.text && (this.firstPhone(page.text) || this.firstLabeledValue(page.text, ['name', 'contact name', 'lead name']))) {
+          return page;
+        }
+      } catch (error) {
+        this.logger.debug(`Zillow linked-page enrichment skipped ${url}: ${this.errorMessage(error)}`);
+      }
+    }
+    return null;
+  }
+
+  private extractZillowLinks(input: LeadCollectionEmailInput) {
+    const values: string[] = [];
+    const html = `${input.htmlBody ?? ''}`;
+    for (const match of html.matchAll(/href\s*=\s*["']([^"']+)["']/gi)) {
+      values.push(this.decodeBasicEntities(match[1]));
+    }
+    const plain = `${input.textBody ?? ''}\n${htmlToLeadCollectionText(html)}`;
+    for (const match of plain.matchAll(/https:\/\/[^\s<>"')\]]+/gi)) {
+      values.push(this.decodeBasicEntities(match[0]));
+    }
+
+    return [...new Set(values)]
+      .map((value) => {
+        try {
+          return new URL(value).toString();
+        } catch {
+          return '';
+        }
+      })
+      .filter(Boolean)
+      .filter((value) => {
+        const url = new URL(value);
+        return (
+          url.protocol === 'https:' &&
+          ZILLOW_HOST.test(url.hostname) &&
+          !/(unsubscribe|preferences|privacy|terms|support|help|static|image|logo)/i.test(
+            `${url.pathname} ${url.search}`,
+          )
+        );
+      });
+  }
+
+  private linkScore(value: string) {
+    const text = value.toLowerCase();
+    let score = 0;
+    if (/(lead|contact|consumer|inquiry|message|detail|prospect)/.test(text)) score += 8;
+    if (/(premier|agent|rental|showing)/.test(text)) score += 4;
+    if (/click\./.test(text)) score += 1;
+    if (/(unsubscribe|privacy|terms)/.test(text)) score -= 20;
+    return score;
+  }
+
+  private async fetchLinkedPage(value: string): Promise<LinkedPageResult | null> {
+    const url = new URL(value);
+    await this.assertSafeZillowUrl(url);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), LINKED_PAGE_TIMEOUT_MS);
+    try {
+      const response = await fetch(url, {
+        redirect: 'follow',
+        signal: controller.signal,
+        headers: {
+          Accept: 'text/html,application/xhtml+xml,application/json;q=0.9,text/plain;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.8',
+          'User-Agent':
+            'Mozilla/5.0 (compatible; RealEstateLeadEnricher/1.0; +https://example.invalid/bot)',
+        },
+      });
+      if (!response.ok) return null;
+      const finalUrl = new URL(response.url || url.toString());
+      await this.assertSafeZillowUrl(finalUrl);
+      const contentLength = Number(response.headers.get('content-length') ?? 0);
+      if (contentLength > LINKED_PAGE_MAX_BYTES) return null;
+      const raw = await this.readLimitedBody(response, LINKED_PAGE_MAX_BYTES);
+      const contentType = `${response.headers.get('content-type') ?? ''}`.toLowerCase();
+      const visible = contentType.includes('html')
+        ? htmlToLeadCollectionText(raw)
+        : normalizeLeadCollectionText(raw);
+      const structured = contentType.includes('html')
+        ? this.extractStructuredLeadText(raw)
+        : '';
+      const text = normalizeLeadCollectionText(`${structured}\n${visible}`).slice(0, 16_000);
+      return text ? { url: finalUrl.toString(), text } : null;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  private async assertSafeZillowUrl(url: URL) {
+    if (url.protocol !== 'https:' || url.username || url.password) {
+      throw new Error('Only credential-free HTTPS links are allowed.');
+    }
+    if (!ZILLOW_HOST.test(url.hostname) || isIP(url.hostname)) {
+      throw new Error('Linked page is outside the approved Zillow domain.');
+    }
+    const addresses = await lookup(url.hostname, { all: true, verbatim: true });
+    if (!addresses.length || addresses.some((item) => this.isPrivateAddress(item.address))) {
+      throw new Error('Linked page resolved to a private or unavailable address.');
+    }
+  }
+
+  private isPrivateAddress(address: string) {
+    if (address === '::1' || address === '::' || address.toLowerCase().startsWith('fe80:')) {
+      return true;
+    }
+    if (address.toLowerCase().startsWith('fc') || address.toLowerCase().startsWith('fd')) {
+      return true;
+    }
+    return PRIVATE_IPV4.some((pattern) => pattern.test(address));
+  }
+
+  private async readLimitedBody(response: Response, maxBytes: number) {
+    if (!response.body) return '';
+    const reader = response.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let total = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel();
+        throw new Error('Linked page exceeded the response-size limit.');
+      }
+      chunks.push(value);
+    }
+    const merged = new Uint8Array(total);
+    let offset = 0;
+    for (const chunk of chunks) {
+      merged.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    return new TextDecoder('utf-8').decode(merged);
+  }
+
+  private extractStructuredLeadText(html: string) {
+    const lines: string[] = [];
+    const scriptPattern = /<script\b[^>]*(?:type=["'](?:application\/ld\+json|application\/json)["']|id=["']__NEXT_DATA__["'])[^>]*>([\s\S]*?)<\/script>/gi;
+    for (const match of html.matchAll(scriptPattern)) {
+      const raw = this.decodeBasicEntities(match[1]).trim();
+      if (!raw || raw.length > 500_000) continue;
+      try {
+        this.flattenStructuredValue(JSON.parse(raw), lines, 0);
+      } catch {
+        continue;
+      }
+    }
+    for (const match of html.matchAll(/["'](?:name|fullName|contactName|phone|telephone|email|streetAddress|address)["']\s*:\s*["']([^"']{2,180})["']/gi)) {
+      lines.push(`${match[0].split(':')[0].replace(/["']/g, '')}: ${this.decodeBasicEntities(match[1])}`);
+    }
+    return normalizeLeadCollectionText(lines.join('\n')).slice(0, 8_000);
+  }
+
+  private flattenStructuredValue(value: unknown, lines: string[], depth: number) {
+    if (depth > 7 || lines.length >= 180 || value === null || value === undefined) return;
+    if (Array.isArray(value)) {
+      value.slice(0, 40).forEach((item) => this.flattenStructuredValue(item, lines, depth + 1));
+      return;
+    }
+    if (typeof value !== 'object') return;
+    const relevant = /^(name|fullName|contactName|givenName|familyName|phone|telephone|email|streetAddress|address|addressLocality|postalCode)$/i;
+    for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+      if (typeof child === 'string' && relevant.test(key) && child.trim()) {
+        lines.push(`${key}: ${child.trim()}`);
+      } else if (typeof child === 'object') {
+        this.flattenStructuredValue(child, lines, depth + 1);
+      }
+    }
+  }
+
+  private firstLabeledValue(text: string, labels: string[]) {
+    for (const label of labels) {
+      const pattern = new RegExp(
+        `(?:^|\\n)\\s*${this.escapeRegExp(label)}\\s*[:|\\-–—]\\s*([^\\n]{2,180})`,
+        'i',
+      );
+      const value = text.match(pattern)?.[1]?.trim();
+      if (value) return value.replace(/\s+/g, ' ').slice(0, 180);
+    }
+    return '';
+  }
+
+  private firstPhone(value: string) {
+    const candidates = value.match(/(?:\+?\d[\d\s().-]{6,}\d)/g) ?? [];
+    return (
+      candidates
+        .map((candidate) => candidate.trim())
+        .find((candidate) => {
+          const digits = candidate.replace(/\D/g, '');
+          return digits.length >= 7 && digits.length <= 15;
+        }) ?? ''
+    );
+  }
+
+  private looksLikeSystemName(value: string) {
+    return /^(zillow|contact|lead|prospect|consumer|inquiry|property|listing|unknown|not provided)$/i.test(
+      value.trim(),
+    );
+  }
+
+  private decodeBasicEntities(value: string) {
+    return `${value ?? ''}`
+      .replace(/&amp;/gi, '&')
+      .replace(/&quot;/gi, '"')
+      .replace(/&#39;|&apos;/gi, "'")
+      .replace(/&lt;/gi, '<')
+      .replace(/&gt;/gi, '>');
+  }
+
+  private escapeHtml(value: string) {
+    return value
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  private escapeRegExp(value: string) {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  private roundScore(value: number) {
+    return Math.round(Math.min(1, Math.max(0, value)) * 1000) / 1000;
+  }
+
+  private errorMessage(error: unknown) {
+    return error instanceof Error ? error.message : `${error}`;
   }
 
   private async normalizeTemplate(dto: TemplateDraft) {
