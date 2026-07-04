@@ -1,10 +1,44 @@
 name: Sync PDF dependencies
 
 on:
+  push:
+    branches: [development]
+    paths:
+      - backend-nestjs/package.json
+      - frontend/package.json
+      - .github/workflows/sync-pdf-dependencies.yml
   workflow_dispatch:
 
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-pdf-dependencies
+  cancel-in-progress: true
+
 jobs:
-  noop:
+  lockfiles:
     runs-on: ubuntu-latest
     steps:
-      - run: echo ready
+      - uses: actions/checkout@v4
+        with:
+          ref: development
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Update backend lockfile
+        working-directory: backend-nestjs
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Update frontend lockfile
+        working-directory: frontend
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Commit lockfiles
+        run: |
+          if git diff --quiet -- backend-nestjs/package-lock.json frontend/package-lock.json; then
+            exit 0
+          fi
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add backend-nestjs/package-lock.json frontend/package-lock.json
+          git commit -m "chore(pdfs): sync PDF dependency lockfiles"
+          git push origin development
