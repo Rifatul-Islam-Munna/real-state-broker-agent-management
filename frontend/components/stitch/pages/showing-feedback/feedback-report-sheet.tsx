@@ -30,6 +30,14 @@ import {
   useSendShowingFeedbackReport,
 } from "@/hooks/use-realtor-showings-api"
 
+const feedbackTokens = [
+  "{{feedback_summary}}",
+  "{{positive_feedback}}",
+  "{{negative_feedback}}",
+  "{{positive_summary}}",
+  "{{negative_summary}}",
+]
+
 export function FeedbackReportSheet({
   fromDate,
   onOpenChange,
@@ -70,10 +78,27 @@ export function FeedbackReportSheet({
   )
   const selectedTemplate = templates.find((item) => item.id === templateId)
 
+  function isTemplateReady() {
+    if (!propertyId || !selectedTemplate) {
+      setError("Choose a property and owner feedback template.")
+      return false
+    }
+    const content = `${selectedTemplate.subject}\n${selectedTemplate.body}`
+    const hasFeedbackToken =
+      feedbackTokens.some((token) => content.includes(token)) ||
+      /\{\{feedback\d+\}\}/.test(content)
+    if (!hasFeedbackToken) {
+      setError(
+        "The selected template needs a feedback token such as {{positive_feedback}}, {{negative_feedback}}, or {{feedback_summary}}."
+      )
+      return false
+    }
+    return true
+  }
+
   async function renderPreview() {
     setError(null)
-    if (!propertyId || !templateId)
-      return setError("Choose a property and owner feedback template.")
+    if (!isTemplateReady() || !propertyId) return
     const response = await previewMutation.mutateAsync({
       propertyId,
       templateId,
@@ -89,8 +114,7 @@ export function FeedbackReportSheet({
 
   async function sendReport() {
     setError(null)
-    if (!propertyId || !templateId)
-      return setError("Choose a property and owner feedback template.")
+    if (!isTemplateReady() || !propertyId) return
     const channels = [
       emailEnabled ? "Email" : null,
       smsEnabled ? "Sms" : null,
@@ -121,6 +145,11 @@ export function FeedbackReportSheet({
           </SheetDescription>
         </SheetHeader>
         <div className="flex-1 space-y-5 overflow-y-auto px-5 pb-5">
+          {templatesQuery.error ? (
+            <Alert variant="destructive">
+              <AlertDescription>{templatesQuery.error.message}</AlertDescription>
+            </Alert>
+          ) : null}
           {error ? (
             <Alert variant="destructive">
               <AlertDescription>{error}</AlertDescription>
@@ -141,6 +170,7 @@ export function FeedbackReportSheet({
               onValueChange={(value) => {
                 setTemplateId(value === "none" ? "" : value)
                 setPreview(null)
+                setError(null)
               }}
             >
               <SelectTrigger className="w-full">
