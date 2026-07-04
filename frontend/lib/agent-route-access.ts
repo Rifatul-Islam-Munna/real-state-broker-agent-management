@@ -49,6 +49,13 @@ export const agentRouteAccessItems = [
     permission: "mail",
   },
   {
+    description: "Manage provider parsers and lead field mappings.",
+    href: "/dashboard/lead-collection-templates",
+    icon: "document_scanner",
+    label: "Lead Templates",
+    permission: "mail",
+  },
+  {
     description: "Agency profile, integrations, AI, and mailbox sync settings.",
     href: "/dashboard/settings",
     icon: "settings",
@@ -86,4 +93,3 @@ export function getAccessibleAgentNavigation(permissions?: string[] | null) {
 export function getDefaultAgentRoute(permissions?: string[] | null) {
   return getAccessibleAgentNavigation(permissions)[0]?.href ?? "/login"
 }
-
