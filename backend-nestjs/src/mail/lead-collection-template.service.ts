@@ -240,9 +240,7 @@ export class LeadCollectionTemplateService {
     )
       ? (dto.sourceType as LeadCollectionTemplateSourceType)
       : source.sourceType;
-    const bodyFingerprint = this.stringArray(dto.bodyFingerprint).length
-      ? this.stringArray(dto.bodyFingerprint)
-      : buildLeadCollectionFingerprint(sourceText, mappings);
+    const bodyFingerprint = buildLeadCollectionFingerprint(sourceText, mappings);
 
     return {
       name,
