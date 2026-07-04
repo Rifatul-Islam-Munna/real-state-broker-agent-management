@@ -1,9 +1,12 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { MailInboxItem } from './entities/mail.entity';
+import { LeadCollectionTemplate } from './entities/lead-collection-template.entity';
 import { MailService } from './mail.service';
 import { MailController } from './mail.controller';
 import { MailInboxSyncBackgroundService } from './mail-sync.service';
+import { LeadCollectionTemplateService } from './lead-collection-template.service';
+import { LeadCollectionTemplateController } from './lead-collection-template.controller';
 import { LeadsModule } from '../leads/leads.module';
 import { AgencyIntegrationSettings } from '../settings/entities/integration-settings.entity';
 import { Lead } from '../leads/entities/lead.entity';
@@ -14,12 +17,24 @@ import { ShowingFeedbackModule } from '../showing-feedback/showing-feedback.modu
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([MailInboxItem, AgencyIntegrationSettings, Lead, LeadHistoryEntry, Property]),
+    TypeOrmModule.forFeature([
+      MailInboxItem,
+      LeadCollectionTemplate,
+      AgencyIntegrationSettings,
+      Lead,
+      LeadHistoryEntry,
+      Property,
+    ]),
     LeadsModule,
     SettingsModule,
     ShowingFeedbackModule,
   ],
-  providers: [MailService, MailInboxSyncBackgroundService],
-  controllers: [MailController],
+  providers: [
+    MailService,
+    MailInboxSyncBackgroundService,
+    LeadCollectionTemplateService,
+  ],
+  controllers: [MailController, LeadCollectionTemplateController],
+  exports: [LeadCollectionTemplateService],
 })
 export class MailModule {}
