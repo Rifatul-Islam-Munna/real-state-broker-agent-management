@@ -1,0 +1,30 @@
+name: Apply lead template UI
+
+on:
+  push:
+    branches: [development]
+    paths:
+      - .github/workflows/apply-lead-template-ui.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: development
+          fetch-depth: 0
+      - name: Apply inbox and type updates
+        run: python frontend/scripts/apply-lead-template-ui.py
+      - name: Commit UI integration
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add frontend/@types/real-estate-api.ts frontend/components/stitch/pages/lead-history/managed-mail-inbox-page.tsx frontend/components/stitch/pages/lead-collection-templates/editor.tsx
+          git commit -m "feat(leads): connect inbox to lead collection templates"
+          git pull --rebase origin development
+          git push origin development
