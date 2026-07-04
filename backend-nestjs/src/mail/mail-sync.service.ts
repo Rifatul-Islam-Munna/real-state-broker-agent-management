@@ -13,6 +13,8 @@ import { MailInboxItem, MailInboxKind, MailInboxStatus } from './entities/mail.e
 import { SettingsService } from '../settings/settings.service';
 import { normalizePhoneNumber } from '../common/phone-normalizer';
 import { ShowingFeedbackService } from '../showing-feedback/showing-feedback.service';
+import { LeadCollectionTemplateService } from './lead-collection-template.service';
+import type { LeadCollectionParseResult } from './lead-collection-parser';
 
 interface MailProviderConfig {
   providerName: string;
@@ -35,6 +37,7 @@ interface InboundEmail {
   senderName: string;
   subject: string;
   body: string;
+  htmlBody: string;
   messageId: string;
   inReplyTo: string;
   references: string[];
@@ -61,6 +64,14 @@ interface ExtractedLeadInfo {
   intent?: string;
   confidence?: number;
   shouldCreateLead?: boolean;
+  rawFields?: Record<string, string>;
+}
+
+interface LeadExtractionOutcome {
+  info: ExtractedLeadInfo;
+  method: 'Template' | 'Template+Fallback' | 'Fallback' | 'AI';
+  confidence: number;
+  aiUsed: boolean;
 }
 
 interface SyncRunResult {
@@ -91,6 +102,7 @@ export class MailInboxSyncBackgroundService {
     private propertyRepo: Repository<Property>,
     private dataSource: DataSource,
     private leadIntelligence: MailboxLeadIntelligenceService,
+    private leadCollectionTemplates: LeadCollectionTemplateService,
     private settingsService: SettingsService,
     private showingFeedbackService: ShowingFeedbackService,
   ) {}
@@ -223,6 +235,7 @@ export class MailInboxSyncBackgroundService {
             senderName: (sender?.name ?? '').trim(),
             subject: (parsed.subject ?? '').trim(),
             body: (parsed.text ?? '').trim(),
+            htmlBody: typeof parsed.html === 'string' ? parsed.html : '',
             messageId: `${parsed.messageId ?? ''}`.trim(),
             inReplyTo: `${parsed.inReplyTo ?? ''}`.trim(),
             references: this.normalizeReferences(parsed.references),
@@ -263,11 +276,18 @@ export class MailInboxSyncBackgroundService {
   }
 
   private async saveInbound(inbound: InboundEmail, properties: Property[], config: MailProviderConfig, aiConfig: AiProviderConfig | null) {
+    const templateResult = await this.leadCollectionTemplates.extractFromEmail({
+      fromAddress: inbound.senderEmail,
+      subject: inbound.subject,
+      htmlBody: inbound.htmlBody,
+      textBody: inbound.body,
+    });
     const fallback = await this.leadIntelligence.extractLeadFromEmail({
       ...inbound,
       receivedAt: inbound.receivedAt,
     });
-    const extracted = await this.extractLeadInfo(inbound, aiConfig, fallback);
+    const extraction = await this.extractLeadInfo(inbound, aiConfig, fallback, templateResult);
+    const extracted = extraction.info;
     const agencySettings = await this.settingsService.getAdminSettings();
     const defaultPhoneCountry = agencySettings.profile?.defaultPhoneCountry ?? 'US';
     extracted.phone = normalizePhoneNumber(extracted.phone, defaultPhoneCountry);
@@ -286,7 +306,7 @@ export class MailInboxSyncBackgroundService {
 
       let lead = await this.findThreadLead(mailRepo, leadRepo, inbound);
       if (!lead) lead = await leadRepo.createQueryBuilder('lead')
-        .where('LOWER(lead.email) = :email', { email: inbound.senderEmail })
+        .where('LOWER(lead.email) = :email', { email: (extracted.email || inbound.senderEmail).toLowerCase() })
         .getOne();
       let matchedLead = false;
       let createdLead = false;
@@ -305,16 +325,18 @@ export class MailInboxSyncBackgroundService {
             lead.agent = `${matchedProperty.agent.firstName ?? ''} ${matchedProperty.agent.lastName ?? ''}`.trim();
           }
           if (matchedProperty.agentId) lead.agentId = matchedProperty.agentId;
+        } else if (extracted.propertyTitle && !lead.property) {
+          lead.property = extracted.propertyTitle;
         }
         lead = await leadRepo.save(lead);
       } else if (config.autoCreateLeads && isPropertyInquiry) {
         const interest = this.inferInterest(combined, extracted.interest);
         lead = leadRepo.create({
           name: this.chooseName(extracted.name, inbound),
-          email: inbound.senderEmail,
+          email: (extracted.email || inbound.senderEmail).toLowerCase(),
           phone: extracted.phone ?? 'Not provided',
-          summary: this.buildSummary(inbound, interest),
-          property: matchedProperty?.title ?? '',
+          summary: extracted.rawFields?.summary || this.buildSummary(inbound, interest),
+          property: matchedProperty?.title ?? extracted.propertyTitle ?? '',
           budget: extracted.budget ?? '',
           stage: LeadStage.New,
           priority: this.priorityFromIntent(extracted.intent, extracted.confidence),
@@ -322,13 +344,13 @@ export class MailInboxSyncBackgroundService {
             ? `${matchedProperty.agent.firstName ?? ''} ${matchedProperty.agent.lastName ?? ''}`.trim()
             : '',
           agentId: matchedProperty?.agentId,
-          source: 'Mail Inbox',
+          source: extracted.rawFields?.source || 'Mail Inbox',
           interest,
           timeline: extracted.timeline ?? '',
           inBoard: true,
           followUpStatus: LeadFollowUpStatus.Open,
           nextActionDate: new Date(inbound.receivedAt.getTime() + 24 * 60 * 60 * 1000),
-          nextActionType: 'Reply to inbound email',
+          nextActionType: extracted.rawFields?.nextActionType || 'Reply to inbound email',
           notes: [],
           lastActivityAt: inbound.receivedAt,
         });
@@ -341,11 +363,22 @@ export class MailInboxSyncBackgroundService {
         name: inbound.senderName,
         subject: inbound.subject,
         message: inbound.body,
+        htmlBody: inbound.htmlBody,
         messageId: inbound.messageId,
         inReplyTo: inbound.inReplyTo,
         references: inbound.references,
         mailboxTag: inbound.mailboxTag,
         extractedLead: extracted,
+        extractionMethod: extraction.method,
+        extractionConfidence: extraction.confidence,
+        leadCollectionTemplateId: templateResult.templateId,
+        leadCollectionTemplateName: templateResult.templateName,
+        aiFallbackUsed: extraction.aiUsed,
+        extractionDetails: {
+          matchScore: templateResult.matchScore,
+          missingRequiredFields: templateResult.missingRequiredFields,
+          diagnostics: templateResult.diagnostics,
+        },
         kind: MailInboxKind.Direct,
         status: MailInboxStatus.New,
         leadId: lead?.id ?? null,
@@ -381,6 +414,8 @@ export class MailInboxSyncBackgroundService {
         mailId: savedMail.id,
       };
     });
+
+    await this.leadCollectionTemplates.recordTemplateResult(templateResult, extraction.aiUsed);
 
     if (outcome.leadId) {
       await this.showingFeedbackService.processInbound({
@@ -510,16 +545,46 @@ export class MailInboxSyncBackgroundService {
     return (inbound.senderEmail.split('@')[0] || 'Email Lead').replace(/[._-]+/g, ' ').trim();
   }
 
-  private async extractLeadInfo(inbound: InboundEmail, aiConfig: AiProviderConfig | null, fallback: any): Promise<ExtractedLeadInfo> {
+  private async extractLeadInfo(
+    inbound: InboundEmail,
+    aiConfig: AiProviderConfig | null,
+    fallback: any,
+    templateResult: LeadCollectionParseResult,
+  ): Promise<LeadExtractionOutcome> {
+    const templateValues = templateResult.values ?? {};
     const fallbackInfo: ExtractedLeadInfo = {
-      name: fallback.name,
-      email: inbound.senderEmail,
-      phone: fallback.phone,
-      interest: fallback.interest,
-      shouldCreateLead: this.isPropertyInquiry(`${inbound.subject}\n${inbound.body}`.toLowerCase()),
-      confidence: 0.45,
+      name: templateValues.name || fallback.name,
+      email: templateValues.email || inbound.senderEmail,
+      phone: templateValues.phone || fallback.phone,
+      propertyTitle: templateValues.property || '',
+      budget: templateValues.budget || '',
+      timeline: templateValues.timeline || '',
+      interest: templateValues.interest || fallback.interest,
+      shouldCreateLead:
+        this.leadCollectionTemplates.isConfident(templateResult) ||
+        this.isPropertyInquiry(`${inbound.subject}
+${inbound.body}`.toLowerCase()),
+      confidence: Math.max(templateResult.confidence, 0.45),
+      rawFields: templateValues,
     };
-    if (!aiConfig?.baseUrl) return fallbackInfo;
+
+    if (this.leadCollectionTemplates.isConfident(templateResult)) {
+      return {
+        info: fallbackInfo,
+        method: 'Template',
+        confidence: templateResult.confidence,
+        aiUsed: false,
+      };
+    }
+
+    if (!aiConfig?.baseUrl) {
+      return {
+        info: fallbackInfo,
+        method: templateResult.matched ? 'Template+Fallback' : 'Fallback',
+        confidence: fallbackInfo.confidence ?? 0.45,
+        aiUsed: false,
+      };
+    }
 
     try {
       const response = await fetch(`${aiConfig.baseUrl}/chat/completions`, {
@@ -544,31 +609,62 @@ export class MailInboxSyncBackgroundService {
                 senderName: inbound.senderName,
                 subject: inbound.subject,
                 body: inbound.body.slice(0, 8000),
+                deterministicTemplateAttempt: {
+                  templateName: templateResult.templateName,
+                  confidence: templateResult.confidence,
+                  values: templateResult.values,
+                  missingRequiredFields: templateResult.missingRequiredFields,
+                },
               }),
             },
           ],
         }),
       });
-      if (!response.ok) return fallbackInfo;
+      if (!response.ok) {
+        return {
+          info: fallbackInfo,
+          method: templateResult.matched ? 'Template+Fallback' : 'Fallback',
+          confidence: fallbackInfo.confidence ?? 0.45,
+          aiUsed: false,
+        };
+      }
       const data: any = await response.json();
       const parsed = this.parseJson(data?.choices?.[0]?.message?.content);
-      if (!parsed) return fallbackInfo;
-      return {
+      if (!parsed) {
+        return {
+          info: fallbackInfo,
+          method: templateResult.matched ? 'Template+Fallback' : 'Fallback',
+          confidence: fallbackInfo.confidence ?? 0.45,
+          aiUsed: false,
+        };
+      }
+      const info: ExtractedLeadInfo = {
         ...fallbackInfo,
         name: this.cleanText(parsed.name) || fallbackInfo.name,
-        email: this.cleanText(parsed.email) || inbound.senderEmail,
+        email: this.cleanText(parsed.email) || fallbackInfo.email,
         phone: this.cleanText(parsed.phone) || fallbackInfo.phone,
-        propertyTitle: this.cleanText(parsed.propertyTitle),
+        propertyTitle: this.cleanText(parsed.propertyTitle) || fallbackInfo.propertyTitle,
         propertyLocation: this.cleanText(parsed.propertyLocation),
-        budget: this.cleanText(parsed.budget),
-        timeline: this.cleanText(parsed.timeline),
+        budget: this.cleanText(parsed.budget) || fallbackInfo.budget,
+        timeline: this.cleanText(parsed.timeline) || fallbackInfo.timeline,
         interest: this.cleanText(parsed.interest) || fallbackInfo.interest,
         intent: this.cleanText(parsed.intent),
         confidence: this.clampNumber(parsed.confidence, fallbackInfo.confidence ?? 0.45, 0, 1),
         shouldCreateLead: parsed.shouldCreateLead === true || fallbackInfo.shouldCreateLead,
       };
+      return {
+        info,
+        method: 'AI',
+        confidence: info.confidence ?? 0.45,
+        aiUsed: true,
+      };
     } catch {
-      return fallbackInfo;
+      return {
+        info: fallbackInfo,
+        method: templateResult.matched ? 'Template+Fallback' : 'Fallback',
+        confidence: fallbackInfo.confidence ?? 0.45,
+        aiUsed: false,
+      };
     }
   }
 
