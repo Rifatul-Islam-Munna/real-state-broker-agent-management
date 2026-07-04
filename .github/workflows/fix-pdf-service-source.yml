@@ -22,48 +22,12 @@ jobs:
           from pathlib import Path
           path = Path('backend-nestjs/src/pdfs/pdfs.service.ts')
           text = path.read_text()
-          old = """  private stringArray(value: unknown) {
-            if (typeof value === 'string') {
-              try {
-                const parsed = JSON.parse(value);
-                if (Array.isArray(parsed)) value = parsed;
-                else value = value.split(',');
-              } catch {
-                value = value.split(',');
-              }
-            }
-          """
-          new = """  private stringArray(value: unknown) {
-            const stringValue = typeof value === 'string' ? value : null;
-            if (stringValue !== null) {
-              try {
-                const parsed = JSON.parse(stringValue);
-                if (Array.isArray(parsed)) value = parsed;
-                else value = stringValue.split(',');
-              } catch {
-                value = stringValue.split(',');
-              }
-            }
-          """
+          text = text.replace("value = value.split(',');", "value = String(value).split(',');")
+          old = "    if (form.getFields().length > 0) {\n      form.flatten();\n    }"
+          new = "    if (form.getFields().length > 0) {\n      try {\n        form.flatten();\n      } catch {\n        // Imported overlays remain usable when a source form cannot be flattened.\n      }\n    }"
           if old not in text:
-              raise SystemExit('stringArray block not found')
-          text = text.replace(old, new, 1)
-          old_flatten = """    if (form.getFields().length > 0) {
-              form.flatten();
-            }
-          """
-          new_flatten = """    if (form.getFields().length > 0) {
-              try {
-                form.flatten();
-              } catch {
-                // Some third-party forms have incomplete appearance streams.
-                // The imported pdfme overlays remain usable without flattening.
-              }
-            }
-          """
-          if old_flatten not in text:
               raise SystemExit('flatten block not found')
-          path.write_text(text.replace(old_flatten, new_flatten, 1))
+          path.write_text(text.replace(old, new, 1))
           PY
       - name: Commit source fixes
         run: |
