@@ -1,6 +1,7 @@
 import { LeadCollectionLinkedPageConfig } from './entities/lead-collection-template.entity';
 import { htmlToLeadCollectionText, LeadCollectionEmailInput, normalizeLeadCollectionText } from './lead-collection-parser';
 import { linkedPageHostAllowed, normalizeLinkedPageConfig } from './linked-page-config';
+import { extractLinkedPageStructuredText } from './linked-page-structured-text';
 
 export type LinkedPageResult = {
   url: string;
@@ -104,9 +105,9 @@ async function loadPage(value: string, config: LeadCollectionLinkedPageConfig) {
     if (contentLength > 1_500_000) return null;
     const raw = (await response.text()).slice(0, 1_500_000);
     const contentType = `${response.headers.get('content-type') ?? ''}`.toLowerCase();
-    const text = normalizeLeadCollectionText(
-      contentType.includes('html') ? htmlToLeadCollectionText(raw) : raw,
-    ).slice(0, 16_000);
+    const visible = contentType.includes('html') ? htmlToLeadCollectionText(raw) : raw;
+    const structured = contentType.includes('html') ? extractLinkedPageStructuredText(raw) : '';
+    const text = normalizeLeadCollectionText(`${structured}\n${visible}`).slice(0, 16_000);
     return text
       ? {
           url: finalUrl.toString(),
