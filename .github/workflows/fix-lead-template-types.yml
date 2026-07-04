@@ -1,0 +1,36 @@
+name: Fix lead template service types
+
+on:
+  push:
+    branches: [development]
+    paths:
+      - .github/workflows/fix-lead-template-types.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: development
+      - name: Fix unknown string narrowing
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('backend-nestjs/src/mail/lead-collection-template.service.ts')
+          text = path.read_text()
+          text = text.replace("value = Array.isArray(parsed) ? parsed : value.split(',');", "value = Array.isArray(parsed) ? parsed : String(value).split(',');")
+          text = text.replace("value = value.split(',');", "value = String(value).split(',');")
+          path.write_text(text)
+          PY
+      - name: Remove temporary workflow and commit
+        run: |
+          rm .github/workflows/fix-lead-template-types.yml
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add backend-nestjs/src/mail/lead-collection-template.service.ts .github/workflows/fix-lead-template-types.yml
+          git commit -m "fix(leads): satisfy strict template service types"
+          git push origin development
