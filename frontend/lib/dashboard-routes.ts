@@ -25,6 +25,7 @@ export const dashboardRoutes: readonly DashboardRoute[] = [
   { href: "/dashboard/mail", label: "Mail", icon: "mail", permission: "mail" },
   { href: "/dashboard/marketing", label: "Marketing", icon: "campaign", adminOnly: true },
   { href: "/dashboard/documents", label: "Documents", icon: "description", adminOnly: true },
+  { href: "/dashboard/pdfs", label: "PDFs", icon: "picture_as_pdf", adminOnly: true },
   { href: "/dashboard/team", label: "Teams", icon: "badge", adminOnly: true },
   { href: "/dashboard/reports", label: "Reports", icon: "trending_up", permission: "dashboard" },
   { href: "/dashboard/settings", label: "Settings", icon: "settings", adminOnly: true },
