@@ -23,27 +23,27 @@ jobs:
           path = Path('backend-nestjs/src/pdfs/pdfs.service.ts')
           text = path.read_text()
           old = """  private stringArray(value: unknown) {
-              if (typeof value === 'string') {
-                try {
-                  const parsed = JSON.parse(value);
-                  if (Array.isArray(parsed)) value = parsed;
-                  else value = value.split(',');
-                } catch {
-                  value = value.split(',');
-                }
+            if (typeof value === 'string') {
+              try {
+                const parsed = JSON.parse(value);
+                if (Array.isArray(parsed)) value = parsed;
+                else value = value.split(',');
+              } catch {
+                value = value.split(',');
               }
+            }
           """
           new = """  private stringArray(value: unknown) {
-              const stringValue = typeof value === 'string' ? value : null;
-              if (stringValue !== null) {
-                try {
-                  const parsed = JSON.parse(stringValue);
-                  if (Array.isArray(parsed)) value = parsed;
-                  else value = stringValue.split(',');
-                } catch {
-                  value = stringValue.split(',');
-                }
+            const stringValue = typeof value === 'string' ? value : null;
+            if (stringValue !== null) {
+              try {
+                const parsed = JSON.parse(stringValue);
+                if (Array.isArray(parsed)) value = parsed;
+                else value = stringValue.split(',');
+              } catch {
+                value = stringValue.split(',');
               }
+            }
           """
           if old not in text:
               raise SystemExit('stringArray block not found')
@@ -65,12 +65,10 @@ jobs:
               raise SystemExit('flatten block not found')
           path.write_text(text.replace(old_flatten, new_flatten, 1))
           PY
-      - name: Remove temporary workflow
-        run: rm .github/workflows/fix-pdf-service-source.yml
       - name: Commit source fixes
         run: |
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add backend-nestjs/src/pdfs/pdfs.service.ts .github/workflows/fix-pdf-service-source.yml
+          git add backend-nestjs/src/pdfs/pdfs.service.ts
           git commit -m "fix(pdfs): harden imported form handling"
           git push origin development
