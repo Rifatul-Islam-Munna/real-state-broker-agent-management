@@ -22,7 +22,7 @@ export function PdfShell({
   const pathname = usePathname()
   const tabs = [
     { href: "/dashboard/pdfs/templates", label: "Templates", icon: "edit_document" },
-    { href: "/dashboard/pdfs/generate", label: "Generate & download", icon: "picture_as_pdf" },
+    { href: "/dashboard/pdfs/download", label: "Generate & download", icon: "picture_as_pdf" },
   ]
 
   return (
