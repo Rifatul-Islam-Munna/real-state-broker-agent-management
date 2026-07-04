@@ -9,6 +9,14 @@ export type LeadCollectionTemplateSourceType =
 export type LeadCollectionSubjectMatchMode = "Contains" | "Exact" | "Regex"
 export type LeadCollectionFieldTransform = "Text" | "Email" | "Phone" | "Number" | "Date"
 
+export type LeadCollectionExternalPageConfig = {
+  enabled: boolean
+  allowedHosts: string[]
+  urlIncludes: string[]
+  linkTextIncludes: string[]
+  maxLinks: number
+}
+
 export type LeadCollectionFieldMapping = {
   field: string
   label: string
@@ -37,6 +45,10 @@ export type LeadCollectionTemplateItem = {
   bodyFingerprint: string[]
   sourceHtml: string
   sourceText: string
+  linkedPageConfig: LeadCollectionExternalPageConfig
+  linkedPageSampleUrl: string
+  linkedPageSourceHtml: string
+  linkedPageSourceText: string
   mappings: LeadCollectionFieldMapping[]
   requiredFields: string[]
   confidenceThreshold: number
@@ -84,6 +96,11 @@ export type LeadCollectionPreparedSource = {
   subjectPattern: string
   subjectMatchMode: LeadCollectionSubjectMatchMode
   bodyFingerprint: string[]
+  linkedPageConfig: LeadCollectionExternalPageConfig
+  linkedPageSampleUrl: string
+  linkedPageSourceHtml: string
+  linkedPageSourceText: string
+  linkedPageStatus: string
 }
 
 export type LeadCollectionParseResult = {
