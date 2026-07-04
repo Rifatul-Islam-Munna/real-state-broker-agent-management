@@ -301,7 +301,11 @@ export class PdfsService {
     }
 
     if (form.getFields().length > 0) {
-      form.flatten();
+      try {
+        form.flatten();
+      } catch {
+        // Imported overlays remain usable when a source form cannot be flattened.
+      }
     }
     const flattenedBytes = await pdfDocument.save({ useObjectStreams: false });
     const basePdf = `data:application/pdf;base64,${Buffer.from(flattenedBytes).toString('base64')}`;
@@ -840,9 +844,9 @@ export class PdfsService {
       try {
         const parsed = JSON.parse(value);
         if (Array.isArray(parsed)) value = parsed;
-        else value = value.split(',');
+        else value = String(value).split(',');
       } catch {
-        value = value.split(',');
+        value = String(value).split(',');
       }
     }
     return [
