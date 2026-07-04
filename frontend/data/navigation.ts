@@ -40,6 +40,11 @@ export const adminNavigation = [
     icon: "mail",
   },
   {
+    href: "/dashboard/lead-collection-templates",
+    label: "Lead Templates",
+    icon: "document_scanner",
+  },
+  {
     href: "/dashboard/marketing",
     label: "Marketing",
     icon: "campaign",
@@ -101,6 +106,11 @@ export const agentNavigation = [
     href: "/dashboard/mail",
     label: "Mail",
     icon: "mail",
+  },
+  {
+    href: "/dashboard/lead-collection-templates",
+    label: "Lead Templates",
+    icon: "document_scanner",
   },
   {
     href: "/dashboard/settings",
