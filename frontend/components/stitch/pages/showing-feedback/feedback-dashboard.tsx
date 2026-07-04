@@ -4,6 +4,7 @@ import { useMemo, useState } from "react"
 
 import type { ShowingFeedbackPropertySummary } from "@/@types/real-estate-api"
 import { ShowingFeedbackAutomationPanel } from "@/components/stitch/pages/agency-settings/sections/showing-feedback-automation-panel"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import { AppIcon } from "@/components/ui/app-icon"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -91,6 +92,7 @@ export function ShowingFeedbackDashboard() {
                 variant="outline"
               />
               <ActionButton
+                disabled={!propertyId}
                 icon="send"
                 label="Owner report"
                 onClick={() => setReportOpen(true)}
@@ -98,6 +100,12 @@ export function ShowingFeedbackDashboard() {
             </div>
           </CardHeader>
         </Card>
+
+        {summariesQuery.error ? (
+          <Alert variant="destructive">
+            <AlertDescription>{summariesQuery.error.message}</AlertDescription>
+          </Alert>
+        ) : null}
 
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <Metric
@@ -147,11 +155,13 @@ export function ShowingFeedbackDashboard() {
 }
 
 function ActionButton({
+  disabled,
   icon,
   label,
   onClick,
   variant,
 }: {
+  disabled?: boolean
   icon: string
   label: string
   onClick: () => void
@@ -160,6 +170,7 @@ function ActionButton({
   return (
     <Button
       className="min-w-36"
+      disabled={disabled}
       onClick={onClick}
       size="lg"
       type="button"
