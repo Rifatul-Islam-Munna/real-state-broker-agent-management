@@ -1,5 +1,6 @@
 import Link from "next/link"
 
+import { PagePagination } from "@/components/stitch/shared/page-pagination"
 import { AppIcon } from "@/components/ui/app-icon"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -15,9 +16,8 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { cn } from "@/lib/utils"
-import { PagePagination } from "@/components/stitch/shared/page-pagination"
 import type { PropertyStatus } from "@/hooks/use-real-estate-api"
+import { cn } from "@/lib/utils"
 
 export type PropertyManagementFilter = "all" | "open" | "closed" | "long-open"
 
@@ -60,6 +60,7 @@ type Section1SectionProps = {
   onPageChange: (page: number) => void
   onSearchChange: (value: string) => void
   onTypeChange: (type: "All" | "Residential" | "Commercial") => void
+  onViewPropertyClick: (propertyId: number) => void
   searchTerm: string
   statusCards: StatusCard[]
   totalPages: number
@@ -145,6 +146,7 @@ export function Section1Section({
   onPageChange,
   onSearchChange,
   onTypeChange,
+  onViewPropertyClick,
   searchTerm,
   statusCards,
   totalPages,
@@ -159,7 +161,7 @@ export function Section1Section({
             <CardDescription>{"Admin Workspace"}</CardDescription>
             <CardTitle>{"Property Management"}</CardTitle>
             <CardDescription className="max-w-3xl">
-              {"Track every listing, identify long-open inventory, and launch a new property only when you need it."}
+              {"Track every listing and click any property to open its complete lead, showing, feedback, and document workspace."}
             </CardDescription>
           </div>
         </CardHeader>
@@ -175,10 +177,7 @@ export function Section1Section({
                 value={searchTerm}
               />
             </div>
-            <Button
-              onClick={onAddPropertyClick}
-              type="button"
-            >
+            <Button onClick={onAddPropertyClick} type="button">
               <AppIcon data-icon="inline-start" name="add" />
               {"Add Property"}
             </Button>
@@ -186,25 +185,25 @@ export function Section1Section({
         </CardContent>
       </Card>
 
-        <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          {statusCards.map((card) => (
-            <Card key={card.label}>
-              <CardHeader className="grid grid-cols-[1fr_auto] items-center gap-3">
-                <div>
-                  <CardDescription>{card.label}</CardDescription>
-                  <CardTitle>{card.value}</CardTitle>
-                </div>
-                <AppIcon className="text-primary" name={card.icon} />
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground">{card.detail}</p>
-              </CardContent>
-            </Card>
-          ))}
-        </section>
+      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        {statusCards.map((card) => (
+          <Card key={card.label}>
+            <CardHeader className="grid grid-cols-[1fr_auto] items-center gap-3">
+              <div>
+                <CardDescription>{card.label}</CardDescription>
+                <CardTitle>{card.value}</CardTitle>
+              </div>
+              <AppIcon className="text-primary" name={card.icon} />
+            </CardHeader>
+            <CardContent>
+              <p className="text-muted-foreground">{card.detail}</p>
+            </CardContent>
+          </Card>
+        ))}
+      </section>
 
-        <Card>
-          <CardContent>
+      <Card>
+        <CardContent>
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex flex-wrap gap-3">
               {quickFilters.map((filter) => (
@@ -221,8 +220,7 @@ export function Section1Section({
               ))}
             </div>
             <div className="flex flex-wrap gap-3">
-              <Select modal={false} onValueChange={(value) => onTypeChange((value ?? activeType) as "All" | "Residential" | "Commercial")} value={activeType}
-              >
+              <Select modal={false} onValueChange={(value) => onTypeChange((value ?? activeType) as "All" | "Residential" | "Commercial")} value={activeType}>
                 <SelectTrigger className="w-44">
                   <SelectValue placeholder="All Types" />
                 </SelectTrigger>
@@ -249,109 +247,136 @@ export function Section1Section({
               </Select>
             </div>
           </div>
-          </CardContent>
-        </Card>
+        </CardContent>
+      </Card>
 
-        <Card>
-          <CardHeader className="grid gap-1 sm:grid-cols-[1fr_auto] sm:items-center">
-            <div>
-              <CardTitle>{"Your Listings"}</CardTitle>
-              <CardDescription>
-                {`${totalResults} total result${totalResults === 1 ? "" : "s"} across ${totalPages} page${totalPages === 1 ? "" : "s"}`}
-              </CardDescription>
-            </div>
-            <Badge variant="outline">
-              {`Page ${currentPage} of ${Math.max(totalPages, 1)}`}
-            </Badge>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{"Listing"}</TableHead>
-                  <TableHead>{"Type"}</TableHead>
-                  <TableHead>{"Price"}</TableHead>
-                  <TableHead>{"Agent"}</TableHead>
-                  <TableHead>{"Status"}</TableHead>
-                  <TableHead>{"Days Open"}</TableHead>
-                  <TableHead>{"Forecast"}</TableHead>
-                  <TableHead className="text-right">{"Actions"}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {isLoading ? (
-                  <TableRow><TableCell colSpan={8}><Empty><EmptyHeader><EmptyTitle>{"Loading listings..."}</EmptyTitle></EmptyHeader></Empty></TableCell></TableRow>
-                ) : errorMessage ? (
-                  <TableRow><TableCell colSpan={8}><Empty><EmptyHeader><EmptyTitle>{errorMessage}</EmptyTitle></EmptyHeader></Empty></TableCell></TableRow>
-                ) : listings.length === 0 ? (
-                  <TableRow><TableCell colSpan={8}><Empty><EmptyHeader><EmptyTitle>{"No listings"}</EmptyTitle><EmptyDescription>{"No listings match the current filters."}</EmptyDescription></EmptyHeader></Empty></TableCell></TableRow>
-                ) : (
-                  listings.map((listing) => (
-                    <TableRow key={listing.id}>
-                      <TableCell>
-                        <div className="flex items-center gap-4">
-                          <div
-                            className="h-14 w-20 bg-cover bg-center"
-                            data-alt={listing.imageAlt}
-                            style={{ backgroundImage: `url("${listing.imageSrc}")` }}
-                          />
-                          <div>
-                            <p className="font-medium">
-                              {listing.addressLine1}
-                            </p>
-                            <p className="text-muted-foreground">
-                              {listing.addressLine2}
-                            </p>
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <p className="font-medium">{listing.propertyType}</p>
-                        <p className="text-muted-foreground">{listing.listingType}</p>
-                      </TableCell>
-                      <TableCell className="font-medium">
-                        {listing.price}
-                      </TableCell>
-                      <TableCell>
-                        {listing.agent}
-                      </TableCell>
-                      <TableCell>
-                        <Badge className={cn(getStatusClasses(listing))} variant="secondary">
-                          {getStatusLabel(listing)}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        {listing.status === "Closed" ? "-" : `${listing.daysOnMarket} days`}
-                      </TableCell>
-                      <TableCell>
-                        <p className="font-medium">{`${listing.predictedSellDays} days`}</p>
-                        <p className="text-muted-foreground">{listing.predictionLabel}</p>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            onClick={() => onEditPropertyClick(listing.id)}
-                            size="icon-sm"
+      <Card>
+        <CardHeader className="grid gap-1 sm:grid-cols-[1fr_auto] sm:items-center">
+          <div>
+            <CardTitle>{"Your Listings"}</CardTitle>
+            <CardDescription>
+              {`${totalResults} total result${totalResults === 1 ? "" : "s"} across ${totalPages} page${totalPages === 1 ? "" : "s"}`}
+            </CardDescription>
+          </div>
+          <Badge variant="outline">
+            {`Page ${currentPage} of ${Math.max(totalPages, 1)}`}
+          </Badge>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>{"Listing"}</TableHead>
+                <TableHead>{"Type"}</TableHead>
+                <TableHead>{"Price"}</TableHead>
+                <TableHead>{"Agent"}</TableHead>
+                <TableHead>{"Status"}</TableHead>
+                <TableHead>{"Days Open"}</TableHead>
+                <TableHead>{"Forecast"}</TableHead>
+                <TableHead className="text-right">{"Actions"}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {isLoading ? (
+                <TableRow><TableCell colSpan={8}><Empty><EmptyHeader><EmptyTitle>{"Loading listings..."}</EmptyTitle></EmptyHeader></Empty></TableCell></TableRow>
+              ) : errorMessage ? (
+                <TableRow><TableCell colSpan={8}><Empty><EmptyHeader><EmptyTitle>{errorMessage}</EmptyTitle></EmptyHeader></Empty></TableCell></TableRow>
+              ) : listings.length === 0 ? (
+                <TableRow><TableCell colSpan={8}><Empty><EmptyHeader><EmptyTitle>{"No listings"}</EmptyTitle><EmptyDescription>{"No listings match the current filters."}</EmptyDescription></EmptyHeader></Empty></TableCell></TableRow>
+              ) : (
+                listings.map((listing) => (
+                  <TableRow
+                    className="cursor-pointer transition-colors hover:bg-muted/40"
+                    key={listing.id}
+                    onClick={() => onViewPropertyClick(listing.id)}
+                  >
+                    <TableCell>
+                      <div className="flex items-center gap-4">
+                        <div
+                          className="h-14 w-20 rounded-md bg-cover bg-center"
+                          data-alt={listing.imageAlt}
+                          style={{ backgroundImage: `url("${listing.imageSrc}")` }}
+                        />
+                        <div>
+                          <button
+                            className="text-left font-medium hover:underline"
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              onViewPropertyClick(listing.id)
+                            }}
                             type="button"
-                            variant="ghost"
                           >
-                            <AppIcon name="edit" />
-                          </Button>
-                          <Button render={<Link href={`/properties/${listing.slug}`} />} size="icon-sm" variant="ghost">
-                            <AppIcon name="visibility" />
-                          </Button>
+                            {listing.addressLine1}
+                          </button>
+                          <p className="text-muted-foreground">{listing.addressLine2}</p>
                         </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </CardContent>
-          <CardFooter>
-            <PagePagination currentPage={currentPage} onPageChange={onPageChange} totalPages={totalPages} />
-          </CardFooter>
-        </Card>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <p className="font-medium">{listing.propertyType}</p>
+                      <p className="text-muted-foreground">{listing.listingType}</p>
+                    </TableCell>
+                    <TableCell className="font-medium">{listing.price}</TableCell>
+                    <TableCell>{listing.agent}</TableCell>
+                    <TableCell>
+                      <Badge className={cn(getStatusClasses(listing))} variant="secondary">
+                        {getStatusLabel(listing)}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {listing.status === "Closed" ? "-" : `${listing.daysOnMarket} days`}
+                    </TableCell>
+                    <TableCell>
+                      <p className="font-medium">{`${listing.predictedSellDays} days`}</p>
+                      <p className="text-muted-foreground">{listing.predictionLabel}</p>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          aria-label="Open property workspace"
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            onViewPropertyClick(listing.id)
+                          }}
+                          size="icon-sm"
+                          type="button"
+                          variant="ghost"
+                        >
+                          <AppIcon name="manage_search" />
+                        </Button>
+                        <Button
+                          aria-label="Edit property"
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            onEditPropertyClick(listing.id)
+                          }}
+                          size="icon-sm"
+                          type="button"
+                          variant="ghost"
+                        >
+                          <AppIcon name="edit" />
+                        </Button>
+                        <Button
+                          aria-label="Open public property page"
+                          onClick={(event) => event.stopPropagation()}
+                          render={<Link href={`/properties/${listing.slug}`} />}
+                          size="icon-sm"
+                          variant="ghost"
+                        >
+                          <AppIcon name="visibility" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+        <CardFooter>
+          <PagePagination currentPage={currentPage} onPageChange={onPageChange} totalPages={totalPages} />
+        </CardFooter>
+      </Card>
     </main>
   )
 }
