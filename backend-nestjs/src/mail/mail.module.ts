@@ -6,6 +6,7 @@ import { MailService } from './mail.service';
 import { MailController } from './mail.controller';
 import { MailInboxSyncBackgroundService } from './mail-sync.service';
 import { LeadCollectionTemplateService } from './lead-collection-template.service';
+import { ConfigurableLeadCollectionTemplateService } from './configurable-lead-collection-template.service';
 import { LeadCollectionTemplateController } from './lead-collection-template.controller';
 import { LeadsModule } from '../leads/leads.module';
 import { AgencyIntegrationSettings } from '../settings/entities/integration-settings.entity';
@@ -34,7 +35,10 @@ import { PdfsModule } from '../pdfs/pdfs.module';
   providers: [
     MailService,
     MailInboxSyncBackgroundService,
-    LeadCollectionTemplateService,
+    {
+      provide: LeadCollectionTemplateService,
+      useClass: ConfigurableLeadCollectionTemplateService,
+    },
   ],
   controllers: [MailController, LeadCollectionTemplateController],
   exports: [LeadCollectionTemplateService],
