@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, MoreThan, Repository } from 'typeorm';
+import { SchedulingSettingsService } from '../settings/scheduling-settings.service';
 import { SettingsService } from '../settings/settings.service';
 import { ShowingFeedback } from './entities/showing-feedback.entity';
 import { ShowingFeedbackQueryService } from './showing-feedback-query.service';
@@ -11,54 +12,98 @@ export class ShowingFeedbackAutomationService {
   private readonly logger = new Logger(ShowingFeedbackAutomationService.name);
 
   constructor(
-    @InjectRepository(ShowingFeedback) private readonly feedbackRepo: Repository<ShowingFeedback>,
+    @InjectRepository(ShowingFeedback)
+    private readonly feedbackRepo: Repository<ShowingFeedback>,
     private readonly settings: SettingsService,
     private readonly reports: ShowingFeedbackQueryService,
     private readonly dataSource: DataSource,
+    private readonly scheduling: SchedulingSettingsService,
   ) {}
 
   @Cron('*/10 * * * *')
   async processDueReports() {
     const automation = await this.settings.getShowingFeedbackAutomation();
     if (!automation.enabled) return;
-    const rows = await this.feedbackRepo.createQueryBuilder('feedback')
+
+    const zone = await this.scheduling.getTimeZone();
+    const localDate = this.dateKey(new Date(), zone);
+    const currentWeekKey = this.weekKey(localDate);
+    if (this.weekday(localDate) !== this.reportDay(automation.gapDays)) return;
+
+    const rows = await this.feedbackRepo
+      .createQueryBuilder('feedback')
       .select('feedback.property_id', 'propertyId')
       .addSelect('MAX(feedback.id)', 'latestFeedbackId')
-      .where('feedback.sentiment IN (:...sentiments)', { sentiments: ['positive', 'negative'] })
+      .where('feedback.sentiment IN (:...sentiments)', {
+        sentiments: ['positive', 'negative'],
+      })
       .groupBy('feedback.property_id')
       .getRawMany();
+
     for (const row of rows) {
       const propertyId = Number(row.propertyId);
       const state = automation.deliveryState?.[String(propertyId)] ?? {};
-      if (Number(row.latestFeedbackId) <= Number(state.lastFeedbackId ?? 0)) continue;
-      await this.processProperty(propertyId);
+      if (Number(row.latestFeedbackId) <= Number(state.lastFeedbackId ?? 0)) {
+        continue;
+      }
+      if (this.wasSentThisWeek(state.lastSentAt, currentWeekKey, zone)) {
+        continue;
+      }
+      await this.processProperty(propertyId, currentWeekKey, zone);
     }
   }
 
-  private async processProperty(propertyId: number) {
+  private async processProperty(
+    propertyId: number,
+    currentWeekKey: string,
+    zone: string,
+  ) {
     const runner = this.dataSource.createQueryRunner();
     await runner.connect();
     const lockName = `showing-feedback-auto:${propertyId}`;
+
     try {
-      const [lock] = await runner.query('SELECT pg_try_advisory_lock(hashtext($1)) AS locked', [lockName]);
+      const [lock] = await runner.query(
+        'SELECT pg_try_advisory_lock(hashtext($1)) AS locked',
+        [lockName],
+      );
       if (!lock?.locked) return;
+
       const automation = await this.settings.getShowingFeedbackAutomation();
       if (!automation.enabled) return;
+      const localDate = this.dateKey(new Date(), zone);
+      if (this.weekday(localDate) !== this.reportDay(automation.gapDays)) return;
+
       const state = automation.deliveryState?.[String(propertyId)] ?? {};
-      const processingStartedAt = state.processingStartedAt ? new Date(state.processingStartedAt) : null;
-      if (processingStartedAt && Date.now() - processingStartedAt.getTime() < 6 * 60 * 60 * 1000) return;
+      if (this.wasSentThisWeek(state.lastSentAt, currentWeekKey, zone)) return;
+
+      const processingStartedAt = state.processingStartedAt
+        ? new Date(state.processingStartedAt)
+        : null;
+      if (
+        processingStartedAt &&
+        Date.now() - processingStartedAt.getTime() < 6 * 60 * 60 * 1000
+      ) {
+        return;
+      }
+
       const feedback = await this.feedbackRepo.find({
-        where: { propertyId, id: MoreThan(Number(state.lastFeedbackId ?? 0)), sentiment: In(['positive', 'negative']) },
+        where: {
+          propertyId,
+          id: MoreThan(Number(state.lastFeedbackId ?? 0)),
+          sentiment: In(['positive', 'negative']),
+        },
         order: { id: 'ASC' },
         take: automation.maxFeedback,
       });
       if (!feedback.length) return;
-      const throughId = feedback[feedback.length - 1].id;
+
       await this.settings.saveShowingFeedbackDeliveryState(propertyId, {
         ...state,
         processingStartedAt: new Date(),
-        processingThroughId: throughId,
+        processingThroughId: feedback[feedback.length - 1].id,
       });
+
       try {
         const result = await this.reports.sendAutomaticReport({
           propertyId,
@@ -76,6 +121,7 @@ export class ShowingFeedbackAutomationService {
           });
           return;
         }
+
         await this.settings.saveShowingFeedbackDeliveryState(propertyId, {
           lastFeedbackId: result.latestFeedbackId,
           lastSentAt: new Date(),
@@ -83,19 +129,64 @@ export class ShowingFeedbackAutomationService {
           processingStartedAt: null,
           processingThroughId: 0,
         });
-        this.logger.log(`Sent automatic showing feedback report for property ${propertyId} through feedback ${result.latestFeedbackId}.`);
+        this.logger.log(
+          `Sent weekly showing feedback report for property ${propertyId} through feedback ${result.latestFeedbackId}.`,
+        );
       } catch (error: any) {
         await this.settings.saveShowingFeedbackDeliveryState(propertyId, {
           ...state,
-          lastError: error?.message ?? 'Automatic owner report failed.',
+          lastError: error?.message ?? 'Weekly owner report failed.',
           processingStartedAt: null,
           processingThroughId: 0,
         });
-        this.logger.warn(`Automatic showing feedback report failed for property ${propertyId}: ${error?.message ?? error}`);
+        this.logger.warn(
+          `Weekly showing feedback report failed for property ${propertyId}: ${error?.message ?? error}`,
+        );
       }
     } finally {
-      try { await runner.query('SELECT pg_advisory_unlock(hashtext($1))', [lockName]); }
-      finally { await runner.release(); }
+      try {
+        await runner.query('SELECT pg_advisory_unlock(hashtext($1))', [
+          lockName,
+        ]);
+      } finally {
+        await runner.release();
+      }
     }
+  }
+
+  private reportDay(value: unknown) {
+    const parsed = Number.parseInt(`${value ?? ''}`, 10);
+    return Number.isFinite(parsed) ? Math.min(6, Math.max(0, parsed)) : 1;
+  }
+
+  private weekday(dateKey: string) {
+    return new Date(`${dateKey}T12:00:00Z`).getUTCDay();
+  }
+
+  private wasSentThisWeek(
+    value: unknown,
+    currentWeekKey: string,
+    zone: string,
+  ) {
+    if (!value) return false;
+    const sentAt = new Date(`${value}`);
+    if (Number.isNaN(sentAt.getTime())) return false;
+    return this.weekKey(this.dateKey(sentAt, zone)) === currentWeekKey;
+  }
+
+  private weekKey(dateKey: string) {
+    const date = new Date(`${dateKey}T12:00:00Z`);
+    const mondayOffset = (date.getUTCDay() + 6) % 7;
+    date.setUTCDate(date.getUTCDate() - mondayOffset);
+    return date.toISOString().slice(0, 10);
+  }
+
+  private dateKey(value: Date, timeZone: string) {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(value);
   }
 }
