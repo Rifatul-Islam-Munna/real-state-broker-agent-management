@@ -24,6 +24,7 @@ import { DatabaseModule } from './lib/database.module';
 import { SmsModule } from './sms/sms.module';
 import { RealtorShowingsModule } from './realtor-showings/realtor-showings.module';
 import { ShowingFeedbackModule } from './showing-feedback/showing-feedback.module';
+import { PdfsModule } from './pdfs/pdfs.module';
 import { DevSeedService } from './dev-seed.service';
 
 @Module({
@@ -51,6 +52,7 @@ import { DevSeedService } from './dev-seed.service';
     SmsModule,
     RealtorShowingsModule,
     ShowingFeedbackModule,
+    PdfsModule,
     PredictionModule,
   ],
   controllers: [],
