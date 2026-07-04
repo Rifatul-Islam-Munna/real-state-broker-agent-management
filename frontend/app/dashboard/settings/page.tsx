@@ -1,6 +1,5 @@
 import { AgencySettingsPage } from "@/components/stitch/pages/agency-settings/page"
 import { IntegrationHealthPanel } from "@/components/stitch/pages/agency-settings/sections/integration-health-panel"
-import { ShowingFeedbackAutomationPanel } from "@/components/stitch/pages/agency-settings/sections/showing-feedback-automation-panel"
 import { agencySettingsPageMeta } from "@/data/page-metadata/admin"
 import { buildPageMetadata } from "@/lib/build-page-metadata"
 import { requireDashboardAccess } from "@/lib/dashboard-auth"
@@ -17,7 +16,6 @@ export default async function Page() {
       <AgencySettingsPage />
       <div className="bg-muted/20 px-4 pb-8 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-[1500px] space-y-6">
-          <ShowingFeedbackAutomationPanel />
           <IntegrationHealthPanel />
         </div>
       </div>
