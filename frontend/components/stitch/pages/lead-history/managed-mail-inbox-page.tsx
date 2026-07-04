@@ -146,6 +146,12 @@ export function ManagedMailInboxPage() {
             >
               {"Send Mail"}
             </button>
+            <Link
+              className="border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 dark:border-white/10 dark:text-white"
+              href="/dashboard/lead-collection-templates"
+            >
+              {"Lead Collect Templates"}
+            </Link>
           </div>
         </section>
 
@@ -232,6 +238,25 @@ export function ManagedMailInboxPage() {
                       <h2 className="text-base font-bold text-slate-900 dark:text-white">{item.subject}</h2>
                       <span className="border border-primary/20 bg-primary/5 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-primary">{item.kind}</span>
                       <span className="border border-slate-200 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-600 dark:border-white/10 dark:text-slate-300">{item.status}</span>
+                      {item.extractionMethod ? (
+                        <span className="border border-emerald-200 bg-emerald-50 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-emerald-700">
+                          {`${item.extractionMethod} ${Math.round((item.extractionConfidence ?? 0) * 100)}%`}
+                        </span>
+                      ) : null}
+                      {item.leadCollectionTemplateName ? (
+                        <span className="border border-sky-200 bg-sky-50 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-sky-700">
+                          {item.leadCollectionTemplateName}
+                        </span>
+                      ) : null}
+                      {item.aiFallbackUsed ? (
+                        <span className="border border-amber-200 bg-amber-50 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-700">
+                          {"AI fallback"}
+                        </span>
+                      ) : item.extractionMethod === "Template" ? (
+                        <span className="border border-emerald-200 bg-emerald-50 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-emerald-700">
+                          {"AI skipped"}
+                        </span>
+                      ) : null}
                     </div>
                     <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">{item.message}</p>
                   </div>
@@ -242,6 +267,12 @@ export function ManagedMailInboxPage() {
                     <p className="mt-2 text-xs font-bold uppercase tracking-wide text-slate-400">{formatDateTimeLabel(item.createdAt)}</p>
                   </div>
                   <div className="flex flex-wrap gap-2 xl:justify-end">
+                    <Link
+                      className="border border-slate-200 px-4 py-2 text-xs font-bold uppercase tracking-wide text-slate-700 dark:border-white/10 dark:text-white"
+                      href={`/dashboard/lead-collection-templates/new?mailInboxId=${item.id}`}
+                    >
+                      {"Create Parser"}
+                    </Link>
                     {item.leadId ? (
                       <>
                         <Link className="border border-primary bg-primary px-4 py-2 text-xs font-bold uppercase tracking-wide text-white" href={`${portalRoutes.leads}?leadId=${item.leadId}`}>

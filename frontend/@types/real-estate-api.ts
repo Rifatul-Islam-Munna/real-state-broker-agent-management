@@ -1098,9 +1098,17 @@ export type MailInboxItem = {
   name: string
   subject: string
   message: string
+  htmlBody?: string
   kind: MailInboxKind
   status: MailInboxStatus
   leadId?: number | null
+  extractedLead?: Record<string, unknown>
+  extractionMethod?: string
+  extractionConfidence?: number
+  leadCollectionTemplateId?: number | null
+  leadCollectionTemplateName?: string
+  aiFallbackUsed?: boolean
+  extractionDetails?: Record<string, unknown>
   createdAt: string
   updatedAt: string
 }

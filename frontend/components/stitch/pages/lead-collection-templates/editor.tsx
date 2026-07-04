@@ -121,7 +121,10 @@ export function LeadCollectionTemplateEditor({
       sourceMailInboxId: value.sourceType === "InboxEmail" ? value.sourceMailInboxId : null,
       sourceHtml:
         value.sourceType === "PastedHtml" || value.sourceType === "UploadedHtml" ? pastedHtml : "",
-      sourceText: value.sourceType === "PastedText" ? pastedText : "",
+      sourceText:
+        value.sourceType === "PastedText" || (value.sourceType === "UploadedHtml" && !pastedHtml)
+          ? pastedText
+          : "",
       sampleFromAddress: value.sampleFromAddress,
       sampleSubject: value.sampleSubject,
     }
