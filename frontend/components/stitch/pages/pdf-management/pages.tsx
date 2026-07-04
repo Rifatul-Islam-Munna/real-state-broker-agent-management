@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { usePdfTemplates } from "@/hooks/use-pdfs-api"
 
+import { PdfImportButton } from "./import-button"
 import { PdfShell } from "./shell"
 
 export function PdfTemplateLibraryPage() {
@@ -19,23 +20,71 @@ export function PdfTemplateLibraryPage() {
 
   return (
     <PdfShell
-      action={<Button render={<Link href="/dashboard/pdfs/templates/new" />}><AppIcon name="add" />Create template</Button>}
-      description="Create and manage backend-stored PDF templates."
+      action={
+        <div className="flex flex-wrap gap-2">
+          <PdfImportButton />
+          <Button render={<Link href="/dashboard/pdfs/templates/new" />}>
+            <AppIcon name="add" />
+            Create blank template
+          </Button>
+        </div>
+      }
+      description="Create a blank pdfme design or import an existing fillable PDF. Imported fields are detected and placed in the editor automatically."
       title="PDF templates"
     >
       <Card>
-        <CardHeader><CardTitle>Template library</CardTitle><CardDescription>{query.data?.totalCount ?? 0} saved templates</CardDescription></CardHeader>
+        <CardHeader>
+          <CardTitle>Template library</CardTitle>
+          <CardDescription>{query.data?.totalCount ?? 0} backend templates</CardDescription>
+        </CardHeader>
         <CardContent className="space-y-5">
-          <Input onChange={(event) => setSearch(event.target.value)} placeholder="Search templates" value={search} />
+          <Input
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search templates"
+            value={search}
+          />
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {templates.map((template) => (
               <div className="rounded-xl border p-4" key={template.id}>
-                <div className="flex items-start justify-between gap-3"><div><h3 className="font-semibold">{template.name}</h3><p className="mt-1 text-sm text-muted-foreground">{template.description || "No description"}</p></div><Badge variant="outline">{template.category}</Badge></div>
-                <div className="mt-4 flex gap-2"><Button render={<Link href={`/dashboard/pdfs/templates/${template.id}`} />} size="sm" variant="outline">Edit</Button><Button render={<Link href={`/dashboard/pdfs/download?templateId=${template.id}`} />} size="sm">Use</Button></div>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h3 className="font-semibold">{template.name}</h3>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {template.description || "No description"}
+                    </p>
+                  </div>
+                  <Badge variant="outline">{template.category}</Badge>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                  <Badge variant={template.sourceType === "UploadedPdf" ? "secondary" : "outline"}>
+                    {template.sourceType === "UploadedPdf" ? "Imported PDF" : "Blank design"}
+                  </Badge>
+                  <span>{template.importedFields.length} imported fields</span>
+                  <span>{template.requiredVariables.length} required</span>
+                </div>
+                <div className="mt-4 flex gap-2">
+                  <Button
+                    render={<Link href={`/dashboard/pdfs/templates/${template.id}`} />}
+                    size="sm"
+                    variant="outline"
+                  >
+                    Edit
+                  </Button>
+                  <Button
+                    render={<Link href={`/dashboard/pdfs/download?templateId=${template.id}`} />}
+                    size="sm"
+                  >
+                    Use
+                  </Button>
+                </div>
               </div>
             ))}
           </div>
-          {!query.isLoading && templates.length === 0 ? <p className="py-8 text-center text-sm text-muted-foreground">No templates found.</p> : null}
+          {!query.isLoading && templates.length === 0 ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">
+              No templates found.
+            </p>
+          ) : null}
         </CardContent>
       </Card>
     </PdfShell>
