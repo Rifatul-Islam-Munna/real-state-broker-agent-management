@@ -10,7 +10,7 @@ describe('ShowingFeedbackAutomationService', () => {
     jest.useRealTimers();
   });
 
-  test('sends an unsent positive and negative batch on the selected weekday', async () => {
+  test('sends the primary and selected follow-up templates on the selected weekday', async () => {
     const rows = [{ propertyId: '4', latestFeedbackId: '8' }];
     const qb: any = {
       select: jest.fn().mockReturnThis(),
@@ -37,6 +37,23 @@ describe('ShowingFeedbackAutomationService', () => {
     };
     const settings: any = {
       getShowingFeedbackAutomation: jest.fn(async () => automation),
+      getAdminSettings: jest.fn(async () => ({
+        communicationTemplates: [
+          {
+            id: 'owner-feedback-summary',
+            audience: 'OwnerFeedback',
+            isActive: true,
+            sequenceType: 'Direct',
+          },
+          {
+            id: 'owner-feedback-follow-up',
+            audience: 'OwnerFeedback',
+            isActive: true,
+            sequenceType: 'FollowUp1',
+            gapDays: 2,
+          },
+        ],
+      })),
       saveShowingFeedbackDeliveryState: jest.fn(
         async (_propertyId, state) => state,
       ),
@@ -70,11 +87,21 @@ describe('ShowingFeedbackAutomationService', () => {
       'feedback.sentiment IN (:...sentiments)',
       { sentiments: ['positive', 'negative'] },
     );
-    expect(reports.sendAutomaticReport).toHaveBeenCalledWith(
+    expect(reports.sendAutomaticReport).toHaveBeenCalledTimes(2);
+    expect(reports.sendAutomaticReport).toHaveBeenNthCalledWith(
+      1,
       expect.objectContaining({
         propertyId: 4,
+        templateId: 'owner-feedback-summary',
         afterFeedbackId: 0,
         compressWithAi: true,
+      }),
+    );
+    expect(reports.sendAutomaticReport).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        propertyId: 4,
+        templateId: 'owner-feedback-follow-up',
       }),
     );
     expect(settings.saveShowingFeedbackDeliveryState).toHaveBeenLastCalledWith(
