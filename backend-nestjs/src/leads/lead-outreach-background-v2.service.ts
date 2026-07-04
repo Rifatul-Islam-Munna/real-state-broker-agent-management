@@ -89,6 +89,21 @@ export class LeadOutreachBackgroundService {
         await this.finishItem(item.id, 'Failed', 'SMS auto-send canceled because lead is already on the board.', '', new Date());
         return true;
       }
+
+      if (this.isRealtorShowingFollowUp(item.createdBy)) {
+        const latestLead = await this.leadRepo.findOne({ where: { id: item.leadId } });
+        if (latestLead?.followUpStatus === LeadFollowUpStatus.Completed) {
+          await this.finishItem(
+            item.id,
+            'Failed',
+            'Realtor showing follow-up canceled because a reply was received by email or SMS.',
+            '',
+            new Date(),
+          );
+          return true;
+        }
+      }
+
       const result = await this.outreachService.sendOutreach({
         leadId: item.leadId,
         kind: item.kind,
@@ -208,6 +223,10 @@ export class LeadOutreachBackgroundService {
       catch { errorCount++; }
     }
     return { processedCount, errorCount };
+  }
+
+  private isRealtorShowingFollowUp(createdBy: string) {
+    return createdBy.startsWith('Realtor Showing #') && createdBy.endsWith(' Follow-up');
   }
 
   private async requireLead(id: number) {
