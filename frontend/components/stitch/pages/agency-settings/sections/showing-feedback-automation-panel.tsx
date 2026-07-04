@@ -16,6 +16,9 @@ import {
 
 import { ShowingFeedbackAutomationSection } from "./showing-feedback-automation-section"
 
+const feedbackTokenPattern =
+  /\{\{(?:feedback_summary|feedback\d+|positive_feedback|negative_feedback|positive_summary|negative_summary)\}\}/
+
 export function ShowingFeedbackAutomationPanel() {
   const query = useAgencySettings()
   const mutation = useUpdateAgencySettings()
@@ -39,6 +42,18 @@ export function ShowingFeedbackAutomationPanel() {
     )
     if (automation.enabled && !selectedTemplate) {
       setError("Choose an active owner feedback template before enabling automation.")
+      return
+    }
+    if (
+      automation.enabled &&
+      selectedTemplate &&
+      !feedbackTokenPattern.test(
+        `${selectedTemplate.subject}\n${selectedTemplate.body}`
+      )
+    ) {
+      setError(
+        "The selected template needs a feedback token such as {{positive_feedback}}, {{negative_feedback}}, or {{feedback_summary}}."
+      )
       return
     }
     if (automation.enabled && automation.channels.length === 0) {
