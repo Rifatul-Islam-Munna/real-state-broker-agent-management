@@ -22,24 +22,20 @@ import { ShowingFeedbackAutomationSection } from "./showing-feedback-automation-
 const feedbackTokenPattern =
   /\{\{(?:feedback_summary|feedback\d+|positive_feedback|negative_feedback|positive_summary|negative_summary)\}\}/
 
+function isFollowUpSequence(value?: string) {
+  return value === "FollowUp1" || value === "FollowUp2" || value === "FollowUp3"
+}
+
 export function ShowingFeedbackAutomationPanel() {
   const query = useAgencySettings()
   const mutation = useUpdateAgencySettings()
   const [values, setValues] = useState<AgencyWorkspaceSettings>(() =>
     cloneAgencySettings(defaultAgencySettings)
   )
-  const [followUpTemplateIds, setFollowUpTemplateIds] = useState<string[]>([])
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!query.data) return
-    setValues(cloneAgencySettings(query.data))
-    const raw = (query.data as any).showingFeedbackAutomation?.followUpTemplateIds
-    setFollowUpTemplateIds(
-      Array.isArray(raw)
-        ? Array.from(new Set(raw.map((item: unknown) => `${item ?? ""}`.trim()).filter(Boolean)))
-        : []
-    )
+    if (query.data) setValues(cloneAgencySettings(query.data))
   }, [query.data])
 
   const ownerTemplates = useMemo(
@@ -53,13 +49,22 @@ export function ShowingFeedbackAutomationPanel() {
   const followUpTemplates = ownerTemplates.filter(
     (template) => template.id !== values.showingFeedbackAutomation.templateId
   )
+  const selectedFollowUps = followUpTemplates.filter((template) =>
+    isFollowUpSequence(template.sequenceType)
+  )
 
   function toggleFollowUp(id: string, checked: boolean) {
-    setFollowUpTemplateIds((current) =>
-      checked
-        ? Array.from(new Set([...current, id]))
-        : current.filter((item) => item !== id)
-    )
+    setValues((current) => ({
+      ...current,
+      communicationTemplates: current.communicationTemplates.map((template) =>
+        template.id === id
+          ? {
+              ...template,
+              sequenceType: checked ? "FollowUp1" : "Direct",
+            }
+          : template
+      ),
+    }))
     setError(null)
   }
 
@@ -74,10 +79,7 @@ export function ShowingFeedbackAutomationPanel() {
       return
     }
 
-    const selectedSequence = [
-      selectedTemplate,
-      ...followUpTemplateIds.map((id) => ownerTemplates.find((item) => item.id === id)),
-    ].filter(Boolean)
+    const selectedSequence = [selectedTemplate, ...selectedFollowUps].filter(Boolean)
     const invalidTemplate = selectedSequence.find(
       (template) =>
         template &&
@@ -94,25 +96,12 @@ export function ShowingFeedbackAutomationPanel() {
       return
     }
 
-    const payload = {
-      ...values,
-      showingFeedbackAutomation: {
-        ...values.showingFeedbackAutomation,
-        followUpTemplateIds: followUpTemplateIds.filter(
-          (id) => id !== values.showingFeedbackAutomation.templateId
-        ),
-      },
-    }
-    const response = await mutation.mutateAsync(payload as any)
+    const response = await mutation.mutateAsync(values)
     if (response.error) {
       setError(response.error.message)
       return
     }
-    if (response.data) {
-      setValues(cloneAgencySettings(response.data))
-      const raw = (response.data as any).showingFeedbackAutomation?.followUpTemplateIds
-      setFollowUpTemplateIds(Array.isArray(raw) ? raw : [])
-    }
+    if (response.data) setValues(cloneAgencySettings(response.data))
   }
 
   return (
@@ -131,9 +120,6 @@ export function ShowingFeedbackAutomationPanel() {
       <ShowingFeedbackAutomationSection
         onChange={(showingFeedbackAutomation) => {
           setValues((current) => ({ ...current, showingFeedbackAutomation }))
-          setFollowUpTemplateIds((current) =>
-            current.filter((id) => id !== showingFeedbackAutomation.templateId)
-          )
           setError(null)
         }}
         settings={values.showingFeedbackAutomation}
@@ -146,12 +132,12 @@ export function ShowingFeedbackAutomationPanel() {
             <div>
               <CardTitle className="text-lg">Follow-up report templates</CardTitle>
               <CardDescription className="mt-1 max-w-3xl leading-6">
-                Select additional owner-feedback templates. They are rendered
-                with the same weekly feedback batch and sent after the primary
-                report in the order shown below.
+                Select additional Owner Feedback templates. The worker renders
+                them with the same weekly feedback batch after the primary report.
+                Their sequence type is saved with the template.
               </CardDescription>
             </div>
-            <Badge variant="outline">{followUpTemplateIds.length} selected</Badge>
+            <Badge variant="outline">{selectedFollowUps.length} selected</Badge>
           </div>
         </CardHeader>
         <CardContent className="grid gap-3 p-5 md:grid-cols-2 xl:grid-cols-3">
@@ -162,7 +148,7 @@ export function ShowingFeedbackAutomationPanel() {
                 key={template.id}
               >
                 <Checkbox
-                  checked={followUpTemplateIds.includes(template.id)}
+                  checked={isFollowUpSequence(template.sequenceType)}
                   onCheckedChange={(checked) =>
                     toggleFollowUp(template.id, checked === true)
                   }
@@ -173,7 +159,9 @@ export function ShowingFeedbackAutomationPanel() {
                     {template.subject}
                   </span>
                   <span className="mt-2 block text-xs text-muted-foreground">
-                    {template.sequenceType ?? "Direct"}
+                    {isFollowUpSequence(template.sequenceType)
+                      ? template.sequenceType
+                      : "Not in sequence"}
                     {template.gapDays ? ` · ${template.gapDays} day gap` : ""}
                   </span>
                 </span>
