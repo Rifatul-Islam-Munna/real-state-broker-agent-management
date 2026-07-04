@@ -56,8 +56,13 @@ export const adminNavigation = [
   },
   {
     href: "/dashboard/showing-feedback",
-    label: "Showing Feedback",
+    label: "Feedback Registry",
     icon: "rate_review",
+  },
+  {
+    href: "/dashboard/showing-feedback-automation",
+    label: "Feedback Automation",
+    icon: "schedule_send",
   },
   {
     href: "/dashboard/reports",
