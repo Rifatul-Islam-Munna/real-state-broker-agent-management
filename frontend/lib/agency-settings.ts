@@ -1,8 +1,12 @@
 import type { AgencySettings } from "@/@types/real-estate-api"
-import { createDefaultAgencySocialLinks, normalizeAgencySocialLinks } from "@/lib/agency-social-links"
+import {
+  createDefaultAgencySocialLinks,
+  normalizeAgencySocialLinks,
+} from "@/lib/agency-social-links"
 
 export type ShowingFeedbackAutomationSettings = {
   enabled: boolean
+  /** Internal compatibility field: 0-6 represents Sunday-Saturday for the weekly report. */
   gapDays: number
   channels: Array<"Email" | "SMS">
   templateId: string
@@ -32,13 +36,13 @@ export const defaultAgencySettings: AgencyWorkspaceSettings = {
   },
   showingFeedbackAutomation: {
     enabled: false,
-    gapDays: 2,
+    gapDays: 1,
     channels: ["Email"],
     templateId: "owner-feedback-summary",
     compressWithAi: true,
     maxFeedback: 10,
     autoClassifyMinConfidence: 72,
-    aiFallbackMinConfidence: 20,
+    aiFallbackMinConfidence: 0,
     negativeKnowledge: [
       "Client felt price was too high for the condition.",
       "Buyer did not like the layout, location, parking, noise, smell, size, or repairs needed.",
@@ -57,7 +61,12 @@ export const defaultAgencySettings: AgencyWorkspaceSettings = {
       id: "new-lead-welcome",
       name: "New Lead Welcome",
       subject: "Welcome to Skyline Real Estate, {{client_name}}!",
-      variableTokens: ["{{client_name}}", "{{property_address}}", "{{agent_name}}", "{{agency_name}}"],
+      variableTokens: [
+        "{{client_name}}",
+        "{{property_address}}",
+        "{{agent_name}}",
+        "{{agency_name}}",
+      ],
       audience: "Lead",
     },
     {
@@ -66,7 +75,12 @@ export const defaultAgencySettings: AgencyWorkspaceSettings = {
       id: "showing-confirmation",
       name: "Showing Confirmation",
       subject: "Your showing is confirmed for {{property_address}}",
-      variableTokens: ["{{client_name}}", "{{property_address}}", "{{showing_time}}", "{{agent_name}}"],
+      variableTokens: [
+        "{{client_name}}",
+        "{{property_address}}",
+        "{{showing_time}}",
+        "{{agent_name}}",
+      ],
       audience: "Realtor",
     },
     {
@@ -75,7 +89,11 @@ export const defaultAgencySettings: AgencyWorkspaceSettings = {
       id: "contract-executed",
       name: "Contract Executed",
       subject: "Contract executed for {{property_address}}",
-      variableTokens: ["{{client_name}}", "{{property_address}}", "{{agent_name}}"],
+      variableTokens: [
+        "{{client_name}}",
+        "{{property_address}}",
+        "{{agent_name}}",
+      ],
       audience: "Lead",
     },
     {
@@ -84,16 +102,31 @@ export const defaultAgencySettings: AgencyWorkspaceSettings = {
       id: "closing-reminder",
       name: "Closing Reminder",
       subject: "Closing reminder for {{property_address}}",
-      variableTokens: ["{{client_name}}", "{{property_address}}", "{{closing_date}}", "{{agent_name}}"],
+      variableTokens: [
+        "{{client_name}}",
+        "{{property_address}}",
+        "{{closing_date}}",
+        "{{agent_name}}",
+      ],
       audience: "Lead",
     },
     {
-      body: "Hello, here is the showing feedback received for {{property_address}} from {{fromdate}} to {{todate}}.\n\n{{feedback_summary}}\n\n{{feedback1}}\n{{feedback2}}\n{{feedback3}}\n{{feedback4}}\n{{feedback5}}",
+      body: "Hello, here is the weekly showing feedback for {{property_address}} from {{fromdate}} to {{todate}}.\n\nPositive feedback\n{{positive_feedback}}\n\nNegative feedback\n{{negative_feedback}}\n\nSummary\n{{feedback_summary}}",
       channels: ["Email", "SMS"],
       id: "owner-feedback-summary",
-      name: "Automatic Owner Feedback Summary",
-      subject: "Showing feedback for {{property_address}}",
-      variableTokens: ["{{property_address}}", "{{fromdate}}", "{{todate}}", "{{feedback_summary}}", "{{feedback1}}"],
+      name: "Weekly Owner Feedback Summary",
+      subject: "Weekly showing feedback for {{property_address}}",
+      variableTokens: [
+        "{{property_address}}",
+        "{{fromdate}}",
+        "{{todate}}",
+        "{{feedback_summary}}",
+        "{{positive_feedback}}",
+        "{{negative_feedback}}",
+        "{{positive_summary}}",
+        "{{negative_summary}}",
+        "{{feedback1}}",
+      ],
       audience: "OwnerFeedback",
       isActive: true,
       attachPropertyDocuments: false,
@@ -102,15 +135,24 @@ export const defaultAgencySettings: AgencyWorkspaceSettings = {
   updatedAt: "",
 }
 
-export function cloneAgencySettings(settings: AgencySettings & { showingFeedbackAutomation?: Partial<ShowingFeedbackAutomationSettings> }): AgencyWorkspaceSettings {
+export function cloneAgencySettings(
+  settings: AgencySettings & {
+    showingFeedbackAutomation?: Partial<ShowingFeedbackAutomationSettings>
+  }
+): AgencyWorkspaceSettings {
   const profile = settings.profile ?? defaultAgencySettings.profile
   const automation = settings.showingFeedbackAutomation ?? {}
   return {
-    communicationTemplates: (settings.communicationTemplates ?? defaultAgencySettings.communicationTemplates).map((item) => ({
+    communicationTemplates: (
+      settings.communicationTemplates ??
+      defaultAgencySettings.communicationTemplates
+    ).map((item) => ({
       ...item,
       attachmentDocumentCategory: item.attachmentDocumentCategory ?? "",
       attachmentDocumentType: item.attachmentDocumentType ?? "",
-      attachmentMode: item.attachmentMode ?? (item.attachPropertyDocuments !== false ? "property" : "none"),
+      attachmentMode:
+        item.attachmentMode ??
+        (item.attachPropertyDocuments !== false ? "property" : "none"),
       channels: [...(item.channels ?? [])],
       pdfTemplateId: item.pdfTemplateId ?? "",
       variableTokens: [...(item.variableTokens ?? [])],
@@ -120,21 +162,50 @@ export function cloneAgencySettings(settings: AgencySettings & { showingFeedback
       ...profile,
       contactPhone: profile.contactPhone ?? "",
       defaultPhoneCountry: profile.defaultPhoneCountry ?? "US",
-      logo: { objectName: profile.logo?.objectName ?? null, url: profile.logo?.url ?? "" },
-      officeLocations: [...(profile.officeLocations?.length ? profile.officeLocations : defaultAgencySettings.profile.officeLocations)],
-      socialLinks: normalizeAgencySocialLinks(profile.socialLinks).map((item) => ({ ...item })),
+      logo: {
+        objectName: profile.logo?.objectName ?? null,
+        url: profile.logo?.url ?? "",
+      },
+      officeLocations: [
+        ...(profile.officeLocations?.length
+          ? profile.officeLocations
+          : defaultAgencySettings.profile.officeLocations),
+      ],
+      socialLinks: normalizeAgencySocialLinks(profile.socialLinks).map(
+        (item) => ({ ...item })
+      ),
     },
     showingFeedbackAutomation: {
       enabled: automation.enabled === true,
-      gapDays: Math.min(365, Math.max(0, Number(automation.gapDays ?? 2) || 0)),
-      channels: (automation.channels ?? ["Email"]).filter((item): item is "Email" | "SMS" => item === "Email" || item === "SMS"),
+      gapDays: Math.min(6, Math.max(0, Number(automation.gapDays ?? 1) || 0)),
+      channels: (automation.channels ?? ["Email"]).filter(
+        (item): item is "Email" | "SMS" => item === "Email" || item === "SMS"
+      ),
       templateId: automation.templateId || "owner-feedback-summary",
       compressWithAi: automation.compressWithAi !== false,
-      maxFeedback: Math.min(50, Math.max(1, Number(automation.maxFeedback ?? 10) || 10)),
-      autoClassifyMinConfidence: Math.min(100, Math.max(1, Number(automation.autoClassifyMinConfidence ?? 72) || 72)),
-      aiFallbackMinConfidence: Math.min(100, Math.max(0, Number.isFinite(Number(automation.aiFallbackMinConfidence)) ? Number(automation.aiFallbackMinConfidence) : 20)),
-      negativeKnowledge: automation.negativeKnowledge ?? defaultAgencySettings.showingFeedbackAutomation.negativeKnowledge,
-      positiveKnowledge: automation.positiveKnowledge ?? defaultAgencySettings.showingFeedbackAutomation.positiveKnowledge,
+      maxFeedback: Math.min(
+        50,
+        Math.max(1, Number(automation.maxFeedback ?? 10) || 10)
+      ),
+      autoClassifyMinConfidence: Math.min(
+        100,
+        Math.max(1, Number(automation.autoClassifyMinConfidence ?? 72) || 72)
+      ),
+      aiFallbackMinConfidence: Math.min(
+        100,
+        Math.max(
+          0,
+          Number.isFinite(Number(automation.aiFallbackMinConfidence))
+            ? Number(automation.aiFallbackMinConfidence)
+            : 0
+        )
+      ),
+      negativeKnowledge:
+        automation.negativeKnowledge ??
+        defaultAgencySettings.showingFeedbackAutomation.negativeKnowledge,
+      positiveKnowledge:
+        automation.positiveKnowledge ??
+        defaultAgencySettings.showingFeedbackAutomation.positiveKnowledge,
     },
     updatedAt: settings.updatedAt ?? "",
   }
