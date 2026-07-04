@@ -402,9 +402,14 @@ function anchorCandidates(anchor: string, direction: 'head' | 'tail') {
   if (!normalized) return [];
   const sizes = [normalized.length, 120, 80, 50, 28]
     .filter((size) => size > 0 && size <= normalized.length);
-  return [...new Set(sizes.map((size) =>
-    direction === 'tail' ? normalized.slice(-size) : normalized.slice(0, size),
-  ))].filter((value) => value.length >= 3);
+  const lines = normalized.split('\n').map((line) => line.trim()).filter(Boolean);
+  const nearestLine = direction === 'tail' ? lines[lines.length - 1] : lines[0];
+  return [...new Set([
+    ...sizes.map((size) =>
+      direction === 'tail' ? normalized.slice(-size) : normalized.slice(0, size),
+    ),
+    nearestLine,
+  ])].filter((value) => value && value.length >= 3);
 }
 
 function senderPatternScore(patterns: string[], fromAddress: string) {
