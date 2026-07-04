@@ -1,6 +1,5 @@
-import { ManagedMailInboxPage } from "@/components/stitch/pages/lead-history/managed-mail-inbox-page"
+import { ProfessionalMailInboxPage } from "@/components/stitch/pages/mail-inbox/professional-mail-workspace"
 
 export function MailInboxPage() {
-  return <ManagedMailInboxPage />
+  return <ProfessionalMailInboxPage />
 }
-
