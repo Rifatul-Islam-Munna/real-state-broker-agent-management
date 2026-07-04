@@ -451,7 +451,7 @@ export function AddPropertyModalOverlaySection({
 
   return (
     <Dialog open onOpenChange={(open) => (!open ? onClose() : undefined)}>
-      <DialogContent className="max-h-[92vh] max-w-none gap-0 overflow-hidden p-0 sm:w-[94vw] lg:w-[78vw] xl:w-[70vw]">
+      <DialogContent className="!flex h-[92dvh] max-h-[92dvh] max-w-none flex-col gap-0 overflow-hidden p-0 sm:w-[94vw] lg:w-[78vw] xl:w-[70vw]">
         <DialogHeader className="border-b px-6 py-5 sm:px-8">
           <DialogTitle className="text-2xl">
             {mode === "create" ? "Add new property" : "Update property"}
@@ -463,7 +463,7 @@ export function AddPropertyModalOverlaySection({
           </DialogDescription>
         </DialogHeader>
 
-        <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit}>
+        <form className="flex min-h-0 flex-1 flex-col overflow-hidden" onSubmit={handleSubmit}>
           <div className="flex-1 space-y-10 overflow-y-auto p-5 sm:p-8">
             <PropertyMediaSection
               galleryError={errors.imageUrls}
