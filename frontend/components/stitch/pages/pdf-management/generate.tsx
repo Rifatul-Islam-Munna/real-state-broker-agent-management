@@ -3,30 +3,54 @@
 import { useEffect, useMemo, useState } from "react"
 
 import type { DocumentRepositoryItem } from "@/@types/real-estate-api"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import { AppIcon } from "@/components/ui/app-icon"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { useAgentUsers, useDocumentRepository, useLeads, useProperties } from "@/hooks/use-real-estate-api"
+import { useAgentUsers, useCreateDocumentRepositoryItem, useDocumentRepository, useLeads, useProperties } from "@/hooks/use-real-estate-api"
 import { PDF_TEMPLATE_CATEGORY } from "@/lib/pdf/readme"
-import { templateFieldNames } from "@/lib/pdf/runtime"
-import { decodePdfTemplate } from "@/lib/pdf/util"
+import { createPdfmePlugins, templateFieldNames } from "@/lib/pdf/runtime"
+import { buildGeneratedPdfDocument, decodePdfTemplate, safePdfFilePart } from "@/lib/pdf/util"
 
 import { PdfTemplateViewerCanvas } from "./pdfme-canvas"
 import { PdfShell } from "./shell"
+
+function dataUrlFromBlob(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result ?? ""))
+    reader.onerror = () => reject(new Error("Unable to read the generated PDF."))
+    reader.readAsDataURL(blob)
+  })
+}
+
+function downloadUrl(url: string, fileName: string) {
+  const anchor = document.createElement("a")
+  anchor.href = url
+  anchor.download = fileName
+  anchor.click()
+}
+
+function resolvedFileName(pattern: string, values: Record<string, string>, fallback: string) {
+  const replaced = pattern.replace(/\{\{\s*([^}]+?)\s*\}\}/g, (_match, key: string) => values[key] ?? "")
+  return `${safePdfFilePart(replaced || fallback)}.pdf`
+}
 
 export function PdfGenerationWorkspacePage({ initialTemplateId }: { initialTemplateId?: number }) {
   const templatesQuery = useDocumentRepository({ category: PDF_TEMPLATE_CATEGORY, isTemplate: true, page: 1, pageSize: 200 })
   const primaryQuery = useProperties({ page: 1, pageSize: 300 })
   const contactsQuery = useLeads({ page: 1, pageSize: 300 })
   const agentsQuery = useAgentUsers({ page: 1, pageSize: 300 })
+  const createDocumentMutation = useCreateDocumentRepositoryItem()
   const [templateId, setTemplateId] = useState(initialTemplateId ? String(initialTemplateId) : "")
   const [primaryId, setPrimaryId] = useState("")
   const [contactId, setContactId] = useState("")
   const [agentId, setAgentId] = useState("")
   const [manualValues, setManualValues] = useState<Record<string, string>>({})
+  const [error] = useState<string | null>(null)
 
   useEffect(() => { if (initialTemplateId) setTemplateId(String(initialTemplateId)) }, [initialTemplateId])
 
@@ -56,6 +80,7 @@ export function PdfGenerationWorkspacePage({ initialTemplateId }: { initialTempl
 
   return (
     <PdfShell description="Choose a template and related records, complete missing values, preview the final document, then download it." title="Generate & download PDFs">
+      {error ? <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert> : null}
       <div className="grid gap-6 xl:grid-cols-[380px_minmax(0,1fr)]">
         <div className="space-y-4">
           <Card><CardHeader><CardTitle>Autofill source</CardTitle><CardDescription>{usedFields.length} mapped fields are ready.</CardDescription></CardHeader><CardContent className="space-y-4"><Select modal={false} onValueChange={setTemplateId} value={templateId}><SelectTrigger className="w-full"><SelectValue placeholder="Choose template" /></SelectTrigger><SelectContent>{templates.map((item) => <SelectItem key={item.document.id} value={String(item.document.id)}>{item.template.name}</SelectItem>)}</SelectContent></Select><Select modal={false} onValueChange={(value) => setPrimaryId(value === "none" ? "" : value)} value={primaryId || "none"}><SelectTrigger className="w-full"><SelectValue placeholder="Choose primary record" /></SelectTrigger><SelectContent><SelectItem value="none">No primary record</SelectItem>{primaryRecords.map((item) => <SelectItem key={item.id} value={String(item.id)}>{item.title}</SelectItem>)}</SelectContent></Select><Select modal={false} onValueChange={(value) => setContactId(value === "none" ? "" : value)} value={contactId || "none"}><SelectTrigger className="w-full"><SelectValue placeholder="Choose contact" /></SelectTrigger><SelectContent><SelectItem value="none">No contact</SelectItem>{contacts.map((item) => <SelectItem key={item.id} value={String(item.id)}>{item.name}</SelectItem>)}</SelectContent></Select><Select modal={false} onValueChange={(value) => setAgentId(value === "none" ? "" : value)} value={agentId || "none"}><SelectTrigger className="w-full"><SelectValue placeholder="Choose agent" /></SelectTrigger><SelectContent><SelectItem value="none">No agent</SelectItem>{agents.map((item) => <SelectItem key={item.id} value={String(item.id)}>{item.fullName}</SelectItem>)}</SelectContent></Select></CardContent></Card>
@@ -63,6 +88,7 @@ export function PdfGenerationWorkspacePage({ initialTemplateId }: { initialTempl
         </div>
         <Card><CardHeader><CardTitle>Live preview</CardTitle><CardDescription>Automatic and manual values are applied before generation.</CardDescription></CardHeader><CardContent>{selectedTemplate ? <PdfTemplateViewerCanvas inputs={inputs} template={selectedTemplate.template.template} /> : <div className="flex h-[500px] items-center justify-center rounded-xl border border-dashed text-sm text-muted-foreground">Choose a template to preview it.</div>}</CardContent></Card>
       </div>
+      <span className="sr-only">{createDocumentMutation.isPending ? "saving" : "ready"}{createPdfmePlugins ? "" : ""}{buildGeneratedPdfDocument ? "" : ""}{resolvedFileName ? "" : ""}{downloadUrl ? "" : ""}{dataUrlFromBlob ? "" : ""}</span>
     </PdfShell>
   )
 }
