@@ -50,7 +50,7 @@ export function PdfGenerationWorkspacePage({ initialTemplateId }: { initialTempl
   const [contactId, setContactId] = useState("")
   const [agentId, setAgentId] = useState("")
   const [manualValues, setManualValues] = useState<Record<string, string>>({})
-  const [error] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => { if (initialTemplateId) setTemplateId(String(initialTemplateId)) }, [initialTemplateId])
 
@@ -78,17 +78,46 @@ export function PdfGenerationWorkspacePage({ initialTemplateId }: { initialTempl
   const missingFields = selectedTemplate ? selectedTemplate.template.requiredVariables.filter((key) => !values[key]?.trim()) : []
   const inputs = [Object.fromEntries(usedFields.map((key) => [key, values[key] ?? ""]))]
 
+  async function generateAndDownload() {
+    if (!selectedTemplate || missingFields.length > 0) return
+    setError(null)
+    try {
+      const generator = await import("@pdfme/generator")
+      const plugins = await createPdfmePlugins()
+      const bytes = await generator.generate({ template: selectedTemplate.template.template, inputs, plugins })
+      const blob = new Blob([new Uint8Array(bytes)], { type: "application/pdf" })
+      const dataUrl = await dataUrlFromBlob(blob)
+      const fileName = resolvedFileName(selectedTemplate.template.fileNamePattern, values, selectedTemplate.template.name)
+      const response = await createDocumentMutation.mutateAsync(buildGeneratedPdfDocument({
+        fileName,
+        fileUrl: dataUrl,
+        sizeBytes: blob.size,
+        templateId: selectedTemplate.document.id,
+        templateName: selectedTemplate.template.name,
+        category: selectedTemplate.template.category,
+        primaryRecord: selectedPrimary,
+        contact: selectedContact,
+      }))
+      if (response.error) {
+        setError(response.error.message)
+        return
+      }
+      downloadUrl(dataUrl, fileName)
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to generate the PDF.")
+    }
+  }
+
   return (
     <PdfShell description="Choose a template and related records, complete missing values, preview the final document, then download it." title="Generate & download PDFs">
       {error ? <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert> : null}
       <div className="grid gap-6 xl:grid-cols-[380px_minmax(0,1fr)]">
         <div className="space-y-4">
           <Card><CardHeader><CardTitle>Autofill source</CardTitle><CardDescription>{usedFields.length} mapped fields are ready.</CardDescription></CardHeader><CardContent className="space-y-4"><Select modal={false} onValueChange={setTemplateId} value={templateId}><SelectTrigger className="w-full"><SelectValue placeholder="Choose template" /></SelectTrigger><SelectContent>{templates.map((item) => <SelectItem key={item.document.id} value={String(item.document.id)}>{item.template.name}</SelectItem>)}</SelectContent></Select><Select modal={false} onValueChange={(value) => setPrimaryId(value === "none" ? "" : value)} value={primaryId || "none"}><SelectTrigger className="w-full"><SelectValue placeholder="Choose primary record" /></SelectTrigger><SelectContent><SelectItem value="none">No primary record</SelectItem>{primaryRecords.map((item) => <SelectItem key={item.id} value={String(item.id)}>{item.title}</SelectItem>)}</SelectContent></Select><Select modal={false} onValueChange={(value) => setContactId(value === "none" ? "" : value)} value={contactId || "none"}><SelectTrigger className="w-full"><SelectValue placeholder="Choose contact" /></SelectTrigger><SelectContent><SelectItem value="none">No contact</SelectItem>{contacts.map((item) => <SelectItem key={item.id} value={String(item.id)}>{item.name}</SelectItem>)}</SelectContent></Select><Select modal={false} onValueChange={(value) => setAgentId(value === "none" ? "" : value)} value={agentId || "none"}><SelectTrigger className="w-full"><SelectValue placeholder="Choose agent" /></SelectTrigger><SelectContent><SelectItem value="none">No agent</SelectItem>{agents.map((item) => <SelectItem key={item.id} value={String(item.id)}>{item.fullName}</SelectItem>)}</SelectContent></Select></CardContent></Card>
-          {selectedTemplate ? <Card><CardHeader><CardTitle>Missing information</CardTitle><CardDescription>{missingFields.length ? `${missingFields.length} required values need attention.` : "All required values are ready."}</CardDescription></CardHeader><CardContent className="space-y-3">{missingFields.length === 0 ? <Badge>Ready</Badge> : null}{missingFields.map((key) => <Input key={key} onChange={(event) => setManualValues((current) => ({ ...current, [key]: event.target.value }))} placeholder={key} value={manualValues[key] ?? ""} />)}<Button className="w-full" disabled><AppIcon name="download" />Generate and download</Button></CardContent></Card> : null}
+          {selectedTemplate ? <Card><CardHeader><CardTitle>Missing information</CardTitle><CardDescription>{missingFields.length ? `${missingFields.length} required values need attention.` : "All required values are ready."}</CardDescription></CardHeader><CardContent className="space-y-3">{missingFields.length === 0 ? <Badge>Ready</Badge> : null}{missingFields.map((key) => <Input key={key} onChange={(event) => setManualValues((current) => ({ ...current, [key]: event.target.value }))} placeholder={key} value={manualValues[key] ?? ""} />)}<Button className="w-full" disabled={createDocumentMutation.isPending || missingFields.length > 0} onClick={() => void generateAndDownload()}><AppIcon name="download" />Generate and download</Button></CardContent></Card> : null}
         </div>
         <Card><CardHeader><CardTitle>Live preview</CardTitle><CardDescription>Automatic and manual values are applied before generation.</CardDescription></CardHeader><CardContent>{selectedTemplate ? <PdfTemplateViewerCanvas inputs={inputs} template={selectedTemplate.template.template} /> : <div className="flex h-[500px] items-center justify-center rounded-xl border border-dashed text-sm text-muted-foreground">Choose a template to preview it.</div>}</CardContent></Card>
       </div>
-      <span className="sr-only">{createDocumentMutation.isPending ? "saving" : "ready"}{createPdfmePlugins ? "" : ""}{buildGeneratedPdfDocument ? "" : ""}{resolvedFileName ? "" : ""}{downloadUrl ? "" : ""}{dataUrlFromBlob ? "" : ""}</span>
     </PdfShell>
   )
 }
