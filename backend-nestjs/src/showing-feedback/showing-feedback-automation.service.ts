@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, MoreThan, Repository } from 'typeorm';
+import { DataSource, In, MoreThan, Repository } from 'typeorm';
 import { SettingsService } from '../settings/settings.service';
 import { ShowingFeedback } from './entities/showing-feedback.entity';
 import { ShowingFeedbackQueryService } from './showing-feedback-query.service';
@@ -23,20 +23,14 @@ export class ShowingFeedbackAutomationService {
     if (!automation.enabled) return;
     const rows = await this.feedbackRepo.createQueryBuilder('feedback')
       .select('feedback.property_id', 'propertyId')
-      .addSelect('MIN(feedback.received_at)', 'firstReceivedAt')
       .addSelect('MAX(feedback.id)', 'latestFeedbackId')
-      .where('feedback.sentiment = :sentiment', { sentiment: 'negative' })
+      .where('feedback.sentiment IN (:...sentiments)', { sentiments: ['positive', 'negative'] })
       .groupBy('feedback.property_id')
       .getRawMany();
     for (const row of rows) {
       const propertyId = Number(row.propertyId);
       const state = automation.deliveryState?.[String(propertyId)] ?? {};
       if (Number(row.latestFeedbackId) <= Number(state.lastFeedbackId ?? 0)) continue;
-      const first = await this.feedbackRepo.findOne({
-        where: { propertyId, id: MoreThan(Number(state.lastFeedbackId ?? 0)), sentiment: 'negative' },
-        order: { id: 'ASC' },
-      });
-      if (!first || !this.isDue(first.receivedAt, automation.gapDays)) continue;
       await this.processProperty(propertyId);
     }
   }
@@ -54,11 +48,11 @@ export class ShowingFeedbackAutomationService {
       const processingStartedAt = state.processingStartedAt ? new Date(state.processingStartedAt) : null;
       if (processingStartedAt && Date.now() - processingStartedAt.getTime() < 6 * 60 * 60 * 1000) return;
       const feedback = await this.feedbackRepo.find({
-        where: { propertyId, id: MoreThan(Number(state.lastFeedbackId ?? 0)), sentiment: 'negative' },
+        where: { propertyId, id: MoreThan(Number(state.lastFeedbackId ?? 0)), sentiment: In(['positive', 'negative']) },
         order: { id: 'ASC' },
         take: automation.maxFeedback,
       });
-      if (!feedback.length || !this.isDue(feedback[0].receivedAt, automation.gapDays)) return;
+      if (!feedback.length) return;
       const throughId = feedback[feedback.length - 1].id;
       await this.settings.saveShowingFeedbackDeliveryState(propertyId, {
         ...state,
@@ -74,7 +68,14 @@ export class ShowingFeedbackAutomationService {
           templateId: automation.templateId,
           compressWithAi: automation.compressWithAi,
         });
-        if (!result) return;
+        if (!result) {
+          await this.settings.saveShowingFeedbackDeliveryState(propertyId, {
+            ...state,
+            processingStartedAt: null,
+            processingThroughId: 0,
+          });
+          return;
+        }
         await this.settings.saveShowingFeedbackDeliveryState(propertyId, {
           lastFeedbackId: result.latestFeedbackId,
           lastSentAt: new Date(),
@@ -96,9 +97,5 @@ export class ShowingFeedbackAutomationService {
       try { await runner.query('SELECT pg_advisory_unlock(hashtext($1))', [lockName]); }
       finally { await runner.release(); }
     }
-  }
-
-  private isDue(receivedAt: Date, gapDays: number) {
-    return Date.now() >= new Date(receivedAt).getTime() + Math.max(0, Number(gapDays) || 0) * 86_400_000;
   }
 }
