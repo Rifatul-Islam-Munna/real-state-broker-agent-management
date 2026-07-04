@@ -1,11 +1,11 @@
 import type { Metadata } from "next"
 
-import { ShowingFeedbackPageV2 } from "@/components/stitch/pages/showing-feedback/page-v2"
+import { ShowingFeedbackDashboard } from "@/components/stitch/pages/showing-feedback/feedback-dashboard"
 
 export const metadata: Metadata = {
   title: "Showing Feedback",
 }
 
 export default function Page() {
-  return <ShowingFeedbackPageV2 />
+  return <ShowingFeedbackDashboard />
 }
