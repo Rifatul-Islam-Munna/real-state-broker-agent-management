@@ -15,6 +15,13 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -64,6 +71,8 @@ export function ShowingFeedbackPageV2() {
   const [manualOpen, setManualOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
   const [reportOpen, setReportOpen] = useState(false)
+  const [propertyPickerOpen, setPropertyPickerOpen] = useState(false)
+  const [propertySearch, setPropertySearch] = useState("")
   const [templateId, setTemplateId] = useState("")
   const [maxFeedback, setMaxFeedback] = useState(5)
   const [emailEnabled, setEmailEnabled] = useState(true)
@@ -100,6 +109,17 @@ export function ShowingFeedbackPageV2() {
   const selectedTemplate = templates.find((template) => template.id === templateId)
   const totalFeedback = summaries.reduce((total, item) => total + item.feedbackCount, 0)
   const timeZone = schedulingQuery.data?.timeZone ?? "UTC"
+  const filteredSummaries = summaries.filter((property) =>
+    `${property.propertyTitle} ${property.propertyLocation ?? ""}`
+      .toLowerCase()
+      .includes(propertySearch.trim().toLowerCase()),
+  )
+
+  function chooseProperty(nextPropertyId: number) {
+    setPropertyId(nextPropertyId)
+    setPage(1)
+    setPropertyPickerOpen(false)
+  }
 
   async function previewReport(nextSummarize = summarize) {
     setReportError(null)
@@ -196,53 +216,7 @@ export function ShowingFeedbackPageV2() {
           <MetricCard icon="description" label="Owner templates" value={templates.length} />
         </section>
 
-        <div className="grid gap-5 lg:grid-cols-[300px_minmax(0,1fr)]">
-          <Card className="shadow-none">
-            <CardHeader>
-              <CardTitle className="text-base">{"Properties"}</CardTitle>
-              <CardDescription>{"Select a property to review its feedback."}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {summariesQuery.isLoading ? (
-                <p className="py-6 text-center text-sm text-muted-foreground">{"Loading properties..."}</p>
-              ) : summaries.length === 0 ? (
-                <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
-                  {"No feedback saved yet. Add one entry or import a CSV."}
-                </p>
-              ) : (
-                summaries.map((property) => (
-                  <Button
-                    className="h-auto w-full justify-start whitespace-normal p-3 text-left"
-                    key={property.propertyId}
-                    onClick={() => {
-                      setPropertyId(property.propertyId)
-                      setPage(1)
-                    }}
-                    type="button"
-                    variant={propertyId === property.propertyId ? "secondary" : "ghost"}
-                  >
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate font-medium text-foreground">
-                        {property.propertyTitle}
-                      </span>
-                      <span className="mt-1 block truncate text-xs text-muted-foreground">
-                        {property.propertyLocation || "No location"}
-                      </span>
-                      <span className="mt-2 flex items-center justify-between gap-2 text-xs text-muted-foreground">
-                        <span>{`${property.feedbackCount} feedback`}</span>
-                        <span>
-                          {property.latestFeedbackAt
-                            ? formatDateTimeInZone(property.latestFeedbackAt, timeZone)
-                            : ""}
-                        </span>
-                      </span>
-                    </span>
-                  </Button>
-                ))
-              )}
-            </CardContent>
-          </Card>
-
+        <div className="grid gap-5">
           <Card className="shadow-none">
             <CardHeader className="grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
               <div>
@@ -253,7 +227,11 @@ export function ShowingFeedbackPageV2() {
                   {"Date filters use the actual reply-received date in the agency timezone."}
                 </CardDescription>
               </div>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid gap-2 sm:grid-cols-[auto_1fr_1fr]">
+                <Button onClick={() => setPropertyPickerOpen(true)} type="button" variant="outline">
+                  <AppIcon name="home_work" />
+                  {selectedProperty ? "Change property" : "Select property"}
+                </Button>
                 <div className="space-y-1"><Label className="text-xs">{"From"}</Label><Input onChange={(event) => { setFromDate(event.target.value); setPage(1) }} type="date" value={fromDate} /></div>
                 <div className="space-y-1"><Label className="text-xs">{"To"}</Label><Input onChange={(event) => { setToDate(event.target.value); setPage(1) }} type="date" value={toDate} /></div>
               </div>
@@ -261,7 +239,10 @@ export function ShowingFeedbackPageV2() {
             <CardContent>
               {!propertyId ? (
                 <div className="rounded-xl border border-dashed py-14 text-center text-sm text-muted-foreground">
-                  {"Choose a property from the left."}
+                  <Button onClick={() => setPropertyPickerOpen(true)} type="button" variant="outline">
+                    <AppIcon name="search" />
+                    {"Choose property"}
+                  </Button>
                 </div>
               ) : feedbackQuery.isLoading ? (
                 <p className="py-14 text-center text-sm text-muted-foreground">{"Loading feedback..."}</p>
@@ -318,6 +299,65 @@ export function ShowingFeedbackPageV2() {
           </Card>
         </div>
       </div>
+
+      <Dialog open={propertyPickerOpen} onOpenChange={setPropertyPickerOpen}>
+        <DialogContent className="!flex max-h-[86dvh] flex-col overflow-hidden p-0 sm:max-w-2xl">
+          <DialogHeader className="border-b px-5 py-4">
+            <DialogTitle>{"Select property"}</DialogTitle>
+            <DialogDescription>
+              {"Search property with saved feedback, then open its feedback registry."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-5">
+            <Input
+              autoFocus
+              onChange={(event) => setPropertySearch(event.target.value)}
+              placeholder="Search property"
+              value={propertySearch}
+            />
+            {summariesQuery.isLoading ? (
+              <p className="py-8 text-center text-sm text-muted-foreground">{"Loading properties..."}</p>
+            ) : summaries.length === 0 ? (
+              <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
+                {"No feedback saved yet. Add one entry or import a CSV."}
+              </p>
+            ) : filteredSummaries.length === 0 ? (
+              <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
+                {"No property matches this search."}
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {filteredSummaries.map((property) => (
+                  <Button
+                    className="h-auto w-full justify-start whitespace-normal p-3 text-left"
+                    key={property.propertyId}
+                    onClick={() => chooseProperty(property.propertyId)}
+                    type="button"
+                    variant={propertyId === property.propertyId ? "secondary" : "ghost"}
+                  >
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate font-medium text-foreground">
+                        {property.propertyTitle}
+                      </span>
+                      <span className="mt-1 block truncate text-xs text-muted-foreground">
+                        {property.propertyLocation || "No location"}
+                      </span>
+                      <span className="mt-2 flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                        <span>{`${property.feedbackCount} feedback`}</span>
+                        <span>
+                          {property.latestFeedbackAt
+                            ? formatDateTimeInZone(property.latestFeedbackAt, timeZone)
+                            : ""}
+                        </span>
+                      </span>
+                    </span>
+                  </Button>
+                ))}
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <ShowingFeedbackEntryDialogsV2
         importOpen={importOpen}

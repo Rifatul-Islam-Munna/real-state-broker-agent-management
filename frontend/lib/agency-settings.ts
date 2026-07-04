@@ -8,6 +8,10 @@ export type ShowingFeedbackAutomationSettings = {
   templateId: string
   compressWithAi: boolean
   maxFeedback: number
+  autoClassifyMinConfidence: number
+  aiFallbackMinConfidence: number
+  negativeKnowledge: string
+  positiveKnowledge: string
 }
 
 export type AgencyWorkspaceSettings = AgencySettings & {
@@ -33,6 +37,18 @@ export const defaultAgencySettings: AgencyWorkspaceSettings = {
     templateId: "owner-feedback-summary",
     compressWithAi: true,
     maxFeedback: 10,
+    autoClassifyMinConfidence: 72,
+    aiFallbackMinConfidence: 20,
+    negativeKnowledge: [
+      "Client felt price was too high for the condition.",
+      "Buyer did not like the layout, location, parking, noise, smell, size, or repairs needed.",
+      "Realtor says the client is not interested after viewing.",
+    ].join("\n"),
+    positiveKnowledge: [
+      "Client loved the property and wants next steps.",
+      "Buyer liked the layout, location, condition, price, light, or amenities.",
+      "Realtor says the showing went well and client is interested.",
+    ].join("\n"),
   },
   communicationTemplates: [
     {
@@ -115,6 +131,10 @@ export function cloneAgencySettings(settings: AgencySettings & { showingFeedback
       templateId: automation.templateId || "owner-feedback-summary",
       compressWithAi: automation.compressWithAi !== false,
       maxFeedback: Math.min(50, Math.max(1, Number(automation.maxFeedback ?? 10) || 10)),
+      autoClassifyMinConfidence: Math.min(100, Math.max(1, Number(automation.autoClassifyMinConfidence ?? 72) || 72)),
+      aiFallbackMinConfidence: Math.min(100, Math.max(0, Number.isFinite(Number(automation.aiFallbackMinConfidence)) ? Number(automation.aiFallbackMinConfidence) : 20)),
+      negativeKnowledge: automation.negativeKnowledge ?? defaultAgencySettings.showingFeedbackAutomation.negativeKnowledge,
+      positiveKnowledge: automation.positiveKnowledge ?? defaultAgencySettings.showingFeedbackAutomation.positiveKnowledge,
     },
     updatedAt: settings.updatedAt ?? "",
   }

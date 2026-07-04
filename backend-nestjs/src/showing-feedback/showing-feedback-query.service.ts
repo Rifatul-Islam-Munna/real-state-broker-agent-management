@@ -62,7 +62,7 @@ export class ShowingFeedbackQueryService {
     const property = await this.propertyRepo.findOne({ where: { id: propertyId } });
     if (!property) throw new NotFoundException('Property not found.');
     const feedback = await this.feedbackRepo.find({
-      where: { propertyId, id: MoreThan(afterFeedbackId) },
+      where: { propertyId, id: MoreThan(afterFeedbackId), sentiment: 'negative' },
       order: { id: 'ASC' },
       take: maxFeedback,
     });
@@ -119,6 +119,7 @@ export class ShowingFeedbackQueryService {
     const maxFeedback = Math.min(50, Math.max(1, Number(payload?.maxFeedback) || 5));
     const feedback = await this.feedbackRepo.createQueryBuilder('feedback')
       .where('feedback.property_id = :propertyId', { propertyId })
+      .andWhere('feedback.sentiment = :sentiment', { sentiment: 'negative' })
       .andWhere('feedback.received_at >= :start', { start: range.start })
       .andWhere('feedback.received_at < :endExclusive', { endExclusive: range.endExclusive })
       .orderBy('feedback.received_at', 'ASC').take(maxFeedback).getMany();

@@ -46,7 +46,7 @@ const routeGroups = [
   },
   {
     label: "Realtors",
-    hrefs: ["/dashboard/realtor-showings", "/dashboard/showing-feedback"],
+    hrefs: ["/dashboard/realtor-showings", "/dashboard/showing-feedback", "/dashboard/settings#feedback-ai"],
   },
   {
     label: "Content",
@@ -118,8 +118,10 @@ export function DashboardSidebar({
                     <SidebarGroupContent>
                       <SidebarMenu className="gap-1">
                         {items.map((item) => {
+                          const hrefPath = item.href.split("#")[0]
                           const isActive =
-                            pathname === item.href || pathname.startsWith(`${item.href}/`)
+                            !item.href.includes("#") &&
+                            (pathname === hrefPath || pathname.startsWith(`${hrefPath}/`))
 
                           return (
                             <SidebarMenuItem key={item.href}>

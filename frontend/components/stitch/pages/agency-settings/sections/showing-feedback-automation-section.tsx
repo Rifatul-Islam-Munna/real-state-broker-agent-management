@@ -8,6 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Textarea } from "@/components/ui/textarea"
 import type { ShowingFeedbackAutomationSettings } from "@/lib/agency-settings"
 
 export function ShowingFeedbackAutomationSection({
@@ -44,7 +45,7 @@ export function ShowingFeedbackAutomationSection({
           <div>
             <CardTitle className="text-lg">{"Automatic showing feedback reports"}</CardTitle>
             <CardDescription className="mt-1 max-w-3xl leading-6">
-              {"After new showing feedback arrives, wait the configured number of days, group only unsent feedback by property, and deliver one owner report automatically."}
+              {"Classify realtor replies locally first, keep positive and negative feedback, then send only negative owner reports automatically."}
             </CardDescription>
           </div>
         </div>
@@ -125,6 +126,50 @@ export function ShowingFeedbackAutomationSection({
             label="Use AI compression"
             onChange={(checked) => patch({ compressWithAi: checked })}
           />
+        </div>
+
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="space-y-2">
+            <Label>{"Negative feedback knowledge"}</Label>
+            <Textarea
+              className="min-h-36"
+              onChange={(event) => patch({ negativeKnowledge: event.target.value })}
+              placeholder="One example or rule per line"
+              value={settings.negativeKnowledge}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>{"Positive feedback knowledge"}</Label>
+            <Textarea
+              className="min-h-36"
+              onChange={(event) => patch({ positiveKnowledge: event.target.value })}
+              placeholder="One example or rule per line"
+              value={settings.positiveKnowledge}
+            />
+          </div>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label>{"Auto-classify confidence"}</Label>
+            <Input
+              min={1}
+              max={100}
+              onChange={(event) => patch({ autoClassifyMinConfidence: Math.min(100, Math.max(1, Number(event.target.value) || 1)) })}
+              type="number"
+              value={settings.autoClassifyMinConfidence}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>{"AI fallback from confidence"}</Label>
+            <Input
+              min={0}
+              max={100}
+              onChange={(event) => patch({ aiFallbackMinConfidence: Math.min(100, Math.max(0, Number(event.target.value) || 0)) })}
+              type="number"
+              value={settings.aiFallbackMinConfidence}
+            />
+          </div>
         </div>
       </CardContent>
     </Card>

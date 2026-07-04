@@ -291,6 +291,10 @@ export class SettingsService {
         templateId: this.loose(automationInput.templateId, defaultAutomation.templateId),
         compressWithAi: automationInput.compressWithAi !== false,
         maxFeedback: this.clampInt(automationInput.maxFeedback, defaultAutomation.maxFeedback, 1, 50),
+        autoClassifyMinConfidence: this.clampInt(automationInput.autoClassifyMinConfidence, defaultAutomation.autoClassifyMinConfidence, 1, 100),
+        aiFallbackMinConfidence: this.clampInt(automationInput.aiFallbackMinConfidence, defaultAutomation.aiFallbackMinConfidence, 0, 100),
+        negativeKnowledge: this.loose(automationInput.negativeKnowledge, defaultAutomation.negativeKnowledge).slice(0, 6000),
+        positiveKnowledge: this.loose(automationInput.positiveKnowledge, defaultAutomation.positiveKnowledge).slice(0, 6000),
         deliveryState,
       },
     };
@@ -304,6 +308,10 @@ export class SettingsService {
       templateId: value.templateId,
       compressWithAi: value.compressWithAi,
       maxFeedback: value.maxFeedback,
+      autoClassifyMinConfidence: value.autoClassifyMinConfidence,
+      aiFallbackMinConfidence: value.aiFallbackMinConfidence,
+      negativeKnowledge: value.negativeKnowledge,
+      positiveKnowledge: value.positiveKnowledge,
     };
   }
 
@@ -352,6 +360,18 @@ export class SettingsService {
         templateId: 'owner-feedback-summary',
         compressWithAi: true,
         maxFeedback: 10,
+        autoClassifyMinConfidence: 72,
+        aiFallbackMinConfidence: 20,
+        negativeKnowledge: [
+          'Client felt price was too high for the condition.',
+          'Buyer did not like the layout, location, parking, noise, smell, size, or repairs needed.',
+          'Realtor says the client is not interested after viewing.',
+        ].join('\n'),
+        positiveKnowledge: [
+          'Client loved the property and wants next steps.',
+          'Buyer liked the layout, location, condition, price, light, or amenities.',
+          'Realtor says the showing went well and client is interested.',
+        ].join('\n'),
         deliveryState: {},
       },
       communicationTemplates: [

@@ -20,6 +20,7 @@ export const dashboardRoutes: readonly DashboardRoute[] = [
   { href: "/dashboard/lead-collection-templates", label: "Lead Collect Templates", icon: "document_scanner", permission: "mail" },
   { href: "/dashboard/realtor-showings", label: "Realtor Showings", icon: "real_estate_agent", permission: "lead" },
   { href: "/dashboard/showing-feedback", label: "Showing Feedback", icon: "rate_review", permission: "lead" },
+  { href: "/dashboard/settings#feedback-ai", label: "Feedback AI", icon: "psychology", adminOnly: true },
   { href: "/dashboard/contact-inbox", label: "Contact Us", icon: "contact_phone", permission: "lead" },
   { href: "/dashboard/property-chat-inbox", label: "Property Chat", icon: "textsms", permission: "lead" },
   { href: "/dashboard/text-messages", label: "Text Messages", icon: "sms", permission: "lead" },

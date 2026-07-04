@@ -12,6 +12,7 @@ import { parseDateTimeInZone } from '../common/time-zone';
 import { SmsService } from '../sms/sms.service';
 import { SchedulingSettingsService } from '../settings/scheduling-settings.service';
 import { SettingsService } from '../settings/settings.service';
+import { AiJsonClientService } from '../settings/ai-json-client.service';
 import { Property } from '../properties/entities/property.entity';
 import { RealtorShowing } from '../realtor-showings/entities/realtor-showing.entity';
 import { LeadHistoryEntry, leadHistoryStatusDb } from '../leads/entities/lead-history.entity';
@@ -41,6 +42,14 @@ type FeedbackImportMapping = {
   receivedAt?: string;
 };
 
+type FeedbackClassification = {
+  classifier: string;
+  confidence: number;
+  feedbackText: string;
+  isFeedback: boolean;
+  sentiment: 'positive' | 'neutral' | 'negative';
+};
+
 @Injectable()
 export class ShowingFeedbackService {
   constructor(
@@ -54,6 +63,7 @@ export class ShowingFeedbackService {
     private readonly historyRepo: Repository<LeadHistoryEntry>,
     private readonly settingsService: SettingsService,
     private readonly schedulingSettingsService: SchedulingSettingsService,
+    private readonly aiJsonClient: AiJsonClientService,
     @Inject(forwardRef(() => SmsService))
     private readonly smsService: SmsService,
   ) {}
@@ -393,6 +403,7 @@ export class ShowingFeedbackService {
     const feedback = await this.feedbackRepo.find({
       where: {
         propertyId,
+        sentiment: 'negative',
         firstMessageAt: Between(
           new Date(`${fromDate}T00:00:00Z`),
           new Date(`${toDate}T23:59:59.999Z`),
@@ -450,33 +461,45 @@ export class ShowingFeedbackService {
     };
   }
 
-  private async classifyFeedback(subject: string, message: string) {
-    const fallback = this.heuristicClassification(message);
-    const config = await this.settingsService.getAiProviderConfig();
-    if (!config?.apiKey || !config?.model) return fallback;
+  private async classifyFeedback(subject: string, message: string): Promise<FeedbackClassification> {
+    const settings = await this.settingsService.getShowingFeedbackAutomation();
+    const local = this.localClassification(subject, message, settings);
+    const autoMin = this.percent(settings.autoClassifyMinConfidence, 72);
+    const aiMin = this.percent(settings.aiFallbackMinConfidence, 20);
+    if (local.confidence >= autoMin) return local;
+    if (local.confidence < aiMin) return { ...local, isFeedback: false };
     try {
-      const parsed = await this.callAiJson(config, [
+      const response = await this.aiJsonClient.call([
         {
           role: 'system',
           content:
-            'Classify a realtor reply after a property showing. Return JSON only: isFeedback boolean, feedbackText string, sentiment positive|neutral|negative, confidence 0-1. Feedback means opinion, reaction, concern, condition, price, layout, location, buyer reaction, or recommendation about shown property. Greetings, acknowledgements, scheduling-only replies, and unrelated text are not feedback.',
+            'Classify realtor reply after property showing. Return JSON only: isFeedback boolean, feedbackText string, sentiment positive|neutral|negative, confidence 0-1. Feedback means actual opinion/reaction/concern/recommendation about shown property. Scheduling-only, greetings, thanks-only, delivery/read receipts are not feedback. Use provided positive/negative knowledge as examples, not exact-only matching.',
         },
         {
           role: 'user',
-          content: JSON.stringify({ subject, message: message.slice(0, 8000) }),
+          content: JSON.stringify({
+            subject,
+            message: message.slice(0, 8000),
+            local,
+            negativeKnowledge: `${settings.negativeKnowledge ?? ''}`.slice(0, 4000),
+            positiveKnowledge: `${settings.positiveKnowledge ?? ''}`.slice(0, 4000),
+          }),
         },
       ]);
+      if (!response?.value) return { ...local, isFeedback: false };
+      const parsed: any = response?.value ?? null;
+      const confidence = this.clamp(parsed?.confidence, local.confidence);
       return {
-        classifier: 'AI',
-        confidence: this.clamp(parsed?.confidence, fallback.confidence),
+        classifier: `AI Fallback${response?.provider ? `:${response.provider}` : ''}`,
+        confidence,
         feedbackText: `${parsed?.feedbackText ?? message}`.trim(),
-        isFeedback: parsed?.isFeedback === true,
+        isFeedback: parsed?.isFeedback === true && confidence >= autoMin,
         sentiment: ['positive', 'neutral', 'negative'].includes(parsed?.sentiment)
           ? parsed.sentiment
-          : 'neutral',
+          : local.sentiment,
       };
     } catch {
-      return fallback;
+      return { ...local, isFeedback: false };
     }
   }
 
@@ -503,47 +526,97 @@ export class ShowingFeedbackService {
     }
   }
 
-  private heuristicClassification(message: string) {
-    const normalized = message.toLowerCase();
-    const terms = [
-      'liked',
-      'loved',
-      'disliked',
-      'feedback',
-      'price',
-      'expensive',
-      'condition',
-      'layout',
-      'location',
-      'room',
-      'kitchen',
-      'bathroom',
-      'bedroom',
-      'small',
-      'large',
-      'offer',
-      'interested',
-      'not interested',
-      'buyer',
-      'client',
-      'property',
-      'house',
-      'apartment',
-    ];
-    const isFeedback =
-      terms.some((term) => normalized.includes(term)) &&
-      normalized.trim().length >= 12;
+  private localClassification(subject: string, message: string, settings: any): FeedbackClassification {
+    const text = this.normalizeFeedbackText(`${subject} ${message}`);
+    const tokens = this.feedbackTokens(text);
+    const negativeKnowledge = this.knowledgeVectors(settings.negativeKnowledge);
+    const positiveKnowledge = this.knowledgeVectors(settings.positiveKnowledge);
+    const negativeSim = this.maxSimilarity(tokens, negativeKnowledge);
+    const positiveSim = this.maxSimilarity(tokens, positiveKnowledge);
+    let negative = negativeSim * 5;
+    let positive = positiveSim * 5;
+    let feedback = 0;
+
+    const negativeTerms = ['concern', 'issue', 'problem', 'dirty', 'smell', 'noise', 'repair', 'damage', 'old', 'dated', 'small', 'tight', 'dark', 'expensive', 'overpriced', 'pricey', 'unsafe', 'parking', 'traffic', 'location', 'layout', 'condition'];
+    const positiveTerms = ['love', 'loved', 'like', 'liked', 'great', 'good', 'excellent', 'interested', 'offer', 'apply', 'perfect', 'clean', 'spacious', 'bright', 'nice', 'works', 'well'];
+    const feedbackTerms = ['client', 'buyer', 'realtor', 'showing', 'viewing', 'tour', 'property', 'house', 'home', 'apartment', 'unit', 'layout', 'price', 'condition', 'location', 'feedback', 'thought', 'felt'];
+    negative += this.termScore(text, negativeTerms, 1.1);
+    positive += this.termScore(text, positiveTerms, 1);
+    feedback += this.termScore(text, feedbackTerms, 0.7);
+    if (/\bnot\s+(interested|like|love|work|fit|comfortable|moving|proceed)\b/.test(text)) negative += 3.5;
+    if (/\b(too|very|really|extremely)\s+(small|dark|expensive|noisy|old|dated|far)\b/.test(text)) negative += 2.5;
+    if (/\b(but|however|although|concern|issue|deal breaker)\b/.test(text)) negative += 1.2;
+    if (/\b(wants?|ready|would like)\s+(to apply|next step|offer|move forward)\b/.test(text)) positive += 3;
+    if (/\b(thanks?|thank you|received|ok|okay|sounds good|confirmed|schedule|reschedule|available)\b/.test(text) && feedback < 2) feedback -= 2;
+
+    const sentimentScore = positive - negative;
+    const sentiment: FeedbackClassification['sentiment'] = sentimentScore > 1.25 ? 'positive' : sentimentScore < -1.25 ? 'negative' : 'neutral';
+    const feedbackScore = feedback + Math.max(positive, negative);
+    const isFeedback = message.trim().length >= 12 && feedbackScore >= 2.4;
+    const confidence = this.clamp(
+      0.18 + Math.min(0.5, feedbackScore / 14) + Math.min(0.3, Math.abs(sentimentScore) / 10) + Math.max(negativeSim, positiveSim) * 0.2,
+      0.2,
+    );
     return {
-      classifier: 'Heuristic',
-      confidence: isFeedback ? 0.55 : 0.2,
+      classifier: 'LocalTone',
+      confidence: isFeedback ? confidence : Math.min(confidence, 0.35),
       feedbackText: message.trim(),
       isFeedback,
-      sentiment: /love|liked|great|good|interested/.test(normalized)
-        ? 'positive'
-        : /dislike|bad|expensive|small|not interested/.test(normalized)
-          ? 'negative'
-          : 'neutral',
+      sentiment,
     };
+  }
+
+  private knowledgeVectors(value: unknown) {
+    return `${value ?? ''}`
+      .split(/\r?\n/)
+      .map((line) => this.feedbackTokens(this.normalizeFeedbackText(line)))
+      .filter((tokens) => tokens.length > 0);
+  }
+
+  private maxSimilarity(tokens: string[], examples: string[][]) {
+    if (!tokens.length || !examples.length) return 0;
+    return Math.max(...examples.map((example) => this.cosineSimilarity(tokens, example)));
+  }
+
+  private cosineSimilarity(left: string[], right: string[]) {
+    const leftCounts = this.countTerms(left);
+    const rightCounts = this.countTerms(right);
+    let dot = 0;
+    let leftNorm = 0;
+    let rightNorm = 0;
+    for (const value of leftCounts.values()) leftNorm += value * value;
+    for (const value of rightCounts.values()) rightNorm += value * value;
+    for (const [term, value] of leftCounts) dot += value * (rightCounts.get(term) ?? 0);
+    return leftNorm && rightNorm ? dot / Math.sqrt(leftNorm * rightNorm) : 0;
+  }
+
+  private countTerms(tokens: string[]) {
+    const counts = new Map<string, number>();
+    for (const token of tokens) counts.set(token, (counts.get(token) ?? 0) + 1);
+    return counts;
+  }
+
+  private feedbackTokens(value: string) {
+    const words = value.split(' ').filter((word) => word.length > 2);
+    const bigrams = words.slice(0, -1).map((word, index) => `${word}_${words[index + 1]}`);
+    return [...words.map((word) => this.stem(word)), ...bigrams];
+  }
+
+  private stem(word: string) {
+    return word.replace(/(ingly|edly|ing|ed|ly|s)$/i, '');
+  }
+
+  private termScore(text: string, terms: string[], weight: number) {
+    return terms.reduce((score, term) => score + (new RegExp(`\\b${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(text) ? weight : 0), 0);
+  }
+
+  private normalizeFeedbackText(value: unknown) {
+    return `${value ?? ''}`.toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+  }
+
+  private percent(value: unknown, fallback: number) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? Math.max(0, Math.min(1, parsed / 100)) : fallback / 100;
   }
 
   private async callAiJson(config: any, messages: any[]) {

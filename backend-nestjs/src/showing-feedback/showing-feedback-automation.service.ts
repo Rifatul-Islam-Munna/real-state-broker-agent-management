@@ -25,6 +25,7 @@ export class ShowingFeedbackAutomationService {
       .select('feedback.property_id', 'propertyId')
       .addSelect('MIN(feedback.received_at)', 'firstReceivedAt')
       .addSelect('MAX(feedback.id)', 'latestFeedbackId')
+      .where('feedback.sentiment = :sentiment', { sentiment: 'negative' })
       .groupBy('feedback.property_id')
       .getRawMany();
     for (const row of rows) {
@@ -32,7 +33,7 @@ export class ShowingFeedbackAutomationService {
       const state = automation.deliveryState?.[String(propertyId)] ?? {};
       if (Number(row.latestFeedbackId) <= Number(state.lastFeedbackId ?? 0)) continue;
       const first = await this.feedbackRepo.findOne({
-        where: { propertyId, id: MoreThan(Number(state.lastFeedbackId ?? 0)) },
+        where: { propertyId, id: MoreThan(Number(state.lastFeedbackId ?? 0)), sentiment: 'negative' },
         order: { id: 'ASC' },
       });
       if (!first || !this.isDue(first.receivedAt, automation.gapDays)) continue;
@@ -53,7 +54,7 @@ export class ShowingFeedbackAutomationService {
       const processingStartedAt = state.processingStartedAt ? new Date(state.processingStartedAt) : null;
       if (processingStartedAt && Date.now() - processingStartedAt.getTime() < 6 * 60 * 60 * 1000) return;
       const feedback = await this.feedbackRepo.find({
-        where: { propertyId, id: MoreThan(Number(state.lastFeedbackId ?? 0)) },
+        where: { propertyId, id: MoreThan(Number(state.lastFeedbackId ?? 0)), sentiment: 'negative' },
         order: { id: 'ASC' },
         take: automation.maxFeedback,
       });

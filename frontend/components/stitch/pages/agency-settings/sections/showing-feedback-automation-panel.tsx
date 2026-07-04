@@ -21,7 +21,7 @@ export function ShowingFeedbackAutomationPanel() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 scroll-mt-6" id="feedback-ai">
       <ShowingFeedbackAutomationSection
         onChange={(showingFeedbackAutomation) => setValues((current) => ({ ...current, showingFeedbackAutomation }))}
         settings={values.showingFeedbackAutomation}
