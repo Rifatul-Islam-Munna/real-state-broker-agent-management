@@ -49,7 +49,7 @@ const routeGroups = [
   },
   {
     label: "Content",
-    hrefs: ["/dashboard/homepage", "/dashboard/blog", "/dashboard/marketing", "/dashboard/documents"],
+    hrefs: ["/dashboard/homepage", "/dashboard/blog", "/dashboard/marketing", "/dashboard/documents", "/dashboard/pdfs"],
   },
   {
     label: "Business",
