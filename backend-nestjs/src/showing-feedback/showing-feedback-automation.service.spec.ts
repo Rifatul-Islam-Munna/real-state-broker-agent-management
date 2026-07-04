@@ -1,7 +1,16 @@
 import { ShowingFeedbackAutomationService } from './showing-feedback-automation.service';
 
 describe('ShowingFeedbackAutomationService', () => {
-  test('sends an unsent positive and negative batch and advances the cursor', async () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-07-04T12:00:00.000Z'));
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  test('sends an unsent positive and negative batch on the selected weekday', async () => {
     const rows = [{ propertyId: '4', latestFeedbackId: '8' }];
     const qb: any = {
       select: jest.fn().mockReturnThis(),
@@ -19,6 +28,7 @@ describe('ShowingFeedbackAutomationService', () => {
     };
     const automation = {
       enabled: true,
+      gapDays: 6,
       channels: ['Email'],
       templateId: 'owner-feedback-summary',
       compressWithAi: true,
@@ -45,11 +55,13 @@ describe('ShowingFeedbackAutomationService', () => {
       ),
     };
     const dataSource: any = { createQueryRunner: jest.fn(() => runner) };
+    const scheduling: any = { getTimeZone: jest.fn(async () => 'UTC') };
     const service = new ShowingFeedbackAutomationService(
       feedbackRepo,
       settings,
       reports,
       dataSource,
+      scheduling,
     );
 
     await service.processDueReports();
@@ -74,7 +86,36 @@ describe('ShowingFeedbackAutomationService', () => {
     );
   });
 
-  test('clears the processing claim when the selected weekday is not due', async () => {
+  test('does not scan or send outside the selected weekday', async () => {
+    const feedbackRepo: any = {
+      createQueryBuilder: jest.fn(),
+    };
+    const settings: any = {
+      getShowingFeedbackAutomation: jest.fn(async () => ({
+        enabled: true,
+        gapDays: 1,
+        deliveryState: {},
+      })),
+    };
+    const reports: any = { sendAutomaticReport: jest.fn() };
+    const dataSource: any = { createQueryRunner: jest.fn() };
+    const scheduling: any = { getTimeZone: jest.fn(async () => 'UTC') };
+    const service = new ShowingFeedbackAutomationService(
+      feedbackRepo,
+      settings,
+      reports,
+      dataSource,
+      scheduling,
+    );
+
+    await service.processDueReports();
+
+    expect(feedbackRepo.createQueryBuilder).not.toHaveBeenCalled();
+    expect(reports.sendAutomaticReport).not.toHaveBeenCalled();
+    expect(dataSource.createQueryRunner).not.toHaveBeenCalled();
+  });
+
+  test('does not send the same property twice in one local week', async () => {
     const qb: any = {
       select: jest.fn().mockReturnThis(),
       addSelect: jest.fn().mockReturnThis(),
@@ -86,48 +127,33 @@ describe('ShowingFeedbackAutomationService', () => {
     };
     const feedbackRepo: any = {
       createQueryBuilder: jest.fn(() => qb),
-      find: jest.fn(async () => [
-        { id: 11, propertyId: 5, sentiment: 'positive' },
-      ]),
     };
     const settings: any = {
       getShowingFeedbackAutomation: jest.fn(async () => ({
         enabled: true,
-        channels: ['SMS'],
-        templateId: 'owner-feedback-summary',
-        compressWithAi: false,
-        maxFeedback: 10,
-        deliveryState: {},
+        gapDays: 6,
+        deliveryState: {
+          '5': {
+            lastFeedbackId: 10,
+            lastSentAt: '2026-07-03T12:00:00.000Z',
+          },
+        },
       })),
-      saveShowingFeedbackDeliveryState: jest.fn(
-        async (_propertyId, state) => state,
-      ),
     };
-    const reports: any = {
-      sendAutomaticReport: jest.fn(async () => null),
-    };
-    const runner: any = {
-      connect: jest.fn(),
-      release: jest.fn(),
-      query: jest.fn(async (sql: string) =>
-        sql.includes('try_advisory') ? [{ locked: true }] : [],
-      ),
-    };
+    const reports: any = { sendAutomaticReport: jest.fn() };
+    const dataSource: any = { createQueryRunner: jest.fn() };
+    const scheduling: any = { getTimeZone: jest.fn(async () => 'UTC') };
     const service = new ShowingFeedbackAutomationService(
       feedbackRepo,
       settings,
       reports,
-      { createQueryRunner: jest.fn(() => runner) } as any,
+      dataSource,
+      scheduling,
     );
 
     await service.processDueReports();
 
-    expect(settings.saveShowingFeedbackDeliveryState).toHaveBeenLastCalledWith(
-      5,
-      expect.objectContaining({
-        processingStartedAt: null,
-        processingThroughId: 0,
-      }),
-    );
+    expect(reports.sendAutomaticReport).not.toHaveBeenCalled();
+    expect(dataSource.createQueryRunner).not.toHaveBeenCalled();
   });
 });
