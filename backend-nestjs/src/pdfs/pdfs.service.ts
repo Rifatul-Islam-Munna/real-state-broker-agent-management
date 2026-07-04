@@ -379,19 +379,21 @@ export class PdfsService {
     const missingVariables = requiredVariables
       .filter((key) => !`${values[key] ?? ''}`.trim())
       .map((key) => ({ key, ...(this.variableMetadata(key) ?? {}) }));
-    const inputs = [
-      Object.fromEntries(
-        variablesUsed.map((key) => [key, `${values[key] ?? ''}`]),
-      ),
-    ];
+    const resolvedTemplateJson = this.materializeTemplate(template.templateJson, values);
+    const inputs = [this.buildPdfmeInput(resolvedTemplateJson, values)];
     const fileName = this.resolveFileName(
       template.fileNamePattern,
       values,
       template.name,
     );
 
+    const resolvedTemplate = {
+      ...template,
+      templateJson: resolvedTemplateJson,
+    };
+
     return {
-      template,
+      template: resolvedTemplate,
       inputs,
       automaticValues,
       manualValues,
@@ -420,38 +422,7 @@ export class PdfsService {
       });
     }
 
-    const generator = await import('@pdfme/generator');
-    const schemaPlugins = await import('@pdfme/schemas');
-    const plugins = {
-      text: schemaPlugins.text,
-      multiVariableText: schemaPlugins.multiVariableText,
-      image: schemaPlugins.image,
-      signature: schemaPlugins.signature,
-      svg: schemaPlugins.svg,
-      table: schemaPlugins.table,
-      line: schemaPlugins.line,
-      rectangle: schemaPlugins.rectangle,
-      ellipse: schemaPlugins.ellipse,
-      dateTime: schemaPlugins.dateTime,
-      date: schemaPlugins.date,
-      time: schemaPlugins.time,
-      select: schemaPlugins.select,
-      radioGroup: schemaPlugins.radioGroup,
-      checkbox: schemaPlugins.checkbox,
-      qrcode: schemaPlugins.barcodes.qrcode,
-    };
-    const bytes = await generator.generate({
-      template: resolved.template.templateJson as Template,
-      inputs: resolved.inputs,
-      plugins,
-      options: {
-        title: resolved.template.name,
-        subject: resolved.template.description,
-        creator: 'Real Estate Broker Agent Management',
-        producer: 'pdfme',
-      },
-    });
-    const buffer = Buffer.from(bytes);
+    const buffer = await this.renderPdfBuffer(resolved);
     const uploadFile = {
       fieldname: 'file',
       originalname: resolved.fileName,
@@ -495,6 +466,21 @@ export class PdfsService {
       generation: saved,
       downloadUrl: saved.fileUrl,
       fileName: saved.fileName,
+      missingVariables: resolved.missingVariables,
+    };
+  }
+
+  async previewPdf(dto: ResolvePdfDto & { allowMissing?: boolean }) {
+    const resolved = await this.resolveTemplate(dto);
+    if (resolved.missingVariables.length > 0 && !dto.allowMissing) {
+      throw new BadRequestException({
+        message: 'Complete the required information before previewing the PDF.',
+        missingVariables: resolved.missingVariables,
+      });
+    }
+    return {
+      buffer: await this.renderPdfBuffer(resolved),
+      fileName: resolved.fileName,
       missingVariables: resolved.missingVariables,
     };
   }
@@ -673,12 +659,130 @@ export class PdfsService {
       : [];
     return [
       ...new Set(
-        schemas
-          .flat()
-          .map((schema) => `${schema?.name ?? ''}`.trim())
-          .filter(Boolean),
+        schemas.flatMap((schemaPage) =>
+          schemaPage.flatMap((schema) => [
+            `${schema?.name ?? ''}`.trim(),
+            ...this.extractMustacheVariables(schema),
+          ]),
+        ).filter(Boolean),
       ),
     ];
+  }
+
+  private buildPdfmeInput(
+    templateJson: Record<string, unknown>,
+    values: Record<string, string>,
+  ) {
+    const schemas = Array.isArray(templateJson?.schemas)
+      ? (templateJson.schemas as Array<Array<Record<string, unknown>>>)
+      : [];
+    const input: Record<string, string> = {};
+
+    for (const schema of schemas.flat()) {
+      const name = `${schema?.name ?? ''}`.trim();
+      if (!name) continue;
+
+      const resolvedValue = `${values[name] ?? ''}`;
+      if (resolvedValue.trim()) {
+        input[name] = resolvedValue;
+        continue;
+      }
+
+      const content = this.schemaContent(schema);
+      if (content.trim()) {
+        input[name] = content;
+      }
+    }
+
+    for (const key of this.extractTemplateVariables(templateJson)) {
+      if (input[key] !== undefined) continue;
+      const resolvedValue = `${values[key] ?? ''}`;
+      if (resolvedValue.trim()) input[key] = resolvedValue;
+    }
+
+    return input;
+  }
+
+  private schemaContent(schema: Record<string, unknown>) {
+    const content = schema.content;
+    if (content === null || content === undefined) return '';
+    if (Array.isArray(content) || typeof content === 'object') {
+      return JSON.stringify(content);
+    }
+    return String(content);
+  }
+
+  private async renderPdfBuffer(resolved: Awaited<ReturnType<PdfsService['resolveTemplate']>>) {
+    const generator = await import('@pdfme/generator');
+    const schemaPlugins = await import('@pdfme/schemas');
+    const plugins = {
+      text: schemaPlugins.text,
+      multiVariableText: schemaPlugins.multiVariableText,
+      image: schemaPlugins.image,
+      signature: schemaPlugins.signature,
+      svg: schemaPlugins.svg,
+      table: schemaPlugins.table,
+      line: schemaPlugins.line,
+      rectangle: schemaPlugins.rectangle,
+      ellipse: schemaPlugins.ellipse,
+      dateTime: schemaPlugins.dateTime,
+      date: schemaPlugins.date,
+      time: schemaPlugins.time,
+      select: schemaPlugins.select,
+      radioGroup: schemaPlugins.radioGroup,
+      checkbox: schemaPlugins.checkbox,
+      qrcode: schemaPlugins.barcodes.qrcode,
+    };
+    const bytes = await generator.generate({
+      template: resolved.template.templateJson as Template,
+      inputs: resolved.inputs,
+      plugins,
+      options: {
+        title: resolved.template.name,
+        subject: resolved.template.description,
+        creator: 'Real Estate Broker Agent Management',
+        producer: 'pdfme',
+      },
+    });
+    return Buffer.from(bytes);
+  }
+
+  private extractMustacheVariables(value: unknown): string[] {
+    if (typeof value === 'string') {
+      return [...value.matchAll(/\{\{\s*([^}]+?)\s*\}\}/g)]
+        .map((match) => `${match[1] ?? ''}`.trim())
+        .filter(Boolean);
+    }
+    if (Array.isArray(value)) {
+      return value.flatMap((item) => this.extractMustacheVariables(item));
+    }
+    if (value && typeof value === 'object') {
+      return Object.entries(value as Record<string, unknown>)
+        .filter(([key]) => key !== 'name')
+        .flatMap(([, item]) => this.extractMustacheVariables(item));
+    }
+    return [];
+  }
+
+  private materializeTemplate<T>(value: T, values: Record<string, string>, keyName = ''): T {
+    if (typeof value === 'string') {
+      if (keyName === 'name') return value as T;
+      return value.replace(/\{\{\s*([^}]+?)\s*\}\}/g, (_match, key: string) => {
+        return values[key.trim()] ?? '';
+      }) as T;
+    }
+    if (Array.isArray(value)) {
+      return value.map((item) => this.materializeTemplate(item, values)) as T;
+    }
+    if (value && typeof value === 'object') {
+      return Object.fromEntries(
+        Object.entries(value as Record<string, unknown>).map(([key, item]) => [
+          key,
+          this.materializeTemplate(item, values, key),
+        ]),
+      ) as T;
+    }
+    return value;
   }
 
   private importedFieldSchema(

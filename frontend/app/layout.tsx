@@ -10,8 +10,8 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" suppressHydrationWarning className={cn("antialiased")}>
-      <body className="font-sans">
+    <html lang="en" suppressHydrationWarning data-scroll-behavior="smooth" className={cn("antialiased")}>
+      <body suppressHydrationWarning className="font-sans">
         <QueryClint>
           <ThemeProvider defaultTheme="light">{children}</ThemeProvider>
         </QueryClint>

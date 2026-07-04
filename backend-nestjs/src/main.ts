@@ -3,6 +3,9 @@ import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { apiReference } from '@scalar/nestjs-api-reference';
+import { json, urlencoded } from 'express';
+
+const DEFAULT_BODY_LIMIT = '25mb';
 
 function validateProductionConfiguration() {
   if (process.env.NODE_ENV !== 'production') return;
@@ -16,8 +19,11 @@ function validateProductionConfiguration() {
 async function bootstrap() {
   validateProductionConfiguration();
 
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { bodyParser: false });
 
+  const bodyLimit = process.env.API_BODY_LIMIT || DEFAULT_BODY_LIMIT;
+  app.use(json({ limit: bodyLimit }));
+  app.use(urlencoded({ extended: true, limit: bodyLimit }));
   app.setGlobalPrefix('api');
   app.useGlobalPipes(new ValidationPipe({ transform: true }));
   app.enableCors();

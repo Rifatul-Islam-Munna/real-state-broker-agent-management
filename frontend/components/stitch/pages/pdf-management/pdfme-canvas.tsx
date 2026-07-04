@@ -1,28 +1,62 @@
 "use client"
 
-import { useEffect, useRef } from "react"
+import { forwardRef, useEffect, useImperativeHandle, useRef } from "react"
 import type { Template } from "@pdfme/common"
 
 import { createPdfmePlugins } from "@/lib/pdf/runtime"
 
 type DesignerApi = {
   destroy: () => void
+  getTemplate: () => Template
+  onSaveTemplate: (callback: (template: Template) => void) => void
+  saveTemplate: () => void
   onChangeTemplate: (callback: (template: Template) => void) => void
   updateTemplate: (template: Template) => void
 }
 type ViewerApi = { destroy: () => void }
 
-export function PdfTemplateDesignerCanvas({
-  template,
-  onTemplateChange,
-}: {
+export type PdfTemplateDesignerHandle = {
+  getTemplate: () => Template | null
+  saveTemplate: () => Promise<Template | null>
+}
+
+export const PdfTemplateDesignerCanvas = forwardRef<PdfTemplateDesignerHandle, {
   template: Template
   onTemplateChange: (template: Template) => void
-}) {
+}>(function PdfTemplateDesignerCanvas({
+  template,
+  onTemplateChange,
+}, ref) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const designerRef = useRef<DesignerApi | null>(null)
   const changeRef = useRef(onTemplateChange)
   const lastDesignerValueRef = useRef("")
+  const saveResolverRef = useRef<((template: Template | null) => void) | null>(null)
+
+  useImperativeHandle(ref, () => ({
+    getTemplate: () => designerRef.current?.getTemplate() ?? null,
+    saveTemplate: () => {
+      const designer = designerRef.current
+      if (!designer) return Promise.resolve(null)
+
+      return new Promise<Template | null>((resolve) => {
+        let finished = false
+        let timeout: ReturnType<typeof window.setTimeout> | undefined
+        const resolveOnce = (template: Template | null) => {
+          if (finished) return
+          finished = true
+          if (timeout) window.clearTimeout(timeout)
+          saveResolverRef.current = null
+          resolve(template)
+        }
+        timeout = window.setTimeout(() => {
+          resolveOnce(designer.getTemplate())
+        }, 500)
+        saveResolverRef.current = resolveOnce
+        designer.saveTemplate()
+      })
+    },
+  }), [])
 
   useEffect(() => {
     changeRef.current = onTemplateChange
@@ -45,12 +79,20 @@ export function PdfTemplateDesignerCanvas({
         lastDesignerValueRef.current = JSON.stringify(nextTemplate)
         changeRef.current(nextTemplate)
       })
+      designer.onSaveTemplate((nextTemplate) => {
+        lastDesignerValueRef.current = JSON.stringify(nextTemplate)
+        changeRef.current(nextTemplate)
+        saveResolverRef.current?.(nextTemplate)
+        saveResolverRef.current = null
+      })
       designerRef.current = designer
     }
     void mount()
     return () => {
       active = false
       designerRef.current?.destroy()
+      saveResolverRef.current?.(null)
+      saveResolverRef.current = null
       designerRef.current = null
     }
     // The designer owns this DOM node after the first mount.
@@ -65,11 +107,11 @@ export function PdfTemplateDesignerCanvas({
   }, [template])
 
   return (
-    <div className="h-[720px] overflow-hidden rounded-xl border bg-background">
+    <div className="h-full min-h-[520px] overflow-hidden bg-background">
       <div className="h-full w-full" ref={containerRef} />
     </div>
   )
-}
+})
 
 export function PdfTemplateViewerCanvas({
   template,

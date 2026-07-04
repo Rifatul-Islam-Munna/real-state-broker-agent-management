@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import type { Template } from "@pdfme/common"
 
 import type { PdfTemplateSaveInput } from "@/@types/pdf-management"
@@ -9,7 +9,14 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { AppIcon } from "@/components/ui/app-icon"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
@@ -20,13 +27,14 @@ import {
   useUpdatePdfTemplate,
 } from "@/hooks/use-pdfs-api"
 import {
+  addBlankPage,
   addTextField,
   cloneTemplate,
   createBlankTemplate,
   templateFieldNames,
 } from "@/lib/pdf/runtime"
 
-import { PdfTemplateDesignerCanvas } from "./pdfme-canvas"
+import { PdfTemplateDesignerCanvas, type PdfTemplateDesignerHandle } from "./pdfme-canvas"
 import { PdfShell } from "./shell"
 
 const categories = [
@@ -66,7 +74,11 @@ export function PdfTemplateEditorPage({ templateId }: { templateId?: number }) {
   const updateMutation = useUpdatePdfTemplate()
   const [value, setValue] = useState<PdfTemplateSaveInput>(initialTemplate)
   const [fieldSearch, setFieldSearch] = useState("")
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [variablesOpen, setVariablesOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [designerRevision, setDesignerRevision] = useState(0)
+  const designerRef = useRef<PdfTemplateDesignerHandle | null>(null)
   const variablesQuery = usePdfVariables(value.category)
 
   useEffect(() => {
@@ -91,6 +103,7 @@ export function PdfTemplateEditorPage({ templateId }: { templateId?: number }) {
       sourceSizeBytes: template.sourceSizeBytes,
       importedFields: template.importedFields,
     })
+    setDesignerRevision((current) => current + 1)
   }, [templateQuery.data])
 
   const variables = useMemo(() => {
@@ -128,9 +141,14 @@ export function PdfTemplateEditorPage({ templateId }: { templateId?: number }) {
 
   async function saveTemplate() {
     setError(null)
-    const fieldNames = templateFieldNames(value.templateJson)
+    const templateJson =
+      (await designerRef.current?.saveTemplate()) ??
+      designerRef.current?.getTemplate() ??
+      value.templateJson
+    const fieldNames = templateFieldNames(templateJson)
     const payload = {
       ...value,
+      templateJson,
       requiredVariables: value.requiredVariables.filter((key) => fieldNames.includes(key)),
     }
     const result = value.id
@@ -140,20 +158,39 @@ export function PdfTemplateEditorPage({ templateId }: { templateId?: number }) {
       setError(result.error.message)
       return
     }
-    router.push("/dashboard/pdfs/templates")
+    if (result.data) {
+      setValue({
+        id: result.data.id,
+        name: result.data.name,
+        description: result.data.description,
+        category: result.data.category,
+        status: result.data.status,
+        sourceType: result.data.sourceType,
+        templateJson: result.data.templateJson,
+        requiredVariables: result.data.requiredVariables,
+        tags: result.data.tags,
+        fileNamePattern: result.data.fileNamePattern,
+        isActive: result.data.isActive,
+        sourceFileName: result.data.sourceFileName,
+        sourceFileUrl: result.data.sourceFileUrl,
+        sourceFileObjectName: result.data.sourceFileObjectName,
+        sourceMimeType: result.data.sourceMimeType,
+        sourceSizeBytes: result.data.sourceSizeBytes,
+        importedFields: result.data.importedFields,
+      })
+      if (!value.id) router.replace(`/dashboard/pdfs/templates/${result.data.id}`)
+    }
   }
 
   const saving = createMutation.isPending || updateMutation.isPending
+  const pageCount = value.templateJson.schemas.length || 1
+  const loadingSavedTemplate = Boolean(templateId) && templateQuery.isLoading && !templateQuery.data
+  const savedTemplateError = templateQuery.error?.message
 
   return (
     <PdfShell
-      action={
-        <Button disabled={saving} onClick={() => void saveTemplate()}>
-          <AppIcon name="save" />
-          Save template
-        </Button>
-      }
       description="Design the document, insert backend variables, and map fields detected from an imported PDF."
+      fullBleed
       title={templateId ? "Edit PDF template" : "Create PDF template"}
     >
       {error ? (
@@ -161,18 +198,47 @@ export function PdfTemplateEditorPage({ templateId }: { templateId?: number }) {
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       ) : null}
-      <div className="grid gap-6 xl:grid-cols-[380px_minmax(0,1fr)]">
-        <div className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Template settings</CardTitle>
-              <CardDescription>
-                {value.sourceType === "UploadedPdf"
-                  ? `Imported from ${value.sourceFileName || "PDF"}`
-                  : "Blank pdfme template"}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
+      {savedTemplateError ? (
+        <Alert variant="destructive">
+          <AlertDescription>{savedTemplateError}</AlertDescription>
+        </Alert>
+      ) : null}
+      <div className="flex h-[calc(100dvh-65px)] min-h-[620px] flex-col overflow-hidden bg-background">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-card px-4 py-3 shadow-xs">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold">{value.name}</p>
+            <p className="text-xs text-muted-foreground">
+              {pageCount} {pageCount === 1 ? "page" : "pages"} / {value.category} / {value.status}
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button disabled={saving} onClick={() => void saveTemplate()}>
+              <AppIcon name="save" />
+              Save
+            </Button>
+            <Button
+              onClick={() => setValue((current) => ({ ...current, templateJson: addBlankPage(current.templateJson) }))}
+              variant="outline"
+            >
+              <AppIcon name="add" />
+              Add page
+            </Button>
+            <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
+              <DialogTrigger render={<Button variant="outline" />}>
+                <AppIcon name="settings" />
+                Settings
+              </DialogTrigger>
+              <DialogContent className="max-w-3xl">
+                <DialogHeader>
+                  <DialogTitle>Template settings</DialogTitle>
+                  <DialogDescription>
+                    {value.sourceType === "UploadedPdf"
+                      ? `Imported from ${value.sourceFileName || "PDF"}`
+                      : "Blank pdfme template"}
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-4 md:col-span-2">
               <Input
                 onChange={(event) => setValue((current) => ({ ...current, name: event.target.value }))}
                 placeholder="Template name"
@@ -183,6 +249,7 @@ export function PdfTemplateEditorPage({ templateId }: { templateId?: number }) {
                 placeholder="Description"
                 value={value.description}
               />
+                  </div>
               <Select
                 modal={false}
                 onValueChange={(category) => setValue((current) => ({ ...current, category }))}
@@ -218,18 +285,31 @@ export function PdfTemplateEditorPage({ templateId }: { templateId?: number }) {
                 placeholder="Tags, comma separated"
                 value={value.tags.join(", ")}
               />
-            </CardContent>
-          </Card>
-
-          {(value.importedFields?.length ?? 0) > 0 ? (
-            <Card>
-              <CardHeader>
-                <CardTitle>Imported field mapping</CardTitle>
-                <CardDescription>
-                  Map each detected PDF field to any backend variable.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="max-h-[440px] space-y-3 overflow-auto">
+                </div>
+              </DialogContent>
+            </Dialog>
+            <Dialog open={variablesOpen} onOpenChange={setVariablesOpen}>
+              <DialogTrigger render={<Button variant="outline" />}>
+                <AppIcon name="database" />
+                Variables
+              </DialogTrigger>
+              <DialogContent className="max-w-5xl">
+                <DialogHeader>
+                  <DialogTitle>Variables and field mapping</DialogTitle>
+                  <DialogDescription>
+                    {variablesQuery.data?.total ?? 0} variables are available for {value.category}.
+                  </DialogDescription>
+                </DialogHeader>
+                <Input
+                  onChange={(event) => setFieldSearch(event.target.value)}
+                  placeholder="Search variables"
+                  value={fieldSearch}
+                />
+                <div className="grid gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+                  {(value.importedFields?.length ?? 0) > 0 ? (
+                    <div className="space-y-3">
+                      <h3 className="text-sm font-semibold">Imported field mapping</h3>
+                      <div className="max-h-[560px] space-y-3 overflow-auto pr-1">
                 {value.importedFields?.map((field, index) => (
                   <div className="space-y-2 rounded-lg border p-3" key={`${field.pageIndex}-${index}`}>
                     <div className="flex items-center justify-between gap-2">
@@ -256,24 +336,12 @@ export function PdfTemplateEditorPage({ templateId }: { templateId?: number }) {
                     </Button>
                   </div>
                 ))}
-              </CardContent>
-            </Card>
-          ) : null}
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Available variables</CardTitle>
-              <CardDescription>
-                {variablesQuery.data?.total ?? 0} variables are available for {value.category}.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <Input
-                onChange={(event) => setFieldSearch(event.target.value)}
-                placeholder="Search variables"
-                value={fieldSearch}
-              />
-              <div className="max-h-[520px] space-y-2 overflow-auto pr-1">
+                      </div>
+                    </div>
+                  ) : null}
+                  <div className="space-y-3">
+                    <h3 className="text-sm font-semibold">Available variables</h3>
+                    <div className="max-h-[560px] space-y-2 overflow-auto pr-1">
                 {variables.map((item) => (
                   <div className="rounded-lg border p-3" key={item.key}>
                     <div className="flex items-start justify-between gap-2">
@@ -309,23 +377,28 @@ export function PdfTemplateEditorPage({ templateId }: { templateId?: number }) {
                     </div>
                   </div>
                 ))}
-              </div>
-            </CardContent>
-          </Card>
+                    </div>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>pdfme designer</CardTitle>
-            <CardDescription>Drag, resize, style, rename, and position every field.</CardDescription>
-          </CardHeader>
-          <CardContent>
+        <div className="min-h-0 flex-1">
+          {loadingSavedTemplate ? (
+            <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+              Loading saved PDF template...
+            </div>
+          ) : (
             <PdfTemplateDesignerCanvas
+              key={`${value.id ?? "new"}-${designerRevision}`}
               onTemplateChange={(template: Template) => setValue((current) => ({ ...current, templateJson: template }))}
+              ref={designerRef}
               template={value.templateJson}
             />
-          </CardContent>
-        </Card>
+          )}
+        </div>
       </div>
     </PdfShell>
   )

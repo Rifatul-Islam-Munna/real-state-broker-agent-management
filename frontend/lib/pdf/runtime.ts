@@ -53,6 +53,12 @@ export function addTextField(template: Template, key: string, label: string) {
   return next
 }
 
+export function addBlankPage(template: Template) {
+  const next = cloneTemplate(template)
+  next.schemas = [...(next.schemas.length ? next.schemas : [[]]), []]
+  return next
+}
+
 export async function createPdfmePlugins() {
   const schemas = await import("@pdfme/schemas")
   return {

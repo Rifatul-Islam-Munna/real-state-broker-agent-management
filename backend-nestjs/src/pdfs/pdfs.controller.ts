@@ -8,13 +8,14 @@ import {
   Post,
   Query,
   Req,
+  Res,
   UploadedFile,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBody, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
-import type { Request } from 'express';
+import type { Request, Response } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PdfsService } from './pdfs.service';
 
@@ -120,6 +121,18 @@ export class PdfsController {
       ...dto,
       generatedBy: request.user?.email ?? '',
     });
+  }
+
+  @Post('preview')
+  @ApiOperation({ summary: 'Render an exact PDF preview without storing it' })
+  async previewPdf(@Body() dto: any, @Res() response: Response) {
+    const result = await this.pdfsService.previewPdf({
+      ...dto,
+      allowMissing: Boolean(dto.allowMissing),
+    });
+    response.setHeader('Content-Type', 'application/pdf');
+    response.setHeader('Content-Disposition', `inline; filename="${result.fileName}"`);
+    response.send(result.buffer);
   }
 
   @Get('generations')

@@ -13,17 +13,23 @@ export function PdfShell({
   description,
   title,
   action,
+  fullBleed = false,
 }: {
   children: React.ReactNode
   description: string
   title: string
   action?: React.ReactNode
+  fullBleed?: boolean
 }) {
   const pathname = usePathname()
   const tabs = [
     { href: "/dashboard/pdfs/templates", label: "Templates", icon: "edit_document" },
     { href: "/dashboard/pdfs/download", label: "Generate & download", icon: "picture_as_pdf" },
   ]
+
+  if (fullBleed) {
+    return <main className="min-h-[calc(100dvh-65px)] bg-muted/20">{children}</main>
+  }
 
   return (
     <main className="min-h-full bg-muted/20 p-4 sm:p-6 lg:p-8">
