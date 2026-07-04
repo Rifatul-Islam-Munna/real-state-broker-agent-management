@@ -40,8 +40,8 @@ export class MailService {
   }
 
   async create(dto: any) {
-      const item = this.mailRepo.create({ ...this.toMailEntity(dto), status: MailInboxStatus.New, leadId: null } as DeepPartial<MailInboxItem>);
-      return this.mapMail(await this.mailRepo.save(item));
+    const item = this.mailRepo.create({ ...this.toMailEntity(dto), status: MailInboxStatus.New, leadId: null } as DeepPartial<MailInboxItem>);
+    return this.mapMail(await this.mailRepo.save(item));
   }
 
   async send(dto: any) {
@@ -76,10 +76,14 @@ export class MailService {
       email: to,
       kind: 'Direct',
       message: this.messageBodyWithAttachments(message, attachmentUrls),
+      htmlBody: message.replace(/\n/g, '<br>'),
       name: `${dto.name ?? to.split('@')[0]}`.trim(),
       status: MailInboxStatus.Replied,
       subject,
       leadId: lead?.id ?? null,
+      extractionMethod: 'Outgoing',
+      extractionConfidence: 1,
+      aiFallbackUsed: false,
     } as DeepPartial<MailInboxItem>);
     const saved = await this.mailRepo.save(item);
     if (lead) await this.cancelRealtorFollowUpsAfterManualMessage(lead.id, saved.createdAt ?? new Date());
@@ -114,25 +118,49 @@ export class MailService {
   }
 
   async update(id: number, dto: any) {
-      const item = await this.findOne(id);
-      const entity = await this.mailRepo.findOne({ where: { id } });
-      if (!entity) throw new NotFoundException('Mail not found');
-      Object.assign(entity, this.toMailEntity(dto));
-      return this.mapMail(await this.mailRepo.save(entity));
+    const entity = await this.mailRepo.findOne({ where: { id } });
+    if (!entity) throw new NotFoundException('Mail not found');
+    Object.assign(entity, this.toMailEntity(dto));
+    return this.mapMail(await this.mailRepo.save(entity));
   }
 
   async convertToLead(id: number) {
     const mail = await this.findOne(id);
+    const parsed = mail.extractedLead ?? {};
+    const contactEmail = `${parsed.email ?? mail.email ?? ''}`.trim().toLowerCase();
+    const contactName = `${parsed.name ?? mail.name ?? ''}`.trim();
+    const contactPhone = `${parsed.phone ?? ''}`.trim();
     let lead = mail.leadId ? await this.leadsService.findOne(mail.leadId).catch(() => null) : null;
-    if (!lead) lead = await this.leadsService.findByEmail(mail.email);
+    if (!lead && contactEmail) lead = await this.leadsService.findByEmail(contactEmail);
     if (!lead) {
       const now = new Date();
-      lead = await this.leadsService.create({ name: mail.name?.trim() || mail.email.split('@')[0], email: mail.email.trim().toLowerCase(), phone: 'Not provided', source: mail.kind === 'Newsletter' ? 'Mail Signup' : 'Mail Inbox', summary: mail.message, interest: mail.subject, notes: [mail.message], stage: 'New', priority: mail.kind === 'Direct' ? 'Warm' : 'FollowUp', inBoard: false, nextActionDate: new Date(now.getTime() + 2 * 86_400_000), nextActionType: 'Review inbox lead', followUpStatus: 'Open', lastActivityAt: now }, 'CRM', false);
+      lead = await this.leadsService.create({
+        name: contactName || contactEmail.split('@')[0] || 'Email Lead',
+        email: contactEmail || mail.email.trim().toLowerCase(),
+        phone: contactPhone || 'Not provided',
+        source: `${parsed.rawFields?.source ?? (mail.kind === 'Newsletter' ? 'Mail Signup' : 'Mail Inbox')}`,
+        summary: `${parsed.rawFields?.summary ?? mail.message}`,
+        property: `${parsed.propertyTitle ?? parsed.rawFields?.property ?? ''}`,
+        budget: `${parsed.budget ?? ''}`,
+        timeline: `${parsed.timeline ?? ''}`,
+        interest: `${parsed.interest ?? mail.subject}`,
+        notes: [mail.message],
+        stage: 'New',
+        priority: mail.kind === 'Direct' ? 'Warm' : 'FollowUp',
+        inBoard: false,
+        nextActionDate: new Date(now.getTime() + 2 * 86_400_000),
+        nextActionType: `${parsed.rawFields?.nextActionType ?? 'Review inbox lead'}`,
+        followUpStatus: 'Open',
+        lastActivityAt: now,
+      }, 'CRM', false);
     }
 
-    mail.leadId = lead.id;
-    mail.status = 'Converted' as any;
-    await this.mailRepo.save(mail);
+    const entity = await this.mailRepo.findOne({ where: { id } });
+    if (entity) {
+      entity.leadId = lead.id;
+      entity.status = MailInboxStatus.Converted;
+      await this.mailRepo.save(entity);
+    }
     return lead;
   }
 
@@ -148,9 +176,17 @@ export class MailService {
       name: item.name,
       subject: item.subject,
       message: item.message,
+      htmlBody: item.htmlBody,
       kind: item.kind,
       status: item.status,
       leadId: item.leadId ?? null,
+      extractedLead: item.extractedLead ?? {},
+      extractionMethod: item.extractionMethod ?? '',
+      extractionConfidence: Number(item.extractionConfidence ?? 0),
+      leadCollectionTemplateId: item.leadCollectionTemplateId ?? null,
+      leadCollectionTemplateName: item.leadCollectionTemplateName ?? '',
+      aiFallbackUsed: item.aiFallbackUsed === true,
+      extractionDetails: item.extractionDetails ?? {},
       createdAt: item.createdAt,
       updatedAt: item.updatedAt,
     };
@@ -162,6 +198,14 @@ export class MailService {
       name: `${dto.name ?? dto.fromName ?? ''}`.trim(),
       subject: `${dto.subject ?? ''}`.trim(),
       message: dto.message ?? dto.body ?? '',
+      htmlBody: dto.htmlBody ?? dto.html ?? '',
+      extractedLead: dto.extractedLead ?? {},
+      extractionMethod: `${dto.extractionMethod ?? ''}`,
+      extractionConfidence: Number(dto.extractionConfidence ?? 0),
+      leadCollectionTemplateId: dto.leadCollectionTemplateId ?? null,
+      leadCollectionTemplateName: `${dto.leadCollectionTemplateName ?? ''}`,
+      aiFallbackUsed: dto.aiFallbackUsed === true,
+      extractionDetails: dto.extractionDetails ?? {},
       kind: dto.kind ?? 'Direct',
       status: dto.status ?? 'New',
       leadId: dto.leadId ?? null,
