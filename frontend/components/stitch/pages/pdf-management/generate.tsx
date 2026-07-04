@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useAgentUsers, useDocumentRepository, useLeads, useProperties } from "@/hooks/use-real-estate-api"
 import { PDF_TEMPLATE_CATEGORY } from "@/lib/pdf/readme"
+import { templateFieldNames } from "@/lib/pdf/runtime"
 import { decodePdfTemplate } from "@/lib/pdf/util"
 
 import { PdfShell } from "./shell"
@@ -35,12 +36,38 @@ export function PdfGenerationWorkspacePage({ initialTemplateId }: { initialTempl
   const primaryRecords = primaryQuery.data?.items ?? []
   const contacts = contactsQuery.data?.items ?? []
   const agents = agentsQuery.data ?? []
+  const selectedTemplate = templates.find((item) => String(item.document.id) === templateId)
+  const selectedPrimary = primaryRecords.find((item) => String(item.id) === primaryId)
+  const selectedContact = contacts.find((item) => String(item.id) === contactId)
+  const selectedAgent = agents.find((item) => String(item.id) === agentId)
+  const now = new Date()
+  const values: Record<string, string> = {
+    "system.current_date": now.toLocaleDateString(),
+    "system.current_time": now.toLocaleTimeString(),
+    "system.current_year": String(now.getFullYear()),
+    "system.generated_at": now.toISOString(),
+    "record.id": String(selectedPrimary?.id ?? ""),
+    "record.slug": selectedPrimary?.slug ?? "",
+    "record.title": selectedPrimary?.title ?? "",
+    "record.price": selectedPrimary?.price ?? "",
+    "record.location": selectedPrimary?.location ?? "",
+    "record.status": selectedPrimary?.status ?? "",
+    "contact.id": String(selectedContact?.id ?? ""),
+    "contact.name": selectedContact?.name ?? "",
+    "contact.email": selectedContact?.email ?? "",
+    "contact.phone": selectedContact?.phone ?? "",
+    "agent.id": String(selectedAgent?.id ?? ""),
+    "agent.name": selectedAgent?.fullName ?? "",
+    "agent.email": selectedAgent?.email ?? "",
+    "agent.phone": selectedAgent?.phone ?? "",
+  }
+  const usedFields = selectedTemplate ? templateFieldNames(selectedTemplate.template.template) : []
 
   return (
     <PdfShell description="Choose a template and related records, complete missing values, preview the final document, then download it." title="Generate & download PDFs">
       <div className="grid gap-6 xl:grid-cols-[380px_minmax(0,1fr)]">
         <Card>
-          <CardHeader><CardTitle>Autofill source</CardTitle><CardDescription>Select any combination of records.</CardDescription></CardHeader>
+          <CardHeader><CardTitle>Autofill source</CardTitle><CardDescription>{usedFields.length} mapped fields are ready.</CardDescription></CardHeader>
           <CardContent className="space-y-4">
             <Select modal={false} onValueChange={setTemplateId} value={templateId}><SelectTrigger className="w-full"><SelectValue placeholder="Choose template" /></SelectTrigger><SelectContent>{templates.map((item) => <SelectItem key={item.document.id} value={String(item.document.id)}>{item.template.name}</SelectItem>)}</SelectContent></Select>
             <Select modal={false} onValueChange={(value) => setPrimaryId(value === "none" ? "" : value)} value={primaryId || "none"}><SelectTrigger className="w-full"><SelectValue placeholder="Choose primary record" /></SelectTrigger><SelectContent><SelectItem value="none">No primary record</SelectItem>{primaryRecords.map((item) => <SelectItem key={item.id} value={String(item.id)}>{item.title}</SelectItem>)}</SelectContent></Select>
@@ -48,7 +75,7 @@ export function PdfGenerationWorkspacePage({ initialTemplateId }: { initialTempl
             <Select modal={false} onValueChange={(value) => setAgentId(value === "none" ? "" : value)} value={agentId || "none"}><SelectTrigger className="w-full"><SelectValue placeholder="Choose agent" /></SelectTrigger><SelectContent><SelectItem value="none">No agent</SelectItem>{agents.map((item) => <SelectItem key={item.id} value={String(item.id)}>{item.fullName}</SelectItem>)}</SelectContent></Select>
           </CardContent>
         </Card>
-        <Card><CardHeader><CardTitle>Live preview</CardTitle><CardDescription>Select a template to begin.</CardDescription></CardHeader><CardContent><div className="flex h-[500px] items-center justify-center rounded-xl border border-dashed text-sm text-muted-foreground">Preview will appear here.</div></CardContent></Card>
+        <Card><CardHeader><CardTitle>Live preview</CardTitle><CardDescription>{Object.keys(values).length} automatic values available.</CardDescription></CardHeader><CardContent><div className="flex h-[500px] items-center justify-center rounded-xl border border-dashed text-sm text-muted-foreground">Preview will appear here.</div></CardContent></Card>
       </div>
     </PdfShell>
   )
