@@ -324,7 +324,14 @@ export class LeadCollectionTemplateService {
     const address = `${fromAddress ?? ''}`.trim().toLowerCase();
     if (!address) return [];
     const domain = address.split('@')[1];
-    return [...new Set([address, domain ? `@${domain}` : ''].filter(Boolean))];
+    const rootDomain = domain?.split('.').slice(-2).join('.');
+    return [...new Set([
+      address,
+      domain ? `@${domain}` : '',
+      domain ? `*@${domain}` : '',
+      rootDomain && rootDomain !== domain ? `*@${rootDomain}` : '',
+      rootDomain && rootDomain !== domain ? `@${rootDomain}` : '',
+    ].filter(Boolean))];
   }
 
   private inferSubjectPattern(subject: string) {

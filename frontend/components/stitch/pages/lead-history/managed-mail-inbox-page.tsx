@@ -3,11 +3,13 @@
 import Link from "next/link"
 import { useMemo, useState } from "react"
 import { usePathname, useRouter } from "next/navigation"
+import PostalMime from "postal-mime"
 
 import { PagePagination } from "@/components/stitch/shared/page-pagination"
 import { AppIcon } from "@/components/ui/app-icon"
 import {
   useConvertMailInboxToLead,
+  useCreateMailInboxItem,
   useMailInbox,
   useMailInboxItem,
   useMailInboxSyncStatus,
@@ -45,6 +47,57 @@ function buildHistoryHref(baseHref: string, leadId: number) {
   return `${baseHref}${baseHref.includes("?") ? "&" : "?"}leadId=${leadId}`
 }
 
+function mailFrameDoc(html: string) {
+  const clean = html.replace(/<script[\s\S]*?<\/script>/gi, "").replace(/\son\w+="[^"]*"/gi, "")
+  return `<!doctype html><html><head><base target="_blank"><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body{margin:0;background:#fff;color:#111;font:14px Arial,sans-serif}body{padding:16px}img{max-width:100%;height:auto}table{max-width:100%}</style></head><body>${clean}</body></html>`
+}
+
+function MailRender({ html, text, compact = false }: { html?: string; text: string; compact?: boolean }) {
+  if (html?.trim()) {
+    return (
+      <iframe
+        className={`${compact ? "h-36" : "h-[58dvh]"} w-full rounded-xl border bg-white`}
+        sandbox=""
+        srcDoc={mailFrameDoc(html)}
+        title="Email content"
+      />
+    )
+  }
+  return <p className="whitespace-pre-wrap text-sm leading-7 text-slate-700">{text}</p>
+}
+
+function htmlToMailText(html: string) {
+  return html
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(p|div|tr|table|li|h\d)>/gi, "\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, "\"")
+    .replace(/&#39;/gi, "'")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n\s+/g, "\n")
+    .trim()
+}
+
+async function parseEmlFile(file: File) {
+  const parsed = await PostalMime.parse(await file.text(), { attachmentEncoding: "base64" })
+  const from = parsed.from && "address" in parsed.from ? parsed.from : null
+  const htmlBody = parsed.html ?? ""
+  return {
+    email: from?.address ?? "",
+    name: from?.name || from?.address || "Imported sender",
+    subject: parsed.subject || file.name.replace(/\.eml$/i, ""),
+    message: parsed.text || htmlToMailText(htmlBody),
+    htmlBody,
+    kind: "Direct" as const,
+  }
+}
+
 export function ManagedMailInboxPage() {
   const pathname = usePathname()
   const router = useRouter()
@@ -73,6 +126,7 @@ export function ManagedMailInboxPage() {
   const pdfTemplatesQuery = usePdfTemplates({ page: 1, pageSize: 200, isActive: true })
   const runSyncMutation = useRunMailInboxSync()
   const convertMailInboxToLead = useConvertMailInboxToLead()
+  const createMailInboxItem = useCreateMailInboxItem()
   const sendMail = useSendMailMessage()
   const syncStatus = syncStatusQuery.data
   const isInitialLoading =
@@ -144,6 +198,15 @@ export function ManagedMailInboxPage() {
     setIsComposeOpen(true)
   }
 
+  async function importEml(file?: File | null) {
+    if (!file) return
+    const payload = await parseEmlFile(file)
+    const result = await createMailInboxItem.mutateAsync(payload)
+    if (!result.error && result.data) {
+      router.push(`/dashboard/mail/${result.data.id}`)
+    }
+  }
+
   return (
     <div className="bg-background-light font-sans text-slate-900 dark:bg-background-dark dark:text-slate-100">
       <main className="flex min-h-screen w-full flex-col overflow-x-hidden">
@@ -196,6 +259,16 @@ export function ManagedMailInboxPage() {
               <AppIcon name="send" />
               {"Send"}
             </button>
+            <label className="inline-flex cursor-pointer items-center gap-2 border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 dark:border-white/10 dark:text-white">
+              <AppIcon name="upload_file" />
+              {"Import .eml"}
+              <input
+                accept=".eml,message/rfc822"
+                className="sr-only"
+                onChange={(event) => void importEml(event.target.files?.[0])}
+                type="file"
+              />
+            </label>
             <Link
               className="inline-flex items-center gap-2 border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 dark:border-white/10 dark:text-white"
               href="/dashboard/lead-collection-templates"
@@ -313,7 +386,9 @@ export function ManagedMailInboxPage() {
                         </span>
                       ) : null}
                     </div>
-                    <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">{item.message}</p>
+                    <div className="mt-3 overflow-hidden">
+                      <MailRender compact html={item.htmlBody} text={item.message} />
+                    </div>
                   </div>
                   <div>
                     <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">{"Sender"}</p>
@@ -442,10 +517,12 @@ export function ManagedMailInboxPage() {
 
 export function MailInboxDetailPage({ mailId }: { mailId: number }) {
   const pathname = usePathname()
+  const router = useRouter()
   const portalRoutes = getPortalRoutes(pathname)
   const mailQuery = useMailInboxItem(mailId)
   const documentsQuery = useDocumentRepository({ page: 1, pageSize: 300 })
   const pdfTemplatesQuery = usePdfTemplates({ page: 1, pageSize: 200, isActive: true })
+  const createMailInboxItem = useCreateMailInboxItem()
   const sendMail = useSendMailMessage()
   const [message, setMessage] = useState("")
   const [files, setFiles] = useState<File[]>([])
@@ -493,6 +570,16 @@ export function MailInboxDetailPage({ mailId }: { mailId: number }) {
     }
   }
 
+  async function importEml(file?: File | null) {
+    if (!file) return
+    const payload = await parseEmlFile(file)
+    const result = await createMailInboxItem.mutateAsync(payload)
+    if (!result.error && result.data) {
+      setSentReplies([])
+      router.push(`/dashboard/mail/${result.data.id}`)
+    }
+  }
+
   return (
     <main className="min-h-screen bg-background-light text-slate-900 dark:bg-background-dark dark:text-slate-100">
       <section className="border-b border-slate-200 bg-white px-4 py-5 dark:border-white/10 dark:bg-slate-950 md:px-6">
@@ -508,6 +595,15 @@ export function MailInboxDetailPage({ mailId }: { mailId: number }) {
           </div>
           {mail ? (
             <div className="flex flex-wrap gap-2">
+              <label className="cursor-pointer border border-slate-200 bg-white px-3 py-2 text-xs font-bold uppercase tracking-wide text-slate-700">
+                {"Import .eml"}
+                <input
+                  accept=".eml,message/rfc822"
+                  className="sr-only"
+                  onChange={(event) => void importEml(event.target.files?.[0])}
+                  type="file"
+                />
+              </label>
               <Link className="border border-slate-200 bg-white px-3 py-2 text-xs font-bold uppercase tracking-wide text-slate-700" href={`/dashboard/lead-collection-templates/new?mailInboxId=${mail.id}`}>
                 {"Create parser"}
               </Link>
@@ -522,28 +618,41 @@ export function MailInboxDetailPage({ mailId }: { mailId: number }) {
         </div>
       </section>
 
-      <section className="grid gap-5 px-4 py-6 md:px-6 xl:grid-cols-[minmax(0,1fr)_420px]">
-        <div className="min-h-[60dvh] rounded-2xl border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-slate-900">
+      <section className="space-y-5 px-4 py-6 md:px-6">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-slate-900">
           {mailQuery.isLoading ? (
             <p className="text-sm font-semibold text-slate-500">{"Loading mail..."}</p>
           ) : mailQuery.error ? (
             <p className="text-sm font-semibold text-rose-600">{mailQuery.error.message}</p>
           ) : mail ? (
             <div className="space-y-5">
-              <div className="max-w-[82%] rounded-2xl rounded-tl-sm border border-slate-200 bg-slate-50 p-4">
-                <div className="mb-3 flex flex-wrap items-center gap-2 text-xs font-bold uppercase tracking-wide text-slate-400">
-                  <span>{mail.name}</span>
-                  <span>{formatDateTimeLabel(mail.createdAt)}</span>
-                  <span>{mail.status}</span>
+              <div className="rounded-2xl bg-white p-4">
+                <div className="mb-4 flex gap-3">
+                  <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-black text-primary">
+                    {(mail.name || mail.email || "?").slice(0, 1).toUpperCase()}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <p className="font-bold text-slate-900">{mail.name || mail.email}</p>
+                        <p className="text-sm text-slate-500">{`to me - ${mail.status}`}</p>
+                      </div>
+                      <p className="text-xs text-slate-500">{formatDateTimeLabel(mail.createdAt)}</p>
+                    </div>
+                  </div>
                 </div>
-                <p className="whitespace-pre-wrap text-sm leading-7 text-slate-700">{mail.message}</p>
+                <MailRender html={mail.htmlBody} text={mail.message} />
               </div>
               {sentReplies.map((reply) => (
-                <div className="ml-auto max-w-[82%] rounded-2xl rounded-tr-sm bg-primary p-4 text-white" key={reply.createdAt}>
-                  <div className="mb-3 text-xs font-bold uppercase tracking-wide text-white/70">
-                    {`You - ${formatDateTimeLabel(reply.createdAt)}`}
+                <div className="rounded-2xl border border-slate-200 bg-white p-4" key={reply.createdAt}>
+                  <div className="mb-4 flex gap-3">
+                    <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-black text-white">{"Y"}</div>
+                    <div>
+                      <p className="font-bold text-slate-900">{"You"}</p>
+                      <p className="text-xs text-slate-500">{formatDateTimeLabel(reply.createdAt)}</p>
+                    </div>
                   </div>
-                  <p className="whitespace-pre-wrap text-sm leading-7">{reply.body}</p>
+                  <p className="whitespace-pre-wrap pl-[52px] text-sm leading-7 text-slate-700">{reply.body}</p>
                 </div>
               ))}
             </div>
@@ -553,10 +662,16 @@ export function MailInboxDetailPage({ mailId }: { mailId: number }) {
         </div>
 
         <aside className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-slate-900">
-          <h2 className="text-lg font-black">{"Reply"}</h2>
+          <div className="mb-4 flex items-center gap-3">
+            <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-black text-white">{"Y"}</div>
+            <div>
+              <h2 className="text-lg font-black">{"Reply"}</h2>
+              <p className="text-sm text-slate-500">{mail ? `to ${mail.email}` : "Loading recipient..."}</p>
+            </div>
+          </div>
           <div className="mt-4 space-y-4">
-            <Textarea className="min-h-40" onChange={(event) => setMessage(event.target.value)} placeholder="Write reply..." value={message} />
-            <Input multiple onChange={(event) => setFiles(Array.from(event.target.files ?? []))} type="file" />
+            <Textarea className="min-h-36 rounded-xl border-slate-200" onChange={(event) => setMessage(event.target.value)} placeholder="Write reply..." value={message} />
+            <Input className="rounded-xl border-slate-200" multiple onChange={(event) => setFiles(Array.from(event.target.files ?? []))} type="file" />
             {files.length ? <p className="text-xs font-semibold text-slate-500">{`${files.length} file(s) selected`}</p> : null}
             <div className="space-y-2">
               <p className="text-sm font-bold text-slate-700">{"Saved documents"}</p>
@@ -579,7 +694,7 @@ export function MailInboxDetailPage({ mailId }: { mailId: number }) {
               </SelectContent>
             </Select>
             <button
-              className="w-full rounded-xl bg-primary px-5 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-full bg-primary px-6 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
               disabled={sendMail.isPending || !mail || (!message.trim() && files.length === 0 && documentIds.length === 0 && !pdfTemplateId)}
               onClick={() => void sendReply()}
               type="button"

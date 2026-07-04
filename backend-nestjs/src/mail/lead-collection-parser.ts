@@ -415,6 +415,7 @@ function anchorCandidates(anchor: string, direction: 'head' | 'tail') {
 function senderPatternScore(patterns: string[], fromAddress: string) {
   const address = `${fromAddress ?? ''}`.trim().toLowerCase();
   const domain = address.split('@')[1] ?? '';
+  const rootDomain = domain.split('.').slice(-2).join('.');
   let score = 0;
   for (const rawPattern of patterns) {
     const pattern = `${rawPattern ?? ''}`.trim().toLowerCase();
@@ -427,7 +428,10 @@ function senderPatternScore(patterns: string[], fromAddress: string) {
         .replace(/^https?:\/\//, '')
         .split('/')[0];
       if (patternDomain && patternDomain === domain) score = Math.max(score, 0.94);
+      else if (patternDomain && patternDomain === rootDomain) score = Math.max(score, 0.9);
+      else if (patternDomain && domain.endsWith(`.${patternDomain}`)) score = Math.max(score, 0.88);
       else if (address.includes(pattern)) score = Math.max(score, 0.75);
+      else if (patternDomain && address.includes(patternDomain)) score = Math.max(score, 0.72);
     }
   }
   return score;

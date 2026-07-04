@@ -30,6 +30,13 @@ const reportTableLabels: Record<Exclude<ReportSource, "">, string> = {
   feedback: "Feedback table",
 }
 
+const allReportSources: Array<Exclude<ReportSource, "">> = ["leads", "showings", "feedback"]
+
+function schemaNameKey(schema: unknown) {
+  const name = `${(schema as { name?: unknown } | null)?.name ?? ""}`.trim()
+  return name.match(/^\{\{\s*([^}]+?)\s*\}\}$/)?.[1]?.trim() ?? name
+}
+
 export function PdfServerGenerationWorkspace({ initialTemplateId }: { initialTemplateId?: number }) {
   const [templateId, setTemplateId] = useState(initialTemplateId ? String(initialTemplateId) : "")
   const [propertyId, setPropertyId] = useState("")
@@ -209,17 +216,18 @@ export function PdfServerGenerationWorkspace({ initialTemplateId }: { initialTem
     const schemas = Array.isArray(selectedTemplate?.templateJson?.schemas)
       ? selectedTemplate.templateJson.schemas.flat()
       : []
-    return [...new Set(schemas
+    const tableSchemas = schemas.filter((schema) => (schema as { type?: unknown } | null)?.type === "table")
+    if (tableSchemas.length === 0) return []
+    const exactSources = tableSchemas
       .map((schema) => {
-        const name = `${schema?.name ?? ""}`.trim()
-        const key = name.match(/^\{\{\s*([^}]+?)\s*\}\}$/)?.[1]?.trim() ?? name
-        if (schema?.type !== "table") return null
+        const key = schemaNameKey(schema)
         if (key === "report.leads.table") return "leads"
         if (key === "report.showings.table") return "showings"
         if (key === "report.feedback.table") return "feedback"
         return null
       })
-      .filter(Boolean) as Array<Exclude<ReportSource, "">>)]
+      .filter(Boolean) as Array<Exclude<ReportSource, "">>
+    return exactSources.length ? [...new Set(exactSources)] : allReportSources
   }, [selectedTemplate?.templateJson])
   const hasReportTables = reportTableOptions.length > 0
   const filteredTemplates = templateOptions.filter((item) =>

@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation"
 import { useEffect, useMemo, useRef, useState } from "react"
+import PostalMime from "postal-mime"
 
 import type {
   LeadCollectionFieldMapping,
@@ -29,6 +30,52 @@ import {
 import { useMailInbox } from "@/hooks/use-real-estate-api"
 
 const transforms: LeadCollectionFieldTransform[] = ["Text", "Email", "Phone", "Number", "Date"]
+
+function sanitizeEmailHtml(html: string) {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/\son\w+="[^"]*"/gi, "")
+    .replace(/\son\w+='[^']*'/gi, "")
+}
+
+function htmlToSelectionText(html: string) {
+  return html
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(p|div|tr|table|li|h\d)>/gi, "\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, "\"")
+    .replace(/&#39;/gi, "'")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n\s+/g, "\n")
+    .trim()
+}
+
+function normalizeSelection(value: string) {
+  return value.replace(/\u00a0/g, " ").replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim()
+}
+
+function findTextIndex(source: string, search: string) {
+  return source.toLowerCase().indexOf(search.toLowerCase())
+}
+
+function selectionToValue(sourceText: string, selectedText: string, selectedStart = -1) {
+  const source = normalizeSelection(sourceText)
+  const selected = normalizeSelection(selectedText)
+  const colonIndex = selected.indexOf(":")
+  const rawValue = colonIndex >= 0 ? selected.slice(colonIndex + 1).trim() : selected
+  const selectedIndex = selectedStart >= 0 ? selectedStart : findTextIndex(source, selected)
+  const valueOffset = rawValue && selectedIndex >= 0 ? selected.toLowerCase().indexOf(rawValue.toLowerCase()) : -1
+  const valueIndex = valueOffset >= 0 ? selectedIndex + valueOffset : rawValue ? findTextIndex(source, rawValue) : -1
+  const start = valueIndex >= 0 ? valueIndex : selectedIndex
+  const text = valueIndex >= 0 ? rawValue : selected
+  return { start, text }
+}
 
 function initialValue(mailInboxId?: number): LeadCollectionTemplateSaveInput {
   return {
@@ -156,17 +203,23 @@ export function LeadCollectionTemplateEditor({
     if (!file) return
     setError(null)
     const content = await file.text()
-    const isHtml = /\.html?$/i.test(file.name) || /<\s*(html|body|table|div|p)\b/i.test(content)
+    const isEml = /\.eml$/i.test(file.name) || /^from:|^subject:|content-type:/im.test(content.slice(0, 2000))
+    const parsed = isEml ? await PostalMime.parse(content, { attachmentEncoding: "base64" }) : null
+    const fromAddress = parsed?.from && "address" in parsed.from ? parsed.from.address : ""
+    const htmlContent = parsed?.html ?? content
+    const textContent = parsed?.text ?? htmlToSelectionText(htmlContent)
+    const isHtml = !!parsed?.html || /\.html?$/i.test(file.name) || /<\s*(html|body|table|div|p)\b/i.test(content)
     setValue((current) => ({
       ...current,
       sourceType: "UploadedHtml",
       sourceMailInboxId: null,
-      sourceHtml: isHtml ? content : "",
-      sourceText: isHtml ? "" : content,
-      sampleSubject: current.sampleSubject || file.name.replace(/\.[^.]+$/, ""),
+      sourceHtml: isHtml ? htmlContent : "",
+      sourceText: isHtml ? "" : textContent,
+      sampleFromAddress: current.sampleFromAddress || fromAddress || "",
+      sampleSubject: current.sampleSubject || parsed?.subject || file.name.replace(/\.[^.]+$/, ""),
     }))
-    setPastedHtml(isHtml ? content : "")
-    setPastedText(isHtml ? "" : content)
+    setPastedHtml(isHtml ? htmlContent : "")
+    setPastedText(isHtml ? "" : textContent)
   }
 
   function captureSelection() {
@@ -176,7 +229,21 @@ export function LeadCollectionTemplateEditor({
     let end = element.selectionEnd
     while (start < end && /\s/.test(value.sourceText[start] ?? "")) start += 1
     while (end > start && /\s/.test(value.sourceText[end - 1] ?? "")) end -= 1
-    setSelection({ start, end, text: value.sourceText.slice(start, end) })
+    const selectedText = value.sourceText.slice(start, end)
+    const smart = selectionToValue(value.sourceText, selectedText, start)
+    if (smart.start < 0 || !smart.text) return
+    setSelection({ start: smart.start, end: smart.start + smart.text.length, text: smart.text })
+  }
+
+  function captureVisualSelection() {
+    const selected = normalizeSelection(window.getSelection()?.toString() ?? "")
+    if (!selected) return
+    const smart = selectionToValue(value.sourceText, selected)
+    if (smart.start < 0 || !smart.text) {
+      setSelection({ start: 0, end: 0, text: selected })
+      return
+    }
+    setSelection({ start: smart.start, end: smart.start + smart.text.length, text: smart.text })
   }
 
   function addMapping() {
@@ -274,7 +341,7 @@ export function LeadCollectionTemplateEditor({
       <div className="flex flex-col gap-4 border-b pb-5 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <div className="flex items-center gap-2">
-            <AppIcon name="document_scanner" />
+            <AppIcon name="description" />
             <h1 className="text-2xl font-black tracking-tight">
               {templateId ? "Edit lead collection template" : "Create lead collection template"}
             </h1>
@@ -285,11 +352,11 @@ export function LeadCollectionTemplateEditor({
         </div>
         <div className="flex flex-wrap gap-2">
           <Button disabled={!value.sourceText || testMutation.isPending} onClick={() => void testTemplate()} variant="outline">
-            <AppIcon name="science" />
+            <AppIcon name="checklist" />
             Test template
           </Button>
           <Button disabled={saving} onClick={() => void saveTemplate()}>
-            <AppIcon name="save" />
+            <AppIcon name="check_circle" />
             Save template
           </Button>
         </div>
@@ -327,7 +394,7 @@ export function LeadCollectionTemplateEditor({
           </Card>
 
           <Card>
-            <CardHeader><CardTitle>Sample source</CardTitle><CardDescription>Use an inbox message, pasted content, or uploaded HTML/text.</CardDescription></CardHeader>
+            <CardHeader><CardTitle>Sample source</CardTitle><CardDescription>Use inbox mail, paste content, or upload .eml / HTML / text.</CardDescription></CardHeader>
             <CardContent className="space-y-4">
               <Select
                 modal={false}
@@ -343,7 +410,7 @@ export function LeadCollectionTemplateEditor({
                   <SelectItem value="InboxEmail">Existing inbox email</SelectItem>
                   <SelectItem value="PastedText">Paste rendered email text</SelectItem>
                   <SelectItem value="PastedHtml">Paste email HTML</SelectItem>
-                  <SelectItem value="UploadedHtml">Upload HTML or text file</SelectItem>
+                  <SelectItem value="UploadedHtml">Upload email file (.eml, HTML, text)</SelectItem>
                 </SelectContent>
               </Select>
 
@@ -369,7 +436,7 @@ export function LeadCollectionTemplateEditor({
               ) : null}
 
               {value.sourceType === "UploadedHtml" ? (
-                <Input accept=".html,.htm,.txt,.eml,text/html,text/plain,message/rfc822" onChange={(event) => void readUploadedFile(event.target.files?.[0])} type="file" />
+                <Input accept=".eml,.html,.htm,.txt,message/rfc822,text/html,text/plain" onChange={(event) => void readUploadedFile(event.target.files?.[0])} type="file" />
               ) : null}
 
               {value.sourceType !== "InboxEmail" ? (
@@ -380,7 +447,7 @@ export function LeadCollectionTemplateEditor({
               ) : null}
 
               <Button disabled={preparing} onClick={() => void prepareSource()} variant="outline">
-                <AppIcon name="auto_fix_high" />
+                <AppIcon name="auto_awesome" />
                 Prepare sample
               </Button>
             </CardContent>
@@ -415,14 +482,39 @@ export function LeadCollectionTemplateEditor({
             <CardContent className="space-y-4">
               {value.sourceText ? (
                 <>
-                  <Textarea
-                    className="min-h-[460px] whitespace-pre-wrap font-mono text-sm leading-6"
-                    onKeyUp={captureSelection}
-                    onMouseUp={captureSelection}
-                    readOnly
-                    ref={sourceTextRef}
-                    value={value.sourceText}
-                  />
+                  {value.sourceHtml ? (
+                    <div className="overflow-hidden rounded-xl border bg-white">
+                      <div className="border-b px-3 py-2 text-xs font-bold uppercase tracking-wide text-muted-foreground">Original email view - select value here</div>
+                      <div
+                        className="max-h-[620px] overflow-auto bg-white p-4 text-sm text-slate-900 [&_img]:max-w-full [&_table]:max-w-full"
+                        dangerouslySetInnerHTML={{ __html: sanitizeEmailHtml(value.sourceHtml) }}
+                        onKeyUp={captureVisualSelection}
+                        onMouseUp={captureVisualSelection}
+                      />
+                    </div>
+                  ) : null}
+                  {!value.sourceHtml ? (
+                    <Textarea
+                      className="min-h-[460px] whitespace-pre-wrap font-mono text-sm leading-6"
+                      onKeyUp={captureSelection}
+                      onMouseUp={captureSelection}
+                      readOnly
+                      ref={sourceTextRef}
+                      value={value.sourceText}
+                    />
+                  ) : (
+                    <details className="rounded-xl border bg-muted/20 p-3 text-sm">
+                      <summary className="cursor-pointer font-semibold">Decoded text used by parser</summary>
+                      <Textarea
+                        className="mt-3 min-h-72 whitespace-pre-wrap font-mono text-xs leading-6"
+                        onKeyUp={captureSelection}
+                        onMouseUp={captureSelection}
+                        readOnly
+                        ref={sourceTextRef}
+                        value={value.sourceText}
+                      />
+                    </details>
+                  )}
                   <div className="rounded-xl border bg-muted/30 p-3">
                     <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Current selection</p>
                     <p className="mt-2 break-words text-sm">{selection.text || "Highlight a value in the email above."}</p>

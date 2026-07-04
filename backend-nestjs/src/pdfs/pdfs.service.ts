@@ -842,6 +842,12 @@ export class PdfsService {
         continue;
       }
 
+      const reportTableValue = this.reportTableInputValue(schema, values, lookupKey);
+      if (this.hasInputValue(reportTableValue)) {
+        input[name] = reportTableValue;
+        continue;
+      }
+
       const content = this.schemaContent(schema);
       if (content.trim()) {
         input[name] = content;
@@ -860,6 +866,18 @@ export class PdfsService {
   private exactMustacheKey(value: string) {
     const match = value.match(/^\{\{\s*([^}]+?)\s*\}\}$/);
     return match?.[1]?.trim() || null;
+  }
+
+  private reportTableInputValue(
+    schema: Record<string, unknown>,
+    values: Record<string, any>,
+    lookupKey: string,
+  ) {
+    if (`${schema?.type ?? ''}` !== 'table') return undefined;
+    if (/^report\.(leads|showings|feedback)\.table$/.test(lookupKey)) return undefined;
+    const source = `${values['report.source'] ?? ''}`.trim();
+    if (!['leads', 'showings', 'feedback'].includes(source)) return undefined;
+    return values[`report.${source}.table`];
   }
 
   private inputValue(value: unknown) {

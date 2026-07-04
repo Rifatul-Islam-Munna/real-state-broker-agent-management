@@ -508,15 +508,40 @@ export class MailInboxSyncBackgroundService {
   }
 
   private matchProperty(properties: Property[], inbound: InboundEmail, extracted?: ExtractedLeadInfo) {
-    const text = `${inbound.subject}\n${inbound.body}\n${extracted?.propertyTitle ?? ''}\n${extracted?.propertyLocation ?? ''}`.toLowerCase();
+    const text = this.normalizeAddressMatch(`${inbound.subject}\n${inbound.body}\n${extracted?.propertyTitle ?? ''}\n${extracted?.propertyLocation ?? ''}`);
     return properties
       .filter((property) => !!property.title?.trim())
-      .sort((a, b) => b.title.length - a.title.length)
-      .find((property) => {
-        const title = property.title.trim().toLowerCase();
-        const location = `${property.location ?? ''} ${property.exactLocation ?? ''}`.trim().toLowerCase();
-        return text.includes(title) || (!!location && location.split(/\s+/).some((word) => word.length > 4 && text.includes(word)));
-      });
+      .map((property) => ({ property, score: this.propertyMatchScore(property, text) }))
+      .filter((item) => item.score >= 0.42)
+      .sort((a, b) => b.score - a.score || b.property.title.length - a.property.title.length)
+      .map((item) => item.property)
+      .find(Boolean);
+  }
+
+  private propertyMatchScore(property: Property, normalizedEmailText: string) {
+    const title = this.normalizeAddressMatch(property.title);
+    const location = this.normalizeAddressMatch(`${property.location ?? ''} ${property.exactLocation ?? ''}`);
+    const candidates = [title, location].filter(Boolean);
+    let score = 0;
+    for (const candidate of candidates) {
+      if (candidate && normalizedEmailText.includes(candidate)) score = Math.max(score, 1);
+      const number = candidate.match(/\b\d{2,}\b/)?.[0];
+      if (number && normalizedEmailText.includes(number)) score = Math.max(score, 0.55);
+      const words = candidate.split(/\s+/).filter((word) => word.length >= 4);
+      const matched = words.filter((word) => normalizedEmailText.includes(word)).length;
+      if (words.length) score = Math.max(score, matched / words.length);
+      if (number && matched > 0) score = Math.max(score, 0.7);
+    }
+    return score;
+  }
+
+  private normalizeAddressMatch(value: unknown) {
+    return `${value ?? ''}`
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, ' ')
+      .replace(/\b(street|st|road|rd|avenue|ave|drive|dr|court|ct|lane|ln|boulevard|blvd|north|south|east|west|n|s|e|w)\b/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
   }
 
   private isPropertyInquiry(text: string) {
