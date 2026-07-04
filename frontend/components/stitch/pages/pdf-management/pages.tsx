@@ -36,7 +36,7 @@ export function PdfTemplateLibraryPage() {
             {templates.map(({ document, template }) => (
               <div className="rounded-xl border p-4" key={document.id}>
                 <div className="flex items-start justify-between gap-3"><div><h3 className="font-semibold">{template.name}</h3><p className="mt-1 text-sm text-muted-foreground">{template.description || "No description"}</p></div><Badge variant="outline">{template.category}</Badge></div>
-                <div className="mt-4 flex gap-2"><Button render={<Link href={`/dashboard/pdfs/templates/${document.id}`} />} size="sm" variant="outline">Edit</Button><Button render={<Link href={`/dashboard/pdfs/generate?templateId=${document.id}`} />} size="sm">Use</Button></div>
+                <div className="mt-4 flex gap-2"><Button render={<Link href={`/dashboard/pdfs/templates/${document.id}`} />} size="sm" variant="outline">Edit</Button><Button render={<Link href={`/dashboard/pdfs/download?templateId=${document.id}`} />} size="sm">Use</Button></div>
               </div>
             ))}
           </div>
