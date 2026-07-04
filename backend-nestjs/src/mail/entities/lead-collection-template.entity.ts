@@ -27,9 +27,12 @@ export type LeadCollectionFieldTransform =
   | 'Number'
   | 'Date';
 
+export type LeadCollectionFieldSource = 'EmailBody' | 'LinkedPage';
+
 export type LeadCollectionFieldMapping = {
   field: string;
   label: string;
+  source?: LeadCollectionFieldSource;
   sampleValue: string;
   selectionStart: number;
   selectionEnd: number;
@@ -38,6 +41,14 @@ export type LeadCollectionFieldMapping = {
   occurrence: number;
   required: boolean;
   transform: LeadCollectionFieldTransform;
+};
+
+export type LeadCollectionLinkedPageConfig = {
+  enabled: boolean;
+  allowedHosts: string[];
+  urlIncludes: string[];
+  linkTextIncludes: string[];
+  maxLinks: number;
 };
 
 @Index(['name'])
@@ -86,6 +97,27 @@ export class LeadCollectionTemplate {
 
   @Column({ type: 'text', default: '' })
   sourceText: string;
+
+  @Column({
+    type: 'jsonb',
+    default: {
+      enabled: false,
+      allowedHosts: [],
+      urlIncludes: [],
+      linkTextIncludes: [],
+      maxLinks: 3,
+    },
+  })
+  linkedPageConfig: LeadCollectionLinkedPageConfig;
+
+  @Column({ type: 'text', default: '' })
+  linkedPageSampleUrl: string;
+
+  @Column({ type: 'text', default: '' })
+  linkedPageSourceHtml: string;
+
+  @Column({ type: 'text', default: '' })
+  linkedPageSourceText: string;
 
   @Column({ type: 'jsonb', default: [] })
   mappings: LeadCollectionFieldMapping[];
