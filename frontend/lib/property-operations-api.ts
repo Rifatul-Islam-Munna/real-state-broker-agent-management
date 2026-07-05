@@ -51,7 +51,7 @@ export type OperationsWorkspace = {
 }
 
 export type OperationsRecord = {
-  id: any
+  id: string
   propertyId?: number
   moduleKey: string
   recordType: string
@@ -74,7 +74,7 @@ export type OperationsRecord = {
 }
 
 export type SaveOperationsRecordInput = {
-  id?: any
+  id?: string | null
   propertyId: number
   moduleKey: string
   recordType: string
@@ -111,9 +111,9 @@ export type OperationsSettings = {
 }
 
 export type OperationsPublicAccess = {
-  id: any
+  id: string
   propertyId: number
-  recordId: any
+  recordId: string | null
   moduleKey: string
   title: string
   instructions: string
@@ -202,9 +202,9 @@ export const propertyOperationsApi = {
       payloadJson: undefined,
     }) })
   },
-  deleteRecord: (id: any) => request<void>(`/records?id=${String(id)}`, { method: "DELETE" }),
-  recordAction: (id: any, action: string, input: Record<string, unknown> = {}) => request<OperationsRecord>(`/records/${String(id)}/actions/${action}`, { method: "PATCH", body: JSON.stringify(input) }),
-  deliverRecord: (id: any, channel: "email" | "sms" | "whatsapp" = "email") => request<OperationsRecord>(`/jobs/deliver/${String(id)}?channel=${channel}`, { method: "POST" }),
+  deleteRecord: (id: string) => request<void>(`/records?id=${id}`, { method: "DELETE" }),
+  recordAction: (id: string, action: string, input: Record<string, unknown> = {}) => request<OperationsRecord>(`/records/${id}/actions/${action}`, { method: "PATCH", body: JSON.stringify(input) }),
+  deliverRecord: (id: string, channel: "email" | "sms" | "whatsapp" = "email") => request<OperationsRecord>(`/jobs/deliver/${id}?channel=${channel}`, { method: "POST" }),
   runAutomation: () => request<Record<string, number>>("/jobs/run", { method: "POST" }),
   runRecurringMaintenance: (propertyId?: number) => request<OperationsRecord[]>(`/recurring-maintenance/run${propertyId ? `?propertyId=${propertyId}` : ""}`, { method: "POST" }),
   getSettings: () => request<OperationsSettings>("/settings"),
@@ -217,8 +217,8 @@ export const propertyOperationsApi = {
     const formSchemaJson = String(input.formSchemaJson ?? "[]")
     return request<OperationsPublicAccess>("/public-access", { method: "POST", body: JSON.stringify({ ...input, formSchema: parseJson(formSchemaJson, []), formSchemaJson: undefined }) })
   },
-  revokePublicLink: (id: any) => request<void>(`/public-access/revoke?id=${String(id)}`, { method: "PATCH" }),
-  getSubmissions: (accessId: any) => request<Array<Record<string, unknown>>>(`/public-submissions?accessId=${String(accessId)}`),
+  revokePublicLink: (id: string) => request<void>(`/public-access/revoke?id=${id}`, { method: "PATCH" }),
+  getSubmissions: (accessId: string) => request<Array<Record<string, unknown>>>(`/public-submissions?accessId=${accessId}`),
   getPublicRequest: (token: string) => request<PublicOperationsRequest>(`/public/${encodeURIComponent(token)}`),
   submitPublicRequest: (token: string, input: Record<string, unknown>) => {
     const responsePayload = parseJson(String(input.responseJson ?? "{}"), {}) as Record<string, unknown>
