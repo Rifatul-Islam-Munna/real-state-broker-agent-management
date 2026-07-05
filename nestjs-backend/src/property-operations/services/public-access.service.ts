@@ -82,14 +82,17 @@ export class PublicAccessService {
   }
 
   async getPublic(token: string) {
-    const item = await this.findActive(token);
-    const [workspace, settings] = await Promise.all([
+    const item = await this.findAccess(token, true);
+    const [workspace, settings, linkedRecord] = await Promise.all([
       this.workspaceModel.findById(item.workspaceId).lean(),
       this.settings.get(),
+      item.recordId ? this.records.findById(item.recordId).lean() : null,
     ]);
     if (!workspace) throw new NotFoundException('Property request was not found.');
     item.lastAccessedAt = new Date();
     await item.save();
+    const stripeConfigured = Boolean(this.config.get<string>('STRIPE_SECRET_KEY'));
+    const payableRecord = linkedRecord && ['billing', 'finance'].includes(linkedRecord.moduleKey) ? linkedRecord : null;
     return {
       businessName: settings.businessName, logoUrl: settings.logoUrl, brandColor: settings.brandColor,
       welcomeMessage: settings.welcomeMessage, termsText: settings.termsText,
@@ -100,11 +103,19 @@ export class PublicAccessService {
       recipientLabel: item.recipientLabel, formSchema: item.formSchema,
       formSchemaJson: JSON.stringify(item.formSchema), expiresAt: item.expiresAt,
       remainingUses: Math.max(0, item.maxUses - item.useCount),
+      requestStatus: item.status,
+      linkedRecordId: linkedRecord ? String(linkedRecord._id) : null,
+      linkedRecordStatus: linkedRecord?.status ?? null,
+      paymentEnabled: Boolean(stripeConfigured && payableRecord?.amount && payableRecord.amount > 0 && payableRecord.status !== 'Paid'),
+      paymentAmount: payableRecord?.amount ?? null,
+      paymentCurrency: (this.config.get<string>('STRIPE_DEFAULT_CURRENCY') ?? 'usd').toUpperCase(),
+      paymentVerified: payableRecord?.status === 'Paid',
+      stripeCheckoutStatus: item.stripeCheckoutStatus || null,
     };
   }
 
   async submit(token: string, dto: SubmitPublicRequestDto) {
-    const item = await this.findActive(token);
+    const item = await this.findAccess(token);
     const settings = await this.settings.get();
     if (settings.requireName && !dto.responderName?.trim()) throw new BadRequestException('Name is required.');
     if (settings.requireEmail && !dto.responderEmail?.trim()) throw new BadRequestException('Email is required.');
@@ -134,7 +145,7 @@ export class PublicAccessService {
     await Promise.all([this.submissions.deleteMany({ publicAccessId: { $in: ids } }), this.links.deleteMany({ workspaceId })]);
   }
 
-  private async findActive(token: string) {
+  private async findAccess(token: string, allowCompleted = false) {
     const item = await this.links.findOne({ tokenHash: this.hash(token) });
     if (!item) throw new NotFoundException('This request link is invalid.');
     if (item.status === 'Revoked') throw new GoneException('This request link was revoked.');
@@ -143,7 +154,7 @@ export class PublicAccessService {
       await item.save();
       throw new GoneException('This request link has expired.');
     }
-    if (item.status === 'Completed' || item.useCount >= item.maxUses) throw new GoneException('This request has already been completed.');
+    if (!allowCompleted && (item.status === 'Completed' || item.useCount >= item.maxUses)) throw new GoneException('This request has already been completed.');
     return item;
   }
 
