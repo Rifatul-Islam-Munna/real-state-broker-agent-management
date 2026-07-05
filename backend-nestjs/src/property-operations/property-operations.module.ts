@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { FileUploadModule } from '../file-upload/file-upload.module';
+import { FileUploadService } from '../file-upload/file-upload.service';
 import { SettingsModule } from '../settings/settings.module';
 import {
   PropertyOperationsModuleState,
@@ -21,6 +21,7 @@ import { PropertyOperationsIntegrationService } from './property-operations-inte
 import { PropertyOperationsPublicService } from './property-operations-public.service';
 import { PropertyOperationsSchemaService } from './property-operations-schema.service';
 import { PropertyOperationsService } from './property-operations.service';
+import { PropertyOperationsUploadService } from './property-operations-upload.service';
 
 @Module({
   imports: [
@@ -33,7 +34,6 @@ import { PropertyOperationsService } from './property-operations.service';
       PropertyOperationsPreferences,
     ]),
     SettingsModule,
-    FileUploadModule,
   ],
   controllers: [PropertyOperationsAdminController, PropertyOperationsPublicController],
   providers: [
@@ -43,6 +43,8 @@ import { PropertyOperationsService } from './property-operations.service';
     PropertyOperationsPublicService,
     PropertyOperationsIntegrationService,
     LegacyLinkService,
+    PropertyOperationsUploadService,
+    { provide: FileUploadService, useExisting: PropertyOperationsUploadService },
     JwtAuthGuard,
   ],
   exports: [PropertyOperationsService],
