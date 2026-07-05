@@ -3,7 +3,7 @@ using Entities;
 using Data;
 namespace Data
 {
-      public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
+      public partial class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
       {
             public DbSet<User> Users => Set<User>();
             public DbSet<Property> Properties => Set<Property>();
