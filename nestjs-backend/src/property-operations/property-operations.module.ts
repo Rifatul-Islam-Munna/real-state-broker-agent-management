@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
+import { ScheduleModule } from '@nestjs/schedule';
 import { AdminGuard } from '../auth/admin.guard';
 import { JobsController } from './controllers/jobs.controller';
 import { ManagementController } from './controllers/management.controller';
@@ -22,6 +23,7 @@ import { WorkspaceService } from './services/workspace.service';
 
 @Module({
   imports: [
+    ScheduleModule.forRoot(),
     MongooseModule.forFeature([
       { name: OperationsWorkspace.name, schema: OperationsWorkspaceSchema },
       { name: OperationsRecord.name, schema: OperationsRecordSchema },
