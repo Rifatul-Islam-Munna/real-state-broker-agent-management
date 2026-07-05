@@ -26,6 +26,7 @@ import { RealtorShowingsModule } from './realtor-showings/realtor-showings.modul
 import { ShowingFeedbackModule } from './showing-feedback/showing-feedback.module';
 import { PdfsModule } from './pdfs/pdfs.module';
 import { DevSeedService } from './dev-seed.service';
+import { PropertyOperationsModule } from './property-operations/property-operations.module';
 
 @Module({
   imports: [
@@ -54,6 +55,7 @@ import { DevSeedService } from './dev-seed.service';
     ShowingFeedbackModule,
     PdfsModule,
     PredictionModule,
+    PropertyOperationsModule,
   ],
   controllers: [],
   providers: [AppService, DevSeedService],
