@@ -1,17 +1,15 @@
 import { Controller, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { AdminGuard } from '../../auth/admin.guard';
-import { AutomationService } from '../services/automation.service';
-import { DeliveryService } from '../services/delivery.service';
+import { AssistantService } from '../../core/assistant.service';
+import { DeliveryService } from '../../shared/delivery.service';
 
 @UseGuards(AdminGuard)
 @Controller('property-operations/jobs')
 export class JobsController {
-  constructor(private readonly automation: AutomationService, private readonly delivery: DeliveryService) {}
+  constructor(private readonly assistant: AssistantService, private readonly delivery: DeliveryService) {}
 
   @Post('run')
-  run() {
-    return this.automation.runHourly();
-  }
+  run() { return this.assistant.runAutomation(); }
 
   @Post('deliver/:id')
   deliver(@Param('id') id: string, @Query('channel') channel = 'email') {
