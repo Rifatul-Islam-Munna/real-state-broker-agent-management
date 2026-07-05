@@ -15,6 +15,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { FileUploadService } from '../file-upload/file-upload.service';
+import { LegacyLinkService } from './legacy-link.service';
 import { PropertyOperationsPublicService } from './property-operations-public.service';
 import { PropertyOperationsService } from './property-operations.service';
 
@@ -135,37 +136,57 @@ export class PropertyOperationsAdminController {
 export class PropertyOperationsPublicController {
   constructor(
     private readonly publicAccess: PropertyOperationsPublicService,
+    private readonly legacyLinks: LegacyLinkService,
     private readonly files: FileUploadService,
   ) {}
 
   @Get(':token')
-  request(@Param('token') token: string) { return this.publicAccess.getRequest(token); }
+  async request(@Param('token') token: string) {
+    await this.legacyLinks.restore(token);
+    return this.publicAccess.getRequest(token);
+  }
 
   @Post(':token')
-  submit(@Param('token') token: string, @Body() body: any) { return this.publicAccess.submit(token, body); }
+  async submit(@Param('token') token: string, @Body() body: any) {
+    await this.legacyLinks.restore(token);
+    return this.publicAccess.submit(token, body);
+  }
 
   @Post(':token/upload')
   @UseInterceptors(FileInterceptor('file'))
   async upload(@Param('token') token: string, @UploadedFile() file: Express.Multer.File) {
+    await this.legacyLinks.restore(token);
     await this.publicAccess.assertUploadAllowed(token);
     return this.files.uploadFile(file, 'property-operations-public');
   }
 
   @Get(':token/status')
-  status(@Param('token') token: string) { return this.publicAccess.getStatus(token); }
+  async status(@Param('token') token: string) {
+    await this.legacyLinks.restore(token);
+    return this.publicAccess.getStatus(token);
+  }
 
   @Patch(':token/status')
-  updateStatus(@Param('token') token: string, @Body() body: any) {
+  async updateStatus(@Param('token') token: string, @Body() body: any) {
+    await this.legacyLinks.restore(token);
     return this.publicAccess.updateStatus(token, body);
   }
 
   @Post(':token/checkout')
-  checkout(@Param('token') token: string, @Body() body: any) {
-    return this.publicAccess.createCheckout(token, String(body?.successUrl ?? ''), String(body?.cancelUrl ?? ''));
+  async checkout(@Param('token') token: string, @Body() body: any) {
+    await this.legacyLinks.restore(token);
+    const successUrl = String(body?.successUrl ?? '').trim();
+    const cancelUrl = String(body?.cancelUrl ?? '').trim();
+    if (!successUrl || !cancelUrl) throw new BadRequestException('Payment success and cancellation URLs are required.');
+    return this.publicAccess.createCheckout(token, successUrl, cancelUrl);
   }
 
   @Post(':token/checkout/verify')
-  verifyCheckout(@Param('token') token: string, @Body() body: any) {
-    return this.publicAccess.verifyCheckout(token, String(body?.sessionId ?? ''), String(body?.paymentToken ?? ''));
+  async verifyCheckout(@Param('token') token: string, @Body() body: any) {
+    await this.legacyLinks.restore(token);
+    const sessionId = String(body?.sessionId ?? '').trim();
+    const paymentToken = String(body?.paymentToken ?? '').trim();
+    if (!sessionId || !paymentToken) throw new BadRequestException('Payment session ID and token are required.');
+    return this.publicAccess.verifyCheckout(token, sessionId, paymentToken);
   }
 }
