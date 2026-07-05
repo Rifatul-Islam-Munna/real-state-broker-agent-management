@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { AdminGuard } from '../auth/admin.guard';
+import { JobsController } from './controllers/jobs.controller';
 import { ManagementController } from './controllers/management.controller';
 import { PublicAdminController } from './controllers/public-admin.controller';
 import { PublicController } from './controllers/public.controller';
@@ -9,7 +10,9 @@ import { WorkspaceRecordController } from './controllers/workspace-record.contro
 import { OperationsRecord, OperationsRecordSchema, OperationsWorkspace, OperationsWorkspaceSchema } from './schemas/operations.schema';
 import { OperationsActivity, OperationsActivitySchema, OperationsSettings, OperationsSettingsSchema, PublicAccess, PublicAccessSchema, PublicSubmission, PublicSubmissionSchema } from './schemas/public-access.schema';
 import { ActivityService } from './services/activity.service';
+import { AutomationService } from './services/automation.service';
 import { CleanupService } from './services/cleanup.service';
+import { DeliveryService } from './services/delivery.service';
 import { InsightsService } from './services/insights.service';
 import { PublicAccessService } from './services/public-access.service';
 import { RecordService } from './services/record.service';
@@ -28,7 +31,7 @@ import { WorkspaceService } from './services/workspace.service';
       { name: OperationsActivity.name, schema: OperationsActivitySchema },
     ]),
   ],
-  controllers: [WorkspaceRecordController, ManagementController, PublicAdminController, PublicController, UploadController],
-  providers: [AdminGuard, ActivityService, WorkspaceService, RecordService, SettingsService, InsightsService, PublicAccessService, CleanupService, UploadService],
+  controllers: [WorkspaceRecordController, ManagementController, PublicAdminController, PublicController, UploadController, JobsController],
+  providers: [AdminGuard, ActivityService, WorkspaceService, RecordService, SettingsService, InsightsService, PublicAccessService, CleanupService, UploadService, AutomationService, DeliveryService],
 })
 export class PropertyOperationsModule {}
