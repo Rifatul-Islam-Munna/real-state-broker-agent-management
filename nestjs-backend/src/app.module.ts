@@ -1,16 +1,24 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
-import { MongooseModule } from '@nestjs/mongoose';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { ModuleStateEntity, OperationsRecordEntity } from './database/entities/record.entity';
+import { WorkspaceEntity } from './database/entities/workspace.entity';
 import { PropertyOperationsModule } from './property-operations/property-operations.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, envFilePath: ['.env.local', '.env'] }),
     JwtModule.register({ global: true }),
-    MongooseModule.forRootAsync({
+    TypeOrmModule.forRootAsync({
       inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({ uri: config.getOrThrow<string>('MONGODB_URL') }),
+      useFactory: (config: ConfigService) => ({
+        type: 'postgres' as const,
+        url: config.get<string>('ConnectionStrings__Default') ?? config.getOrThrow<string>('DATABASE_URL'),
+        entities: [WorkspaceEntity, ModuleStateEntity, OperationsRecordEntity],
+        synchronize: true,
+        logging: false,
+      }),
     }),
     PropertyOperationsModule,
   ],
