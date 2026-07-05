@@ -41,8 +41,8 @@ export class PropertyOperationsRecord {
   @Column({ type: 'numeric', precision: 18, scale: 2, nullable: true }) amount: string | null;
   @Column({ type: 'timestamptz', nullable: true }) dueAt: Date | null;
   @Column({ type: 'jsonb', default: () => "'[]'::jsonb" }) attachments: string[];
-  @Column({ type: 'jsonb', default: () => "'{}'::jsonb" }) payload: Record<string, unknown>;
-  @Column({ type: 'jsonb', nullable: true }) recurrence: Record<string, unknown> | null;
+  @Column({ name: 'payload_json', type: 'jsonb', default: () => "'{}'::jsonb" }) payload: Record<string, unknown>;
+  @Column({ name: 'recurrence_json', type: 'jsonb', nullable: true }) recurrence: Record<string, unknown> | null;
   @Column({ type: 'int', nullable: true }) parentRecordId: number | null;
   @Column({ length: 240, default: '' }) assignedTo: string;
   @Column({ type: 'timestamptz', nullable: true }) completedAt: Date | null;
