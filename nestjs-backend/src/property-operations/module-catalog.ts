@@ -28,5 +28,5 @@ export const MODULE_CATALOG = {
 export type ModuleKey = keyof typeof MODULE_CATALOG;
 export const MODULE_KEYS = Object.keys(MODULE_CATALOG) as ModuleKey[];
 export const MODULE_STATUSES = ['Not started', 'In progress', 'Ready'] as const;
-export const RECORD_STATUSES = ['Open', 'Pending', 'Scheduled', 'Assigned', 'In progress', 'Waiting', 'Completed', 'Closed', 'Paid', 'Cancelled', 'Archived'] as const;
+export const RECORD_STATUSES = ['Draft', 'Open', 'Active', 'Due', 'Overdue', 'Pending', 'Submitted', 'Under review', 'Scheduled', 'Assigned', 'In progress', 'Waiting', 'Approved', 'Rejected', 'Published', 'Sent', 'Failed', 'Resolved', 'Completed', 'Closed', 'Paid', 'Paused', 'Cancelled', 'Expired', 'Revoked', 'Archived'] as const;
 export const isModuleKey = (value: string): value is ModuleKey => value in MODULE_CATALOG;
