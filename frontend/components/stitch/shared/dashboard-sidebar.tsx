@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
+import { PropertyOperationsSidebar } from "@/components/stitch/pages/property-operations/property-operations-sidebar"
 import { PortalBrandLink } from "@/components/stitch/shared/portal-brand-link"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { AppIcon } from "@/components/ui/app-icon"
@@ -78,6 +79,16 @@ export function DashboardSidebar({
   const pathname = usePathname()
   const navigation = getDashboardRoutesForUser(role, agentRoutePermissions)
   const homeHref = navigation[0]?.href ?? "/dashboard"
+
+  if (pathname.startsWith("/dashboard/property-operations")) {
+    return (
+      <PropertyOperationsSidebar
+        agencyName={agencyName}
+        logoUrl={logoUrl}
+        role={role}
+      />
+    )
+  }
 
   return (
     <Sidebar collapsible="offcanvas" variant="sidebar">
