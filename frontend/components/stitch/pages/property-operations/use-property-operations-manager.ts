@@ -83,10 +83,13 @@ export function usePropertyOperationsManager() {
 
   function setActiveModule(module: PropertyOperationsModule | null) {
     setActiveModuleState(module)
-    if (module) {
-      setTabState("modules")
-      router.replace(`/dashboard/property-operations?tab=modules&module=${module.id}`, { scroll: false })
-    }
+    setTabState("modules")
+    router.replace(
+      module
+        ? `/dashboard/property-operations?tab=modules&module=${module.id}`
+        : "/dashboard/property-operations?tab=modules",
+      { scroll: false },
+    )
   }
 
   async function loadAll() {
