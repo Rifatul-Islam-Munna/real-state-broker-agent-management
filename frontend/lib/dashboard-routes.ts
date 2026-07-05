@@ -12,6 +12,7 @@ export const dashboardRoutes: readonly DashboardRoute[] = [
   { href: "/dashboard", label: "Dashboard", icon: "dashboard", permission: "dashboard" },
   { href: "/dashboard/homepage", label: "Homepage", icon: "home", adminOnly: true },
   { href: "/dashboard/properties", label: "Properties", icon: "domain", permission: "properties" },
+  { href: "/dashboard/property-operations", label: "Property Operations", icon: "apartment", adminOnly: true },
   { href: "/dashboard/blog", label: "Blog", icon: "article", adminOnly: true },
   { href: "/dashboard/deals", label: "Deal Pipeline", icon: "partner_exchange", permission: "deal-pipeline" },
   { href: "/dashboard/leads", label: "Lead CRM", icon: "group", permission: "lead" },
