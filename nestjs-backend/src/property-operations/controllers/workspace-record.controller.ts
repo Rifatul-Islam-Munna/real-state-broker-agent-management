@@ -2,6 +2,7 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } f
 import { AdminGuard } from '../../auth/admin.guard';
 import { ImportPropertiesDto, RecordActionDto, SaveRecordDto, UpdateModuleStateDto } from '../dto/workspace-record.dto';
 import { CleanupService } from '../services/cleanup.service';
+import { DeliveryService } from '../services/delivery.service';
 import { RecordService } from '../services/record.service';
 import { WorkspaceService } from '../services/workspace.service';
 
@@ -12,6 +13,7 @@ export class WorkspaceRecordController {
     private readonly workspaces: WorkspaceService,
     private readonly records: RecordService,
     private readonly cleanup: CleanupService,
+    private readonly delivery: DeliveryService,
   ) {}
 
   @Get('workspaces')
@@ -56,6 +58,10 @@ export class WorkspaceRecordController {
 
   @Patch('records/:id/actions/:action')
   runRecordAction(@Param('id') id: string, @Param('action') action: string, @Body() dto: RecordActionDto) {
+    if (action === 'send') {
+      const channel = String(dto.payload?.channel ?? 'email').toLowerCase();
+      return this.delivery.send(id, channel);
+    }
     return this.records.action(id, action, dto);
   }
 }
