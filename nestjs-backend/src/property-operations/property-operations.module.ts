@@ -6,6 +6,7 @@ import { JobsController } from './controllers/jobs.controller';
 import { ManagementController } from './controllers/management.controller';
 import { PublicAdminController } from './controllers/public-admin.controller';
 import { PublicController } from './controllers/public.controller';
+import { PublicStatusController } from './controllers/public-status.controller';
 import { UploadController } from './controllers/upload.controller';
 import { WorkspaceRecordController } from './controllers/workspace-record.controller';
 import { OperationsRecord, OperationsRecordSchema, OperationsWorkspace, OperationsWorkspaceSchema } from './schemas/operations.schema';
@@ -17,6 +18,7 @@ import { DeliveryService } from './services/delivery.service';
 import { InsightsService } from './services/insights.service';
 import { PaymentService } from './services/payment.service';
 import { PublicAccessService } from './services/public-access.service';
+import { PublicStatusService } from './services/public-status.service';
 import { RecordService } from './services/record.service';
 import { SettingsService } from './services/settings.service';
 import { UploadService } from './services/upload.service';
@@ -34,7 +36,7 @@ import { WorkspaceService } from './services/workspace.service';
       { name: OperationsActivity.name, schema: OperationsActivitySchema },
     ]),
   ],
-  controllers: [WorkspaceRecordController, ManagementController, PublicAdminController, PublicController, UploadController, JobsController],
-  providers: [AdminGuard, ActivityService, WorkspaceService, RecordService, SettingsService, InsightsService, PublicAccessService, PaymentService, CleanupService, UploadService, AutomationService, DeliveryService],
+  controllers: [WorkspaceRecordController, ManagementController, PublicAdminController, PublicController, PublicStatusController, UploadController, JobsController],
+  providers: [AdminGuard, ActivityService, WorkspaceService, RecordService, SettingsService, InsightsService, PublicAccessService, PublicStatusService, PaymentService, CleanupService, UploadService, AutomationService, DeliveryService],
 })
 export class PropertyOperationsModule {}
