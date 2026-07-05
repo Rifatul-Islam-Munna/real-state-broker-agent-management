@@ -15,6 +15,7 @@ export class IntegrationWorkspaceService {
     const communication = this.parse(row?.twilioPayload);
     const smtp = this.parse(row?.smtpPayload);
     const ai = this.parse(row?.aiProviderPayload);
+    const payment = this.parse(row?.gatewayPayload);
 
     return {
       hasCommunicationConfig: this.communicationValid(communication),
@@ -41,6 +42,12 @@ export class IntegrationWorkspaceService {
       aiProviderUpdatedAt: row?.aiProviderUpdatedAt ?? null,
       aiProviderName: ai?.providerName ?? null,
       aiProviderConfig: ai ? this.withSecretFlags(ai, ['apiKey']) : null,
+      hasPaymentConfig: this.paymentValid(payment),
+      paymentUpdatedAt: row?.gatewayUpdatedAt ?? null,
+      paymentProviderName: payment?.providerName ?? null,
+      paymentConfig: payment
+        ? this.withSecretFlags(payment, ['apiKey', 'secretKey', 'token'])
+        : null,
       updatedAt: row?.updatedAt ?? null,
     };
   }
@@ -113,6 +120,24 @@ export class IntegrationWorkspaceService {
       row.aiProviderUpdatedAt = now;
     }
 
+    if (input?.clearPayment) {
+      row.gatewayPayload = null;
+      row.gatewayUpdatedAt = null;
+    } else if (input?.payment) {
+      const value = this.merge(this.parse(row.gatewayPayload), input.payment, [
+        'apiKey',
+        'secretKey',
+        'token',
+      ]);
+      if (!this.paymentValid(value)) {
+        throw new BadRequestException(
+          'Payment provider name, checkout URL, and verification URL are required.',
+        );
+      }
+      row.gatewayPayload = JSON.stringify(value);
+      row.gatewayUpdatedAt = now;
+    }
+
     await this.repository.save(row);
     return this.getStatus();
   }
@@ -157,6 +182,14 @@ export class IntegrationWorkspaceService {
   private aiValid(value: any) {
     if (!value?.providerName || !value?.baseUrl || !value?.model) return false;
     return `${value.providerName}`.toLowerCase() === 'ollama' || !!value.apiKey;
+  }
+
+  private paymentValid(value: any) {
+    return !!(
+      value?.providerName &&
+      (value?.createUrl || value?.checkoutUrl || value?.apiUrl) &&
+      (value?.verifyUrl || value?.statusUrl)
+    );
   }
 
   private parse(value?: string | null) {
