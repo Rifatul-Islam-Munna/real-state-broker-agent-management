@@ -15,6 +15,7 @@ import {
   PropertyOperationsAdminController,
   PropertyOperationsPublicController,
 } from './property-operations.controller';
+import { LegacyLinkService } from './legacy-link.service';
 import { PropertyOperationsIntegrationService } from './property-operations-integration.service';
 import { PropertyOperationsPublicService } from './property-operations-public.service';
 import { PropertyOperationsSchemaService } from './property-operations-schema.service';
@@ -39,6 +40,7 @@ import { PropertyOperationsService } from './property-operations.service';
     PropertyOperationsService,
     PropertyOperationsPublicService,
     PropertyOperationsIntegrationService,
+    LegacyLinkService,
     JwtAuthGuard,
   ],
   exports: [PropertyOperationsService],
