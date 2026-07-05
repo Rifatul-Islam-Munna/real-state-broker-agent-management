@@ -25,20 +25,20 @@ import { propertyOperationsModules } from "@/data/property-operations-modules"
 const workspaceItems = [
   { href: "/dashboard/property-operations?tab=overview", label: "Overview", icon: "dashboard", tab: "overview" },
   { href: "/dashboard/property-operations?tab=modules", label: "All operations", icon: "apartment", tab: "modules" },
-  { href: "/dashboard/property-operations?tab=requests", label: "Links and QR forms", icon: "qr_code_2", tab: "requests" },
+  { href: "/dashboard/property-operations?tab=requests", label: "Links and QR forms", icon: "link", tab: "requests" },
   { href: "/dashboard/property-operations?tab=settings", label: "Settings", icon: "settings", tab: "settings" },
 ] as const
 
 const categoryIcons: Record<string, string> = {
   Portfolio: "domain",
-  People: "groups",
-  Maintenance: "build",
+  People: "group",
+  Maintenance: "work",
   Finance: "payments",
   Communication: "forum",
   Documents: "description",
-  Portals: "language",
-  Administration: "admin_panel_settings",
-  Insights: "monitoring",
+  Portals: "public",
+  Administration: "verified",
+  Insights: "analytics",
 }
 
 export function PropertyOperationsSidebar({
@@ -114,7 +114,7 @@ export function PropertyOperationsSidebar({
                               render={<Link href={`/dashboard/property-operations?tab=modules&module=${module.id}`} />}
                               tooltip={label}
                             >
-                              <AppIcon name={categoryIcons[category] ?? "widgets"} />
+                              <AppIcon name={categoryIcons[category] ?? "apartment"} />
                               <span>{label}</span>
                             </SidebarMenuButton>
                           </SidebarMenuItem>
