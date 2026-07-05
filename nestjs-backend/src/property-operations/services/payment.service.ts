@@ -24,10 +24,7 @@ export class PaymentService {
     if (record.status === 'Paid') throw new BadRequestException('This bill is already paid.');
 
     const paymentToken = randomUUID();
-    const successUrl = this.withParams(input.successUrl, {
-      session_id: '{CHECKOUT_SESSION_ID}',
-      payment_token: paymentToken,
-    });
+    const successUrl = this.withParams(input.successUrl, { session_id: '{CHECKOUT_SESSION_ID}', payment_token: paymentToken });
     const cancelUrl = this.withParams(input.cancelUrl, { payment_cancelled: '1' });
     const currency = (this.config.get<string>('STRIPE_DEFAULT_CURRENCY') ?? 'usd').toLowerCase();
     const body = new URLSearchParams();
@@ -51,7 +48,7 @@ export class PaymentService {
       body: body.toString(),
     });
     const session = await response.json() as Record<string, unknown>;
-    if (!response.ok) throw new BadRequestException(String((session.error as any)?.message ?? 'Stripe checkout failed.'));
+    if (!response.ok) throw new BadRequestException(this.errorMessage(session, 'Stripe checkout failed.'));
 
     link.paymentToken = paymentToken;
     link.stripeCheckoutSessionId = String(session.id ?? '');
@@ -72,7 +69,7 @@ export class PaymentService {
       headers: { Authorization: `Bearer ${secret}` },
     });
     const session = await response.json() as Record<string, unknown>;
-    if (!response.ok) throw new BadRequestException(String((session.error as any)?.message ?? 'Payment verification failed.'));
+    if (!response.ok) throw new BadRequestException(this.errorMessage(session, 'Payment verification failed.'));
 
     link.stripeCheckoutStatus = String(session.status ?? link.stripeCheckoutStatus);
     link.stripeCheckoutSessionId = String(session.id ?? link.stripeCheckoutSessionId);
@@ -108,5 +105,11 @@ export class PaymentService {
     const parsed = new URL(url);
     for (const [key, value] of Object.entries(params)) parsed.searchParams.set(key, value);
     return parsed.toString().replace(encodeURIComponent('{CHECKOUT_SESSION_ID}'), '{CHECKOUT_SESSION_ID}');
+  }
+
+  private errorMessage(payload: Record<string, unknown>, fallback: string) {
+    const error = payload.error;
+    if (error && typeof error === 'object' && 'message' in error) return String((error as Record<string, unknown>).message ?? fallback);
+    return fallback;
   }
 }
