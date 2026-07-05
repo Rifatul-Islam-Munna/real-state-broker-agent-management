@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { createHash } from 'crypto';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { PropertyOperationsPublicAccess, PropertyOperationsRecord, PropertyOperationsSubmission } from './property-operations.entity';
 
 @Injectable()
@@ -10,9 +10,23 @@ export class LegacyLinkService {
     @InjectRepository(PropertyOperationsPublicAccess) private readonly links: Repository<PropertyOperationsPublicAccess>,
     @InjectRepository(PropertyOperationsRecord) private readonly records: Repository<PropertyOperationsRecord>,
     @InjectRepository(PropertyOperationsSubmission) private readonly submissions: Repository<PropertyOperationsSubmission>,
+    private readonly dataSource: DataSource,
   ) {}
 
+  async migratePreferences() {
+    await this.dataSource.query(`
+      INSERT INTO property_operations_preferences (id, content, updated_at)
+      SELECT 1, payload_json, COALESCE(updated_at, NOW())
+      FROM property_operations_record
+      WHERE record_type = 'Preferences'
+      ORDER BY updated_at DESC
+      LIMIT 1
+      ON CONFLICT (id) DO NOTHING
+    `);
+  }
+
   async restore(codeValue: string) {
+    await this.migratePreferences();
     const code = String(codeValue ?? '').trim();
     if (!code) return;
     const digest = createHash('sha256').update(code).digest('hex');
