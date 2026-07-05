@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 
-export function usePublicUpload(token: string) {
+export function usePublicUpload(token = "") {
   const [urls, setUrls] = useState<string[]>([])
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState("")
@@ -11,6 +11,7 @@ export function usePublicUpload(token: string) {
     setUploading(true)
     setError("")
     try {
+      if (!token) throw new Error("A secure request token is required for uploads.")
       const body = new FormData()
       body.append("file", file)
       const response = await fetch(`/api/property-operations-proxy/property-operations/public/${encodeURIComponent(token)}/upload`, { method: "POST", body })
