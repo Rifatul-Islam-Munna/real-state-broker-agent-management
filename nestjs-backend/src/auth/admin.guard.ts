@@ -14,11 +14,12 @@ export class AdminGuard implements CanActivate {
 
     const bearer = request.header('authorization')?.replace(/^Bearer\s+/i, '');
     const token = request.header('access_token') ?? bearer;
-    if (!token) throw new UnauthorizedException('Administrator authentication is required.');
+    const secret = this.config.get<string>('ACCESS_TOKEN');
+    if (!token || !secret) throw new UnauthorizedException('Administrator authentication is required.');
 
     try {
-      const payload = this.jwt.verify<Record<string, unknown>>(token);
-      const role = String(payload.role ?? payload.Role ?? '');
+      const payload = this.jwt.verify<Record<string, unknown>>(token, { secret });
+      const role = String(payload.role ?? payload.Role ?? payload['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'] ?? '');
       if (role.toLowerCase() !== 'admin') throw new Error('not admin');
       return true;
     } catch {
