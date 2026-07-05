@@ -48,8 +48,8 @@ export class PropertyOperationsSchemaService implements OnModuleInit {
             amount NUMERIC(18,2),
             due_at TIMESTAMPTZ,
             attachments JSONB NOT NULL DEFAULT '[]'::jsonb,
-            payload JSONB NOT NULL DEFAULT '{}'::jsonb,
-            recurrence JSONB,
+            payload_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+            recurrence_json JSONB,
             parent_record_id INTEGER,
             assigned_to VARCHAR(240) NOT NULL DEFAULT '',
             completed_at TIMESTAMPTZ,
@@ -57,22 +57,22 @@ export class PropertyOperationsSchemaService implements OnModuleInit {
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
           )
         `);
-        await manager.query("ALTER TABLE property_operations_record ADD COLUMN IF NOT EXISTS payload JSONB NOT NULL DEFAULT '{}'::jsonb");
-        await manager.query('ALTER TABLE property_operations_record ADD COLUMN IF NOT EXISTS recurrence JSONB');
+        await manager.query("ALTER TABLE property_operations_record ADD COLUMN IF NOT EXISTS payload_json JSONB NOT NULL DEFAULT '{}'::jsonb");
+        await manager.query('ALTER TABLE property_operations_record ADD COLUMN IF NOT EXISTS recurrence_json JSONB');
         await manager.query(`
           DO $$
           BEGIN
             IF EXISTS (
               SELECT 1 FROM information_schema.columns
-              WHERE table_name = 'property_operations_record' AND column_name = 'payload_json'
+              WHERE table_name = 'property_operations_record' AND column_name = 'payload'
             ) THEN
-              EXECUTE 'UPDATE property_operations_record SET payload = payload_json WHERE payload = ''{}''::jsonb AND payload_json IS NOT NULL';
+              EXECUTE 'UPDATE property_operations_record SET payload_json = payload WHERE payload_json = ''{}''::jsonb AND payload IS NOT NULL';
             END IF;
             IF EXISTS (
               SELECT 1 FROM information_schema.columns
-              WHERE table_name = 'property_operations_record' AND column_name = 'recurrence_json'
+              WHERE table_name = 'property_operations_record' AND column_name = 'recurrence'
             ) THEN
-              EXECUTE 'UPDATE property_operations_record SET recurrence = recurrence_json WHERE recurrence IS NULL AND recurrence_json IS NOT NULL';
+              EXECUTE 'UPDATE property_operations_record SET recurrence_json = recurrence WHERE recurrence_json IS NULL AND recurrence IS NOT NULL';
             END IF;
           END $$
         `);
