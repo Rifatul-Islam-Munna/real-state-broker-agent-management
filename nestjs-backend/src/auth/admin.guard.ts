@@ -9,18 +9,22 @@ export class AdminGuard implements CanActivate {
 
   canActivate(context: ExecutionContext) {
     const request = context.switchToHttp().getRequest<Request>();
-    const adminKey = this.config.get<string>('PROPERTY_OPERATIONS_ADMIN_KEY');
-    if (adminKey && request.header('x-admin-key') === adminKey) return true;
-
     const bearer = request.header('authorization')?.replace(/^Bearer\s+/i, '');
     const token = request.header('access_token') ?? bearer;
-    const secret = this.config.get<string>('ACCESS_TOKEN');
+    const secret = this.config.get<string>('Jwt__AccessTokenSecret')
+      ?? this.config.get<string>('JWT_ACCESS_TOKEN_SECRET')
+      ?? this.config.get<string>('ACCESS_TOKEN');
+
     if (!token || !secret) throw new UnauthorizedException('Administrator authentication is required.');
 
     try {
       const payload = this.jwt.verify<Record<string, unknown>>(token, { secret });
-      const role = String(payload.role ?? payload.Role ?? payload['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'] ?? '');
-      if (role.toLowerCase() !== 'admin') throw new Error('not admin');
+      const claim = payload.role
+        ?? payload.Role
+        ?? payload.roles
+        ?? payload['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'];
+      const roles = Array.isArray(claim) ? claim.map(String) : String(claim ?? '').split(',');
+      if (!roles.some((role) => role.trim().toLowerCase() === 'admin')) throw new Error('not admin');
       return true;
     } catch {
       throw new UnauthorizedException('Administrator authentication is invalid or expired.');
