@@ -10,7 +10,7 @@ import { PropertyOperationsModule } from './property-operations/property-operati
     JwtModule.register({ global: true }),
     MongooseModule.forRootAsync({
       inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({ uri: config.get<string>('MONGODB_URL') }),
+      useFactory: (config: ConfigService) => ({ uri: config.getOrThrow<string>('MONGODB_URL') }),
     }),
     PropertyOperationsModule,
   ],
