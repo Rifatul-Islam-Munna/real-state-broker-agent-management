@@ -141,6 +141,9 @@ export class PropertyOperationsPublicAccess {
   @Column({ length: 64 })
   tokenHash: string;
 
+  @Column({ length: 80 })
+  accessToken: string;
+
   @Column({ length: 240 })
   title: string;
 
