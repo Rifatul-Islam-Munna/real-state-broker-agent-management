@@ -50,6 +50,11 @@ export class PublicAccess {
   @Prop({ default: null }) lastAccessedAt: Date | null;
   @Prop({ default: null }) completedAt: Date | null;
   @Prop({ default: null }) revokedAt: Date | null;
+  @Prop({ default: '' }) paymentToken: string;
+  @Prop({ default: '' }) stripeCheckoutSessionId: string;
+  @Prop({ default: '' }) stripeCheckoutStatus: string;
+  @Prop({ default: '' }) stripePaymentIntentId: string;
+  @Prop({ default: null }) paymentVerifiedAt: Date | null;
 }
 
 export type PublicAccessDocument = HydratedDocument<PublicAccess>;
