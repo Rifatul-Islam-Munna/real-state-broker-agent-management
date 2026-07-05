@@ -1,11 +1,11 @@
 "use client"
 
-import { ApiModuleWorkspace } from "./api-module-workspace"
 import { ManagerModules } from "./manager-modules"
 import { ManagerOverview } from "./manager-overview"
 import { ManagerSettings } from "./manager-settings"
 import { ManagerShares } from "./manager-shares"
 import { ManagerShell } from "./manager-shell"
+import { NestModuleWorkspace } from "./nest-module-workspace"
 import { usePropertyOperationsManager } from "./use-property-operations-manager"
 
 export function PropertyOperationsPage() {
@@ -18,6 +18,6 @@ export function PropertyOperationsPage() {
       {s.tab === "requests" ? <ManagerShares items={s.links} revoke={(id) => void s.revokeLink(id)} /> : null}
       {s.tab === "settings" ? <ManagerSettings value={s.settings} setValue={s.setSettings} save={() => void s.saveSettings()} saving={s.saving} /> : null}
     </ManagerShell>
-    <ApiModuleWorkspace module={s.activeModule} onChanged={() => void s.loadAll()} onClose={() => s.setActiveModule(null)} workspace={s.activeWorkspace} />
+    <NestModuleWorkspace module={s.activeModule} onChanged={() => void s.loadAll()} onClose={() => s.setActiveModule(null)} workspace={s.activeWorkspace} />
   </>
 }
