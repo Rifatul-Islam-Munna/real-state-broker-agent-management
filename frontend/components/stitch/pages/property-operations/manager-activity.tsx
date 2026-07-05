@@ -1,0 +1,5 @@
+"use client"
+
+export function ManagerActivity({ items }: { items: Array<Record<string, unknown>> }) {
+  return <section className="rounded-2xl border bg-background p-5"><h2 className="font-semibold">Operations activity and audit history</h2><p className="mt-1 text-xs text-muted-foreground">Admin actions and anonymous submissions across every property module.</p><div className="mt-5 space-y-3">{items.map((item, index) => <article className="flex gap-3 rounded-2xl border p-4" key={String(item._id ?? item.id ?? index)}><div className="mt-1 size-2 shrink-0 rounded-full bg-primary" /><div><p className="text-sm font-semibold">{String(item.summary ?? item.action ?? "Activity")}</p><p className="mt-1 text-xs text-muted-foreground">{String(item.moduleKey ?? "organization")} · {String(item.actorType ?? "Admin")} · {item.createdAt ? new Date(String(item.createdAt)).toLocaleString() : ""}</p></div></article>)}{!items.length ? <p className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">No activity recorded yet.</p> : null}</div></section>
+}

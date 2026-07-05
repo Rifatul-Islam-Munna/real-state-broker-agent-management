@@ -51,6 +51,7 @@ export function usePropertyOperationsManager() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
   const propertiesQuery = useManagedProperties({ page: 1, pageSize: 100, search: search.trim() || undefined })
+  const availableProperties = propertiesQuery.data?.items ?? []
   const activeWorkspace = useMemo(() => workspaces.find((item) => item.propertyId === activePropertyId) ?? workspaces[0] ?? null, [activePropertyId, workspaces])
 
   async function loadAll() {
@@ -81,7 +82,17 @@ export function usePropertyOperationsManager() {
     if (!selectedIds.length) return
     setSaving(true)
     try {
-      await propertyOperationsApi.importProperties(selectedIds)
+      const properties = availableProperties.filter((item) => selectedIds.includes(item.id)).map((item) => ({
+        propertyId: item.id,
+        title: item.title,
+        location: item.exactLocation || item.location,
+        propertyType: item.propertyType,
+        listingType: item.listingType,
+        propertyStatus: item.status,
+        propertySlug: item.slug,
+        thumbnailUrl: item.thumbnailUrl ?? "",
+      }))
+      await propertyOperationsApi.importProperties(properties)
       setActivePropertyId((current) => current ?? selectedIds[0] ?? null)
       setSelectedIds([])
       await loadAll()
@@ -110,7 +121,7 @@ export function usePropertyOperationsManager() {
     finally { setSaving(false) }
   }
 
-  async function revokeLink(id: number) {
+  async function revokeLink(id: string) {
     if (!window.confirm("Revoke this shared form?")) return
     try { await propertyOperationsApi.revokePublicLink(id); await loadAll() }
     catch (value) { setError(value instanceof Error ? value.message : "Could not revoke link.") }
@@ -120,8 +131,7 @@ export function usePropertyOperationsManager() {
   const completion = Math.round((readyCount / 24) * 100)
 
   return {
-    activeModule, activePropertyId, activeWorkspace, analytics,
-    availableProperties: propertiesQuery.data?.items ?? [], completion, error,
+    activeModule, activePropertyId, activeWorkspace, analytics, availableProperties, completion, error,
     importSelected, links, loadAll, loading, removeWorkspace, revokeLink,
     saveSettings, saving, search, selectedIds, setActiveModule, setActivePropertyId,
     setSearch, setSelectedIds, setSettings, setTab, settings, tab, updateModule, workspaces,
