@@ -1,8 +1,12 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 
-import type { PropertyOperationsModule } from "@/data/property-operations-modules"
+import {
+  propertyOperationsModules,
+  type PropertyOperationsModule,
+} from "@/data/property-operations-modules"
 import { useManagedProperties } from "@/hooks/use-real-estate-api"
 import {
   propertyOperationsApi,
@@ -13,6 +17,10 @@ import {
 } from "@/lib/property-operations-api"
 
 export type OperationsTab = "overview" | "modules" | "requests" | "settings"
+
+function resolveTab(value: string | null): OperationsTab {
+  return value === "modules" || value === "requests" || value === "settings" ? value : "overview"
+}
 
 const defaults: OperationsSettings = {
   businessName: "Property Operations",
@@ -38,10 +46,12 @@ const defaults: OperationsSettings = {
 }
 
 export function usePropertyOperationsManager() {
-  const [tab, setTab] = useState<OperationsTab>("overview")
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const [tab, setTabState] = useState<OperationsTab>(() => resolveTab(searchParams.get("tab")))
   const [workspaces, setWorkspaces] = useState<OperationsWorkspace[]>([])
   const [activePropertyId, setActivePropertyId] = useState<number | null>(null)
-  const [activeModule, setActiveModule] = useState<PropertyOperationsModule | null>(null)
+  const [activeModule, setActiveModuleState] = useState<PropertyOperationsModule | null>(null)
   const [links, setLinks] = useState<OperationsPublicAccess[]>([])
   const [settings, setSettings] = useState<OperationsSettings>(defaults)
   const [analytics, setAnalytics] = useState<OperationsAnalytics | null>(null)
@@ -53,6 +63,31 @@ export function usePropertyOperationsManager() {
   const propertiesQuery = useManagedProperties({ page: 1, pageSize: 100, search: search.trim() || undefined })
   const availableProperties = propertiesQuery.data?.items ?? []
   const activeWorkspace = useMemo(() => workspaces.find((item) => item.propertyId === activePropertyId) ?? workspaces[0] ?? null, [activePropertyId, workspaces])
+
+  useEffect(() => {
+    const requestedTab = resolveTab(searchParams.get("tab"))
+    const requestedModuleId = searchParams.get("module")
+    const requestedModule = requestedModuleId
+      ? propertyOperationsModules.find((module) => module.id === requestedModuleId) ?? null
+      : null
+
+    setTabState(requestedModule ? "modules" : requestedTab)
+    setActiveModuleState(requestedModule)
+  }, [searchParams])
+
+  function setTab(nextTab: OperationsTab) {
+    setTabState(nextTab)
+    setActiveModuleState(null)
+    router.replace(`/dashboard/property-operations?tab=${nextTab}`, { scroll: false })
+  }
+
+  function setActiveModule(module: PropertyOperationsModule | null) {
+    setActiveModuleState(module)
+    if (module) {
+      setTabState("modules")
+      router.replace(`/dashboard/property-operations?tab=modules&module=${module.id}`, { scroll: false })
+    }
+  }
 
   async function loadAll() {
     setLoading(true)
