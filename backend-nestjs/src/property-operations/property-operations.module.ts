@@ -15,6 +15,7 @@ import {
   PropertyOperationsAdminController,
   PropertyOperationsPublicController,
 } from './property-operations.controller';
+import { PropertyOperationsIntegrationService } from './property-operations-integration.service';
 import { PropertyOperationsPublicService } from './property-operations-public.service';
 import { PropertyOperationsService } from './property-operations.service';
 
@@ -32,7 +33,12 @@ import { PropertyOperationsService } from './property-operations.service';
     FileUploadModule,
   ],
   controllers: [PropertyOperationsAdminController, PropertyOperationsPublicController],
-  providers: [PropertyOperationsService, PropertyOperationsPublicService, JwtAuthGuard],
+  providers: [
+    PropertyOperationsService,
+    PropertyOperationsPublicService,
+    PropertyOperationsIntegrationService,
+    JwtAuthGuard,
+  ],
   exports: [PropertyOperationsService],
 })
 export class PropertyOperationsModule {}
