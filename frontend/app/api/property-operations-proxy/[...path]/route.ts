@@ -1,11 +1,7 @@
 import { cookies } from "next/headers"
 import { NextResponse, type NextRequest } from "next/server"
 
-const baseUrl = (
-  process.env.PROPERTY_OPERATIONS_API_URL ??
-  process.env.NESTJS_API_URL ??
-  "http://127.0.0.1:4100/api"
-).replace(/\/$/, "")
+const baseUrl = (process.env.BASE_URL ?? "http://127.0.0.1:4000/api").replace(/\/$/, "")
 
 type Context = { params: Promise<{ path: string[] }> }
 
@@ -42,8 +38,8 @@ async function forward(request: NextRequest, context: Context) {
     console.error("Property Operations API request failed", { targetUrl, error })
     return NextResponse.json(
       {
-        message: "Property Operations API is unavailable.",
-        detail: "Start the NestJS service or set PROPERTY_OPERATIONS_API_URL to its /api address.",
+        message: "The existing NestJS backend is unavailable.",
+        detail: "Start backend-nestjs on port 4000 or set BASE_URL to its /api address.",
       },
       { status: 503 },
     )
