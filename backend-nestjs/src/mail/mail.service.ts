@@ -50,6 +50,8 @@ export class MailService {
     const to = `${dto.to ?? dto.email ?? ''}`.trim().toLowerCase();
     const subject = `${dto.subject ?? ''}`.trim();
     const message = `${dto.message ?? dto.body ?? ''}`.trim();
+    const htmlBody = this.cleanOutgoingHtml(dto.htmlBody ?? dto.html ?? '');
+    const plainBody = message || this.htmlToText(htmlBody);
     if (!to) throw new BadRequestException('Recipient email is required.');
     if (!subject) throw new BadRequestException('Subject is required.');
     const config = await this.settingsService.getSmtpConfig();
@@ -61,7 +63,7 @@ export class MailService {
       ? await this.generatePdfUrls(dto.pdfTemplateId, lead)
       : [];
     const attachmentUrls = [...this.stringList(dto.attachmentUrls), ...generatedPdfUrls];
-    if (!message && attachmentUrls.length === 0) throw new BadRequestException('Message or attachment is required.');
+    if (!plainBody && !htmlBody && attachmentUrls.length === 0) throw new BadRequestException('Message or attachment is required.');
     const nodemailer = require('nodemailer');
     const transporter = nodemailer.createTransport({
       host: config.host,
@@ -73,15 +75,15 @@ export class MailService {
       from: config.fromName ? `"${config.fromName}" <${config.fromEmail || config.username}>` : (config.fromEmail || config.username),
       to,
       subject,
-      text: message,
-      html: message.replace(/\n/g, '<br>'),
+      text: plainBody,
+      html: htmlBody || this.textToHtml(plainBody),
       attachments: attachmentUrls.map((url) => ({ filename: url.split('/').pop() || 'attachment', path: url })),
     });
     const item = this.mailRepo.create({
       email: to,
       kind: 'Direct',
-      message: this.messageBodyWithAttachments(message, attachmentUrls),
-      htmlBody: message.replace(/\n/g, '<br>'),
+      message: this.messageBodyWithAttachments(plainBody, attachmentUrls),
+      htmlBody: htmlBody || this.textToHtml(plainBody),
       name: `${dto.name ?? to.split('@')[0]}`.trim(),
       status: MailInboxStatus.Replied,
       subject,
@@ -223,6 +225,45 @@ export class MailService {
 
   private messageBodyWithAttachments(message: string, attachmentUrls: string[]) {
     return [message, ...attachmentUrls.map((url) => `Attachment: ${url}`)].filter(Boolean).join('\n');
+  }
+
+  private cleanOutgoingHtml(value: any) {
+    return `${value ?? ''}`
+      .replace(/<script[\s\S]*?<\/script>/gi, '')
+      .replace(/\son\w+\s*=\s*"[^"]*"/gi, '')
+      .replace(/\son\w+\s*=\s*'[^']*'/gi, '')
+      .trim();
+  }
+
+  private htmlToText(value: string) {
+    return `${value ?? ''}`
+      .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+      .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/(p|div|tr|table|li|h\d)>/gi, '\n')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/&nbsp;/gi, ' ')
+      .replace(/&amp;/gi, '&')
+      .replace(/&lt;/gi, '<')
+      .replace(/&gt;/gi, '>')
+      .replace(/&quot;/gi, '"')
+      .replace(/&#39;/gi, "'")
+      .replace(/[ \t]+/g, ' ')
+      .replace(/\n\s+/g, '\n')
+      .trim();
+  }
+
+  private textToHtml(value: string) {
+    return this.escapeHtml(value).replace(/\n/g, '<br>');
+  }
+
+  private escapeHtml(value: string) {
+    return `${value ?? ''}`
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
   }
 
   private async generatePdfUrls(templateId: number | string, lead: Lead | null) {

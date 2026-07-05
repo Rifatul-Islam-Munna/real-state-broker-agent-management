@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import PostalMime from "postal-mime"
 
@@ -23,7 +23,6 @@ import { formatDateTimeLabel } from "@/lib/admin-portal"
 import { getPortalRoutes } from "@/lib/portal-routes"
 import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
-import { Textarea } from "@/components/ui/textarea"
 import { uploadPropertyAsset } from "@/lib/upload-client"
 import {
   DropdownMenu,
@@ -64,6 +63,60 @@ function MailRender({ html, text, compact = false }: { html?: string; text: stri
     )
   }
   return <p className="whitespace-pre-wrap text-sm leading-7 text-slate-700">{text}</p>
+}
+
+function MiniRichMailEditor({
+  className = "",
+  onChange,
+  placeholder,
+  value,
+}: {
+  className?: string
+  onChange: (html: string) => void
+  placeholder: string
+  value: string
+}) {
+  const editorRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    const editor = editorRef.current
+    if (!editor) return
+    if (editor.innerHTML !== value) editor.innerHTML = value
+  }, [value])
+
+  function emit() {
+    onChange(editorRef.current?.innerHTML ?? "")
+  }
+
+  function run(command: string, input?: string) {
+    editorRef.current?.focus()
+    document.execCommand(command, false, input)
+    emit()
+  }
+
+  function signature() {
+    run("insertHTML", `<br><br><div style="font-family:Arial,sans-serif;color:#111827"><strong>Best regards,</strong><br><span>Your Name</span><br><span>Real Estate Team</span><br><a href="mailto:you@example.com">you@example.com</a> | <span>+1 (555) 000-0000</span></div>`)
+  }
+
+  return (
+    <div className={`overflow-hidden rounded-xl border border-slate-200 bg-white ${className}`}>
+      <div className="flex flex-wrap gap-1 border-b px-2 py-1.5">
+        <button className="rounded px-2 py-1 text-sm font-bold hover:bg-slate-100" onClick={() => run("bold")} type="button">B</button>
+        <button className="rounded px-2 py-1 text-sm italic hover:bg-slate-100" onClick={() => run("italic")} type="button">I</button>
+        <button className="rounded px-2 py-1 text-sm hover:bg-slate-100" onClick={() => run("insertUnorderedList")} type="button">List</button>
+        <button className="rounded px-2 py-1 text-sm hover:bg-slate-100" onClick={() => run("createLink", window.prompt("Link URL") || "")} type="button">Link</button>
+        <button className="rounded px-2 py-1 text-sm hover:bg-slate-100" onClick={signature} type="button">Signature</button>
+      </div>
+      <div
+        className="min-h-[inherit] px-3 py-2 text-sm leading-6 outline-none empty:before:text-slate-400 empty:before:content-[attr(data-placeholder)]"
+        contentEditable
+        data-placeholder={placeholder}
+        onInput={emit}
+        ref={editorRef}
+        suppressContentEditableWarning
+      />
+    </div>
+  )
 }
 
 function htmlToMailText(html: string) {
@@ -173,7 +226,8 @@ export function ManagedMailInboxPage() {
       .filter(Boolean)
     const response = await sendMail.mutateAsync({
       attachmentUrls: [...uploads.map((upload) => upload.url), ...selectedDocUrls],
-      message: mailMessage.trim(),
+      htmlBody: mailMessage,
+      message: htmlToMailText(mailMessage),
       pdfTemplateId: mailPdfTemplateId || undefined,
       subject: mailSubject.trim(),
       to: mailTo.trim(),
@@ -455,7 +509,7 @@ export function ManagedMailInboxPage() {
               </label>
               <label className="flex flex-col gap-2">
                 <span className="text-sm font-bold text-slate-700">{"Message"}</span>
-                <Textarea className="min-h-40" onChange={(event) => setMailMessage(event.target.value)} placeholder="Write mail" value={mailMessage} />
+                <MiniRichMailEditor className="min-h-40" onChange={setMailMessage} placeholder="Write mail" value={mailMessage} />
               </label>
               <label className="flex flex-col gap-2">
                 <span className="text-sm font-bold text-slate-700">{"Attachments"}</span>
@@ -501,7 +555,7 @@ export function ManagedMailInboxPage() {
               </div>
               <button
                 className="rounded-xl bg-primary px-5 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={sendMail.isPending || !mailTo.trim() || !mailSubject.trim() || (!mailMessage.trim() && mailFiles.length === 0 && mailDocumentIds.length === 0 && !mailPdfTemplateId)}
+                disabled={sendMail.isPending || !mailTo.trim() || !mailSubject.trim() || (!htmlToMailText(mailMessage) && mailFiles.length === 0 && mailDocumentIds.length === 0 && !mailPdfTemplateId)}
                 onClick={() => void handleSendMail()}
                 type="button"
               >
@@ -530,7 +584,7 @@ export function MailInboxDetailPage({ mailId }: { mailId: number }) {
   const [documentIds, setDocumentIds] = useState<number[]>([])
   const [pdfTemplateId, setPdfTemplateId] = useState("")
   const [pdfSearch, setPdfSearch] = useState("")
-  const [sentReplies, setSentReplies] = useState<Array<{ body: string; createdAt: string }>>([])
+  const [sentReplies, setSentReplies] = useState<Array<{ body: string; htmlBody?: string; createdAt: string }>>([])
 
   const mail = mailQuery.data
   const allDocuments = documentsQuery.data?.items ?? []
@@ -554,13 +608,14 @@ export function MailInboxDetailPage({ mailId }: { mailId: number }) {
       .filter(Boolean)
     const response = await sendMail.mutateAsync({
       attachmentUrls: [...uploads.map((upload) => upload.url), ...selectedDocUrls],
-      message: message.trim(),
+      htmlBody: message,
+      message: htmlToMailText(message),
       pdfTemplateId: pdfTemplateId || undefined,
       subject: mail.subject.toLowerCase().startsWith("re:") ? mail.subject : `Re: ${mail.subject}`,
       to: mail.email,
     })
     if (!response.error) {
-      setSentReplies((current) => [...current, { body: message.trim() || "Attachment sent.", createdAt: new Date().toISOString() }])
+      setSentReplies((current) => [...current, { body: htmlToMailText(message) || "Attachment sent.", htmlBody: message, createdAt: new Date().toISOString() }])
       setMessage("")
       setFiles([])
       setDocumentIds([])
@@ -652,7 +707,9 @@ export function MailInboxDetailPage({ mailId }: { mailId: number }) {
                       <p className="text-xs text-slate-500">{formatDateTimeLabel(reply.createdAt)}</p>
                     </div>
                   </div>
-                  <p className="whitespace-pre-wrap pl-[52px] text-sm leading-7 text-slate-700">{reply.body}</p>
+                  <div className="pl-[52px]">
+                    <MailRender compact html={reply.htmlBody} text={reply.body} />
+                  </div>
                 </div>
               ))}
             </div>
@@ -670,7 +727,7 @@ export function MailInboxDetailPage({ mailId }: { mailId: number }) {
             </div>
           </div>
           <div className="mt-4 space-y-4">
-            <Textarea className="min-h-36 rounded-xl border-slate-200" onChange={(event) => setMessage(event.target.value)} placeholder="Write reply..." value={message} />
+            <MiniRichMailEditor className="min-h-36" onChange={setMessage} placeholder="Write reply..." value={message} />
             <Input className="rounded-xl border-slate-200" multiple onChange={(event) => setFiles(Array.from(event.target.files ?? []))} type="file" />
             {files.length ? <p className="text-xs font-semibold text-slate-500">{`${files.length} file(s) selected`}</p> : null}
             <div className="space-y-2">
@@ -695,7 +752,7 @@ export function MailInboxDetailPage({ mailId }: { mailId: number }) {
             </Select>
             <button
               className="rounded-full bg-primary px-6 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={sendMail.isPending || !mail || (!message.trim() && files.length === 0 && documentIds.length === 0 && !pdfTemplateId)}
+              disabled={sendMail.isPending || !mail || (!htmlToMailText(message) && files.length === 0 && documentIds.length === 0 && !pdfTemplateId)}
               onClick={() => void sendReply()}
               type="button"
             >

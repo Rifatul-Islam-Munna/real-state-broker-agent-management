@@ -347,6 +347,7 @@ export type SendMailMessageInput = {
   to: string
   subject: string
   message: string
+  htmlBody?: string
   attachmentUrls?: string[]
   pdfTemplateId?: string
 }

@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import type { KeyboardEventHandler } from "react"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import PostalMime from "postal-mime"
@@ -20,7 +21,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Textarea } from "@/components/ui/textarea"
 import {
   useConvertMailInboxToLead,
   useCreateMailInboxItem,
@@ -39,6 +39,7 @@ const PAGE_SIZE = 50
 
 type OptimisticReply = {
   body: string
+  htmlBody?: string
   createdAt: string
   attachmentCount: number
 }
@@ -48,6 +49,7 @@ type ComposeState = {
   to: string
   subject: string
   message: string
+  htmlBody: string
   files: File[]
 }
 
@@ -56,6 +58,7 @@ const emptyCompose: ComposeState = {
   to: "",
   subject: "",
   message: "",
+  htmlBody: "",
   files: [],
 }
 
@@ -150,7 +153,8 @@ function ProfessionalMailWorkspace({ initialMailId }: { initialMailId?: number }
     const response = await sendMutation.mutateAsync({
       to: selected.email,
       subject: normalizeReplySubject(selected.subject),
-      message: reply.trim(),
+      message: htmlToText(reply),
+      htmlBody: reply,
       attachmentUrls: [
         ...uploads.map((item) => item.url),
         ...savedDocumentUrls,
@@ -161,7 +165,8 @@ function ProfessionalMailWorkspace({ initialMailId }: { initialMailId?: number }
     setOptimisticReplies((current) => [
       ...current,
       {
-        body: reply.trim() || "Attachment sent.",
+        body: htmlToText(reply) || "Attachment sent.",
+        htmlBody: reply,
         createdAt: new Date().toISOString(),
         attachmentCount:
           uploads.length + savedDocumentUrls.length + (pdfTemplateId ? 1 : 0),
@@ -185,6 +190,7 @@ function ProfessionalMailWorkspace({ initialMailId }: { initialMailId?: number }
       to: compose.to.trim(),
       subject: compose.subject.trim(),
       message: compose.message.trim(),
+      htmlBody: compose.htmlBody,
       attachmentUrls: uploads.map((item) => item.url),
     })
     if (!response.error) setCompose(emptyCompose)
@@ -490,9 +496,9 @@ function ProfessionalMailWorkspace({ initialMailId }: { initialMailId?: number }
 
               <div className="border-t bg-background p-3 sm:p-4">
                 <div className="mx-auto max-w-4xl rounded-2xl border bg-background shadow-sm focus-within:ring-2 focus-within:ring-ring/30">
-                  <Textarea
-                    className="min-h-24 resize-none border-0 bg-transparent px-4 pt-4 shadow-none focus-visible:ring-0"
-                    onChange={(event) => setReply(event.target.value)}
+                  <RichMailEditor
+                    className="min-h-24"
+                    onChange={(html, text) => setReply(html.trim() ? html : text)}
                     onKeyDown={(event) => {
                       if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
                         event.preventDefault()
@@ -532,7 +538,7 @@ function ProfessionalMailWorkspace({ initialMailId }: { initialMailId?: number }
                       className="rounded-full px-5"
                       disabled={
                         sendMutation.isPending ||
-                        (!reply.trim() &&
+                        (!htmlToText(reply).trim() &&
                           !replyFiles.length &&
                           !documentIds.length &&
                           !pdfTemplateId)
@@ -587,13 +593,13 @@ function ProfessionalMailWorkspace({ initialMailId }: { initialMailId?: number }
               placeholder="Subject"
               value={compose.subject}
             />
-            <Textarea
-              className="min-h-64 resize-none"
-              onChange={(event) =>
-                setCompose((current) => ({ ...current, message: event.target.value }))
+            <RichMailEditor
+              className="min-h-64 rounded-xl border"
+              onChange={(html, text) =>
+                setCompose((current) => ({ ...current, htmlBody: html, message: text }))
               }
               placeholder="Write your message"
-              value={compose.message}
+              value={compose.htmlBody}
             />
             <Input
               multiple
@@ -748,7 +754,9 @@ function OutgoingMailCard({ item }: { item: OptimisticReply }) {
             {formatDateTimeLabel(item.createdAt)}
           </p>
         </div>
-        <p className="mt-3 whitespace-pre-wrap text-sm leading-6">{item.body}</p>
+        <div className="mt-3 text-sm leading-6">
+          <MailBody html={item.htmlBody} text={item.body} />
+        </div>
         {item.attachmentCount ? (
           <Badge className="mt-3" variant="outline">
             {item.attachmentCount} attachment(s)
@@ -756,6 +764,70 @@ function OutgoingMailCard({ item }: { item: OptimisticReply }) {
         ) : null}
       </CardContent>
     </Card>
+  )
+}
+
+function RichMailEditor({
+  className = "",
+  onChange,
+  onKeyDown,
+  placeholder,
+  value,
+}: {
+  className?: string
+  onChange: (html: string, text: string) => void
+  onKeyDown?: KeyboardEventHandler<HTMLDivElement>
+  placeholder: string
+  value: string
+}) {
+  const editorRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    const editor = editorRef.current
+    if (!editor) return
+    if (editor.innerHTML !== value) editor.innerHTML = value
+  }, [value])
+
+  function emit() {
+    const html = editorRef.current?.innerHTML ?? ""
+    onChange(html, htmlToText(html))
+  }
+
+  function run(command: string, input?: string) {
+    editorRef.current?.focus()
+    document.execCommand(command, false, input)
+    emit()
+  }
+
+  function addSignature() {
+    run(
+      "insertHTML",
+      `<br><br><div style="font-family:Arial,sans-serif;color:#111827"><strong>Best regards,</strong><br><span>Your Name</span><br><span>Real Estate Team</span><br><a href="mailto:you@example.com">you@example.com</a> | <span>+1 (555) 000-0000</span></div>`
+    )
+  }
+
+  return (
+    <div className={`overflow-hidden bg-background ${className}`}>
+      <div className="flex flex-wrap items-center gap-1 border-b px-2 py-1.5">
+        <Button onClick={() => run("bold")} size="icon-sm" type="button" variant="ghost"><AppIcon name="format_bold" /></Button>
+        <Button onClick={() => run("italic")} size="icon-sm" type="button" variant="ghost"><AppIcon name="format_italic" /></Button>
+        <Button onClick={() => run("insertUnorderedList")} size="icon-sm" type="button" variant="ghost"><AppIcon name="format_list_bulleted" /></Button>
+        <Button onClick={() => run("createLink", window.prompt("Link URL") || "")} size="icon-sm" type="button" variant="ghost"><AppIcon name="link" /></Button>
+        <Button onClick={addSignature} size="sm" type="button" variant="ghost">
+          <AppIcon name="signature" />
+          Signature
+        </Button>
+      </div>
+      <div
+        className="min-h-[inherit] px-4 py-3 text-sm leading-6 outline-none empty:before:text-muted-foreground empty:before:content-[attr(data-placeholder)]"
+        contentEditable
+        data-placeholder={placeholder}
+        onInput={emit}
+        onKeyDown={onKeyDown}
+        ref={editorRef}
+        suppressContentEditableWarning
+      />
+    </div>
   )
 }
 
