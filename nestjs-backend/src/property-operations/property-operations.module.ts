@@ -15,6 +15,7 @@ import { AutomationService } from './services/automation.service';
 import { CleanupService } from './services/cleanup.service';
 import { DeliveryService } from './services/delivery.service';
 import { InsightsService } from './services/insights.service';
+import { PaymentService } from './services/payment.service';
 import { PublicAccessService } from './services/public-access.service';
 import { RecordService } from './services/record.service';
 import { SettingsService } from './services/settings.service';
@@ -34,6 +35,6 @@ import { WorkspaceService } from './services/workspace.service';
     ]),
   ],
   controllers: [WorkspaceRecordController, ManagementController, PublicAdminController, PublicController, UploadController, JobsController],
-  providers: [AdminGuard, ActivityService, WorkspaceService, RecordService, SettingsService, InsightsService, PublicAccessService, CleanupService, UploadService, AutomationService, DeliveryService],
+  providers: [AdminGuard, ActivityService, WorkspaceService, RecordService, SettingsService, InsightsService, PublicAccessService, PaymentService, CleanupService, UploadService, AutomationService, DeliveryService],
 })
 export class PropertyOperationsModule {}
