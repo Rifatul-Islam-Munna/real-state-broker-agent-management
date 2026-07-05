@@ -20,7 +20,7 @@ export class LegacyLinkService {
     const legacyKey = ['access', 'Checksum'].join('');
     const legacy = await this.records.createQueryBuilder('item')
       .where('item.record_type = :kind', { kind: 'ExternalRequest' })
-      .andWhere(`item.payload ->> '${legacyKey}' = :digest`, { digest })
+      .andWhere(`item.payload_json ->> '${legacyKey}' = :digest`, { digest })
       .getOne();
     if (!legacy) return;
     const data = legacy.payload ?? {};
