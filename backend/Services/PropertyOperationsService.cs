@@ -40,6 +40,9 @@ namespace Services
             StringComparer.OrdinalIgnoreCase);
 
         private readonly AppDbContext _db;
+        private DbSet<PropertyOperationsWorkspace> Workspaces => _db.Set<PropertyOperationsWorkspace>();
+        private DbSet<PropertyOperationsModuleState> ModuleStates => _db.Set<PropertyOperationsModuleState>();
+        private DbSet<PropertyOperationsRecord> Records => _db.Set<PropertyOperationsRecord>();
 
         public PropertyOperationsService(AppDbContext db)
         {
@@ -48,7 +51,7 @@ namespace Services
 
         public async Task<List<PropertyOperationsWorkspace>> GetWorkspacesAsync(CancellationToken ct = default)
         {
-            return await _db.PropertyOperationsWorkspaces
+            return await Workspaces
                 .AsNoTracking()
                 .Include(item => item.Property)
                 .Include(item => item.ModuleStates)
@@ -80,7 +83,7 @@ namespace Services
                 throw new ArgumentException("One or more selected properties could not be found.");
             }
 
-            var existingPropertyIds = await _db.PropertyOperationsWorkspaces
+            var existingPropertyIds = await Workspaces
                 .Where(workspace => validPropertyIds.Contains(workspace.PropertyId))
                 .Select(workspace => workspace.PropertyId)
                 .ToListAsync(ct);
@@ -103,7 +106,7 @@ namespace Services
                         .ToList(),
                 };
 
-                await _db.PropertyOperationsWorkspaces.AddAsync(workspace, ct);
+                await Workspaces.AddAsync(workspace, ct);
             }
 
             await _db.SaveChangesAsync(ct);
@@ -112,7 +115,7 @@ namespace Services
 
         public async Task RemoveWorkspaceAsync(int propertyId, CancellationToken ct = default)
         {
-            var workspace = await _db.PropertyOperationsWorkspaces
+            var workspace = await Workspaces
                 .FirstOrDefaultAsync(item => item.PropertyId == propertyId, ct);
 
             if (workspace is null)
@@ -120,7 +123,7 @@ namespace Services
                 return;
             }
 
-            _db.PropertyOperationsWorkspaces.Remove(workspace);
+            Workspaces.Remove(workspace);
             await _db.SaveChangesAsync(ct);
         }
 
@@ -134,7 +137,7 @@ namespace Services
             var normalizedModuleKey = NormalizeModuleKey(moduleKey);
             var normalizedStatus = NormalizeModuleStatus(status);
 
-            var workspace = await _db.PropertyOperationsWorkspaces
+            var workspace = await Workspaces
                 .Include(item => item.ModuleStates)
                 .FirstOrDefaultAsync(item => item.PropertyId == propertyId, ct)
                 ?? throw new ArgumentException("Import the property before updating module state.");
@@ -149,7 +152,7 @@ namespace Services
                     WorkspaceId = workspace.Id,
                     ModuleKey = normalizedModuleKey,
                 };
-                await _db.PropertyOperationsModuleStates.AddAsync(state, ct);
+                await ModuleStates.AddAsync(state, ct);
             }
 
             state.Status = normalizedStatus;
@@ -166,13 +169,13 @@ namespace Services
             string? moduleKey,
             CancellationToken ct = default)
         {
-            var workspaceId = await _db.PropertyOperationsWorkspaces
+            var workspaceId = await Workspaces
                 .Where(item => item.PropertyId == propertyId)
                 .Select(item => (int?)item.Id)
                 .FirstOrDefaultAsync(ct)
                 ?? throw new ArgumentException("Import the property before loading operational records.");
 
-            var query = _db.PropertyOperationsRecords
+            var query = Records
                 .AsNoTracking()
                 .Where(item => item.WorkspaceId == workspaceId);
 
@@ -207,14 +210,14 @@ namespace Services
             CancellationToken ct = default)
         {
             var normalizedModuleKey = NormalizeModuleKey(moduleKey);
-            var workspace = await _db.PropertyOperationsWorkspaces
+            var workspace = await Workspaces
                 .FirstOrDefaultAsync(item => item.PropertyId == propertyId, ct)
                 ?? throw new ArgumentException("Import the property before saving operational records.");
 
             PropertyOperationsRecord record;
             if (id.HasValue && id.Value > 0)
             {
-                record = await _db.PropertyOperationsRecords
+                record = await Records
                     .FirstOrDefaultAsync(item => item.Id == id.Value && item.WorkspaceId == workspace.Id, ct)
                     ?? throw new KeyNotFoundException("Operational record was not found.");
             }
@@ -225,7 +228,7 @@ namespace Services
                     WorkspaceId = workspace.Id,
                     CreatedAt = DateTime.UtcNow,
                 };
-                await _db.PropertyOperationsRecords.AddAsync(record, ct);
+                await Records.AddAsync(record, ct);
             }
 
             record.ModuleKey = normalizedModuleKey;
@@ -249,13 +252,13 @@ namespace Services
 
         public async Task DeleteRecordAsync(int id, CancellationToken ct = default)
         {
-            var record = await _db.PropertyOperationsRecords.FirstOrDefaultAsync(item => item.Id == id, ct);
+            var record = await Records.FirstOrDefaultAsync(item => item.Id == id, ct);
             if (record is null)
             {
                 return;
             }
 
-            _db.PropertyOperationsRecords.Remove(record);
+            Records.Remove(record);
             await _db.SaveChangesAsync(ct);
         }
 
