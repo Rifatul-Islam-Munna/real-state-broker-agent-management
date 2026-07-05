@@ -1,12 +1,9 @@
-const apiBase = "/api/proxy/property-operations"
+const apiBase = "/api/property-operations-proxy/property-operations"
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${apiBase}${path}`, {
     ...init,
-    headers: {
-      ...(init?.body ? { "Content-Type": "application/json" } : {}),
-      ...(init?.headers ?? {}),
-    },
+    headers: { ...(init?.body ? { "Content-Type": "application/json" } : {}), ...(init?.headers ?? {}) },
     cache: "no-store",
   })
   const text = await response.text()
@@ -18,8 +15,19 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return payload as T
 }
 
+export type PropertySnapshotInput = {
+  propertyId: number
+  title: string
+  location?: string
+  propertyType?: string
+  listingType?: string
+  propertyStatus?: string
+  propertySlug?: string
+  thumbnailUrl?: string
+}
+
 export type OperationsModuleState = {
-  id: number
+  id: string
   moduleKey: string
   status: "Not started" | "In progress" | "Ready"
   notes: string
@@ -27,7 +35,7 @@ export type OperationsModuleState = {
 }
 
 export type OperationsWorkspace = {
-  id: number
+  id: string
   propertyId: number
   status: string
   propertyTitle: string
@@ -43,23 +51,30 @@ export type OperationsWorkspace = {
 }
 
 export type OperationsRecord = {
-  id: number
-  propertyId: number
+  id: string
+  propertyId?: number
   moduleKey: string
   recordType: string
   title: string
   description: string
   status: string
   priority: string
+  contactName?: string
+  contactEmail?: string
+  contactPhone?: string
   amount: number | null
   dueAt: string | null
+  attachments?: string[]
+  payload?: Record<string, unknown>
   payloadJson: string
+  assignedTo?: string
+  completedAt?: string | null
   createdAt: string
   updatedAt: string
 }
 
 export type SaveOperationsRecordInput = {
-  id?: number | null
+  id?: string | null
   propertyId: number
   moduleKey: string
   recordType: string
@@ -96,9 +111,9 @@ export type OperationsSettings = {
 }
 
 export type OperationsPublicAccess = {
-  id: number
+  id: string
   propertyId: number
-  recordId: number | null
+  recordId: string | null
   moduleKey: string
   title: string
   instructions: string
@@ -120,6 +135,7 @@ export type OperationsPublicAccess = {
   propertyLocation: string
   publicUrl: string | null
   accessToken: string | null
+  qrDataUrl?: string | null
   submissionCount: number
 }
 
@@ -134,6 +150,11 @@ export type OperationsAnalytics = {
   anonymousSubmissions: number
   totalIncome: number
   totalExpense: number
+  netOperatingAmount?: number
+  occupiedUnits?: number
+  availableUnits?: number
+  maintenanceBacklog?: number
+  pendingQuotes?: number
   recordsByModule: Record<string, number>
   recordsByStatus: Record<string, number>
 }
@@ -160,20 +181,49 @@ export type PublicOperationsRequest = {
   remainingUses: number
 }
 
+function parseJson(value: string, fallback: unknown) {
+  try { return JSON.parse(value) } catch { return fallback }
+}
+
 export const propertyOperationsApi = {
   getWorkspaces: () => request<OperationsWorkspace[]>("/workspaces"),
-  importProperties: (propertyIds: number[]) => request<OperationsWorkspace[]>("/import", { method: "POST", body: JSON.stringify({ propertyIds }) }),
+  importProperties: (properties: PropertySnapshotInput[]) => request<OperationsWorkspace[]>("/import", { method: "POST", body: JSON.stringify({ properties }) }),
   removeWorkspace: (propertyId: number) => request<void>(`/workspaces?propertyId=${propertyId}`, { method: "DELETE" }),
   updateModuleState: (input: { propertyId: number; moduleKey: string; status: string; notes?: string }) => request<OperationsModuleState>("/module-state", { method: "PATCH", body: JSON.stringify(input) }),
   getRecords: (propertyId: number, moduleKey?: string) => request<OperationsRecord[]>(`/records?propertyId=${propertyId}${moduleKey ? `&moduleKey=${encodeURIComponent(moduleKey)}` : ""}`),
-  saveRecord: (input: SaveOperationsRecordInput) => request<OperationsRecord>("/records/save", { method: "POST", body: JSON.stringify(input) }),
-  deleteRecord: (id: number) => request<void>(`/records?id=${id}`, { method: "DELETE" }),
+  saveRecord: (input: SaveOperationsRecordInput) => {
+    const parsed = parseJson(input.payloadJson, {}) as Record<string, unknown>
+    return request<OperationsRecord>("/records/save", { method: "POST", body: JSON.stringify({
+      ...input,
+      contactName: String(parsed.contactName ?? ""),
+      contactEmail: String(parsed.contactEmail ?? ""),
+      contactPhone: String(parsed.contactPhone ?? ""),
+      payload: typeof parsed.extra === "object" && parsed.extra ? parsed.extra : parsed,
+      payloadJson: undefined,
+    }) })
+  },
+  deleteRecord: (id: string) => request<void>(`/records?id=${id}`, { method: "DELETE" }),
+  recordAction: (id: string, action: string, input: Record<string, unknown> = {}) => request<OperationsRecord>(`/records/${id}/actions/${action}`, { method: "PATCH", body: JSON.stringify(input) }),
+  runRecurringMaintenance: (propertyId?: number) => request<OperationsRecord[]>(`/recurring-maintenance/run${propertyId ? `?propertyId=${propertyId}` : ""}`, { method: "POST" }),
   getSettings: () => request<OperationsSettings>("/settings"),
   updateSettings: (input: OperationsSettings) => request<OperationsSettings>("/settings", { method: "PATCH", body: JSON.stringify(input) }),
-  getAnalytics: () => request<OperationsAnalytics>("/analytics"),
+  getAnalytics: (propertyId?: number) => request<OperationsAnalytics>(`/analytics${propertyId ? `?propertyId=${propertyId}` : ""}`),
+  getAssistant: (propertyId?: number) => request<Record<string, unknown>>(`/ai/summary${propertyId ? `?propertyId=${propertyId}` : ""}`),
+  getActivity: (propertyId?: number) => request<Array<Record<string, unknown>>>(`/activity${propertyId ? `?propertyId=${propertyId}` : ""}`),
   getPublicLinks: (propertyId?: number) => request<OperationsPublicAccess[]>(`/public-access${propertyId ? `?propertyId=${propertyId}` : ""}`),
-  createPublicLink: (input: Record<string, unknown>) => request<OperationsPublicAccess>("/public-access", { method: "POST", body: JSON.stringify(input) }),
-  revokePublicLink: (id: number) => request<void>(`/public-access/revoke?id=${id}`, { method: "PATCH" }),
+  createPublicLink: (input: Record<string, unknown>) => {
+    const formSchemaJson = String(input.formSchemaJson ?? "[]")
+    return request<OperationsPublicAccess>("/public-access", { method: "POST", body: JSON.stringify({ ...input, formSchema: parseJson(formSchemaJson, []), formSchemaJson: undefined }) })
+  },
+  revokePublicLink: (id: string) => request<void>(`/public-access/revoke?id=${id}`, { method: "PATCH" }),
+  getSubmissions: (accessId: string) => request<Array<Record<string, unknown>>>(`/public-submissions?accessId=${accessId}`),
   getPublicRequest: (token: string) => request<PublicOperationsRequest>(`/public/${encodeURIComponent(token)}`),
-  submitPublicRequest: (token: string, input: Record<string, unknown>) => request<Record<string, unknown>>(`/public/${encodeURIComponent(token)}`, { method: "POST", body: JSON.stringify(input) }),
+  submitPublicRequest: (token: string, input: Record<string, unknown>) => request<Record<string, unknown>>(`/public/${encodeURIComponent(token)}`, { method: "POST", body: JSON.stringify({
+    responderName: input.responderName,
+    responderEmail: input.responderEmail,
+    responderPhone: input.responderPhone,
+    notes: input.notes,
+    response: parseJson(String(input.responseJson ?? "{}"), {}),
+    attachmentUrls: parseJson(String(input.attachmentUrlsJson ?? "[]"), []),
+  }) }),
 }
