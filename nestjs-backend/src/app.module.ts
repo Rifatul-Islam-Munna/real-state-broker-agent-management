@@ -4,7 +4,8 @@ import { JwtModule } from '@nestjs/jwt';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ModuleStateEntity, OperationsRecordEntity } from './database/entities/record.entity';
 import { WorkspaceEntity } from './database/entities/workspace.entity';
-import { PropertyOperationsModule } from './property-operations/property-operations.module';
+import { AdminApiModule } from './property-operations/admin-api.module';
+import { PublicApiModule } from './property-operations/public-api.module';
 
 @Module({
   imports: [
@@ -20,7 +21,8 @@ import { PropertyOperationsModule } from './property-operations/property-operati
         logging: false,
       }),
     }),
-    PropertyOperationsModule,
+    AdminApiModule,
+    PublicApiModule,
   ],
 })
 export class AppModule {}
