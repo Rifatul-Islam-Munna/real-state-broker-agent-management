@@ -16,6 +16,7 @@ import {
   PropertyOperationsPublicController,
 } from './property-operations.controller';
 import { LegacyLinkService } from './legacy-link.service';
+import { LegacyPreferencesService } from './legacy-preferences.service';
 import { PropertyOperationsIntegrationService } from './property-operations-integration.service';
 import { PropertyOperationsPublicService } from './property-operations-public.service';
 import { PropertyOperationsSchemaService } from './property-operations-schema.service';
@@ -37,6 +38,7 @@ import { PropertyOperationsService } from './property-operations.service';
   controllers: [PropertyOperationsAdminController, PropertyOperationsPublicController],
   providers: [
     PropertyOperationsSchemaService,
+    LegacyPreferencesService,
     PropertyOperationsService,
     PropertyOperationsPublicService,
     PropertyOperationsIntegrationService,
