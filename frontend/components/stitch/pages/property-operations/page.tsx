@@ -1,1 +1,1 @@
-export { PropertyOperationsPage } from "./property-operations-dashboard"
+export { PropertyOperationsPage } from "./property-operations-manager"
