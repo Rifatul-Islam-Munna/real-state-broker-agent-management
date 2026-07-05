@@ -29,6 +29,12 @@ export class AgencyIntegrationSettings {
   @Column({ type: 'timestamptz', nullable: true })
   smtpUpdatedAt: Date | null;
 
+  @Column({ name: 'payment_payload', type: 'text', nullable: true })
+  gatewayPayload: string | null;
+
+  @Column({ name: 'payment_updated_at', type: 'timestamptz', nullable: true })
+  gatewayUpdatedAt: Date | null;
+
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;
 
