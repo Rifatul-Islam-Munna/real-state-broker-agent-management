@@ -15,6 +15,11 @@ export const adminNavigation = [
     icon: "domain",
   },
   {
+    href: "/dashboard/property-operations",
+    label: "Property Operations",
+    icon: "apartment",
+  },
+  {
     href: "/dashboard/blog",
     label: "Blog",
     icon: "article",
