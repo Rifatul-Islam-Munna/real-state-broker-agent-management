@@ -1,6 +1,6 @@
 namespace Models;
 
-public sealed class PropertyOperationsSettingsResponse
+public class PropertyOperationsSettingsResponse
 {
     public string BusinessName { get; set; } = "Property Operations";
     public string LogoUrl { get; set; } = string.Empty;
@@ -110,7 +110,7 @@ public sealed class PublicPropertyOperationsRequestResponse
     public int RemainingUses { get; set; }
 }
 
-public sealed class SubmitPropertyOperationsPublicRequest
+public class SubmitPropertyOperationsPublicRequest
 {
     public string ResponderName { get; set; } = string.Empty;
     public string ResponderEmail { get; set; } = string.Empty;
