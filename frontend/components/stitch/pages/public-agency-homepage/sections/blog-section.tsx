@@ -83,11 +83,21 @@ export function BlogSection({ content }: BlogSectionProps) {
                 href={`/blog/${post.slug}`}
               >
                 <div className="overflow-hidden">
-                  <img
-                    alt={post.title}
-                    className="w-full h-56 object-cover group-hover:scale-110 transition-transform duration-700"
-                    src={post.coverImageUrl}
-                  />
+                  {post.coverImageUrl?.trim() ? (
+                    <img
+                      alt={post.title}
+                      className="w-full h-56 object-cover group-hover:scale-110 transition-transform duration-700"
+                      src={post.coverImageUrl}
+                    />
+                  ) : (
+                    <div
+                      aria-label={`${post.title} has no cover image`}
+                      className="flex h-56 items-center justify-center bg-slate-100 px-6 text-center text-xs font-bold uppercase tracking-[0.2em] text-slate-400"
+                      role="img"
+                    >
+                      No cover image
+                    </div>
+                  )}
                 </div>
                 <div className="flex flex-1 flex-col p-8">
                   <div className="flex items-center justify-between gap-4 text-[10px] font-black uppercase tracking-widest text-slate-400">

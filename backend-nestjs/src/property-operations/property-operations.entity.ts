@@ -75,8 +75,8 @@ export class PropertyOperationsPublicAccess {
   @Column({ type: 'numeric', precision: 18, scale: 2, nullable: true }) paymentAmount: string | null;
   @Column({ length: 12, default: 'USD' }) paymentCurrency: string;
   @Column({ default: false }) paymentVerified: boolean;
-  @Column({ length: 120, nullable: true }) paymentSessionId: string | null;
-  @Column({ length: 64, nullable: true }) paymentTokenHash: string | null;
+  @Column({ type: 'varchar', length: 120, nullable: true }) paymentSessionId: string | null;
+  @Column({ type: 'varchar', length: 64, nullable: true }) paymentTokenHash: string | null;
   @CreateDateColumn({ type: 'timestamptz' }) createdAt: Date;
   @Column({ type: 'timestamptz', nullable: true }) lastAccessedAt: Date | null;
   @Column({ type: 'timestamptz', nullable: true }) completedAt: Date | null;

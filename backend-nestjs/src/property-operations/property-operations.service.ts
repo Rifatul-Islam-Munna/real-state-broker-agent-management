@@ -365,12 +365,18 @@ export class PropertyOperationsService {
     const agency = await this.settingsService.getAdminSettings();
     const preference = await this.ensurePreferences();
     const profile = agency?.profile ?? {};
+    const legacyProfile = profile as typeof profile & {
+      brandColor?: unknown;
+      primaryColor?: unknown;
+      currency?: unknown;
+    };
+    const legacyAgency = agency as typeof agency & { currency?: unknown };
     return {
       businessName: String(profile.agencyName ?? 'Property Operations'),
       logoUrl: String(profile.logo?.url ?? ''),
-      brandColor: String(profile.brandColor ?? profile.primaryColor ?? '#111827'),
+      brandColor: String(legacyProfile.brandColor ?? legacyProfile.primaryColor ?? '#111827'),
       publicBaseUrl: String(process.env.FRONTEND_URL ?? process.env.APP_URL ?? 'http://localhost:3000'),
-      currency: String(profile.currency ?? agency?.currency ?? 'USD').toUpperCase(),
+      currency: String(legacyProfile.currency ?? legacyAgency.currency ?? 'USD').toUpperCase(),
       defaultExpiryHours: Number(preference.content.defaultExpiryHours ?? 168),
       defaultMaxUses: Number(preference.content.defaultMaxUses ?? 1),
       defaultOneTime: preference.content.defaultOneTime !== false,
