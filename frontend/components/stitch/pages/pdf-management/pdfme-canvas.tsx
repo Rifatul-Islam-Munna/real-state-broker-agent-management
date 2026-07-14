@@ -41,7 +41,7 @@ export const PdfTemplateDesignerCanvas = forwardRef<PdfTemplateDesignerHandle, {
 
       return new Promise<Template | null>((resolve) => {
         let finished = false
-        let timeout: ReturnType<typeof window.setTimeout> | undefined
+        let timeout: number | undefined
         const resolveOnce = (template: Template | null) => {
           if (finished) return
           finished = true

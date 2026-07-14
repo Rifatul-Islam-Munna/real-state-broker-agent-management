@@ -810,6 +810,7 @@ export type LeadOutreachDispatchInput = {
   title: string
   message: string
   attachPropertyDocuments?: boolean
+  attachmentMode?: "none" | "property" | "pdf" | "document"
   mediaUrls?: string[]
   templateId?: string
   pdfTemplateId?: string

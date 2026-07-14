@@ -76,7 +76,7 @@ export function NestModuleWorkspace({ module, workspace, onClose, onChanged }: {
     if (!form.title.trim()) return
     setLoading(true)
     try {
-      await propertyOperationsApi.saveRecord({ id: form.id, propertyId: workspace.propertyId, moduleKey: module.id, recordType: form.recordType, title: form.title.trim(), description: form.description.trim(), status: form.status, priority: form.priority, amount: form.amount ? Number(form.amount) : null, dueAt: form.dueAt ? new Date(`${form.dueAt}T12:00:00Z`).toISOString() : null, payloadJson: JSON.stringify({ contactName: form.contactName, contactEmail: form.contactEmail, contactPhone: form.contactPhone }) })
+      await propertyOperationsApi.saveRecord({ id: form.id, propertyId: workspace!.propertyId, moduleKey: module!.id, recordType: form.recordType, title: form.title.trim(), description: form.description.trim(), status: form.status, priority: form.priority, amount: form.amount ? Number(form.amount) : null, dueAt: form.dueAt ? new Date(`${form.dueAt}T12:00:00Z`).toISOString() : null, payloadJson: JSON.stringify({ contactName: form.contactName, contactEmail: form.contactEmail, contactPhone: form.contactPhone }) })
       setEditing(false); await load(); onChanged()
     } catch (value) { setError(value instanceof Error ? value.message : "Could not save record.") }
     finally { setLoading(false) }
@@ -98,7 +98,7 @@ export function NestModuleWorkspace({ module, workspace, onClose, onChanged }: {
     if (!sharing) return
     setLoading(true)
     try {
-      const result = await propertyOperationsApi.createPublicLink({ propertyId: workspace.propertyId, recordId: sharing.id, moduleKey: module.id, title: sharing.title, instructions: sharing.description, recipientLabel: preset.recipient, recipientName: sharing.contactName ?? "", recipientEmail: sharing.contactEmail ?? "", recipientPhone: sharing.contactPhone ?? "", formSchemaJson: JSON.stringify(preset.fields), oneTime: true, maxUses: 1, allowFileUploads: true })
+      const result = await propertyOperationsApi.createPublicLink({ propertyId: workspace!.propertyId, recordId: sharing.id, moduleKey: module!.id, title: sharing.title, instructions: sharing.description, recipientLabel: preset.recipient, recipientName: sharing.contactName ?? "", recipientEmail: sharing.contactEmail ?? "", recipientPhone: sharing.contactPhone ?? "", formSchemaJson: JSON.stringify(preset.fields), oneTime: true, maxUses: 1, allowFileUploads: true })
       setCreatedLink(result); onChanged()
     } catch (value) { setError(value instanceof Error ? value.message : "Could not create link.") }
     finally { setLoading(false) }
@@ -106,7 +106,7 @@ export function NestModuleWorkspace({ module, workspace, onClose, onChanged }: {
 
   async function runRecurring() {
     setLoading(true)
-    try { await propertyOperationsApi.runRecurringMaintenance(workspace.propertyId); await load(); onChanged() }
+    try { await propertyOperationsApi.runRecurringMaintenance(workspace!.propertyId); await load(); onChanged() }
     catch (value) { setError(value instanceof Error ? value.message : "Could not generate work orders.") }
     finally { setLoading(false) }
   }
@@ -117,7 +117,7 @@ export function NestModuleWorkspace({ module, workspace, onClose, onChanged }: {
       <div className="min-h-0 flex-1 overflow-y-auto p-5">
         {error ? <p className="mb-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p> : null}
         <div className="flex flex-wrap justify-between gap-3"><p className="font-semibold">{records.length} records</p><div className="flex gap-2">{module.id === "recurring-maintenance" ? <button className="inline-flex h-10 items-center gap-2 rounded-xl border px-4 text-sm font-semibold" onClick={() => void runRecurring()} type="button"><RefreshCw className="size-4" />Generate due work</button> : null}<button className="inline-flex h-10 items-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground" onClick={openNew} type="button"><Plus className="size-4" />New record</button></div></div>
-        <div className="mt-5 grid gap-3 lg:grid-cols-2">{records.map((item) => <article className="rounded-2xl border p-4" key={item.id}><div className="flex justify-between gap-3"><div><h3 className="font-semibold">{item.title}</h3><p className="text-xs text-muted-foreground">{item.recordType} · {item.status} · {item.priority}</p></div><div className="flex"><button className="p-2" onClick={() => { setSharing(item); setCreatedLink(null) }} title="Link or QR" type="button"><Link2 className="size-4" /></button><button className="p-2" onClick={() => openEdit(item)} title="Edit" type="button"><Pencil className="size-4" /></button><button className="p-2 text-red-600" onClick={() => void remove(item.id)} title="Delete" type="button"><Trash2 className="size-4" /></button></div></div>{item.description ? <p className="mt-3 text-sm text-muted-foreground">{item.description}</p> : null}<div className="mt-4 flex flex-wrap gap-2">{actionsFor(module.id, item.status).map((action) => <button className="inline-flex h-8 items-center gap-1 rounded-lg border px-3 text-xs font-semibold" key={action.id} onClick={() => void runAction(item, action.id)} type="button"><Play className="size-3" />{action.label}</button>)}</div></article>)}{!loading && !records.length ? <p className="rounded-2xl border border-dashed p-8 text-center text-sm text-muted-foreground">No records yet.</p> : null}</div>
+        <div className="mt-5 grid gap-3 lg:grid-cols-2">{records.map((item) => <article className="rounded-2xl border p-4" key={item.id}><div className="flex justify-between gap-3"><div><h3 className="font-semibold">{item.title}</h3><p className="text-xs text-muted-foreground">{item.recordType} Â· {item.status} Â· {item.priority}</p></div><div className="flex"><button className="p-2" onClick={() => { setSharing(item); setCreatedLink(null) }} title="Link or QR" type="button"><Link2 className="size-4" /></button><button className="p-2" onClick={() => openEdit(item)} title="Edit" type="button"><Pencil className="size-4" /></button><button className="p-2 text-red-600" onClick={() => void remove(item.id)} title="Delete" type="button"><Trash2 className="size-4" /></button></div></div>{item.description ? <p className="mt-3 text-sm text-muted-foreground">{item.description}</p> : null}<div className="mt-4 flex flex-wrap gap-2">{actionsFor(module.id, item.status).map((action) => <button className="inline-flex h-8 items-center gap-1 rounded-lg border px-3 text-xs font-semibold" key={action.id} onClick={() => void runAction(item, action.id)} type="button"><Play className="size-3" />{action.label}</button>)}</div></article>)}{!loading && !records.length ? <p className="rounded-2xl border border-dashed p-8 text-center text-sm text-muted-foreground">No records yet.</p> : null}</div>
       </div>
     </div>
 

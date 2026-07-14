@@ -29,6 +29,13 @@ export const propertyOperationsModules: readonly PropertyOperationsModule[] = [
     sourceArea: "TenantModule",
   },
   {
+    id: "leases",
+    label: "Leases",
+    category: "Portfolio",
+    description: "Lease terms, renewals, amendments, deposits and move-in or move-out agreements.",
+    sourceArea: "TenantModule / PlanDocModule",
+  },
+  {
     id: "staff",
     label: "Property Staff",
     category: "People",
@@ -153,6 +160,20 @@ export const propertyOperationsModules: readonly PropertyOperationsModule[] = [
     category: "Administration",
     description: "Operational settings, branding, payment configuration and role-aware workspace controls.",
     sourceArea: "OrganizationModule",
+  },
+  {
+    id: "users",
+    label: "Users & Access",
+    category: "Administration",
+    description: "User accounts, roles, property assignments, access requests, sessions and login activity.",
+    sourceArea: "UserModule",
+  },
+  {
+    id: "property-health",
+    label: "Property Health",
+    category: "Insights",
+    description: "Safety, compliance, deferred maintenance, insurance risk and capital planning health checks.",
+    sourceArea: "AnalyticsModule / InspectionModule / AssetModule",
   },
   {
     id: "audit",

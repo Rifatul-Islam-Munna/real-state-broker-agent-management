@@ -137,6 +137,9 @@ export type OperationsPublicAccess = {
   accessToken: string | null
   qrDataUrl?: string | null
   submissionCount: number
+  paymentAmount?: number | null
+  paymentCurrency?: string
+  paymentVerified?: boolean
 }
 
 export type OperationsAnalytics = {

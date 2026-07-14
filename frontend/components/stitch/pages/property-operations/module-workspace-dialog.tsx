@@ -111,7 +111,7 @@ export function ModuleWorkspaceDialog({
 
   const records = useMemo(() => {
     if (!property || !module) return []
-    return store[String(property.id)]?.[module.id] ?? []
+    return store[String(property!.id)]?.[module.id] ?? []
   }, [module, property, store])
 
   const visibleRecords = useMemo(() => {
@@ -137,9 +137,9 @@ export function ModuleWorkspaceDialog({
   function saveStore(nextRecords: OperationRecord[]) {
     setStore((current) => ({
       ...current,
-      [String(property.id)]: {
-        ...(current[String(property.id)] ?? {}),
-        [module.id]: nextRecords,
+      [String(property!.id)]: {
+        ...(current[String(property!.id)] ?? {}),
+        [module!.id]: nextRecords,
       },
     }))
   }

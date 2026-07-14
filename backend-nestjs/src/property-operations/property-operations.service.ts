@@ -13,16 +13,17 @@ import {
 import { PropertyOperationsIntegrationService } from './property-operations-integration.service';
 
 export const PROPERTY_OPERATIONS_MODULES = [
-  'portfolio', 'units', 'tenants', 'staff', 'technicians', 'vendors', 'vendor-quotes',
+  'portfolio', 'units', 'tenants', 'leases', 'staff', 'technicians', 'vendors', 'vendor-quotes',
   'tickets', 'work-orders', 'recurring-maintenance', 'inspections', 'assets', 'billing',
   'finance', 'subscriptions', 'messages', 'announcements', 'notifications', 'documents',
-  'public-portals', 'organization', 'audit', 'analytics', 'ai',
+  'public-portals', 'organization', 'users', 'property-health', 'plans', 'audit', 'analytics', 'ai',
 ] as const;
 
 const moduleCatalog: Record<string, { label: string; category: string; recordTypes: string[] }> = {
   portfolio: { label: 'Portfolio', category: 'Portfolio', recordTypes: ['Property note', 'Ownership update', 'Occupancy update', 'Compliance item', 'Insurance item'] },
   units: { label: 'Units', category: 'Portfolio', recordTypes: ['Unit', 'Availability', 'Move-in', 'Move-out', 'Unit charge', 'Unit condition'] },
-  tenants: { label: 'Residents', category: 'People', recordTypes: ['Resident', 'Lease', 'Move-in', 'Move-out', 'Emergency contact', 'Resident request'] },
+  tenants: { label: 'Residents', category: 'People', recordTypes: ['Resident', 'Move-in', 'Move-out', 'Emergency contact', 'Resident request', 'Activity history'] },
+  leases: { label: 'Leases', category: 'Portfolio', recordTypes: ['Lease', 'Lease renewal', 'Lease amendment', 'Move-in agreement', 'Move-out agreement', 'Deposit record'] },
   staff: { label: 'Staff', category: 'People', recordTypes: ['Staff profile', 'Assignment', 'Shift', 'Payment', 'Performance note'] },
   technicians: { label: 'Technicians & Workers', category: 'People', recordTypes: ['Technician', 'Worker', 'Assignment', 'Availability', 'Completion report'] },
   vendors: { label: 'Vendors', category: 'People', recordTypes: ['Vendor', 'Service agreement', 'Insurance', 'Performance review', 'Vendor contact'] },
@@ -41,6 +42,9 @@ const moduleCatalog: Record<string, { label: string; category: string; recordTyp
   documents: { label: 'Documents', category: 'Documents', recordTypes: ['Property plan', 'Contract', 'Lease document', 'Compliance document', 'Generated document'] },
   'public-portals': { label: 'Public Portals', category: 'Portals', recordTypes: ['Public form', 'Checkout request', 'Quote request', 'Information request', 'Anonymous submission'] },
   organization: { label: 'Organization', category: 'Administration', recordTypes: ['Setting change', 'Brand asset', 'Integration note', 'Policy', 'Operational preference'] },
+  users: { label: 'Users & Access', category: 'Administration', recordTypes: ['User account', 'Role assignment', 'Property assignment', 'Access request', 'Login event', 'Session review'] },
+  'property-health': { label: 'Property Health', category: 'Insights', recordTypes: ['Health score', 'Safety risk', 'Compliance gap', 'Deferred maintenance', 'Insurance risk', 'Capital planning item'] },
+  plans: { label: 'Operations Plans', category: 'Insights', recordTypes: ['Operations plan', 'Maintenance roadmap', 'Capital plan', 'Milestone', 'Plan phase'] },
   audit: { label: 'Audit', category: 'Administration', recordTypes: ['Activity', 'Change log', 'Access event', 'Submission event', 'Exception'] },
   analytics: { label: 'Analytics', category: 'Insights', recordTypes: ['KPI snapshot', 'Occupancy report', 'Maintenance report', 'Finance report', 'Service report'] },
   ai: { label: 'AI Assistant', category: 'Insights', recordTypes: ['AI summary', 'Suggested priority', 'Risk note', 'Draft response', 'Operational recommendation'] },

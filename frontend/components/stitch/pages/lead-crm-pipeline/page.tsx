@@ -18,7 +18,8 @@ import {
   useUpdateLead,
 } from "@/hooks/use-real-estate-api"
 import { useDispatchLeadOutreach } from "@/hooks/use-lead-outreach-api"
-import { getPortalRoutes } from "@/lib/portal-routes"
+import { getPortalRoutes } from "@/lib/portal-routes"
+import type { DocumentType } from "@/@types/real-estate-api"
 
 import { type LeadFormValues, Section1Section, Section2Section } from "./sections"
 import type {
@@ -162,7 +163,7 @@ export function LeadCrmPipelinePage() {
       title: values.title.trim(),
       message: values.message.trim(),
       attachmentDocumentCategory: values.attachmentDocumentCategory,
-      attachmentDocumentType: values.attachmentDocumentType,
+      attachmentDocumentType: (values.attachmentDocumentType ?? "") as DocumentType | "",
       attachmentMode: values.attachmentMode,
       attachPropertyDocuments: values.attachPropertyDocuments !== false,
       mediaUrls: values.mediaUrls,
