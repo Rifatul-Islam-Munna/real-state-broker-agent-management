@@ -38,7 +38,9 @@ export class RealtorShowingsService {
     private readonly schedulingSettingsService: SchedulingSettingsService,
   ) {}
 
-  async findAll(search?: string) {
+  async findAll(search?: string, page = 1, pageSize = 25) {
+    page = Math.max(1, Number(page) || 1);
+    pageSize = Math.min(100, Math.max(1, Number(pageSize) || 25));
     const qb = this.showingRepo.createQueryBuilder('showing')
       .leftJoinAndSelect('showing.property', 'property')
       .leftJoinAndSelect('showing.lead', 'lead')
@@ -52,7 +54,19 @@ export class RealtorShowingsService {
       );
     }
 
-    return (await qb.getMany()).map((item) => this.mapShowing(item));
+    const [items, totalCount] = await qb
+      .skip((page - 1) * pageSize)
+      .take(pageSize)
+      .getManyAndCount();
+    return {
+      items: items.map((item) => this.mapShowing(item)),
+      page,
+      pageSize,
+      totalCount,
+      totalPages: Math.max(1, Math.ceil(totalCount / pageSize)),
+      hasNextPage: page * pageSize < totalCount,
+      hasPreviousPage: page > 1,
+    };
   }
 
   async importRows(payload: any) {
@@ -163,12 +177,34 @@ export class RealtorShowingsService {
   }
 
   async updateSequence(id: number, status: 'active' | 'paused' | 'cancelled') {
-    const showing = await this.showingRepo.findOne({ where: { id } });
+    const showing = await this.showingRepo.findOne({ where: { id }, relations: ['lead', 'property'] });
     if (!showing) throw new NotFoundException('Showing not found.');
     showing.sequenceStatus = status;
     showing.followUpEnabled = status === 'active';
     if (status === 'cancelled') showing.sequenceStep = 'cancelled';
-    return this.showingRepo.save(showing);
+    if (status === 'paused') showing.sequenceStep = 'paused';
+    const saved = await this.showingRepo.save(showing);
+    if (showing.leadId) {
+      await this.historyRepo.createQueryBuilder()
+        .update(LeadHistoryEntry)
+        .set({
+          occurredAt: new Date(),
+          status: 'Failed',
+          summary: status === 'active'
+            ? 'Realtor showing automation resumed with a refreshed schedule.'
+            : `Realtor showing automation ${status}.`,
+        })
+        .where('lead_id = :leadId', { leadId: showing.leadId })
+        .andWhere('status = :scheduledStatus', { scheduledStatus: leadHistoryStatusDb('Scheduled') })
+        .andWhere('created_by IN (:...createdBy)', { createdBy: this.automationCreators(showing.id) })
+        .execute();
+    }
+    if (status === 'active') {
+      if (!showing.lead) throw new BadRequestException('Showing does not have a linked lead.');
+      const settings = await this.settingsService.getAdminSettings();
+      await this.scheduleOutreach(saved, showing.lead, settings.communicationTemplates ?? []);
+    }
+    return this.mapShowing(await this.showingRepo.findOneOrFail({ where: { id }, relations: ['lead', 'property'] }));
   }
 
   async updateProperty(id: number, propertyId: number | null) {
@@ -325,7 +361,7 @@ export class RealtorShowingsService {
     return {
       ...item,
       automationStatus: responded ? 'StoppedByReply' : (item.emailEnabled || item.smsEnabled ? 'Scheduled' : 'NotScheduled'),
-      lead: item.lead ? { id: item.lead.id, followUpStatus: item.lead.followUpStatus } : null,
+      lead: item.lead ? { id: item.lead.id, name: item.lead.name, email: item.lead.email, phone: item.lead.phone, followUpStatus: item.lead.followUpStatus } : null,
       property: item.property ? { id: item.property.id, title: item.property.title, location: item.property.location } : null,
     };
   }

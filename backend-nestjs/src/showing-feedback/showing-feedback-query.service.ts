@@ -134,7 +134,18 @@ export class ShowingFeedbackQueryService {
     return this.feedbackRepo.save(feedback);
   }
 
-  async leadInbox(fromDate?: string, toDate?: string, readStatus?: string) {
+  async leadInbox(
+    fromDate?: string,
+    toDate?: string,
+    readStatus?: string,
+    page = 1,
+    pageSize = 25,
+    sentiment?: string,
+    intent?: string,
+    minimumPriority = 0,
+  ) {
+    page = Math.max(1, Number(page) || 1);
+    pageSize = Math.min(100, Math.max(1, Number(pageSize) || 25));
     const qb = this.feedbackRepo.createQueryBuilder('feedback').where('feedback.lead_id IS NOT NULL');
     if (fromDate && toDate) {
       const range = dateRangeInZone(fromDate, toDate, await this.schedulingSettingsService.getTimeZone());
@@ -143,15 +154,28 @@ export class ShowingFeedbackQueryService {
     }
     if (readStatus === 'read') qb.andWhere('feedback.is_read = true');
     if (readStatus === 'unread') qb.andWhere('feedback.is_read = false');
-    return qb
+    if (['positive', 'neutral', 'negative'].includes(`${sentiment ?? ''}`)) qb.andWhere('feedback.sentiment = :sentiment', { sentiment });
+    if (['apply', 'offer', 'interested', 'not_interested', 'unknown'].includes(`${intent ?? ''}`)) qb.andWhere('feedback.intent = :intent', { intent });
+    if (minimumPriority > 0) qb.andWhere('feedback.priorityScore >= :minimumPriority', { minimumPriority });
+    const [items, totalCount] = await qb
       .distinct(true)
       .leftJoinAndSelect('feedback.realtorShowing', 'showing')
       .leftJoinAndSelect('showing.lead', 'lead')
       .leftJoinAndSelect('feedback.property', 'property')
       .orderBy('feedback.priorityScore', 'DESC')
       .addOrderBy('feedback.receivedAt', 'DESC')
-      .take(200)
-      .getMany();
+      .skip((page - 1) * pageSize)
+      .take(pageSize)
+      .getManyAndCount();
+    return {
+      items,
+      page,
+      pageSize,
+      totalCount,
+      totalPages: Math.max(1, Math.ceil(totalCount / pageSize)),
+      hasNextPage: page * pageSize < totalCount,
+      hasPreviousPage: page > 1,
+    };
   }
 
   async bulkMarkRead(ids: number[], isRead = true) {

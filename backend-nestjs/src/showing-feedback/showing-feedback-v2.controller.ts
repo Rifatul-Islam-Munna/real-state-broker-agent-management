@@ -45,8 +45,17 @@ export class ShowingFeedbackV2Controller {
 
 
   @Get('lead-inbox')
-  leadInbox(@Query('fromDate') fromDate?: string, @Query('toDate') toDate?: string, @Query('readStatus') readStatus?: string) {
-    return this.queries.leadInbox(fromDate, toDate, readStatus);
+  leadInbox(
+    @Query('fromDate') fromDate?: string,
+    @Query('toDate') toDate?: string,
+    @Query('readStatus') readStatus?: string,
+    @Query('page') page = 1,
+    @Query('pageSize') pageSize = 25,
+    @Query('sentiment') sentiment?: string,
+    @Query('intent') intent?: string,
+    @Query('minimumPriority') minimumPriority?: string,
+  ) {
+    return this.queries.leadInbox(fromDate, toDate, readStatus, Number(page), Number(pageSize), sentiment, intent, Number(minimumPriority) || 0);
   }
 
   @Patch('bulk/read')

@@ -1,11 +1,12 @@
 "use client"
 
 import Link from "next/link"
+import type React from "react"
 import { useEffect, useMemo, useState } from "react"
-import { CheckCheck, ExternalLink, Filter, Sparkles, UserRoundCheck } from "lucide-react"
+import { CheckCheck, ExternalLink, Filter, History, Sparkles } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -21,6 +22,8 @@ type Feedback = {
   applyLikelihood: number
   confidence: number
   classifier: string
+  channel: string
+  sourceMessageId: string
   isRead: boolean
   receivedAt: string
   property?: { id: number; title?: string; location?: string }
@@ -32,6 +35,16 @@ type Feedback = {
     replyReceived?: boolean
     lead?: { id: number; name?: string; email?: string; phone?: string }
   }
+}
+
+type PageResult<T> = {
+  items: T[]
+  page: number
+  pageSize: number
+  totalCount: number
+  totalPages: number
+  hasNextPage: boolean
+  hasPreviousPage: boolean
 }
 
 const today = new Date().toISOString().slice(0, 10)
@@ -47,7 +60,7 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export default function LeadShowingFeedbackPage() {
-  const [items, setItems] = useState<Feedback[]>([])
+  const [result, setResult] = useState<PageResult<Feedback>>({ items: [], page: 1, pageSize: 25, totalCount: 0, totalPages: 1, hasNextPage: false, hasPreviousPage: false })
   const [selected, setSelected] = useState<number[]>([])
   const [fromDate, setFromDate] = useState(monthAgo)
   const [toDate, setToDate] = useState(today)
@@ -55,39 +68,48 @@ export default function LeadShowingFeedbackPage() {
   const [sentiment, setSentiment] = useState("all")
   const [intent, setIntent] = useState("all")
   const [minimumPriority, setMinimumPriority] = useState("0")
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState("25")
   const [loading, setLoading] = useState(true)
 
-  async function load() {
-    setLoading(true)
-    const params = new URLSearchParams({ fromDate, toDate })
-    if (readStatus !== "all") params.set("readStatus", readStatus)
-    try {
-      setItems(await api<Feedback[]>(`/showing-feedback/lead-inbox?${params}`))
-      setSelected([])
-    } finally {
-      setLoading(false)
+  useEffect(() => {
+    setPage(1)
+  }, [fromDate, toDate, readStatus, sentiment, intent, minimumPriority, pageSize])
+
+  useEffect(() => {
+    let alive = true
+    async function load() {
+      setLoading(true)
+      const params = new URLSearchParams({ fromDate, toDate, page: String(page), pageSize })
+      if (readStatus !== "all") params.set("readStatus", readStatus)
+      if (sentiment !== "all") params.set("sentiment", sentiment)
+      if (intent !== "all") params.set("intent", intent)
+      if (Number(minimumPriority) > 0) params.set("minimumPriority", minimumPriority)
+      try {
+        const payload = await api<PageResult<Feedback>>(`/showing-feedback/lead-inbox?${params}`)
+        if (alive) {
+          setResult(payload)
+          setSelected([])
+        }
+      } finally {
+        if (alive) setLoading(false)
+      }
     }
-  }
+    void load()
+    return () => { alive = false }
+  }, [fromDate, intent, minimumPriority, page, pageSize, readStatus, sentiment, toDate])
 
-  useEffect(() => { void load() }, [fromDate, toDate, readStatus])
-
-  const visible = useMemo(() => items.filter((item) => {
-    if (sentiment !== "all" && item.sentiment !== sentiment) return false
-    if (intent !== "all" && item.intent !== intent) return false
-    return item.priorityScore >= Number(minimumPriority || 0)
-  }), [intent, items, minimumPriority, sentiment])
-
+  const items = result.items
   const summary = useMemo(() => ({
     unread: items.filter((item) => !item.isRead).length,
     hot: items.filter((item) => item.priorityScore >= 70).length,
     apply: items.filter((item) => item.intent === "apply" || item.intent === "offer").length,
-    negative: items.filter((item) => item.sentiment === "negative").length,
   }), [items])
 
   async function bulkRead(isRead: boolean) {
     if (!selected.length) return
     await api("/showing-feedback/bulk/read", { method: "PATCH", body: JSON.stringify({ ids: selected, isRead }) })
-    setItems((current) => current.map((item) => selected.includes(item.id) ? { ...item, isRead } : item))
+    setResult((current) => ({ ...current, items: current.items.map((item) => selected.includes(item.id) ? { ...item, isRead } : item) }))
     setSelected([])
   }
 
@@ -96,106 +118,93 @@ export default function LeadShowingFeedbackPage() {
       method: "PATCH",
       body: JSON.stringify(patch),
     })
-    setItems((current) => current.map((entry) => entry.id === item.id ? { ...entry, ...updated } : entry))
+    setResult((current) => ({ ...current, items: current.items.map((entry) => entry.id === item.id ? { ...entry, ...updated } : entry) }))
   }
 
-  const allVisibleSelected = visible.length > 0 && visible.every((item) => selected.includes(item.id))
+  const allSelected = items.length > 0 && items.every((item) => selected.includes(item.id))
 
-  return <main className="space-y-6 p-4 md:p-6">
-    <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
-      <div>
-        <div className="mb-2 flex items-center gap-2"><Badge variant="secondary"><Sparkles className="mr-1 size-3" />CPU-light intent scoring</Badge><Badge variant="outline">Lead-linked</Badge></div>
-        <h1 className="text-3xl font-bold tracking-tight">Lead Showing Intelligence</h1>
-        <p className="mt-1 max-w-3xl text-muted-foreground">Feedback from the actual lead or tenant who visited the property, ranked by intent, urgency, and likelihood to apply.</p>
+  return <main className="space-y-4 p-3 md:p-4">
+    <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+      <div className="min-w-0">
+        <div className="mb-1 flex flex-wrap items-center gap-2"><Badge variant="secondary"><Sparkles className="mr-1 size-3" />Lead-linked</Badge><Badge variant="outline">{result.totalCount} total</Badge><Badge variant="outline">{summary.unread} unread</Badge><Badge variant="outline">{summary.hot} hot</Badge><Badge variant="outline">{summary.apply} apply/offer</Badge></div>
+        <h1 className="text-xl font-bold tracking-tight md:text-2xl">Lead Showing Feedback</h1>
       </div>
-      <div className="flex flex-wrap gap-2"><Button render={<Link href="/dashboard/showing-feedback/leads/classifier-controls" />} variant="outline"><Filter className="mr-2 size-4" />Advanced classifier controls</Button><Button render={<Link href="/dashboard/showing-feedback/leads/sequences" />} variant="outline">Lead message sequences</Button></div>
+      <div className="flex flex-wrap gap-2"><Button render={<Link href="/dashboard/showing-feedback/leads/classifier-controls" />} size="sm" variant="outline"><Filter className="mr-2 size-4" />Classifier</Button><Button render={<Link href="/dashboard/showing-feedback/leads/sequences" />} size="sm" variant="outline">Lead sequences</Button></div>
     </div>
 
-    <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-      <Metric title="Unread replies" value={summary.unread} detail="Needs review" />
-      <Metric title="Hot prospects" value={summary.hot} detail="Priority 70+" />
-      <Metric title="Apply / offer intent" value={summary.apply} detail="Revenue opportunity" />
-      <Metric title="Negative feedback" value={summary.negative} detail="Objections to resolve" />
-    </section>
-
     <Card>
-      <CardHeader>
-        <CardTitle>Classifier and inbox controls</CardTitle>
-        <CardDescription>Filter by date, sentiment, intent, read status, and priority. Bulk actions work on selected responses.</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
-          <Field label="From"><Input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} /></Field>
-          <Field label="To"><Input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} /></Field>
-          <Field label="Read status"><Select value={readStatus} onValueChange={setReadStatus}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All</SelectItem><SelectItem value="unread">Unread</SelectItem><SelectItem value="read">Read</SelectItem></SelectContent></Select></Field>
-          <Field label="Sentiment"><Select value={sentiment} onValueChange={setSentiment}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All</SelectItem><SelectItem value="positive">Positive</SelectItem><SelectItem value="neutral">Neutral</SelectItem><SelectItem value="negative">Negative</SelectItem></SelectContent></Select></Field>
-          <Field label="Intent"><Select value={intent} onValueChange={setIntent}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All</SelectItem><SelectItem value="apply">Apply</SelectItem><SelectItem value="offer">Offer</SelectItem><SelectItem value="interested">Interested</SelectItem><SelectItem value="not_interested">Not interested</SelectItem><SelectItem value="unknown">Unknown</SelectItem></SelectContent></Select></Field>
-          <Field label="Minimum priority"><Input min={0} max={100} type="number" value={minimumPriority} onChange={(e) => setMinimumPriority(e.target.value)} /></Field>
+      <CardContent className="space-y-3 p-3">
+        <div className="grid gap-2 md:grid-cols-4 xl:grid-cols-8">
+          <Field label="From"><Input className="h-9" type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} /></Field>
+          <Field label="To"><Input className="h-9" type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} /></Field>
+          <Field label="Read"><Select value={readStatus} onValueChange={setReadStatus}><SelectTrigger className="h-9"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All</SelectItem><SelectItem value="unread">Unread</SelectItem><SelectItem value="read">Read</SelectItem></SelectContent></Select></Field>
+          <Field label="Sentiment"><Select value={sentiment} onValueChange={setSentiment}><SelectTrigger className="h-9"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All</SelectItem><SelectItem value="positive">Positive</SelectItem><SelectItem value="neutral">Neutral</SelectItem><SelectItem value="negative">Negative</SelectItem></SelectContent></Select></Field>
+          <Field label="Intent"><Select value={intent} onValueChange={setIntent}><SelectTrigger className="h-9"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All</SelectItem><SelectItem value="apply">Apply</SelectItem><SelectItem value="offer">Offer</SelectItem><SelectItem value="interested">Interested</SelectItem><SelectItem value="not_interested">Not interested</SelectItem><SelectItem value="unknown">Unknown</SelectItem></SelectContent></Select></Field>
+          <Field label="Priority"><Input className="h-9" min={0} max={100} type="number" value={minimumPriority} onChange={(e) => setMinimumPriority(e.target.value)} /></Field>
+          <Field label="Rows"><Select value={pageSize} onValueChange={setPageSize}><SelectTrigger className="h-9"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="10">10</SelectItem><SelectItem value="25">25</SelectItem><SelectItem value="50">50</SelectItem><SelectItem value="100">100</SelectItem></SelectContent></Select></Field>
+          <div className="flex items-end gap-2"><Button className="h-9 flex-1" disabled={!selected.length} size="sm" variant="outline" onClick={() => void bulkRead(true)}><CheckCheck className="mr-2 size-4" />Read</Button></div>
         </div>
-
-        <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-muted/30 p-3">
-          <Checkbox checked={allVisibleSelected} onCheckedChange={(checked) => setSelected(checked ? visible.map((item) => item.id) : [])} />
-          <span className="mr-auto text-sm font-medium">{selected.length ? `${selected.length} selected` : "Select visible feedback"}</span>
-          <Button disabled={!selected.length} size="sm" variant="outline" onClick={() => void bulkRead(true)}><CheckCheck className="mr-2 size-4" />Mark selected read</Button>
-          <Button disabled={!selected.length} size="sm" variant="outline" onClick={() => void bulkRead(false)}>Mark selected unread</Button>
+        <div className="flex items-center gap-2 rounded-lg border bg-muted/20 px-3 py-2">
+          <Checkbox checked={allSelected} onCheckedChange={(checked) => setSelected(checked ? items.map((item) => item.id) : [])} />
+          <span className="mr-auto text-xs font-medium">{selected.length ? `${selected.length} selected` : "Select page"}</span>
+          <Button disabled={!selected.length} size="sm" variant="ghost" onClick={() => void bulkRead(false)}>Unread</Button>
         </div>
       </CardContent>
     </Card>
 
-    <div className="space-y-4">
-      {!loading && visible.length === 0 ? <Card className="border-dashed"><CardContent className="p-10 text-center text-muted-foreground">No lead showing feedback matches these filters.</CardContent></Card> : null}
-      {visible.map((item) => <FeedbackCard key={item.id} item={item} selected={selected.includes(item.id)} onSelect={(checked) => setSelected((current) => checked ? [...new Set([...current, item.id])] : current.filter((id) => id !== item.id))} onUpdate={updateClassification} />)}
+    <div className="overflow-hidden rounded-lg border">
+      {!loading && items.length === 0 ? <div className="p-8 text-center text-sm text-muted-foreground">No lead showing feedback matches filters.</div> : null}
+      {items.map((item) => <FeedbackRow key={item.id} item={item} selected={selected.includes(item.id)} onSelect={(checked) => setSelected((current) => checked ? [...new Set([...current, item.id])] : current.filter((id) => id !== item.id))} onUpdate={updateClassification} />)}
     </div>
+
+    <Pagination page={result.page} totalPages={result.totalPages} totalCount={result.totalCount} pageSize={result.pageSize} onPage={setPage} />
   </main>
 }
 
-function FeedbackCard({ item, selected, onSelect, onUpdate }: { item: Feedback; selected: boolean; onSelect: (checked: boolean) => void; onUpdate: (item: Feedback, patch: Partial<Feedback>) => Promise<void> }) {
+function FeedbackRow({ item, selected, onSelect, onUpdate }: { item: Feedback; selected: boolean; onSelect: (checked: boolean) => void; onUpdate: (item: Feedback, patch: Partial<Feedback>) => Promise<void> }) {
   const lead = item.realtorShowing?.lead
   const visitorName = lead?.name || item.realtorShowing?.visitorName || `Lead #${item.leadId}`
   const visitorContact = lead?.email || item.realtorShowing?.visitorEmail || item.realtorShowing?.visitorPhone || "No contact"
-  const tone = item.sentiment === "positive" ? "border-emerald-300 bg-emerald-50/70" : item.sentiment === "negative" ? "border-rose-300 bg-rose-50/80" : "border-slate-200 bg-slate-50/70"
-  const scoreTone = item.priorityScore >= 70 ? "text-rose-700" : item.priorityScore >= 40 ? "text-amber-700" : "text-slate-700"
+  const leadHistoryHref = item.leadId ? `/dashboard/lead-history?leadId=${item.leadId}` : "/dashboard/lead-history"
 
-  return <Card className={tone}>
-    <CardContent className="p-5">
-      <div className="flex flex-col gap-5 xl:flex-row xl:items-start">
-        <Checkbox checked={selected} onCheckedChange={(checked) => onSelect(checked === true)} />
-        <div className="min-w-0 flex-1 space-y-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <UserRoundCheck className="size-5" /><strong className="text-base">{visitorName}</strong>
-            <Badge variant={item.sentiment === "negative" ? "destructive" : item.sentiment === "positive" ? "default" : "secondary"}>{item.sentiment}</Badge>
-            <Badge variant="outline">{item.intent.replaceAll("_", " ")}</Badge>
-            {!item.isRead ? <Badge>Unread</Badge> : <Badge variant="outline">Read</Badge>}
-            {item.realtorShowing?.replyReceived ? <Badge variant="secondary">Follow-ups stopped</Badge> : null}
-          </div>
-          <div className="grid gap-2 text-sm text-muted-foreground md:grid-cols-2">
-            <span>{visitorContact}</span>
-            <span>{item.property?.title || item.property?.location || "Property unavailable"}</span>
-            <span>Showing realtor: {item.realtorShowing?.realtorName || "Unassigned"}</span>
-            <span>Received {new Date(item.receivedAt).toLocaleString()}</span>
-          </div>
-          <p className="rounded-xl border bg-background/80 p-4 text-sm leading-6 text-foreground">{item.feedbackText}</p>
-          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground"><span>Classifier: {item.classifier}</span><span>•</span><span>Confidence {Math.round(item.confidence * 100)}%</span></div>
-        </div>
-
-        <div className="w-full space-y-3 xl:w-72">
-          <div className="grid grid-cols-2 gap-3 rounded-xl border bg-background/85 p-4 text-center">
-            <div><p className="text-xs text-muted-foreground">Priority</p><p className={`text-2xl font-bold ${scoreTone}`}>{item.priorityScore}</p></div>
-            <div><p className="text-xs text-muted-foreground">Apply likelihood</p><p className="text-2xl font-bold">{Math.round(item.applyLikelihood * 100)}%</p></div>
-          </div>
-          <Select value={item.sentiment} onValueChange={(value) => void onUpdate(item, { sentiment: value as Feedback["sentiment"] })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="positive">Positive</SelectItem><SelectItem value="neutral">Neutral</SelectItem><SelectItem value="negative">Negative</SelectItem></SelectContent></Select>
-          <Select value={item.intent} onValueChange={(value) => void onUpdate(item, { intent: value as Feedback["intent"] })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="apply">Apply</SelectItem><SelectItem value="offer">Offer</SelectItem><SelectItem value="interested">Interested</SelectItem><SelectItem value="not_interested">Not interested</SelectItem><SelectItem value="unknown">Unknown</SelectItem></SelectContent></Select>
-          {item.leadId ? <Button className="w-full" render={<Link href={`/dashboard/leads/${item.leadId}`} />} variant="outline">Open linked lead <ExternalLink className="ml-2 size-4" /></Button> : null}
-        </div>
+  return <div className="grid gap-3 border-b bg-background p-3 last:border-b-0 xl:grid-cols-[24px_minmax(220px,0.85fr)_minmax(260px,1.25fr)_220px] xl:items-center">
+    <Checkbox checked={selected} onCheckedChange={(checked) => onSelect(checked === true)} />
+    <div className="min-w-0">
+      <div className="flex flex-wrap items-center gap-1.5"><strong className="truncate text-sm">{visitorName}</strong><Badge className="h-5 px-1.5 text-[11px]" variant={item.sentiment === "negative" ? "destructive" : item.sentiment === "positive" ? "default" : "secondary"}>{item.sentiment}</Badge>{!item.isRead ? <Badge className="h-5 px-1.5 text-[11px]">Unread</Badge> : null}</div>
+      <p className="truncate text-xs text-muted-foreground">{visitorContact}</p>
+      <p className="truncate text-xs text-muted-foreground">{item.property?.title || item.property?.location || "Property unavailable"}</p>
+    </div>
+    <div className="min-w-0">
+      <p className="line-clamp-2 text-sm leading-5">{item.feedbackText}</p>
+      <p className="mt-1 truncate text-[11px] text-muted-foreground">{item.channel} reply {item.sourceMessageId ? `#${item.sourceMessageId}` : ""} | {new Date(item.receivedAt).toLocaleString()} | {item.classifier} {Math.round(item.confidence * 100)}%</p>
+    </div>
+    <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto] xl:grid-cols-1">
+      <div className="flex items-center gap-2 text-xs"><Badge variant="outline">P {item.priorityScore}</Badge><Badge variant="outline">{Math.round(item.applyLikelihood * 100)}%</Badge><Badge variant="outline">{item.intent.replaceAll("_", " ")}</Badge></div>
+      <div className="grid grid-cols-2 gap-2">
+        <Select value={item.sentiment} onValueChange={(value) => void onUpdate(item, { sentiment: value as Feedback["sentiment"] })}><SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="positive">Positive</SelectItem><SelectItem value="neutral">Neutral</SelectItem><SelectItem value="negative">Negative</SelectItem></SelectContent></Select>
+        <Select value={item.intent} onValueChange={(value) => void onUpdate(item, { intent: value as Feedback["intent"] })}><SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="apply">Apply</SelectItem><SelectItem value="offer">Offer</SelectItem><SelectItem value="interested">Interested</SelectItem><SelectItem value="not_interested">Not interested</SelectItem><SelectItem value="unknown">Unknown</SelectItem></SelectContent></Select>
       </div>
-    </CardContent>
-  </Card>
+      <div className="flex gap-1">
+        <Button className="h-8 flex-1" render={<Link href={leadHistoryHref} />} size="sm" variant="outline"><History className="mr-1 size-3" />History</Button>
+        {item.leadId ? <Button className="h-8 flex-1" render={<Link href={`/dashboard/leads/${item.leadId}`} />} size="sm" variant="outline">Lead <ExternalLink className="ml-1 size-3" /></Button> : null}
+      </div>
+    </div>
+  </div>
 }
 
-function Metric({ title, value, detail }: { title: string; value: number; detail: string }) {
-  return <Card><CardContent className="p-5"><p className="text-sm text-muted-foreground">{title}</p><p className="mt-2 text-3xl font-bold">{value}</p><p className="mt-1 text-xs text-muted-foreground">{detail}</p></CardContent></Card>
+function Pagination({ page, totalPages, totalCount, pageSize, onPage }: { page: number; totalPages: number; totalCount: number; pageSize: number; onPage: (page: number) => void }) {
+  const start = totalCount === 0 ? 0 : (page - 1) * pageSize + 1
+  const end = Math.min(totalCount, page * pageSize)
+  return <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+    <span>{start}-{end} of {totalCount}</span>
+    <div className="flex gap-2">
+      <Button disabled={page <= 1} size="sm" variant="outline" onClick={() => onPage(page - 1)}>Prev</Button>
+      <span className="flex h-9 items-center px-2">Page {page} / {totalPages}</span>
+      <Button disabled={page >= totalPages} size="sm" variant="outline" onClick={() => onPage(page + 1)}>Next</Button>
+    </div>
+  </div>
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return <div className="space-y-2"><Label>{label}</Label>{children}</div>
+  return <div className="space-y-1"><Label className="text-xs">{label}</Label>{children}</div>
 }

@@ -103,6 +103,13 @@ export class ShowingFeedbackService {
         input.message,
       );
       if (!classification.isFeedback) return null;
+      showing.replyReceived = true;
+      showing.replyReceivedAt = input.receivedAt;
+      showing.sequenceStatus = 'completed';
+      showing.sequenceStep = 'reply received';
+      showing.followUpEnabled = false;
+      await this.showingRepo.save(showing);
+      await this.cancelShowingFollowUps(showing.id, input.leadId, input.receivedAt);
       return this.feedbackRepo.save(
         this.feedbackRepo.create({
           channel: input.channel,
@@ -122,6 +129,23 @@ export class ShowingFeedbackService {
       );
     }
     return null;
+  }
+
+  private async cancelShowingFollowUps(showingId: number, leadId: number, repliedAt: Date) {
+    await this.historyRepo
+      .createQueryBuilder()
+      .update(LeadHistoryEntry)
+      .set({
+        occurredAt: repliedAt,
+        status: 'Failed',
+        summary: 'Showing follow-up canceled because the lead replied.',
+      })
+      .where('lead_id = :leadId', { leadId })
+      .andWhere('status = :status', { status: leadHistoryStatusDb('Scheduled') })
+      .andWhere('created_by IN (:...createdBy)', {
+        createdBy: [`Realtor Showing #${showingId}`, `Realtor Showing #${showingId} Follow-up`],
+      })
+      .execute();
   }
 
   async createManual(payload: any) {

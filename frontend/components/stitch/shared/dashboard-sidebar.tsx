@@ -51,10 +51,15 @@ const routeGroups = [
       "/dashboard/realtor-showings",
       "/dashboard/realtor-showings/sequences",
       "/dashboard/showing-feedback",
+      "/dashboard/showing-feedback-automation",
+    ],
+  },
+  {
+    label: "Lead Feedback",
+    hrefs: [
       "/dashboard/showing-feedback/leads",
       "/dashboard/showing-feedback/leads/sequences",
       "/dashboard/showing-feedback/leads/classifier-controls",
-      "/dashboard/showing-feedback-automation",
     ],
   },
   {

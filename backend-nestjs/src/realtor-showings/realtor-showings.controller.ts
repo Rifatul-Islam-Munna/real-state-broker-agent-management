@@ -21,8 +21,8 @@ export class RealtorShowingsController {
 
   @Get()
   @ApiOperation({ summary: 'List imported realtor showings' })
-  findAll(@Query('search') search?: string) {
-    return this.realtorShowingsService.findAll(search);
+  findAll(@Query('search') search?: string, @Query('page') page = 1, @Query('pageSize') pageSize = 25) {
+    return this.realtorShowingsService.findAll(search, Number(page), Number(pageSize));
   }
 
   @Post('import')
