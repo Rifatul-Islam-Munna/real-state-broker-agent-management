@@ -216,6 +216,7 @@ export function LeadOutreachSchedulePage() {
         entry.leadName,
         entry.leadEmail,
         entry.leadPhone,
+        entry.leadProperty,
         entry.title,
         entry.summary,
         entry.body,
@@ -775,6 +776,7 @@ export function LeadOutreachSchedulePage() {
                   <p className="mt-2 font-semibold">{displayText(selectedDetail.leadName, `Lead #${selectedDetail.leadId}`)}</p>
                   <p className="mt-1 text-sm text-muted-foreground">{displayText(selectedDetail.leadEmail)}</p>
                   <p className="text-sm text-muted-foreground">{displayText(selectedDetail.leadPhone)}</p>
+                  <p className="mt-2 text-sm font-medium">{displayText(selectedDetail.leadProperty, "No property linked")}</p>
                 </div>
                 <div className="rounded-xl border bg-background p-4">
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Message / reply"}</p>
@@ -880,7 +882,7 @@ export function LeadOutreachSchedulePage() {
               <Table className="min-w-[980px]">
                 <TableHeader>
                   <TableRow>
-                    <TableHead>{"Lead / stage"}</TableHead>
+                    <TableHead>{"Lead / property"}</TableHead>
                     <TableHead>{"Channel"}</TableHead>
                     <TableHead>{"State"}</TableHead>
                     <TableHead>{"Follow-Up"}</TableHead>
@@ -896,6 +898,7 @@ export function LeadOutreachSchedulePage() {
                       <TableRow key={`${entry.id}-${entry.updatedAt}`}>
                         <TableCell className="max-w-[220px]">
                           <p className="font-medium">{displayText(entry.leadName, `Lead #${entry.leadId}`)}</p>
+                          <p className="truncate text-xs font-semibold text-foreground">{displayText(entry.leadProperty, "No property linked")}</p>
                           <p className="truncate text-muted-foreground">{displayText(entry.leadEmail)}</p>
                           <p className="text-muted-foreground">{displayText(entry.leadPhone)}</p>
                           <div className="mt-2 flex flex-wrap gap-1">

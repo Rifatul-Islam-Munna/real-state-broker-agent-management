@@ -7,6 +7,7 @@ import { DataSource, Repository } from 'typeorm';
 import { AgencyIntegrationSettings } from '../settings/entities/integration-settings.entity';
 import { Lead, LeadFollowUpStatus, LeadPriority, LeadStage } from '../leads/entities/lead.entity';
 import { LeadHistoryEntry, leadHistoryKindDb, leadHistoryStatusDb } from '../leads/entities/lead-history.entity';
+import { LeadIntelligenceService } from '../leads/lead-intelligence.service';
 import { MailboxLeadIntelligenceService } from '../leads/mailbox-lead-intelligence.service';
 import { Property } from '../properties/entities/property.entity';
 import { MailInboxItem, MailInboxKind, MailInboxStatus } from './entities/mail.entity';
@@ -101,10 +102,11 @@ export class MailInboxSyncBackgroundService {
     @InjectRepository(Property)
     private propertyRepo: Repository<Property>,
     private dataSource: DataSource,
-    private leadIntelligence: MailboxLeadIntelligenceService,
+    private mailboxLeadIntelligence: MailboxLeadIntelligenceService,
     private leadCollectionTemplates: LeadCollectionTemplateService,
     private settingsService: SettingsService,
     private showingFeedbackService: ShowingFeedbackService,
+    private leadLearner: LeadIntelligenceService,
   ) {}
 
   @Cron(CronExpression.EVERY_5_MINUTES)
@@ -282,7 +284,7 @@ export class MailInboxSyncBackgroundService {
       htmlBody: inbound.htmlBody,
       textBody: inbound.body,
     });
-    const fallback = await this.leadIntelligence.extractLeadFromEmail({
+    const fallback = await this.mailboxLeadIntelligence.extractLeadFromEmail({
       ...inbound,
       receivedAt: inbound.receivedAt,
     });
@@ -354,6 +356,13 @@ export class MailInboxSyncBackgroundService {
           notes: [],
           lastActivityAt: inbound.receivedAt,
         });
+        this.leadLearner.applyDecision(lead, await this.leadLearner.classify({
+          ...extracted,
+          message: inbound.body,
+          property: matchedProperty?.title ?? extracted.propertyTitle ?? '',
+          source: 'Mail Inbox',
+          summary: extracted.rawFields?.summary || inbound.subject,
+        }), true);
         lead = await leadRepo.save(lead);
         createdLead = true;
       }

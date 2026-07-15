@@ -406,6 +406,12 @@ export type AgencySettings = {
     directTemplateId: string
     followUpEnabled: boolean
   }
+  leadIntelligence?: {
+    qualifiedKnowledge: string
+    unqualifiedKnowledge: string
+    learnedQualified: string[]
+    learnedUnqualified: string[]
+  }
   updatedAt: string
 }
 
@@ -747,6 +753,8 @@ export type LeadItem = {
   interest: string
   timeline: string
   inBoard: boolean
+  intelligenceClassifier?: string
+  intelligenceConfidence?: number
   nextActionDate?: string | null
   nextActionType: string
   followUpStatus: LeadFollowUpStatus
@@ -862,6 +870,8 @@ export type LeadOutreachScheduleItem = {
   leadName: string
   leadEmail: string
   leadPhone: string
+  leadProperty?: string
+  leadPropertyId?: number | null
   leadStage?: LeadStage | ""
   leadPriority?: LeadPriority | ""
   kind: Extract<LeadHistoryKind, "Email" | "Sms" | "Call" | "MailInbox">

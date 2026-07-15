@@ -101,6 +101,24 @@ export class Lead {
   @Column({ default: false })
   inBoard: boolean;
 
+  @Column({ type: 'text', default: '' })
+  intelligenceClassifier: string;
+
+  @Column({ type: 'int', default: 0 })
+  intelligenceConfidence: number;
+
+  @Column({ type: 'text', default: '' })
+  intelligenceAssignedStage: string;
+
+  @Column({ type: 'text', default: '' })
+  intelligenceAssignedPriority: string;
+
+  @Column({ type: 'boolean', default: false })
+  intelligenceAssignedInBoard: boolean;
+
+  @Column({ type: 'text', default: '' })
+  intelligenceText: string;
+
   @Column({ type: 'timestamp', nullable: true })
   nextActionDate: Date | null;
 

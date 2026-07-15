@@ -4,8 +4,10 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "dev:webpack": "next dev --turbopack",
+    "dev": "next dev --webpack",
+    "dev:webpack": "next dev --webpack",
+    "dev:turbopack": "next dev --turbopack",
+    "dev:clean": "node -e \"const fs=require('fs'); for (const p of ['.next/cache','.next/dev/cache']) fs.rmSync(p,{recursive:true,force:true});\" && next dev --webpack",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",

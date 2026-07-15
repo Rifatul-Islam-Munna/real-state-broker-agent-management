@@ -32,5 +32,14 @@
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts"
   ],
-  "exclude": ["node_modules", "api-hooks", "api-hooks/**", "api-hooks/**/*.ts"]
+  "exclude": [
+    "node_modules",
+    "api-hooks",
+    "api-hooks/**",
+    "api-hooks/**/*.ts",
+    ".next/cache/**",
+    ".next/dev/cache/**",
+    ".next/server/**",
+    ".next/static/**"
+  ]
 }

@@ -1,3 +1,14 @@
 {
-    "dotnet.defaultSolution": "backend.slnx"
+  "dotnet.defaultSolution": "backend.slnx",
+  "files.watcherExclude": {
+    "**/.next/**": true,
+    "**/dist/**": true,
+    "**/node_modules/**": true
+  },
+  "search.exclude": {
+    "**/.next": true,
+    "**/dist": true,
+    "**/node_modules": true
+  },
+  "typescript.tsserver.maxTsServerMemory": 4096
 }

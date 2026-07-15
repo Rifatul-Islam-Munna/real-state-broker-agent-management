@@ -250,6 +250,8 @@ export class LeadOutreachService {
       leadName: entry.lead?.name ?? '',
       leadEmail: entry.lead?.email ?? '',
       leadPhone: entry.lead?.phone ?? '',
+      leadProperty: entry.lead?.property ?? '',
+      leadPropertyId: entry.lead?.propertyId ?? null,
       leadStage: entry.lead?.stage ?? '',
       leadPriority: entry.lead?.priority ?? '',
     };

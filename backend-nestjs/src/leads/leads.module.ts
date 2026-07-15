@@ -12,6 +12,7 @@ import { LeadOutreachController } from './lead-outreach.controller';
 import { LeadQualificationPredictionService } from './lead-qualification-prediction.service';
 import { MailboxLeadIntelligenceService } from './mailbox-lead-intelligence.service';
 import { LeadOutreachBackgroundService } from './lead-outreach-background.service';
+import { LeadIntelligenceService } from './lead-intelligence.service';
 import { DealPipeline } from '../deals/entities/deal-pipeline.entity';
 import { SettingsModule } from '../settings/settings.module';
 import { MailInboxItem } from '../mail/entities/mail.entity';
@@ -24,8 +25,8 @@ import { PdfsModule } from '../pdfs/pdfs.module';
 
 @Module({
   imports: [TypeOrmModule.forFeature([Lead, LeadHistoryEntry, DealPipeline, MailInboxItem, ContactRequest, DocumentRepositoryItem, Property]), SettingsModule, BrokerageModule, SmsModule, PdfsModule],
-  providers: [LeadsService, { provide: LeadOutreachService, useClass: LeadOutreachV2Service }, LeadIntakeAutomationService, LeadQualificationPredictionService, MailboxLeadIntelligenceService, LeadOutreachBackgroundService],
+  providers: [LeadsService, { provide: LeadOutreachService, useClass: LeadOutreachV2Service }, LeadIntakeAutomationService, LeadQualificationPredictionService, LeadIntelligenceService, MailboxLeadIntelligenceService, LeadOutreachBackgroundService],
   controllers: [LeadsController, LeadHistoryController, LeadOutreachController],
-  exports: [LeadsService, LeadOutreachService, LeadIntakeAutomationService, LeadQualificationPredictionService, MailboxLeadIntelligenceService, LeadOutreachBackgroundService],
+  exports: [LeadsService, LeadOutreachService, LeadIntakeAutomationService, LeadQualificationPredictionService, LeadIntelligenceService, MailboxLeadIntelligenceService, LeadOutreachBackgroundService],
 })
 export class LeadsModule {}

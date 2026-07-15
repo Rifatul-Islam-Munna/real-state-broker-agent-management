@@ -12,6 +12,7 @@ import { BrokerageService } from '../brokerage/brokerage.service';
 import { AuditAction, AuditEntityType } from '../brokerage/entities/audit-log.entity';
 import { SettingsService } from '../settings/settings.service';
 import { normalizePhoneNumber } from '../common/phone-normalizer';
+import { LeadIntelligenceService } from './lead-intelligence.service';
 
 @Injectable()
 export class LeadsService {
@@ -23,6 +24,7 @@ export class LeadsService {
     private brokerageService: BrokerageService,
     private settingsService: SettingsService,
     private leadIntakeAutomation: LeadIntakeAutomationService,
+    private leadIntelligence: LeadIntelligenceService,
   ) {}
 
   async findAll(page = 1, pageSize = 20, search?: string, stage?: string): Promise<any> {
@@ -42,6 +44,14 @@ export class LeadsService {
 
   async create(createDto: any, actor = 'CRM', autoAssign = true): Promise<any> {
     const lead = this.leadsRepository.create((await this.normalizeLead(createDto)) as object);
+    if (
+      createDto?.skipLeadIntelligence !== true &&
+      ['contact form', 'mail inbox', 'mail signup', 'website'].some((source) =>
+        `${lead.source}`.toLowerCase().includes(source),
+      )
+    ) {
+      this.leadIntelligence.applyDecision(lead, await this.leadIntelligence.classify(createDto), true);
+    }
     if (autoAssign) {
       const assignedAgentId = await this.brokerageService.autoAssignLead(lead);
       if (assignedAgentId) lead.agentId = assignedAgentId;
@@ -58,6 +68,7 @@ export class LeadsService {
     const oldStage = lead.stage;
     const oldAgent = lead.agent;
     const oldNextActionDate = lead.nextActionDate;
+    const before = this.leadsRepository.create({ ...lead });
     Object.assign(lead, await this.normalizeLead(updateDto));
     const assignedAgentId = await this.brokerageService.autoAssignLead(lead);
     if (assignedAgentId) lead.agentId = assignedAgentId;
@@ -65,6 +76,7 @@ export class LeadsService {
     if (oldStage !== saved.stage) await this.brokerageService.logAudit({ entityType: AuditEntityType.Lead, entityId: saved.id, action: AuditAction.Update, fieldName: 'stage', oldValue: oldStage, newValue: saved.stage, actor });
     if (oldAgent !== saved.agent) await this.brokerageService.logAudit({ entityType: AuditEntityType.Lead, entityId: saved.id, action: AuditAction.Update, fieldName: 'agent', oldValue: oldAgent, newValue: saved.agent, actor });
     if (Number(oldNextActionDate) !== Number(saved.nextActionDate)) await this.brokerageService.logAudit({ entityType: AuditEntityType.Lead, entityId: saved.id, action: AuditAction.Update, fieldName: 'next_action_date', oldValue: oldNextActionDate?.toISOString() ?? '', newValue: saved.nextActionDate?.toISOString() ?? '', actor });
+    await this.leadIntelligence.learnFromHumanChange(before, saved);
     return this.findOne(saved.id);
   }
 
@@ -141,6 +153,8 @@ export class LeadsService {
       agent: lead.agent, agentId: lead.agentId ?? null,
       assignedAgentName: lead.assignedAgent ? `${lead.assignedAgent.firstName ?? ''} ${lead.assignedAgent.lastName ?? ''}`.trim() : null,
       source: lead.source, interest: lead.interest, timeline: lead.timeline, inBoard: lead.inBoard,
+      intelligenceClassifier: lead.intelligenceClassifier,
+      intelligenceConfidence: lead.intelligenceConfidence,
       nextActionDate: lead.nextActionDate ?? null, nextActionType: lead.nextActionType, followUpStatus: lead.followUpStatus,
       isFollowUpOverdue: overdue, notes: lead.notes ?? [], createdAt: lead.createdAt, updatedAt: lead.updatedAt,
       lastActivityAt: lead.lastActivityAt, linkedDealId: linkedDeal?.id ?? null, linkedDealTitle: linkedDeal?.title ?? null,

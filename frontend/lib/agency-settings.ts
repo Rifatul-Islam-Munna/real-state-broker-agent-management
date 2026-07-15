@@ -25,8 +25,16 @@ export type LeadAutomationSettings = {
   followUpEnabled: boolean
 }
 
+export type LeadIntelligenceSettings = {
+  qualifiedKnowledge: string
+  unqualifiedKnowledge: string
+  learnedQualified: string[]
+  learnedUnqualified: string[]
+}
+
 export type AgencyWorkspaceSettings = AgencySettings & {
   leadAutomation: LeadAutomationSettings
+  leadIntelligence: LeadIntelligenceSettings
   showingFeedbackAutomation: ShowingFeedbackAutomationSettings
 }
 
@@ -67,6 +75,20 @@ export const defaultAgencySettings: AgencyWorkspaceSettings = {
     channels: ["Email"],
     directTemplateId: "new-lead-welcome",
     followUpEnabled: true,
+  },
+  leadIntelligence: {
+    qualifiedKnowledge: [
+      "Lead asks to schedule a showing, tour, viewing, or visit.",
+      "Lead gives budget, timeline, pre-approval, cash offer, or move date.",
+      "Lead says they are interested in buying, renting, applying, or making an offer.",
+    ].join("\n"),
+    unqualifiedKnowledge: [
+      "Sender is vendor, recruiter, marketer, job seeker, spam, or partnership request.",
+      "Sender only asks a generic question and shows no buyer/renter/seller intent.",
+      "Sender says not interested, wrong number, unsubscribe, test, or maintenance request.",
+    ].join("\n"),
+    learnedQualified: [],
+    learnedUnqualified: [],
   },
   communicationTemplates: [
     {
@@ -152,12 +174,14 @@ export const defaultAgencySettings: AgencyWorkspaceSettings = {
 export function cloneAgencySettings(
   settings: AgencySettings & {
     leadAutomation?: Partial<LeadAutomationSettings>
+    leadIntelligence?: Partial<LeadIntelligenceSettings>
     showingFeedbackAutomation?: Partial<ShowingFeedbackAutomationSettings>
   }
 ): AgencyWorkspaceSettings {
   const profile = settings.profile ?? defaultAgencySettings.profile
   const automation = settings.showingFeedbackAutomation ?? {}
   const leadAutomation = settings.leadAutomation ?? {}
+  const leadIntelligence = settings.leadIntelligence ?? {}
   const leadAutomationChannels = (leadAutomation.channels ?? ["Email"]).filter(
     (item): item is "Email" | "SMS" => item === "Email" || item === "SMS"
   )
@@ -204,6 +228,16 @@ export function cloneAgencySettings(
         leadAutomation.directTemplateId ||
         defaultAgencySettings.leadAutomation.directTemplateId,
       followUpEnabled: leadAutomation.followUpEnabled !== false,
+    },
+    leadIntelligence: {
+      qualifiedKnowledge:
+        leadIntelligence.qualifiedKnowledge ??
+        defaultAgencySettings.leadIntelligence.qualifiedKnowledge,
+      unqualifiedKnowledge:
+        leadIntelligence.unqualifiedKnowledge ??
+        defaultAgencySettings.leadIntelligence.unqualifiedKnowledge,
+      learnedQualified: [...(leadIntelligence.learnedQualified ?? [])],
+      learnedUnqualified: [...(leadIntelligence.learnedUnqualified ?? [])],
     },
     showingFeedbackAutomation: {
       enabled: automation.enabled === true,

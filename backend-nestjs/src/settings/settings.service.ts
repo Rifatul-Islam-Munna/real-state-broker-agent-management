@@ -27,6 +27,8 @@ export class SettingsService {
     const current = this.normalizeAgencySettings(this.readJson(settings.contentJson) ?? this.defaultAgencySettings());
     const payload = this.normalizeAgencySettings(dto);
     payload.showingFeedbackAutomation.deliveryState = current.showingFeedbackAutomation.deliveryState;
+    payload.leadIntelligence.learnedQualified = current.leadIntelligence.learnedQualified;
+    payload.leadIntelligence.learnedUnqualified = current.leadIntelligence.learnedUnqualified;
     settings.contentJson = JSON.stringify(payload);
     const saved = await this.agencyRepository.save(settings);
     return {
@@ -39,6 +41,45 @@ export class SettingsService {
   async getShowingFeedbackAutomation() {
     const settings = await this.ensureAgencySettings();
     return this.normalizeAgencySettings(this.readJson(settings.contentJson) ?? this.defaultAgencySettings()).showingFeedbackAutomation;
+  }
+
+  async getLeadIntelligence() {
+    const settings = await this.ensureAgencySettings();
+    return this.normalizeAgencySettings(this.readJson(settings.contentJson) ?? this.defaultAgencySettings()).leadIntelligence;
+  }
+
+  async addLeadLearningExample(kind: 'qualified' | 'unqualified', text: string) {
+    const normalized = this.loose(text).slice(0, 1200);
+    if (!normalized) return;
+    const settings = await this.ensureAgencySettings();
+    const payload = this.normalizeAgencySettings(this.readJson(settings.contentJson) ?? this.defaultAgencySettings());
+    if (kind === 'qualified') {
+      payload.leadIntelligence.learnedQualified = [normalized, ...(payload.leadIntelligence.learnedQualified ?? []).filter((item: string) => item !== normalized)].slice(0, 80);
+    } else {
+      payload.leadIntelligence.learnedUnqualified = [normalized, ...(payload.leadIntelligence.learnedUnqualified ?? []).filter((item: string) => item !== normalized)].slice(0, 80);
+    }
+    settings.contentJson = JSON.stringify(payload);
+    await this.agencyRepository.save(settings);
+  }
+
+  async addShowingFeedbackLearningExample(sentiment: 'positive' | 'negative', text: string) {
+    const normalized = this.loose(text).slice(0, 1000);
+    if (!normalized) return;
+    const settings = await this.ensureAgencySettings();
+    const payload = this.normalizeAgencySettings(this.readJson(settings.contentJson) ?? this.defaultAgencySettings());
+    if (sentiment === 'positive') {
+      const current = `${payload.showingFeedbackAutomation.positiveKnowledge ?? ''}`.split(/\n+/).map((item) => item.trim()).filter(Boolean);
+      const opposite = `${payload.showingFeedbackAutomation.negativeKnowledge ?? ''}`.split(/\n+/).map((item) => item.trim()).filter((item) => item && item !== normalized);
+      payload.showingFeedbackAutomation.positiveKnowledge = [normalized, ...current.filter((item) => item !== normalized)].slice(0, 80).join('\n').slice(0, 6000);
+      payload.showingFeedbackAutomation.negativeKnowledge = opposite.join('\n').slice(0, 6000);
+    } else {
+      const current = `${payload.showingFeedbackAutomation.negativeKnowledge ?? ''}`.split(/\n+/).map((item) => item.trim()).filter(Boolean);
+      const opposite = `${payload.showingFeedbackAutomation.positiveKnowledge ?? ''}`.split(/\n+/).map((item) => item.trim()).filter((item) => item && item !== normalized);
+      payload.showingFeedbackAutomation.negativeKnowledge = [normalized, ...current.filter((item) => item !== normalized)].slice(0, 80).join('\n').slice(0, 6000);
+      payload.showingFeedbackAutomation.positiveKnowledge = opposite.join('\n').slice(0, 6000);
+    }
+    settings.contentJson = JSON.stringify(payload);
+    await this.agencyRepository.save(settings);
   }
 
   async saveShowingFeedbackDeliveryState(propertyId: number, state: any) {
@@ -293,6 +334,12 @@ export class SettingsService {
         directTemplateId: this.loose(leadAutomationInput.directTemplateId, defaultLeadAutomation.directTemplateId),
         followUpEnabled: leadAutomationInput.followUpEnabled !== false,
       },
+      leadIntelligence: {
+        qualifiedKnowledge: this.loose(input?.leadIntelligence?.qualifiedKnowledge, fallback.leadIntelligence.qualifiedKnowledge).slice(0, 6000),
+        unqualifiedKnowledge: this.loose(input?.leadIntelligence?.unqualifiedKnowledge, fallback.leadIntelligence.unqualifiedKnowledge).slice(0, 6000),
+        learnedQualified: this.stringList(input?.leadIntelligence?.learnedQualified, fallback.leadIntelligence.learnedQualified).slice(0, 80),
+        learnedUnqualified: this.stringList(input?.leadIntelligence?.learnedUnqualified, fallback.leadIntelligence.learnedUnqualified).slice(0, 80),
+      },
       showingFeedbackAutomation: {
         enabled: automationInput.enabled === true,
         gapDays: this.clampInt(automationInput.gapDays, defaultAutomation.gapDays, 0, 6),
@@ -394,6 +441,20 @@ export class SettingsService {
         channels: ['Email'],
         directTemplateId: 'new-lead-welcome',
         followUpEnabled: true,
+      },
+      leadIntelligence: {
+        qualifiedKnowledge: [
+          'Lead asks to schedule a showing, tour, viewing, or visit.',
+          'Lead gives budget, timeline, pre-approval, cash offer, or move date.',
+          'Lead says they are interested in buying, renting, applying, or making an offer.',
+        ].join('\n'),
+        unqualifiedKnowledge: [
+          'Sender is vendor, recruiter, marketer, job seeker, spam, or partnership request.',
+          'Sender only asks a generic question and shows no buyer/renter/seller intent.',
+          'Sender says not interested, wrong number, unsubscribe, test, or maintenance request.',
+        ].join('\n'),
+        learnedQualified: [],
+        learnedUnqualified: [],
       },
       communicationTemplates: [
         {

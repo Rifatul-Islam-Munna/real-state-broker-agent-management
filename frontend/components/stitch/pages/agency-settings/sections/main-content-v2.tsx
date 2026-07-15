@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import {
   Select,
   SelectContent,
@@ -243,6 +244,14 @@ export function MainContentSectionV2() {
           templates={directLeadTemplates}
         />
 
+        <LeadKnowledgePanel
+          onChange={(leadIntelligence) => {
+            setValues((current) => ({ ...current, leadIntelligence }))
+            setError(null)
+          }}
+          settings={values.leadIntelligence}
+        />
+
         <SecureIntegrationsSectionV2 />
 
         <CommunicationTemplateWorkspaceV2
@@ -402,6 +411,56 @@ function LeadAutomationPanel({
             {"Queue follow-up templates"}
           </label>
         </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function LeadKnowledgePanel({
+  onChange,
+  settings,
+}: {
+  onChange: (settings: AgencyWorkspaceSettings["leadIntelligence"]) => void
+  settings: AgencyWorkspaceSettings["leadIntelligence"]
+}) {
+  const patch = (next: Partial<AgencyWorkspaceSettings["leadIntelligence"]>) =>
+    onChange({ ...settings, ...next })
+
+  return (
+    <Card className="overflow-hidden shadow-none">
+      <CardHeader className="border-b bg-background/70">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex min-w-0 gap-3">
+            <span className="flex size-11 shrink-0 items-center justify-center rounded-xl border bg-emerald-50 text-emerald-700">
+              <AppIcon name="tune" />
+            </span>
+            <div>
+              <CardTitle className="text-lg">{"Lead knowledge"}</CardTitle>
+              <CardDescription className="mt-1">
+                {"Contact forms and inbox-created leads use this before placing leads on the board."}
+              </CardDescription>
+            </div>
+          </div>
+          <Badge variant="outline">{`${settings.learnedUnqualified.length} learned corrections`}</Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="grid gap-4 p-4 lg:grid-cols-2">
+        <label className="space-y-2">
+          <span className="text-sm font-semibold">{"Qualified / board-worthy"}</span>
+          <Textarea
+            className="min-h-36"
+            onChange={(event) => patch({ qualifiedKnowledge: event.target.value })}
+            value={settings.qualifiedKnowledge}
+          />
+        </label>
+        <label className="space-y-2">
+          <span className="text-sm font-semibold">{"Not a real lead / keep out"}</span>
+          <Textarea
+            className="min-h-36"
+            onChange={(event) => patch({ unqualifiedKnowledge: event.target.value })}
+            value={settings.unqualifiedKnowledge}
+          />
+        </label>
       </CardContent>
     </Card>
   )

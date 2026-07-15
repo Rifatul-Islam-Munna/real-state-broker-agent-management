@@ -188,12 +188,24 @@ export class ShowingFeedbackQueryService {
   async reclassify(id: number, input: { sentiment?: string; intent?: string; priorityScore?: number; applyLikelihood?: number }) {
     const feedback = await this.feedbackRepo.findOne({ where: { id } });
     if (!feedback) throw new NotFoundException('Showing feedback not found.');
+    const previousSentiment = feedback.sentiment;
+    const previousClassifier = feedback.classifier;
     if (['positive', 'neutral', 'negative'].includes(`${input.sentiment}`)) feedback.sentiment = `${input.sentiment}`;
     if (['apply', 'offer', 'interested', 'not_interested', 'unknown'].includes(`${input.intent}`)) feedback.intent = `${input.intent}`;
     if (Number.isFinite(Number(input.priorityScore))) feedback.priorityScore = Math.max(0, Math.min(100, Number(input.priorityScore)));
     if (Number.isFinite(Number(input.applyLikelihood))) feedback.applyLikelihood = Math.max(0, Math.min(1, Number(input.applyLikelihood)));
     feedback.classifier = 'Human reviewed';
     feedback.confidence = 1;
+    if (
+      previousClassifier !== 'Human reviewed' &&
+      previousSentiment !== feedback.sentiment &&
+      ['positive', 'negative'].includes(feedback.sentiment)
+    ) {
+      await this.settingsService.addShowingFeedbackLearningExample(
+        feedback.sentiment as 'positive' | 'negative',
+        feedback.feedbackText,
+      );
+    }
     return this.feedbackRepo.save(feedback);
   }
 
