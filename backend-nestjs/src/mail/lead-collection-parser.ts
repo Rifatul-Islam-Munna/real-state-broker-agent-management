@@ -129,7 +129,7 @@ export function buildLeadCollectionMappings(
 ): LeadCollectionFieldMapping[] {
   const text = normalizeLeadCollectionText(sourceText);
   return mappings
-    .map((mapping, index) => {
+    .map<LeadCollectionFieldMapping | null>((mapping, index) => {
       const field = `${mapping.field ?? ''}`.trim();
       const sampleValue = normalizeLeadCollectionText(mapping.sampleValue ?? '');
       if (!field || !sampleValue) return null;
@@ -145,22 +145,32 @@ export function buildLeadCollectionMappings(
         selectionStart = findOccurrence(text, sampleValue, occurrence);
         selectionEnd = selectionStart >= 0 ? selectionStart + sampleValue.length : -1;
       }
-      if (selectionStart < 0 || selectionEnd <= selectionStart) return null;
-
       const prefix = `${mapping.prefix ?? ''}`.trim()
         ? normalizeLeadCollectionText(mapping.prefix)
-        : buildPrefixAnchor(text, selectionStart);
+        : selectionStart >= 0
+          ? buildPrefixAnchor(text, selectionStart)
+          : '';
       const suffix = `${mapping.suffix ?? ''}`.trim()
         ? normalizeLeadCollectionText(mapping.suffix)
-        : buildSuffixAnchor(text, selectionEnd);
+        : selectionEnd > selectionStart
+          ? buildSuffixAnchor(text, selectionEnd)
+          : '';
       const transform = normalizeTransform(mapping.transform, field);
+      const source = mapping.source === 'LinkedPage' ? 'LinkedPage' : 'EmailBody';
+      const foundSelection = selectionStart >= 0 && selectionEnd > selectionStart;
+      const fallbackStart = Math.max(0, finiteInt(mapping.selectionStart, 0));
+      const fallbackEnd = Math.max(
+        fallbackStart + sampleValue.length,
+        finiteInt(mapping.selectionEnd, fallbackStart + sampleValue.length),
+      );
 
       return {
         field,
         label: `${mapping.label ?? humanize(field)}`.trim() || humanize(field),
+        source,
         sampleValue,
-        selectionStart,
-        selectionEnd,
+        selectionStart: foundSelection ? selectionStart : fallbackStart,
+        selectionEnd: foundSelection ? selectionEnd : fallbackEnd,
         prefix,
         suffix,
         occurrence: Math.max(0, finiteInt(mapping.occurrence, index)),
@@ -238,14 +248,14 @@ export function parseLeadCollectionTemplate(
     diagnostics.push(`${mapping.field}: ${result.reason}`);
   }
 
-  if (!values.email) {
+  if (!values.email && fieldRequested(template, 'email')) {
     const candidate = firstEmail(text);
     if (candidate) {
       values.email = candidate;
       diagnostics.push('email: generic email validation fallback');
     }
   }
-  if (!values.phone) {
+  if (!values.phone && fieldRequested(template, 'phone')) {
     const candidate = firstPhone(text);
     if (candidate) {
       values.phone = candidate;
@@ -265,7 +275,9 @@ export function parseLeadCollectionTemplate(
   const requiredCoverage = requiredFields.length
     ? (requiredFields.length - missingRequiredFields.length) / requiredFields.length
     : 1;
-  const confidence = clamp01(matchScore * 0.45 + extractionRatio * 0.45 + requiredCoverage * 0.1);
+  const confidence = missingRequiredFields.length === 0 && (template.mappings?.length ?? 0) > 0
+    ? 1
+    : clamp01(matchScore * 0.45 + extractionRatio * 0.45 + requiredCoverage * 0.1);
   const threshold = clamp(template.confidenceThreshold, 0.5, 0.99, 0.82);
 
   return {
@@ -281,6 +293,11 @@ export function parseLeadCollectionTemplate(
     diagnostics,
     scopeMatched: true,
   };
+}
+
+function fieldRequested(template: LeadCollectionTemplateLike, field: string) {
+  return (template.requiredFields ?? []).includes(field)
+    || (template.mappings ?? []).some((mapping) => mapping.field === field);
 }
 
 export function scoreLeadCollectionTemplate(
@@ -346,6 +363,8 @@ function extractMappedValue(text: string, mapping: LeadCollectionFieldMapping) {
 
   if (start < 0 && !mapping.prefix) start = 0;
   if (start < 0) {
+    const exact = exactSampleCandidate(text, mapping);
+    if (exact) return exact;
     const generic = genericTransformCandidate(text, mapping.transform);
     return generic
       ? { value: generic, score: 0.45, reason: 'generic field validator fallback' }
@@ -371,6 +390,8 @@ function extractMappedValue(text: string, mapping: LeadCollectionFieldMapping) {
   const raw = text.slice(start, end).trim().replace(/^[\s:|\-–—]+|[\s:|\-–—]+$/g, '');
   const transformed = transformMappedValue(raw, mapping.transform);
   if (!transformed) {
+    const exact = exactSampleCandidate(text, mapping);
+    if (exact) return exact;
     const generic = genericTransformCandidate(text, mapping.transform);
     return generic
       ? { value: generic, score: 0.45, reason: 'anchors matched but validator used generic fallback' }
@@ -441,6 +462,15 @@ function senderPatternScore(patterns: string[], fromAddress: string) {
   return score;
 }
 
+function exactSampleCandidate(text: string, mapping: LeadCollectionFieldMapping) {
+  const sample = normalizeLeadCollectionText(mapping.sampleValue);
+  if (!sample || findInsensitive(text, sample) < 0) return null;
+  const value = transformMappedValue(sample, mapping.transform);
+  return value
+    ? { value, score: 0.9, reason: 'exact selected sample matched' }
+    : null;
+}
+
 function subjectPatternScore(pattern: string, mode: string, subject: string) {
   const expected = `${pattern ?? ''}`.trim();
   const actual = `${subject ?? ''}`.trim();
@@ -482,10 +512,24 @@ function firstEmail(value: string) {
 }
 
 function firstPhone(value: string) {
+  const labeled = normalizeLeadCollectionText(value).match(
+    /(?:^|\n)\s*(?:phone|phone number|telephone|mobile|cell|contact phone|lead phone|renter phone)\s*[:|–—-]\s*([^\n]{7,40})/i,
+  )?.[1];
+  const labeledPhone = labeled ? validPhoneCandidate(labeled) : '';
+  if (labeledPhone) return labeledPhone;
+
   const candidates = value.match(/(?:\+?\d[\d\s().-]{6,}\d)/g) ?? [];
   return candidates
     .map((candidate) => candidate.trim())
-    .find((candidate) => candidate.replace(/\D/g, '').length >= 7);
+    .find(validPhoneCandidate);
+}
+
+function validPhoneCandidate(candidate: string) {
+  const trimmed = candidate.trim();
+  const digits = trimmed.replace(/\D/g, '');
+  if (digits.length < 7 || digits.length > 15) return '';
+  if (/^\d{4}\s*[-–—]\s*\d{4}$/.test(trimmed)) return '';
+  return trimmed;
 }
 
 function normalizeTransform(value: unknown, field: string): LeadCollectionFieldTransform {

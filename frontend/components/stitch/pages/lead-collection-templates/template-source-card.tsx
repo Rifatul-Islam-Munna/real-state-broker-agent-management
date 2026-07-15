@@ -5,7 +5,7 @@ import type {
   LeadCollectionTemplateSourceType,
 } from "@/@types/lead-collection-template"
 import type { MailInboxItem } from "@/@types/real-estate-api"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
@@ -31,13 +31,10 @@ export function TemplateSourceCard({
 }) {
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Sample email</CardTitle>
-        <CardDescription>
-          Choose a real provider email from the inbox, paste one, or upload an email file.
-        </CardDescription>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base">Sample email</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-3">
         <Select
           onValueChange={(sourceType) =>
             onTemplateChange({
@@ -80,7 +77,7 @@ export function TemplateSourceCard({
 
         {template.sourceType === "PastedText" ? (
           <Textarea
-            className="min-h-48"
+            className="min-h-32"
             onChange={(event) => onTextChange(event.target.value)}
             placeholder="Paste the email as you see it"
             value={pastedText}
@@ -89,7 +86,7 @@ export function TemplateSourceCard({
 
         {template.sourceType === "PastedHtml" ? (
           <Textarea
-            className="min-h-48 font-mono text-xs"
+            className="min-h-32 font-mono text-xs"
             onChange={(event) => onHtmlChange(event.target.value)}
             placeholder="Paste the complete email HTML"
             value={pastedHtml}
@@ -97,8 +94,8 @@ export function TemplateSourceCard({
         ) : null}
 
         {template.sourceType === "UploadedHtml" ? (
-          <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed px-4 py-8 text-sm font-semibold hover:border-primary hover:text-primary">
-            <span className="flex size-8 items-center justify-center rounded-full border text-lg">+</span>
+          <label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed px-4 py-5 text-sm font-semibold hover:border-primary hover:text-primary">
+            <span className="flex size-7 items-center justify-center rounded-full border text-lg">+</span>
             Choose .eml, HTML, or text file
             <input
               accept=".eml,.html,.htm,.txt,message/rfc822,text/html,text/plain"

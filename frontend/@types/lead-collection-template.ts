@@ -16,6 +16,9 @@ export type LeadCollectionExternalPageConfig = {
   urlIncludes: string[]
   linkTextIncludes: string[]
   maxLinks: number
+  selectedUrl?: string
+  openPage?: boolean
+  autoFillContactFields?: boolean
 }
 
 export type LeadCollectionFieldMapping = {

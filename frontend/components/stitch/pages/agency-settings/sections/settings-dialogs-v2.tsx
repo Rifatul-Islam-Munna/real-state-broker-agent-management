@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 
-const phoneCountryOptions = [
+export const phoneCountryOptions = [
   ["US", "United States (+1)"],
   ["CA", "Canada (+1)"],
   ["GB", "United Kingdom (+44)"],

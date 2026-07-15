@@ -10,6 +10,7 @@ export const DEFAULT_LINKED_PAGE_CONFIG: LeadCollectionLinkedPageConfig = {
 
 export function normalizeLinkedPageConfig(value: unknown): LeadCollectionLinkedPageConfig {
   const raw = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+  const selectedUrl = safeUrl(raw.selectedUrl);
   return {
     enabled: raw.enabled === true,
     allowedHosts: stringArray(raw.allowedHosts)
@@ -18,6 +19,9 @@ export function normalizeLinkedPageConfig(value: unknown): LeadCollectionLinkedP
     urlIncludes: stringArray(raw.urlIncludes).map((item) => item.toLowerCase()),
     linkTextIncludes: stringArray(raw.linkTextIncludes).map((item) => item.toLowerCase()),
     maxLinks: clampInt(raw.maxLinks, 3, 1, 5),
+    openPage: raw.openPage === false ? false : true,
+    autoFillContactFields: raw.autoFillContactFields === false ? false : true,
+    ...(selectedUrl ? { selectedUrl } : {}),
   };
 }
 
@@ -42,4 +46,15 @@ function stringArray(value: unknown) {
 function clampInt(value: unknown, fallback: number, min: number, max: number) {
   const parsed = Number.parseInt(`${value ?? ''}`, 10);
   return Number.isFinite(parsed) ? Math.min(max, Math.max(min, parsed)) : fallback;
+}
+
+function safeUrl(value: unknown) {
+  const raw = `${value ?? ''}`.trim();
+  if (!raw) return undefined;
+  try {
+    const url = new URL(raw);
+    return url.protocol === 'https:' && !url.username && !url.password ? url.toString() : undefined;
+  } catch {
+    return undefined;
+  }
 }

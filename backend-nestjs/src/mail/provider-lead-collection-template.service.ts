@@ -47,9 +47,10 @@ export class ProviderLeadCollectionTemplateService extends ConfigurableLeadColle
     if (!mappings.length) {
       throw new BadRequestException('Map at least one selected value to a Lead field.');
     }
+    const mappedFields = new Set(mappings.map((mapping) => mapping.field));
     const requiredFields = [
       ...new Set([
-        ...(Array.isArray(dto.requiredFields) ? dto.requiredFields : []),
+        ...(Array.isArray(dto.requiredFields) ? dto.requiredFields : []).filter((field) => mappedFields.has(field)),
         ...mappings.filter((mapping) => mapping.required).map((mapping) => mapping.field),
       ]),
     ];
@@ -82,6 +83,11 @@ export class ProviderLeadCollectionTemplateService extends ConfigurableLeadColle
       confidenceThreshold: Math.min(0.99, Math.max(0.5, Number(dto.confidenceThreshold ?? 0.82))),
       isActive: dto.isActive !== false,
     });
-    return parseLeadCollectionTemplate(template, effectiveInput);
+    const result = parseLeadCollectionTemplate(template, effectiveInput);
+    if (prepared.linkedPageSourceText) {
+      this.pruneUnmappedValuesWhenManual(result, template);
+      this.applyGenericLinkedFallbacks(result, template, prepared.linkedPageSourceText);
+    }
+    return result;
   }
 }

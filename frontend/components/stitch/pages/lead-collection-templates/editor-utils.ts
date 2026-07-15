@@ -35,6 +35,8 @@ export function emptyLeadTemplate(mailInboxId?: number): LeadCollectionTemplateS
       urlIncludes: [],
       linkTextIncludes: [],
       maxLinks: 3,
+      openPage: true,
+      autoFillContactFields: true,
     },
     linkedPageSampleUrl: "",
     linkedPageSourceHtml: "",
@@ -65,8 +67,106 @@ export function applyZillowTemplatePreset(
       urlIncludes: ["lead", "contact", "inquiry", "detail"],
       linkTextIncludes: [],
       maxLinks: 3,
+      openPage: false,
+      autoFillContactFields: true,
     },
   }
+}
+
+export function linkedPageConfigForUrl(url: string, linkText = "", openPage = false) {
+  const cleanUrl = url.trim()
+  return {
+    enabled: Boolean(cleanUrl),
+    selectedUrl: cleanUrl || undefined,
+    allowedHosts: hostsForLink(cleanUrl),
+    urlIncludes: urlIncludesForLink(cleanUrl),
+    linkTextIncludes: linkText ? [linkText] : [],
+    maxLinks: 3,
+    openPage,
+    autoFillContactFields: true,
+  }
+}
+
+export function extractTemplateLinks(html: string, text = "") {
+  const links: Array<{ url: string; text: string; host: string }> = []
+  for (const match of `${html ?? ""}`.matchAll(/<a\b[^>]*href\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi)) {
+    links.push(toTemplateLink(match[1], htmlToVisibleTemplateText(match[2])))
+  }
+  for (const match of `${html ?? ""}`.matchAll(/<(?:area|form)\b[^>]*(?:href|action)\s*=\s*["']([^"']+)["'][^>]*>/gi)) {
+    links.push(toTemplateLink(match[1], ""))
+  }
+  for (const match of `${html ?? ""}`.matchAll(/\b(?:data-href|data-url|data-link)\s*=\s*["']([^"']+)["']/gi)) {
+    links.push(toTemplateLink(match[1], ""))
+  }
+  for (const match of `${text ?? ""}\n${htmlToVisibleTemplateText(html)}`.matchAll(/https:\/\/[^\s<>"')\]]+/gi)) {
+    links.push(toTemplateLink(match[0], ""))
+  }
+  const unique = new Map<string, { url: string; text: string; host: string }>()
+  for (const link of links) if (link.url) unique.set(link.url, link)
+  return [...unique.values()].sort((left, right) => linkScore(right) - linkScore(left))
+}
+
+function toTemplateLink(value: string, text: string) {
+  const url = decodeBasicEntities(value)
+  try {
+    const parsed = new URL(url)
+    const target = redirectTarget(parsed) ?? parsed
+    return { url, text: normalizeTemplateText(text).slice(0, 80), host: target.hostname }
+  } catch {
+    return { url: "", text: normalizeTemplateText(text).slice(0, 80), host: "" }
+  }
+}
+
+function hostsForLink(value: string) {
+  const url = targetUrl(value)
+  if (!url) return []
+  const parts = url.hostname.split(".")
+  const root = parts.length > 2 ? parts.slice(-2).join(".") : url.hostname
+  return root === url.hostname ? [root] : [root, `*.${root}`]
+}
+
+function urlIncludesForLink(value: string) {
+  const url = targetUrl(value)
+  if (!url) return []
+  return url.pathname.split("/").map((part) => part.trim().toLowerCase()).filter((part) => part.length >= 4).slice(-2)
+}
+
+function targetUrl(value: string) {
+  try {
+    const parsed = new URL(value)
+    return redirectTarget(parsed) ?? parsed
+  } catch {
+    return null
+  }
+}
+
+function redirectTarget(url: URL) {
+  for (const value of url.searchParams.values()) {
+    try {
+      const decoded = decodeURIComponent(value)
+      if (/^https:\/\//i.test(decoded)) return new URL(decoded)
+    } catch {
+      continue
+    }
+  }
+  return null
+}
+
+function linkScore(link: { text: string; url: string }) {
+  const value = `${link.text} ${link.url}`.toLowerCase()
+  let score = 0
+  if (/(contact|phone|call|lead|inquiry|detail|renter|prospect)/.test(value)) score += 8
+  if (/(unsubscribe|privacy|terms|preferences|logo|image|static)/.test(value)) score -= 20
+  return score
+}
+
+function decodeBasicEntities(value: string) {
+  return `${value ?? ""}`
+    .replace(/&amp;/gi, "&")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
 }
 
 export function splitTemplateList(value: string) {

@@ -6,7 +6,10 @@ import { AppIcon } from "@/components/ui/app-icon"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { applyZillowTemplatePreset, splitTemplateList } from "./editor-utils"
+import { useState } from "react"
+import { applyZillowTemplatePreset, linkedPageConfigForUrl } from "./editor-utils"
+
+type ContactMode = "email" | "url" | "page"
 
 export function LinkedPageSettings({
   template,
@@ -20,113 +23,138 @@ export function LinkedPageSettings({
   preparing: boolean
 }) {
   const config = template.linkedPageConfig
+  const [manualUrl, setManualUrl] = useState(config.selectedUrl ?? "")
+  const mode: ContactMode = !config.enabled ? "email" : config.openPage === false ? "url" : "page"
   const loaded = Boolean(template.linkedPageSourceText.trim())
+
+  function setContactMode(nextMode: ContactMode) {
+    onChange({
+      ...template,
+      linkedPageConfig:
+        nextMode === "email"
+          ? {
+              ...config,
+              enabled: false,
+              selectedUrl: undefined,
+              openPage: true,
+            }
+          : {
+              ...config,
+              enabled: true,
+              openPage: nextMode === "page",
+            },
+      linkedPageSampleUrl: "",
+      linkedPageSourceHtml: "",
+      linkedPageSourceText: "",
+    })
+  }
+
+  function useManualUrl() {
+    const cleanUrl = manualUrl.trim()
+    if (!cleanUrl) return
+    onChange({
+      ...template,
+      linkedPageConfig: linkedPageConfigForUrl(cleanUrl, "", mode === "page"),
+      linkedPageSampleUrl: "",
+      linkedPageSourceHtml: "",
+      linkedPageSourceText: "",
+    })
+  }
 
   return (
     <Card>
-      <CardHeader>
-        <div className="flex flex-wrap items-start justify-between gap-3">
+      <CardHeader className="pb-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <CardTitle>Open a detail-page link</CardTitle>
-            <CardDescription className="mt-2 max-w-xl">
-              Use this when the email contains a button or link, while the contact name,
-              phone number, or property address is on the page behind that link.
-              Configure it once for each provider; future matching emails use it automatically.
+            <CardTitle className="text-base">Where is contact info?</CardTitle>
+            <CardDescription className="mt-1 text-xs">
+              Pick one. Extra boxes show only when needed.
             </CardDescription>
           </div>
           <Button
-            onClick={() => onChange(applyZillowTemplatePreset(template))}
+            onClick={() =>
+              onChange({
+                ...applyZillowTemplatePreset(template),
+                linkedPageSampleUrl: "",
+                linkedPageSourceHtml: "",
+                linkedPageSourceText: "",
+              })
+            }
+            size="sm"
             type="button"
             variant="outline"
           >
             <AppIcon name="home_work" />
-            Apply Zillow preset
+            Zillow
           </Button>
         </div>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <label className="flex items-start gap-3 rounded-xl border p-4">
-          <input
-            checked={config.enabled}
-            className="mt-1"
-            onChange={(event) =>
-              onChange({
-                ...template,
-                linkedPageConfig: { ...config, enabled: event.target.checked },
-              })
-            }
-            type="checkbox"
+      <CardContent className="space-y-3">
+        <div className="grid gap-2">
+          <ModeButton
+            active={mode === "email"}
+            icon="mail"
+            label="Inside email"
+            onClick={() => setContactMode("email")}
+            text="Name/phone/address are visible in the email."
           />
-          <span>
-            <span className="block text-sm font-semibold">
-              Open a matching link from this provider&apos;s email
-            </span>
-            <span className="mt-1 block text-xs leading-5 text-muted-foreground">
-              This is disabled by default. The system only opens HTTPS websites listed below.
-            </span>
-          </span>
-        </label>
+          <ModeButton
+            active={mode === "url"}
+            icon="link"
+            label="Inside button URL"
+            onClick={() => setContactMode("url")}
+            text="Button link has name= or phone=. No page open."
+          />
+          <ModeButton
+            active={mode === "page"}
+            icon="open_in_new"
+            label="On page after button"
+            onClick={() => setContactMode("page")}
+            text="Button opens another page with the info."
+          />
+        </div>
 
-        {config.enabled ? (
-          <div className="space-y-4 rounded-xl border bg-muted/20 p-4">
-            <label className="space-y-2 text-sm font-medium">
-              <span>Allowed website hosts *</span>
+        {mode !== "email" ? (
+          <div className="rounded-lg border bg-muted/20 p-3">
+            <p className="text-sm font-semibold">Button or URL</p>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+              Easiest: highlight the button text in Map fields, then click "Use as contact button".
+            </p>
+            <div className="mt-2 flex flex-col gap-2 sm:flex-row">
               <Input
+                onChange={(event) => setManualUrl(event.target.value)}
+                placeholder="Paste link if you have it"
+                value={manualUrl}
+              />
+              <Button disabled={!manualUrl.trim()} onClick={useManualUrl} type="button" variant="outline">
+                Use URL
+              </Button>
+            </div>
+            {config.selectedUrl ? (
+              <p className="mt-2 truncate text-xs text-muted-foreground">
+                Selected: {config.selectedUrl}
+              </p>
+            ) : null}
+            <label className="mt-3 flex items-start gap-2 rounded-md border bg-background p-2 text-sm">
+              <input
+                checked={config.autoFillContactFields !== false}
+                className="mt-1"
                 onChange={(event) =>
                   onChange({
                     ...template,
                     linkedPageConfig: {
                       ...config,
-                      allowedHosts: splitTemplateList(event.target.value),
+                      autoFillContactFields: event.target.checked,
                     },
                   })
                 }
-                placeholder="zillow.com, *.zillow.com, leads.example.com"
-                value={config.allowedHosts.join(", ")}
+                type="checkbox"
               />
-              <span className="block text-xs font-normal leading-5 text-muted-foreground">
-                Required for safety. Add the exact provider domain or use a wildcard for its
-                subdomains. Other websites will not be opened.
-              </span>
-            </label>
-
-            <label className="space-y-2 text-sm font-medium">
-              <span>Link URL contains</span>
-              <Input
-                onChange={(event) =>
-                  onChange({
-                    ...template,
-                    linkedPageConfig: {
-                      ...config,
-                      urlIncludes: splitTemplateList(event.target.value),
-                    },
-                  })
-                }
-                placeholder="lead, detail, inquiry"
-                value={config.urlIncludes.join(", ")}
-              />
-              <span className="block text-xs font-normal text-muted-foreground">
-                Optional words used to choose the correct link when the email contains several links.
-              </span>
-            </label>
-
-            <label className="space-y-2 text-sm font-medium">
-              <span>Button or link text contains</span>
-              <Input
-                onChange={(event) =>
-                  onChange({
-                    ...template,
-                    linkedPageConfig: {
-                      ...config,
-                      linkTextIncludes: splitTemplateList(event.target.value),
-                    },
-                  })
-                }
-                placeholder="View lead, View details"
-                value={config.linkTextIncludes.join(", ")}
-              />
-              <span className="block text-xs font-normal text-muted-foreground">
-                Optional. Leave empty when the provider changes the button wording frequently.
+              <span>
+                <span className="block font-medium">Auto-fill Name, Phone, Email</span>
+                <span className="block text-xs text-muted-foreground">
+                  Turn off if you want to map and remove every field yourself.
+                </span>
               </span>
             </label>
           </div>
@@ -134,31 +162,60 @@ export function LinkedPageSettings({
 
         <Button
           className="w-full"
-          disabled={preparing}
+          disabled={preparing || (mode !== "email" && Boolean(template.sourceText) && !config.selectedUrl)}
           onClick={onPrepare}
           type="button"
         >
           <AppIcon name="auto_awesome" />
-          {preparing ? "Preparing sample..." : "Prepare email and detail page"}
+          {preparing
+            ? "Working..."
+            : !template.sourceText
+              ? "Load sample"
+              : mode === "email"
+                ? "Prepare email"
+                : "Extract from button"}
         </Button>
 
-        {config.enabled && template.sourceText ? (
+        {mode !== "email" && template.sourceText ? (
           <Alert variant={loaded ? "default" : "destructive"}>
             <AlertDescription>
               {loaded
-                ? `Detail page loaded successfully: ${template.linkedPageSampleUrl}`
-                : "No matching public detail page was loaded. Check the allowed host and link filters, then prepare the sample again."}
+                ? "Button data loaded. Map values from Selected button / URL."
+                : "Select a button in Map fields, or paste URL here."}
             </AlertDescription>
           </Alert>
         ) : null}
-
-        <div className="rounded-xl border border-dashed p-4 text-xs leading-5 text-muted-foreground">
-          <strong className="text-foreground">Zillow setup:</strong> create or open a Zillow
-          template, apply the preset, choose a real Zillow email from the inbox, and press
-          “Prepare email and detail page.” You do not configure Zillow globally, and you do
-          not repeat this for every email.
-        </div>
       </CardContent>
     </Card>
+  )
+}
+
+function ModeButton({
+  active,
+  icon,
+  label,
+  onClick,
+  text,
+}: {
+  active: boolean
+  icon: string
+  label: string
+  onClick: () => void
+  text: string
+}) {
+  return (
+    <button
+      className={`rounded-lg border p-3 text-left transition-colors ${
+        active ? "border-primary bg-primary/5" : "bg-background hover:border-primary"
+      }`}
+      onClick={onClick}
+      type="button"
+    >
+      <span className="flex items-center gap-2 text-sm font-semibold">
+        <AppIcon name={active ? "check_circle" : icon} />
+        {label}
+      </span>
+      <span className="mt-1 block text-xs text-muted-foreground">{text}</span>
+    </button>
   )
 }

@@ -44,6 +44,7 @@ import { CommunicationTemplateWorkspaceV2 } from "./communication-template-works
 import { SecureIntegrationsSectionV2 } from "./secure-integrations-section-v2"
 import {
   ProfileSettingsDialog,
+  phoneCountryOptions,
   SchedulingSettingsDialog,
 } from "./settings-dialogs-v2"
 
@@ -244,6 +245,17 @@ export function MainContentSectionV2() {
           templates={directLeadTemplates}
         />
 
+        <PhoneCountryPanel
+          country={values.profile.defaultPhoneCountry || "US"}
+          onChange={(defaultPhoneCountry) => {
+            setValues((current) => ({
+              ...current,
+              profile: { ...current.profile, defaultPhoneCountry },
+            }))
+            setError(null)
+          }}
+        />
+
         <LeadKnowledgePanel
           onChange={(leadIntelligence) => {
             setValues((current) => ({ ...current, leadIntelligence }))
@@ -411,6 +423,50 @@ function LeadAutomationPanel({
             {"Queue follow-up templates"}
           </label>
         </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function PhoneCountryPanel({
+  country,
+  onChange,
+}: {
+  country: string
+  onChange: (country: string) => void
+}) {
+  const selected = phoneCountryOptions.find(([value]) => value === country) ?? phoneCountryOptions[0]
+
+  return (
+    <Card className="overflow-hidden shadow-none">
+      <CardHeader className="border-b bg-background/70">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex min-w-0 gap-3">
+            <span className="flex size-11 shrink-0 items-center justify-center rounded-xl border bg-blue-50 text-blue-700">
+              <AppIcon name="phone" />
+            </span>
+            <div>
+              <CardTitle className="text-lg">{"Phone country"}</CardTitle>
+              <CardDescription className="mt-1">
+                {"Local numbers use this country before SMS sends. Example: 754-223-9582 becomes +1... for United States."}
+              </CardDescription>
+            </div>
+          </div>
+          <Badge variant="outline">{selected[1]}</Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="grid gap-3 p-4 md:grid-cols-[minmax(260px,420px)_1fr] md:items-center">
+        <Select onValueChange={onChange} value={country}>
+          <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {phoneCountryOptions.map(([value, label]) => (
+              <SelectItem key={value} value={value}>{label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p className="text-xs leading-5 text-muted-foreground">
+          {"Email-only leads skip SMS. Phone-only leads skip email. Each channel sends only when that contact exists."}
+        </p>
       </CardContent>
     </Card>
   )

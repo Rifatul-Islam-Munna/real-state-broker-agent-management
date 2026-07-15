@@ -49,6 +49,9 @@ export type LeadCollectionLinkedPageConfig = {
   urlIncludes: string[];
   linkTextIncludes: string[];
   maxLinks: number;
+  selectedUrl?: string;
+  openPage?: boolean;
+  autoFillContactFields?: boolean;
 };
 
 @Index(['name'])

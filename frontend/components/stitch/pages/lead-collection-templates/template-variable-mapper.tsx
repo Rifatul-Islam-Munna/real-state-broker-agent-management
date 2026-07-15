@@ -12,6 +12,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   detectTemplateValues,
+  extractTemplateLinks,
   MappingSource,
   normalizeTemplateText,
   sanitizeTemplateHtml,
@@ -29,6 +30,7 @@ export function TemplateVariableMapper({
   onFieldChange,
   onSelectionChange,
   onAddMapping,
+  onSelectContactButton,
 }: {
   template: LeadCollectionTemplateSaveInput
   fields: LeadCollectionLeadField[]
@@ -39,10 +41,14 @@ export function TemplateVariableMapper({
   onFieldChange: (field: string) => void
   onSelectionChange: (selection: SelectedTemplateValue) => void
   onAddMapping: () => void
+  onSelectContactButton: (url: string, linkText: string) => void
 }) {
   const sourceText = source === "linked" ? template.linkedPageSourceText : template.sourceText
   const sourceHtml = source === "linked" ? template.linkedPageSourceHtml : template.sourceHtml
   const detected = detectTemplateValues(sourceText)
+  const selectedLink = source === "email"
+    ? findSelectedLink(template.sourceHtml, template.sourceText, selection.text)
+    : null
 
   function captureVisibleSelection() {
     const text = normalizeTemplateText(window.getSelection()?.toString() ?? "")
@@ -52,14 +58,10 @@ export function TemplateVariableMapper({
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Map values directly</CardTitle>
-        <CardDescription>
-          Select a detected value or highlight it in the visible page, then choose the Lead
-          field. The internal normalized parser text is no longer shown as a required step.
-        </CardDescription>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base">Map fields</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-3">
         {template.sourceText ? (
           <>
             <div className="flex flex-wrap gap-2">
@@ -78,30 +80,30 @@ export function TemplateVariableMapper({
                   variant={source === "linked" ? "default" : "outline"}
                 >
                   <AppIcon name="open_in_new" />
-                  Linked detail page
+                  Selected button / URL
                 </Button>
               ) : null}
             </div>
 
             {sourceHtml ? (
-              <div className="overflow-hidden rounded-xl border bg-white">
+              <div className="overflow-hidden rounded-lg border bg-white">
                 <div className="border-b px-3 py-2 text-xs font-bold uppercase tracking-wide text-muted-foreground">
-                  Select a value directly from this {source === "linked" ? "detail page" : "email"}
+                  Select a value directly from this {source === "linked" ? "selected button result" : "email"}
                 </div>
                 <div
-                  className="max-h-[520px] overflow-auto bg-white p-4 text-sm text-slate-900 [&_img]:max-w-full [&_table]:max-w-full"
+                  className="max-h-[360px] overflow-auto bg-white p-3 text-sm text-slate-900 [&_img]:max-w-full [&_table]:max-w-full"
                   dangerouslySetInnerHTML={{ __html: sanitizeTemplateHtml(sourceHtml) }}
                   onKeyUp={captureVisibleSelection}
                   onMouseUp={captureVisibleSelection}
                 />
               </div>
             ) : (
-              <div className="max-h-[420px] overflow-auto whitespace-pre-wrap rounded-xl border bg-muted/20 p-4 text-sm leading-6">
+              <div className="max-h-[300px] overflow-auto whitespace-pre-wrap rounded-lg border bg-muted/20 p-3 text-sm leading-6">
                 {sourceText}
               </div>
             )}
 
-            <div className="rounded-xl border bg-muted/20 p-3">
+            <div className="rounded-lg border bg-muted/20 p-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Detected variables
               </p>
@@ -109,7 +111,7 @@ export function TemplateVariableMapper({
                 {detected.length ? (
                   detected.map((item, index) => (
                     <button
-                      className={`rounded-lg border p-3 text-left transition-colors hover:border-primary ${
+                      className={`rounded-md border p-2 text-left transition-colors hover:border-primary ${
                         selection.text === item.value
                           ? "border-primary bg-primary/5"
                           : "bg-background"
@@ -136,13 +138,24 @@ export function TemplateVariableMapper({
               </div>
             </div>
 
-            <div className="rounded-xl border bg-muted/30 p-3">
+            <div className="rounded-lg border bg-muted/30 p-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Selected value
               </p>
               <p className="mt-2 break-words text-sm">
                 {selection.text || "Choose a detected variable or highlight text above."}
               </p>
+              {selectedLink ? (
+                <Button
+                  className="mt-3 w-full"
+                  onClick={() => onSelectContactButton(selectedLink.url, selectedLink.text || selection.text)}
+                  type="button"
+                  variant="outline"
+                >
+                  <AppIcon name="link" />
+                  Use as contact button
+                </Button>
+              ) : null}
             </div>
 
             <div className="flex flex-col gap-2 sm:flex-row">
@@ -168,13 +181,22 @@ export function TemplateVariableMapper({
             </div>
           </>
         ) : (
-          <div className="flex min-h-[420px] items-center justify-center rounded-xl border border-dashed text-sm text-muted-foreground">
+          <div className="flex min-h-72 items-center justify-center rounded-lg border border-dashed text-sm text-muted-foreground">
             Prepare a sample email first.
           </div>
         )}
       </CardContent>
     </Card>
   )
+}
+
+function findSelectedLink(html: string, text: string, selected: string) {
+  const needle = normalizeTemplateText(selected).toLowerCase()
+  if (!needle) return null
+  return extractTemplateLinks(html, text).find((link) => {
+    const label = normalizeTemplateText(link.text || link.host).toLowerCase()
+    return label && (label.includes(needle) || needle.includes(label))
+  }) ?? null
 }
 
 export function MappedLeadFields({
@@ -192,14 +214,14 @@ export function MappedLeadFields({
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Mapped Lead fields</CardTitle>
-        <CardDescription>{mappings.length} values will be extracted automatically.</CardDescription>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base">Mapped fields</CardTitle>
+        <CardDescription>{mappings.length} values</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         {mappings.map((mapping, index) => (
           <div
-            className="grid gap-3 rounded-xl border p-4 lg:grid-cols-[minmax(0,1fr)_160px_auto] lg:items-center"
+            className="grid gap-3 rounded-lg border p-3 lg:grid-cols-[minmax(0,1fr)_150px_auto] lg:items-center"
             key={`${mapping.field}-${index}`}
           >
             <div>

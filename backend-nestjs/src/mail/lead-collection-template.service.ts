@@ -42,7 +42,7 @@ const SAFE_WRITABLE_LEAD_FIELDS = new Set([
   'nextActionType',
 ]);
 
-const DEFAULT_REQUIRED_FIELDS = ['name', 'email', 'phone', 'property'];
+const DEFAULT_REQUIRED_FIELDS = ['name', 'phone'];
 const LINKED_PAGE_MAX_BYTES = 1_500_000;
 const LINKED_PAGE_TIMEOUT_MS = 8_000;
 const ZILLOW_HOST = /(^|\.)zillow\.com$/i;
@@ -279,11 +279,11 @@ export class LeadCollectionTemplateService {
       const phone = this.firstPhone(text);
       if (phone) result.values.phone = phone;
     }
-    if (!result.values.email) {
+    if (!result.values.email && this.fieldRequested(template, 'email')) {
       const email = text.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)?.[0];
       if (email) result.values.email = email.toLowerCase();
     }
-    if (!result.values.property) {
+    if (!result.values.property && this.fieldRequested(template, 'property')) {
       const property = this.firstLabeledValue(text, [
         'property address',
         'listing address',
@@ -590,9 +590,10 @@ export class LeadCollectionTemplateService {
       throw new BadRequestException('Map at least one selected value to a Lead field.');
     }
 
+    const mappedFields = new Set(mappings.map((mapping) => mapping.field));
     const requiredFields = [
       ...new Set([
-        ...this.stringArray(dto.requiredFields),
+        ...this.stringArray(dto.requiredFields).filter((field) => mappedFields.has(field)),
         ...mappings.filter((mapping) => mapping.required).map((mapping) => mapping.field),
       ]),
     ].filter((field) => SAFE_WRITABLE_LEAD_FIELDS.has(field));
@@ -682,6 +683,11 @@ export class LeadCollectionTemplateService {
     });
     this.cacheExpiresAt = Date.now() + 60_000;
     return this.cachedTemplates;
+  }
+
+  protected fieldRequested(template: LeadCollectionTemplate, field: string) {
+    return (template.requiredFields ?? []).includes(field)
+      || (template.mappings ?? []).some((mapping) => mapping.field === field);
   }
 
   private templatesForMailboxTag(templates: LeadCollectionTemplate[], mailboxTag?: string) {

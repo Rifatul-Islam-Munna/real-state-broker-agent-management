@@ -98,6 +98,7 @@ export class ConfigurableLeadCollectionTemplateService extends LeadCollectionTem
       template,
       enrichEmailWithLinkedPage(input, linked),
     );
+    this.pruneUnmappedValuesWhenManual(result, template);
     this.applyGenericLinkedFallbacks(result, template, linked.text);
     result.diagnostics.unshift(`linked-page: enriched from ${linked.url}`);
     return result;
@@ -200,11 +201,12 @@ export class ConfigurableLeadCollectionTemplateService extends LeadCollectionTem
     };
   }
 
-  private applyGenericLinkedFallbacks(
+  protected applyGenericLinkedFallbacks(
     result: LeadCollectionParseResult,
     template: LeadCollectionTemplate,
     linkedText: string,
   ) {
+    if (template.linkedPageConfig?.autoFillContactFields === false) return;
     const before = new Set(Object.keys(result.values));
     const text = normalizeLeadCollectionText(linkedText);
     if (!result.values.name) {
@@ -224,11 +226,11 @@ export class ConfigurableLeadCollectionTemplateService extends LeadCollectionTem
         });
       if (phone) result.values.phone = phone;
     }
-    if (!result.values.email) {
+    if (!result.values.email && this.fieldRequested(template, 'email')) {
       const email = text.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)?.[0];
       if (email) result.values.email = email.toLowerCase();
     }
-    if (!result.values.property) {
+    if (!result.values.property && this.fieldRequested(template, 'property')) {
       const property = this.labeledValue(text, [
         'property address', 'listing address', 'street address', 'property', 'address',
       ]);
@@ -250,6 +252,27 @@ export class ConfigurableLeadCollectionTemplateService extends LeadCollectionTem
       result.confidence = Math.min(0.99, result.confidence + added.length * 0.07);
       result.diagnostics.push(`linked-page: recovered ${added.join(', ')}`);
     }
+  }
+
+  protected pruneUnmappedValuesWhenManual(
+    result: LeadCollectionParseResult,
+    template: LeadCollectionTemplate,
+  ) {
+    if (template.linkedPageConfig?.autoFillContactFields !== false) return;
+    const mappedFields = new Set((template.mappings ?? []).map((item) => item.field));
+    for (const field of Object.keys(result.values)) {
+      if (!mappedFields.has(field)) delete result.values[field];
+    }
+    result.extractedFields = Object.keys(result.values);
+    const required = [
+      ...new Set([
+        ...(template.requiredFields ?? []),
+        ...(template.mappings ?? []).filter((item) => item.required).map((item) => item.field),
+      ]),
+    ];
+    result.missingRequiredFields = required.filter(
+      (field) => !`${result.values[field] ?? ''}`.trim(),
+    );
   }
 
   private labeledValue(text: string, labels: string[]) {

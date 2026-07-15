@@ -11,6 +11,8 @@ describe('linked page configuration', () => {
       urlIncludes: [],
       linkTextIncludes: [],
       maxLinks: 3,
+      openPage: true,
+      autoFillContactFields: true,
     });
   });
 
@@ -27,6 +29,18 @@ describe('linked page configuration', () => {
       urlIncludes: ['lead', 'detail'],
       linkTextIncludes: ['view lead'],
       maxLinks: 5,
+      openPage: true,
+      autoFillContactFields: true,
+    });
+  });
+
+  test('can disable automatic URL contact fallback for manual mapping', () => {
+    expect(normalizeLinkedPageConfig({
+      enabled: true,
+      allowedHosts: ['zillow.com'],
+      autoFillContactFields: false,
+    })).toMatchObject({
+      autoFillContactFields: false,
     });
   });
 
