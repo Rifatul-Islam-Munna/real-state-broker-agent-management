@@ -39,6 +39,7 @@ const routeGroups = [
       "/dashboard/leads",
       "/dashboard/lead-history",
       "/dashboard/lead-schedule",
+      "/dashboard/replies",
       "/dashboard/lead-collection-templates",
       "/dashboard/contact-inbox",
       "/dashboard/text-messages",

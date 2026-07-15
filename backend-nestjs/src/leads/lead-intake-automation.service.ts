@@ -33,11 +33,19 @@ export class LeadIntakeAutomationService {
     }
 
     const agency = await this.settings.getAdminSettings();
-    const templates = (agency.communicationTemplates ?? []).filter((item: any) =>
+    const automation = agency.leadAutomation ?? {};
+    if (automation.enabled !== true) {
+      return { sent: 0, skipped: 1, failures: ['Lead automation is disabled.'] };
+    }
+    const directTemplates = (agency.communicationTemplates ?? []).filter((item: any) =>
       item.isActive !== false &&
       (item.audience ?? 'Lead') === 'Lead' &&
       (item.sequenceType ?? 'Direct') === 'Direct',
     );
+    const selectedTemplate = directTemplates.find((item: any) => item.id === automation.directTemplateId) ?? directTemplates[0];
+    if (!selectedTemplate) {
+      return { sent: 0, skipped: 1, failures: ['No active direct lead automation template is configured.'] };
+    }
     const [smtp, communication] = await Promise.all([
       this.settings.getSmtpConfig(),
       this.settings.getCommunicationConfig(),
@@ -46,41 +54,46 @@ export class LeadIntakeAutomationService {
     let sent = 0;
     let skipped = 0;
 
-    for (const template of templates) {
-      for (const kind of this.channels(template.channels)) {
-        if (kind === 'Email' && (!lead.email || !smtp?.host || !smtp?.username || !smtp?.password)) {
-          skipped++;
-          continue;
-        }
-        if (kind === 'Sms' && (!lead.phone || !communication?.supportsSms || !communication?.accountId || !communication?.authToken || !communication?.fromNumber)) {
-          skipped++;
-          continue;
-        }
-        const createdBy = `Lead Intake:${lead.id}:${property?.id ?? 'general'}:${template.id}:${kind}`;
-        const duplicate = await this.historyRepo.findOne({ where: { leadId: lead.id, createdBy } });
-        if (duplicate) {
-          skipped++;
-          continue;
-        }
-        try {
-          const result = await this.outreach.sendOutreach({
-            attachPropertyDocuments: template.attachPropertyDocuments !== false,
-            attachmentDocumentCategory: template.attachmentDocumentCategory,
-            attachmentDocumentType: template.attachmentDocumentType,
-            attachmentMode: template.attachmentMode,
-            createdBy,
-            kind,
-            leadId: lead.id,
-            message: this.render(template.body, lead),
-            pdfTemplateId: template.pdfTemplateId,
-            templateId: template.id,
-            title: this.render(template.subject || template.name, lead),
-          });
-          if (result.status === 'Failed') failures.push(`${kind}: ${result.summary}`);
-          else sent++;
-        } catch (error: any) {
-          failures.push(`${kind}: ${error?.message ?? 'Delivery failed.'}`);
-        }
+    const channels = this.channels(automation.channels).filter((kind) =>
+      this.channels(selectedTemplate.channels).includes(kind),
+    );
+    if (channels.length === 0) {
+      return { sent: 0, skipped: 1, failures: ['Selected lead automation template has no enabled Email or SMS channel.'] };
+    }
+
+    for (const kind of channels) {
+      if (kind === 'Email' && (!lead.email || !smtp?.host || !smtp?.username || !smtp?.password)) {
+        skipped++;
+        continue;
+      }
+      if (kind === 'Sms' && (!lead.phone || !communication?.supportsSms || !communication?.accountId || !communication?.authToken || !communication?.fromNumber)) {
+        skipped++;
+        continue;
+      }
+      const createdBy = `Lead Intake:${lead.id}:${property?.id ?? 'general'}:${selectedTemplate.id}:${kind}`;
+      const duplicate = await this.historyRepo.findOne({ where: { leadId: lead.id, createdBy } });
+      if (duplicate) {
+        skipped++;
+        continue;
+      }
+      try {
+        const result = await this.outreach.sendOutreach({
+          attachPropertyDocuments: selectedTemplate.attachPropertyDocuments !== false,
+          attachmentDocumentCategory: selectedTemplate.attachmentDocumentCategory,
+          attachmentDocumentType: selectedTemplate.attachmentDocumentType,
+          attachmentMode: selectedTemplate.attachmentMode,
+          createdBy,
+          kind,
+          leadId: lead.id,
+          message: this.render(selectedTemplate.body, lead),
+          pdfTemplateId: selectedTemplate.pdfTemplateId,
+          templateId: automation.followUpEnabled === false ? undefined : selectedTemplate.id,
+          title: this.render(selectedTemplate.subject || selectedTemplate.name, lead),
+        });
+        if (result.status === 'Failed') failures.push(`${kind}: ${result.summary}`);
+        else sent++;
+      } catch (error: any) {
+        failures.push(`${kind}: ${error?.message ?? 'Delivery failed.'}`);
       }
     }
     return { sent, skipped, failures };

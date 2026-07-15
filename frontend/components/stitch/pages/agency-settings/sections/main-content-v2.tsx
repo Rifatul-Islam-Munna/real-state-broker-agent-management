@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { useEffect, useMemo, useState } from "react"
 
-import type { AgencySettings } from "@/@types/real-estate-api"
+import type { AgencyCommunicationTemplateItem } from "@/@types/real-estate-api"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { AppIcon } from "@/components/ui/app-icon"
 import { Badge } from "@/components/ui/badge"
@@ -15,6 +15,15 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Label } from "@/components/ui/label"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import {
   useAgencySettings,
   useUpdateAgencySettings,
@@ -25,6 +34,7 @@ import {
 } from "@/hooks/use-scheduling-settings"
 import { formatDateTimeLabel } from "@/lib/admin-portal"
 import {
+  type AgencyWorkspaceSettings,
   cloneAgencySettings,
   defaultAgencySettings,
 } from "@/lib/agency-settings"
@@ -42,10 +52,10 @@ export function MainContentSectionV2() {
   const schedulingQuery = useSchedulingSettings()
   const updateSchedulingMutation = useUpdateSchedulingSettings()
 
-  const [values, setValues] = useState<AgencySettings>(() =>
+  const [values, setValues] = useState<AgencyWorkspaceSettings>(() =>
     cloneAgencySettings(defaultAgencySettings),
   )
-  const [savedValues, setSavedValues] = useState<AgencySettings>(() =>
+  const [savedValues, setSavedValues] = useState<AgencyWorkspaceSettings>(() =>
     cloneAgencySettings(defaultAgencySettings),
   )
   const [profileOpen, setProfileOpen] = useState(false)
@@ -83,6 +93,16 @@ export function MainContentSectionV2() {
       { lead: 0, owner: 0, realtor: 0 },
     )
   }, [values.communicationTemplates])
+  const directLeadTemplates = useMemo(
+    () =>
+      values.communicationTemplates.filter(
+        (template) =>
+          template.isActive !== false &&
+          (template.audience ?? "Lead") === "Lead" &&
+          (template.sequenceType ?? "Direct") === "Direct",
+      ),
+    [values.communicationTemplates],
+  )
 
   async function saveSettings() {
     setError(null)
@@ -214,6 +234,15 @@ export function MainContentSectionV2() {
           </Card>
         </section>
 
+        <LeadAutomationPanel
+          onChange={(leadAutomation) => {
+            setValues((current) => ({ ...current, leadAutomation }))
+            setError(null)
+          }}
+          settings={values.leadAutomation}
+          templates={directLeadTemplates}
+        />
+
         <SecureIntegrationsSectionV2 />
 
         <CommunicationTemplateWorkspaceV2
@@ -251,6 +280,130 @@ export function MainContentSectionV2() {
         timeZone={timeZone}
       />
     </main>
+  )
+}
+
+function LeadAutomationPanel({
+  onChange,
+  settings,
+  templates,
+}: {
+  onChange: (settings: AgencyWorkspaceSettings["leadAutomation"]) => void
+  settings: AgencyWorkspaceSettings["leadAutomation"]
+  templates: AgencyCommunicationTemplateItem[]
+}) {
+  const selectedTemplate = templates.find((template) => template.id === settings.directTemplateId)
+  const selectedTemplateId = selectedTemplate?.id ?? templates[0]?.id ?? "none"
+  const channelLabel = settings.channels.join(" + ") || "No channel"
+  const patch = (next: Partial<AgencyWorkspaceSettings["leadAutomation"]>) =>
+    onChange({
+      ...settings,
+      ...next,
+      channels: next.channels?.length ? next.channels : settings.channels.length ? settings.channels : ["Email"],
+    })
+  const toggleChannel = (channel: "Email" | "SMS", checked: boolean) => {
+    const channels = checked
+      ? Array.from(new Set([...settings.channels, channel]))
+      : settings.channels.filter((item) => item !== channel)
+    patch({ channels: channels.length ? channels : [channel] })
+  }
+
+  return (
+    <Card className="overflow-hidden shadow-none">
+      <CardHeader className="border-b bg-background/70">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex min-w-0 gap-3">
+            <span className="flex size-11 shrink-0 items-center justify-center rounded-xl border bg-primary/10 text-primary">
+              <AppIcon name="send" />
+            </span>
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <CardTitle className="text-lg">{"Lead automation"}</CardTitle>
+                <Badge variant={settings.enabled ? "secondary" : "outline"}>
+                  {settings.enabled ? "Enabled" : "Paused"}
+                </Badge>
+              </div>
+              <CardDescription className="mt-1">
+                {"Auto-send the first lead message, then stop pending automation when the lead replies."}
+              </CardDescription>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2 text-xs sm:min-w-72">
+            <div className="rounded-lg border bg-muted/30 px-3 py-2">
+              <span className="block text-muted-foreground">{"Channels"}</span>
+              <strong>{channelLabel}</strong>
+            </div>
+            <div className="rounded-lg border bg-muted/30 px-3 py-2">
+              <span className="block text-muted-foreground">{"Follow-up"}</span>
+              <strong>{settings.followUpEnabled ? "Queued" : "Off"}</strong>
+            </div>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="grid gap-4 p-4 lg:grid-cols-[minmax(220px,0.8fr)_minmax(280px,1.4fr)_minmax(260px,1fr)]">
+        <label
+          className={`flex items-center justify-between gap-3 rounded-xl border p-4 text-left transition-colors ${settings.enabled ? "border-primary bg-primary/5" : "bg-muted/30"}`}
+        >
+          <span>
+            <span className="block text-sm font-semibold">{"Auto-send for new leads"}</span>
+            <span className="mt-1 block text-xs text-muted-foreground">{settings.enabled ? "New leads get the default template." : "No automatic lead message sends."}</span>
+          </span>
+          <Checkbox checked={settings.enabled} onCheckedChange={(checked) => patch({ enabled: checked === true })} />
+        </label>
+        <div className="rounded-xl border bg-background p-4">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Default direct template"}</Label>
+            <Badge variant="outline">{"Lead"}</Badge>
+          </div>
+          <div className="grid gap-2 md:grid-cols-[1fr_auto]">
+            <Select
+              onValueChange={(value) => value !== "none" && patch({ directTemplateId: value })}
+              value={selectedTemplateId}
+            >
+              <SelectTrigger className="w-full"><SelectValue placeholder="Choose lead template" /></SelectTrigger>
+              <SelectContent>
+                {!templates.length ? <SelectItem value="none">{"No direct lead template"}</SelectItem> : null}
+                {templates.map((template) => (
+                  <SelectItem key={template.id} value={template.id}>
+                    {template.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button
+              onClick={() =>
+                document
+                  .getElementById("communication-templates")
+                  ?.scrollIntoView({ behavior: "smooth" })
+              }
+              type="button"
+              variant="outline"
+            >
+              {"Templates"}
+            </Button>
+          </div>
+          <p className={`mt-2 text-xs ${templates.length ? "text-muted-foreground" : "text-destructive"}`}>
+            {templates.length
+              ? (selectedTemplate?.subject || "This template is used first.")
+              : "Create one active Lead / Direct template first."}
+          </p>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <label className="flex min-h-12 items-center gap-2 rounded-xl border bg-background p-3 text-sm font-semibold">
+            <Checkbox checked={settings.channels.includes("Email")} onCheckedChange={(checked) => toggleChannel("Email", checked === true)} />
+            {"Email"}
+          </label>
+          <label className="flex min-h-12 items-center gap-2 rounded-xl border bg-background p-3 text-sm font-semibold">
+            <Checkbox checked={settings.channels.includes("SMS")} onCheckedChange={(checked) => toggleChannel("SMS", checked === true)} />
+            {"SMS"}
+          </label>
+          <label className="col-span-2 flex min-h-12 items-center gap-2 rounded-xl border bg-background p-3 text-sm font-semibold">
+            <Checkbox checked={settings.followUpEnabled} onCheckedChange={(checked) => patch({ followUpEnabled: checked === true })} />
+            {"Queue follow-up templates"}
+          </label>
+        </div>
+      </CardContent>
+    </Card>
   )
 }
 

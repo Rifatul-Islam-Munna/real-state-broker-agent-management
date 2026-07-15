@@ -2,7 +2,7 @@ import { BadRequestException, Injectable, NotFoundException, Optional } from '@n
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Lead } from './entities/lead.entity';
-import { LeadHistoryEntry, leadHistoryKindDb, leadHistoryStatusDb } from './entities/lead-history.entity';
+import { LeadHistoryEntry, leadHistoryDirectionDb, leadHistoryKindDb, leadHistoryStatusDb } from './entities/lead-history.entity';
 import { DealPipeline } from '../deals/entities/deal-pipeline.entity';
 import { SettingsService } from '../settings/settings.service';
 import { SmsService } from '../sms/sms.service';
@@ -37,7 +37,7 @@ export class LeadOutreachService {
   async getSchedule(leadId?: number, kind?: string, status?: string) {
     const qb = this.historyRepo.createQueryBuilder('history')
       .leftJoinAndSelect('history.lead', 'lead')
-      .where('history.kind IN (:...kinds)', { kinds: ['Email', 'Sms', 'Call'].map(leadHistoryKindDb) });
+      .where('history.kind IN (:...kinds)', { kinds: ['Email', 'Sms', 'Call', 'MailInbox'].map(leadHistoryKindDb) });
     if (leadId) qb.andWhere('history.lead_id = :leadId', { leadId });
     if (kind) qb.andWhere('history.kind = :kind', { kind: leadHistoryKindDb(kind) });
     if (status) qb.andWhere('history.status = :status', { status: leadHistoryStatusDb(status) });
@@ -82,6 +82,20 @@ export class LeadOutreachService {
     }
 
     return this.mapSchedule(await this.historyRepo.save(entry));
+  }
+
+  async markRead(ids: number[], isRead = true) {
+    const cleanIds = [...new Set((Array.isArray(ids) ? ids : []).map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0))];
+    if (cleanIds.length === 0) throw new BadRequestException('Choose at least one reply.');
+
+    await this.historyRepo.createQueryBuilder()
+      .update(LeadHistoryEntry)
+      .set({ isRead })
+      .where('id IN (:...ids)', { ids: cleanIds })
+      .andWhere('direction = :direction', { direction: leadHistoryDirectionDb('Incoming') })
+      .execute();
+
+    return { ids: cleanIds, isRead };
   }
 
   async sendOutreach(dto: any) {
@@ -222,6 +236,7 @@ export class LeadOutreachService {
       body: entry.body,
       provider: entry.provider,
       createdBy: entry.createdBy,
+      isRead: entry.isRead,
       scheduledAt: entry.scheduledAt ?? null,
       occurredAt: entry.occurredAt ?? null,
       createdAt: entry.createdAt,

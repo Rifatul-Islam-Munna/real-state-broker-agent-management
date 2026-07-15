@@ -18,6 +18,7 @@ export const dashboardRoutes: readonly DashboardRoute[] = [
   { href: "/dashboard/leads", label: "Lead CRM", icon: "group", permission: "lead" },
   { href: "/dashboard/lead-history", label: "Lead History", icon: "history", permission: "lead" },
   { href: "/dashboard/lead-schedule", label: "Lead Activity", icon: "event_note", permission: "lead" },
+  { href: "/dashboard/replies", label: "Reply Inbox", icon: "mark_email_unread", permission: "lead" },
   { href: "/dashboard/lead-collection-templates", label: "Lead Templates", icon: "document_scanner", permission: "mail" },
   { href: "/dashboard/realtor-showings", label: "Realtor Showings", icon: "real_estate_agent", permission: "lead" },
   { href: "/dashboard/realtor-showings/sequences", label: "Realtor Message Sequences", icon: "forward_to_inbox", permission: "lead" },

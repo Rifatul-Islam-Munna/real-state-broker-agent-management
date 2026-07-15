@@ -18,7 +18,15 @@ export type ShowingFeedbackAutomationSettings = {
   positiveKnowledge: string
 }
 
+export type LeadAutomationSettings = {
+  enabled: boolean
+  channels: Array<"Email" | "SMS">
+  directTemplateId: string
+  followUpEnabled: boolean
+}
+
 export type AgencyWorkspaceSettings = AgencySettings & {
+  leadAutomation: LeadAutomationSettings
   showingFeedbackAutomation: ShowingFeedbackAutomationSettings
 }
 
@@ -53,6 +61,12 @@ export const defaultAgencySettings: AgencyWorkspaceSettings = {
       "Buyer liked the layout, location, condition, price, light, or amenities.",
       "Realtor says the showing went well and client is interested.",
     ].join("\n"),
+  },
+  leadAutomation: {
+    enabled: false,
+    channels: ["Email"],
+    directTemplateId: "new-lead-welcome",
+    followUpEnabled: true,
   },
   communicationTemplates: [
     {
@@ -137,11 +151,16 @@ export const defaultAgencySettings: AgencyWorkspaceSettings = {
 
 export function cloneAgencySettings(
   settings: AgencySettings & {
+    leadAutomation?: Partial<LeadAutomationSettings>
     showingFeedbackAutomation?: Partial<ShowingFeedbackAutomationSettings>
   }
 ): AgencyWorkspaceSettings {
   const profile = settings.profile ?? defaultAgencySettings.profile
   const automation = settings.showingFeedbackAutomation ?? {}
+  const leadAutomation = settings.leadAutomation ?? {}
+  const leadAutomationChannels = (leadAutomation.channels ?? ["Email"]).filter(
+    (item): item is "Email" | "SMS" => item === "Email" || item === "SMS"
+  )
   return {
     communicationTemplates: (
       settings.communicationTemplates ??
@@ -153,7 +172,10 @@ export function cloneAgencySettings(
       attachmentMode:
         item.attachmentMode ??
         (item.attachPropertyDocuments !== false ? "property" : "none"),
-      channels: [...(item.channels ?? [])],
+      channels: (item.channels ?? []).filter(
+        (channel): channel is "Email" | "SMS" =>
+          channel === "Email" || channel === "SMS"
+      ),
       pdfTemplateId: item.pdfTemplateId ?? "",
       variableTokens: [...(item.variableTokens ?? [])],
     })),
@@ -174,6 +196,14 @@ export function cloneAgencySettings(
       socialLinks: normalizeAgencySocialLinks(profile.socialLinks).map(
         (item) => ({ ...item })
       ),
+    },
+    leadAutomation: {
+      enabled: leadAutomation.enabled === true,
+      channels: leadAutomationChannels.length ? leadAutomationChannels : ["Email"],
+      directTemplateId:
+        leadAutomation.directTemplateId ||
+        defaultAgencySettings.leadAutomation.directTemplateId,
+      followUpEnabled: leadAutomation.followUpEnabled !== false,
     },
     showingFeedbackAutomation: {
       enabled: automation.enabled === true,

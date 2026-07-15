@@ -90,6 +90,7 @@ export class LeadOutreachV2Service extends LeadOutreachService {
       body: entry.body,
       provider: entry.provider,
       createdBy: entry.createdBy,
+      isRead: entry.isRead,
       scheduledAt: null,
       occurredAt: entry.occurredAt,
       createdAt: entry.createdAt,

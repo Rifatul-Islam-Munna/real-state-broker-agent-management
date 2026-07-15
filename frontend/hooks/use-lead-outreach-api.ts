@@ -109,3 +109,14 @@ export function useUpdateLeadOutreachScheduleStatus() {
     url: "/lead-outreach/schedule-status",
   })
 }
+
+export function useMarkLeadRepliesRead() {
+  const invalidate = useInvalidate(["lead-outreach-schedule", "lead-history", "lead", "leads"])
+
+  return useCommonMutationApi<{ ids: number[]; isRead: boolean }, { ids: number[]; isRead?: boolean }>({
+    method: "PATCH",
+    onSuccess: () => void invalidate(),
+    successMessage: "Replies updated",
+    url: "/lead-outreach/replies/read",
+  })
+}

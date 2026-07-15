@@ -14,6 +14,7 @@ const transform = (values: string[], fallback: string) => ({
 });
 
 export const leadHistoryKindDb = (value: string) => Math.max(0, kinds.indexOf(value as LeadHistoryKind));
+export const leadHistoryDirectionDb = (value: string) => Math.max(0, directions.indexOf(value as LeadHistoryDirection));
 export const leadHistoryStatusDb = (value: string) => Math.max(0, statuses.indexOf(value as LeadHistoryStatus));
 
 @Entity('lead_history')
@@ -29,6 +30,7 @@ export class LeadHistoryEntry {
   @Column({ type: 'text', default: '' }) body: string = '';
   @Column({ type: 'text', default: '' }) provider: string = '';
   @Column({ type: 'text', default: '' }) createdBy: string = '';
+  @Column({ type: 'boolean', default: false }) isRead: boolean = false;
   @Column({ type: 'timestamptz', nullable: true }) scheduledAt: Date | null;
   @Column({ type: 'timestamptz', nullable: true }) occurredAt: Date | null;
   @CreateDateColumn({ type: 'timestamptz' }) createdAt: Date;

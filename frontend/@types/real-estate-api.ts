@@ -352,7 +352,7 @@ export type SendMailMessageInput = {
   pdfTemplateId?: string
 }
 
-export type AgencyCommunicationChannel = "Email" | "SMS" | "WhatsApp"
+export type AgencyCommunicationChannel = "Email" | "SMS"
 
 export type AgencySocialLinkPlatform =
   | "facebook"
@@ -400,6 +400,12 @@ export type AgencyCommunicationTemplateItem = {
 export type AgencySettings = {
   profile: AgencyProfileSettings
   communicationTemplates: AgencyCommunicationTemplateItem[]
+  leadAutomation?: {
+    enabled: boolean
+    channels: AgencyCommunicationChannel[]
+    directTemplateId: string
+    followUpEnabled: boolean
+  }
   updatedAt: string
 }
 
@@ -784,6 +790,7 @@ export type LeadHistoryEntry = {
   body: string
   provider: string
   createdBy: string
+  isRead?: boolean
   scheduledAt?: string | null
   occurredAt?: string | null
   createdAt: string
@@ -857,7 +864,7 @@ export type LeadOutreachScheduleItem = {
   leadPhone: string
   leadStage?: LeadStage | ""
   leadPriority?: LeadPriority | ""
-  kind: Extract<LeadHistoryKind, "Email" | "Sms" | "Call">
+  kind: Extract<LeadHistoryKind, "Email" | "Sms" | "Call" | "MailInbox">
   direction: LeadHistoryDirection
   status: LeadHistoryStatus
   title: string
@@ -865,6 +872,7 @@ export type LeadOutreachScheduleItem = {
   body: string
   provider: string
   createdBy: string
+  isRead?: boolean
   scheduledAt?: string | null
   occurredAt?: string | null
   createdAt: string

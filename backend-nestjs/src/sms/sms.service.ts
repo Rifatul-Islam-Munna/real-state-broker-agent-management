@@ -163,6 +163,18 @@ export class SmsService {
     });
     const saved = await this.smsRepo.save(entity);
     if ((input.direction ?? 'Incoming') === 'Incoming' && input.lead?.id) {
+      await this.historyRepo.save(this.historyRepo.create({
+        leadId: input.lead.id,
+        kind: 'Sms',
+        direction: 'Incoming',
+        status: 'Received',
+        title: 'SMS reply received',
+        summary: `SMS reply received from ${saved.fromNumber}. Pending automation was stopped.`,
+        body: this.messageBodyWithMedia(saved.body, saved.mediaUrls ?? []),
+        provider: input.provider ?? 'SMS',
+        createdBy: saved.fromNumber,
+        occurredAt: saved.occurredAt ?? new Date(),
+      } as any));
       await this.cancelScheduledLeadAutomation(input.lead.id, saved.occurredAt ?? new Date());
       await this.showingFeedbackService.processInbound({
         channel: 'Sms',

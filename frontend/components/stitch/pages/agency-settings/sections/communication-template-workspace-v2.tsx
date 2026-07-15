@@ -391,7 +391,7 @@ function TemplateSheet({
                 label="Template active"
                 onChange={(checked) => update("isActive", checked)}
               />
-              {(["Email", "SMS", "WhatsApp"] as AgencyCommunicationChannel[]).map((channel) => (
+              {(["Email", "SMS"] as AgencyCommunicationChannel[]).map((channel) => (
                 <Toggle
                   checked={(draft.channels ?? []).includes(channel)}
                   key={channel}

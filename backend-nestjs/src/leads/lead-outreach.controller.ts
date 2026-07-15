@@ -62,6 +62,16 @@ export class LeadOutreachController {
     return this.outreachService.updateScheduleStatus(Number(id), status);
   }
 
+  @Patch('replies/read')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Mark inbound lead replies as read or unread' })
+  async markRepliesRead(
+    @Body('ids') ids: number[],
+    @Body('isRead') isRead?: boolean,
+  ) {
+    return this.outreachService.markRead(ids, isRead !== false);
+  }
+
   @Get('call-script')
   @ApiOperation({ summary: 'Get call script' })
   async getCallScript(

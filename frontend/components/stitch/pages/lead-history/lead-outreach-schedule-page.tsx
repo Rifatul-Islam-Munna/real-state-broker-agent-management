@@ -4,7 +4,7 @@ import Link from "next/link"
 import { useMemo, useState } from "react"
 import { usePathname, useSearchParams } from "next/navigation"
 
-import type { DealStage, LeadHistoryStatus, LeadStage } from "@/@types/real-estate-api"
+import type { DealStage, LeadHistoryStatus, LeadOutreachScheduleItem, LeadStage } from "@/@types/real-estate-api"
 import { AppIcon } from "@/components/ui/app-icon"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -100,7 +100,8 @@ function isFollowUpScheduleEntry(entry: { body?: string | null; createdBy?: stri
     .some((value) => /follow[-\s]?up/i.test(`${value ?? ""}`))
 }
 
-function formatKindLabel(kind: OutreachKind) {
+function formatKindLabel(kind: string) {
+  if (kind === "MailInbox") return "Email reply"
   return kind === "Sms" ? "SMS" : kind
 }
 
@@ -114,6 +115,8 @@ export function LeadOutreachSchedulePage() {
   const [composerOpen, setComposerOpen] = useState(false)
   const [leadSearch, setLeadSearch] = useState("")
   const [searchTerm, setSearchTerm] = useState("")
+  const [selectedDetail, setSelectedDetail] = useState<LeadOutreachScheduleItem | null>(null)
+  const [stageFilter, setStageFilter] = useState<"" | LeadStage>("")
   const [statusFilter, setStatusFilter] = useState<"" | LeadHistoryStatus>("")
   const [page, setPage] = useState(1)
   const pageSize = 20
@@ -206,6 +209,7 @@ export function LeadOutreachSchedulePage() {
 
       if (followUpFilter === "FollowUp" && !isFollowUp) return false
       if (followUpFilter === "Direct" && isFollowUp) return false
+      if (stageFilter && entry.leadStage !== stageFilter) return false
       if (!term) return true
 
       return [
@@ -219,9 +223,27 @@ export function LeadOutreachSchedulePage() {
         entry.kind,
       ].some((value) => `${value ?? ""}`.toLowerCase().includes(term))
     })
-  }, [followUpFilter, scheduleQuery.data, searchTerm])
+  }, [followUpFilter, scheduleQuery.data, searchTerm, stageFilter])
   const totalPages = Math.max(1, Math.ceil(filteredSchedule.length / pageSize))
   const paginatedSchedule = useMemo(() => filteredSchedule.slice((page - 1) * pageSize, page * pageSize), [filteredSchedule, page])
+  const actionCounts = useMemo(
+    () => ({
+      cancelled: filteredSchedule.filter((entry) => entry.status === "Failed").length,
+      completed: filteredSchedule.filter((entry) => entry.status === "Completed" || entry.status === "Sent").length,
+      scheduled: filteredSchedule.filter((entry) => entry.status === "Scheduled").length,
+    }),
+    [filteredSchedule],
+  )
+  const stageActivity = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const entry of scheduleQuery.data ?? []) {
+      const key = entry.leadStage || "No stage"
+      counts.set(key, (counts.get(key) ?? 0) + 1)
+    }
+    return Array.from(counts.entries())
+      .sort((left, right) => right[1] - left[1])
+      .slice(0, 6)
+  }, [scheduleQuery.data])
 
   function updateComposer(patch: Partial<ComposerState>) {
     setSubmitError(null)
@@ -395,6 +417,26 @@ export function LeadOutreachSchedulePage() {
               {"New Outreach"}
             </Button>
           </CardHeader>
+        </Card>
+        <section className="grid gap-3 md:grid-cols-3">
+          <ActionMetric icon="calendar_today" label="Scheduled now" value={actionCounts.scheduled} />
+          <ActionMetric icon="done" label="Sent / completed" value={actionCounts.completed} />
+          <ActionMetric icon="event_busy" label="Paused / canceled / failed" value={actionCounts.cancelled} />
+        </section>
+        <Card className="shadow-none">
+          <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
+            <div>
+              <p className="text-sm font-semibold text-foreground">{"Stage activity"}</p>
+              <p className="mt-1 text-xs text-muted-foreground">{"Send batch outreach from New Outreach -> Lead Stage. Replies appear here and stop pending automation."}</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {stageActivity.length ? stageActivity.map(([stage, count]) => (
+                <Badge key={stage} variant="outline">
+                  {stage === "No stage" ? stage : formatLeadStage(stage as LeadStage)}: {count}
+                </Badge>
+              )) : <Badge variant="outline">{"No activity yet"}</Badge>}
+            </div>
+          </CardContent>
         </Card>
         <Sheet open={composerOpen} onOpenChange={setComposerOpen}>
           <SheetContent className="!w-[100vw] overflow-hidden p-0 sm:!max-w-none md:!w-[60vw] xl:!w-[50vw]" side="right">
@@ -712,6 +754,55 @@ export function LeadOutreachSchedulePage() {
             </SheetFooter>
           </SheetContent>
         </Sheet>
+        <Sheet open={selectedDetail !== null} onOpenChange={(open) => !open && setSelectedDetail(null)}>
+          <SheetContent className="sm:w-[34rem] sm:max-w-[34rem]">
+            <SheetHeader className="border-b">
+              <SheetTitle>{"Activity details"}</SheetTitle>
+              <SheetDescription>
+                {selectedDetail ? `${displayText(selectedDetail.leadName, `Lead #${selectedDetail.leadId}`)} - ${formatKindLabel(selectedDetail.kind)}` : ""}
+              </SheetDescription>
+            </SheetHeader>
+            {selectedDetail ? (
+              <div className="flex-1 space-y-4 overflow-y-auto px-5 pb-5">
+                <div className="grid grid-cols-2 gap-2">
+                  <DetailPill label="State" value={selectedDetail.status} />
+                  <DetailPill label="Stage" value={selectedDetail.leadStage ? formatLeadStage(selectedDetail.leadStage as LeadStage) : "No stage"} />
+                  <DetailPill label="Channel" value={formatKindLabel(selectedDetail.kind)} />
+                  <DetailPill label="Type" value={isFollowUpScheduleEntry(selectedDetail) ? "Follow-up" : "Direct / reply"} />
+                </div>
+                <div className="rounded-xl border bg-background p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Contact"}</p>
+                  <p className="mt-2 font-semibold">{displayText(selectedDetail.leadName, `Lead #${selectedDetail.leadId}`)}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">{displayText(selectedDetail.leadEmail)}</p>
+                  <p className="text-sm text-muted-foreground">{displayText(selectedDetail.leadPhone)}</p>
+                </div>
+                <div className="rounded-xl border bg-background p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Message / reply"}</p>
+                  <p className="mt-2 font-semibold">{displayText(selectedDetail.title, "Untitled")}</p>
+                  <p className="mt-2 text-sm text-muted-foreground">{displayText(selectedDetail.summary, "No summary")}</p>
+                  <div className="mt-3 whitespace-pre-wrap rounded-lg bg-muted/40 p-3 text-sm leading-6">
+                    {displayText(selectedDetail.body, "No message body saved.")}
+                  </div>
+                </div>
+                <div className="rounded-xl border bg-background p-4 text-sm">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Timing"}</p>
+                  {selectedDetail.scheduledAt ? <p className="mt-2">{`Scheduled: ${formatDateTimeLabel(selectedDetail.scheduledAt)}`}</p> : null}
+                  {selectedDetail.occurredAt ? <p className="mt-2">{`Occurred: ${formatDateTimeLabel(selectedDetail.occurredAt)}`}</p> : null}
+                  <p className="mt-2">{`Saved: ${formatDateTimeLabel(selectedDetail.createdAt)}`}</p>
+                  <p className="mt-2 text-muted-foreground">{`Provider: ${displayText(selectedDetail.provider)}`}</p>
+                  <p className="mt-1 text-muted-foreground">{`Created by: ${displayText(selectedDetail.createdBy)}`}</p>
+                </div>
+              </div>
+            ) : null}
+            <SheetFooter className="border-t">
+              {selectedDetail ? (
+                <Button className="w-full" render={<Link href={buildHistoryHref(pathname, selectedDetail.leadId)} />} variant="outline">
+                  {"Open full lead history"}
+                </Button>
+              ) : null}
+            </SheetFooter>
+          </SheetContent>
+        </Sheet>
 
         <Card>
           <CardHeader className="flex flex-wrap items-end justify-between gap-4 border-b border-slate-200">
@@ -721,7 +812,7 @@ export function LeadOutreachSchedulePage() {
                 {"This shows pending outreach first, then sent, completed, and failed items so you can see exactly what happened."}
               </CardDescription>
             </div>
-            <div className="grid w-full gap-3 md:grid-cols-[minmax(220px,1fr)_160px_160px_170px]">
+            <div className="grid w-full gap-3 md:grid-cols-[minmax(220px,1fr)_150px_150px_170px_170px]">
               <Input
                 onChange={(event) => setSearchTerm(event.target.value)}
                 placeholder="Search people, email, phone, message..."
@@ -746,7 +837,19 @@ export function LeadOutreachSchedulePage() {
                     <SelectItem value="Scheduled">{"Scheduled"}</SelectItem>
                     <SelectItem value="Sent">{"Sent"}</SelectItem>
                     <SelectItem value="Completed">{"Completed"}</SelectItem>
+                    <SelectItem value="Received">{"Received"}</SelectItem>
                     <SelectItem value="Failed">{"Failed"}</SelectItem>
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+              <Select modal={false} onValueChange={(value) => setStageFilter(value === "all" ? "" : (value as LeadStage))} value={stageFilter || "all"}>
+                <SelectTrigger><SelectValue placeholder="All stages" /></SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    <SelectItem value="all">{"All stages"}</SelectItem>
+                    {leadStageOrder.map((stage) => (
+                      <SelectItem key={stage} value={stage}>{formatLeadStage(stage)}</SelectItem>
+                    ))}
                   </SelectGroup>
                 </SelectContent>
               </Select>
@@ -774,16 +877,15 @@ export function LeadOutreachSchedulePage() {
             <div className="py-10 text-center text-sm font-semibold text-slate-500">{"No lead activity matches the current filters."}</div>
           ) : (
             <div className="mt-4 overflow-x-auto">
-              <Table className="min-w-[1080px]">
+              <Table className="min-w-[980px]">
                 <TableHeader>
                   <TableRow>
                     <TableHead>{"Lead / stage"}</TableHead>
                     <TableHead>{"Channel"}</TableHead>
                     <TableHead>{"State"}</TableHead>
                     <TableHead>{"Follow-Up"}</TableHead>
-                    <TableHead>{"Message"}</TableHead>
                     <TableHead>{"When"}</TableHead>
-                    <TableHead className="text-right">{"Control"}</TableHead>
+                    <TableHead className="text-right">{"Actions"}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -810,45 +912,58 @@ export function LeadOutreachSchedulePage() {
                         <TableCell>
                           <Badge variant={isFollowUp ? "secondary" : "outline"}>{isFollowUp ? "Follow-up" : "Direct"}</Badge>
                         </TableCell>
-                        <TableCell className="max-w-[360px]">
-                          <p className="font-medium">{entry.title}</p>
-                          <p className="truncate text-muted-foreground">{entry.summary}</p>
-                          {entry.body ? <p className="mt-1 line-clamp-2 whitespace-pre-wrap text-muted-foreground">{entry.body}</p> : null}
-                        </TableCell>
                         <TableCell className="min-w-[190px] text-muted-foreground">
+                          <p className="max-w-[260px] truncate font-medium text-foreground">{entry.title}</p>
                           {entry.scheduledAt ? <p>{`Scheduled: ${formatDateTimeLabel(entry.scheduledAt)}`}</p> : null}
                           {entry.occurredAt ? <p>{`Occurred: ${formatDateTimeLabel(entry.occurredAt)}`}</p> : null}
                           <p>{`Saved: ${formatDateTimeLabel(entry.createdAt)}`}</p>
                         </TableCell>
-                        <TableCell className="min-w-[260px] text-right">
-                          <div className="flex flex-wrap justify-end gap-2">
-                          <Button render={<Link href={buildHistoryHref(pathname, entry.leadId)} />} size="sm" variant="outline">
-                            {"Open"}
-                          </Button>
-                          <Button
-                            disabled={entry.status === "Scheduled" || !entry.scheduledAt || scheduleStatusMutation.isPending}
-                            onClick={() => void scheduleStatusMutation.mutateAsync({ id: entry.id, status: "active" })}
-                            size="sm"
-                            variant="outline"
-                          >
-                            {"Resume"}
-                          </Button>
-                          <Button
-                            disabled={entry.status !== "Scheduled" || scheduleStatusMutation.isPending}
-                            onClick={() => void scheduleStatusMutation.mutateAsync({ id: entry.id, status: "paused" })}
-                            size="sm"
-                            variant="outline"
-                          >
-                            {"Pause"}
-                          </Button>
-                          <Button
-                            disabled={entry.status !== "Scheduled" || scheduleStatusMutation.isPending}
-                            onClick={() => void scheduleStatusMutation.mutateAsync({ id: entry.id, status: "cancelled" })}
-                            size="sm"
-                            variant="destructive"
-                          >
-                            {"Cancel"}
-                          </Button>
+                        <TableCell className="min-w-[320px] text-right">
+                          <div className="flex flex-col items-end gap-2">
+                            <div className="grid w-full grid-cols-2 gap-2">
+                              <Button render={<Link href={buildHistoryHref(pathname, entry.leadId)} />} size="sm" variant="outline">
+                                <AppIcon data-icon="inline-start" name="visibility" />
+                                {"History"}
+                              </Button>
+                              <Button onClick={() => setSelectedDetail(entry)} size="sm" type="button" variant="outline">
+                                <AppIcon data-icon="inline-start" name="description" />
+                                {"Details"}
+                              </Button>
+                              <Button
+                                disabled={entry.status === "Scheduled" || !entry.scheduledAt || scheduleStatusMutation.isPending}
+                                onClick={() => void scheduleStatusMutation.mutateAsync({ id: entry.id, status: "active" })}
+                                size="sm"
+                                variant="outline"
+                              >
+                                <AppIcon data-icon="inline-start" name="rocket_launch" />
+                                {"Resume"}
+                              </Button>
+                              <Button
+                                disabled={entry.status !== "Scheduled" || scheduleStatusMutation.isPending}
+                                onClick={() => void scheduleStatusMutation.mutateAsync({ id: entry.id, status: "paused" })}
+                                size="sm"
+                                variant="outline"
+                              >
+                                <AppIcon data-icon="inline-start" name="event_busy" />
+                                {"Pause"}
+                              </Button>
+                              <Button
+                                disabled={entry.status !== "Scheduled" || scheduleStatusMutation.isPending}
+                                onClick={() => void scheduleStatusMutation.mutateAsync({ id: entry.id, status: "cancelled" })}
+                                size="sm"
+                                variant="destructive"
+                              >
+                                <AppIcon data-icon="inline-start" name="close" />
+                                {"Cancel"}
+                              </Button>
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              {entry.status === "Scheduled"
+                                ? "Pause or cancel before it sends."
+                                : entry.scheduledAt
+                                  ? "Resume only if this item still has a scheduled time."
+                                  : "Sent items stay in history."}
+                            </p>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -866,5 +981,30 @@ export function LeadOutreachSchedulePage() {
         </Card>
       </div>
     </main>
+  )
+}
+
+function ActionMetric({ icon, label, value }: { icon: string; label: string; value: number }) {
+  return (
+    <Card className="shadow-none">
+      <CardContent className="flex items-center justify-between gap-3 p-4">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
+          <p className="mt-1 text-2xl font-semibold text-foreground">{value}</p>
+        </div>
+        <span className="flex size-10 items-center justify-center rounded-xl border bg-muted/30 text-foreground">
+          <AppIcon name={icon} />
+        </span>
+      </CardContent>
+    </Card>
+  )
+}
+
+function DetailPill({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border bg-muted/30 p-3">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="mt-1 text-sm font-semibold text-foreground">{value}</p>
+    </div>
   )
 }

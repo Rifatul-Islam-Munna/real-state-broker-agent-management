@@ -42,6 +42,13 @@ export const agentRouteAccessItems = [
     permission: "lead",
   },
   {
+    description: "Unread and read replies from email and SMS with direct lead workflow links.",
+    href: "/dashboard/replies",
+    icon: "mark_email_unread",
+    label: "Reply Inbox",
+    permission: "lead",
+  },
+  {
     description: "Customer messages, inbox management, and email workflow.",
     href: "/dashboard/mail",
     icon: "mail",

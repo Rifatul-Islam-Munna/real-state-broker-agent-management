@@ -238,7 +238,7 @@ export class SettingsService {
         name: this.text(item?.name, fallbackItem.name),
         subject: this.text(item?.subject, fallbackItem.subject),
         body: this.text(item?.body, fallbackItem.body),
-        channels: Array.isArray(item?.channels) && item.channels.length ? [...new Set(item.channels)] : fallbackItem.channels,
+        channels: this.communicationChannels(item?.channels, fallbackItem.channels),
         variableTokens: this.stringList(item?.variableTokens, fallbackItem.variableTokens),
         sequenceType: ['Direct', 'FollowUp1', 'FollowUp2', 'FollowUp3'].includes(item?.sequenceType) ? item.sequenceType : (fallbackItem.sequenceType ?? 'Direct'),
         gapDays: this.clampInt(item?.gapDays, fallbackItem.gapDays ?? 0, 0, 365),
@@ -253,6 +253,9 @@ export class SettingsService {
     });
     const defaultOwnerTemplate = fallback.communicationTemplates.find((item: any) => item.audience === 'OwnerFeedback');
     if (defaultOwnerTemplate && !templates.some((item: any) => item.audience === 'OwnerFeedback')) templates.push(defaultOwnerTemplate);
+    const leadAutomationInput = input?.leadAutomation ?? {};
+    const defaultLeadAutomation = fallback.leadAutomation;
+    const leadAutomationChannels = this.communicationChannels(leadAutomationInput.channels, defaultLeadAutomation.channels);
     const automationInput = input?.showingFeedbackAutomation ?? {};
     const defaultAutomation = fallback.showingFeedbackAutomation;
     const channels = Array.isArray(automationInput.channels)
@@ -284,6 +287,12 @@ export class SettingsService {
         })),
       },
       communicationTemplates: templates,
+      leadAutomation: {
+        enabled: leadAutomationInput.enabled === true,
+        channels: leadAutomationChannels.length ? leadAutomationChannels : defaultLeadAutomation.channels,
+        directTemplateId: this.loose(leadAutomationInput.directTemplateId, defaultLeadAutomation.directTemplateId),
+        followUpEnabled: leadAutomationInput.followUpEnabled !== false,
+      },
       showingFeedbackAutomation: {
         enabled: automationInput.enabled === true,
         gapDays: this.clampInt(automationInput.gapDays, defaultAutomation.gapDays, 0, 6),
@@ -340,6 +349,12 @@ export class SettingsService {
     return items.length ? items : fallback;
   }
 
+  private communicationChannels(value: any, fallback: string[]) {
+    const source = Array.isArray(value) ? value : fallback;
+    const channels = [...new Set(source.map((item: any) => `${item ?? ''}`.trim()).filter((item: string) => item === 'Email' || item === 'SMS'))];
+    return channels.length ? channels : fallback.filter((item) => item === 'Email' || item === 'SMS');
+  }
+
   private defaultAgencySettings() {
     return {
       profile: {
@@ -374,6 +389,12 @@ export class SettingsService {
         ].join('\n'),
         deliveryState: {},
       },
+      leadAutomation: {
+        enabled: false,
+        channels: ['Email'],
+        directTemplateId: 'new-lead-welcome',
+        followUpEnabled: true,
+      },
       communicationTemplates: [
         {
           id: 'new-lead-welcome',
@@ -407,7 +428,7 @@ export class SettingsService {
         {
           id: 'follow-up-after-visit', name: 'Follow-Up After Visit', subject: 'Thanks for visiting {{property_address}}',
           body: 'Hi {{client_name}}, thank you for viewing {{property_address}}. What questions can {{agent_name}} answer before your next step?',
-          channels: ['Email', 'SMS', 'WhatsApp'], variableTokens: ['{{client_name}}', '{{property_address}}', '{{agent_name}}'], audience: 'Lead',
+          channels: ['Email', 'SMS'], variableTokens: ['{{client_name}}', '{{property_address}}', '{{agent_name}}'], audience: 'Lead',
         },
         {
           id: 'document-request', name: 'Document Request', subject: 'Documents needed for {{property_address}}',
@@ -417,12 +438,12 @@ export class SettingsService {
         {
           id: 'deal-update', name: 'Deal Update', subject: 'Deal update for {{property_address}}',
           body: 'Hi {{client_name}}, your deal for {{property_address}} is now at {{deal_stage}}. {{agent_name}} will follow up with the next action.',
-          channels: ['Email', 'SMS', 'WhatsApp'], variableTokens: ['{{client_name}}', '{{property_address}}', '{{agent_name}}', '{{deal_stage}}'], audience: 'Lead',
+          channels: ['Email', 'SMS'], variableTokens: ['{{client_name}}', '{{property_address}}', '{{agent_name}}', '{{deal_stage}}'], audience: 'Lead',
         },
         {
           id: 'closing-congratulations', name: 'Closing Congratulations', subject: 'Congratulations on closing {{property_address}}',
           body: 'Congratulations {{client_name}}! Closing for {{property_address}} is complete. {{agency_name}} and {{agent_name}} are grateful to be part of the move.',
-          channels: ['Email', 'WhatsApp'], variableTokens: ['{{client_name}}', '{{property_address}}', '{{agent_name}}', '{{agency_name}}'], audience: 'Lead',
+          channels: ['Email'], variableTokens: ['{{client_name}}', '{{property_address}}', '{{agent_name}}', '{{agency_name}}'], audience: 'Lead',
         },
         {
           id: 'owner-feedback-summary',
