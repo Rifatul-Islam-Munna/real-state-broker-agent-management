@@ -106,6 +106,10 @@ export function RealtorShowingsPage() {
   const propertyMutation = useUpdateRealtorShowingProperty()
   const automationMutation = useUpdateRealtorShowingAutomation()
 
+  const showingsData = showingsQuery.data
+  const showings = Array.isArray(showingsData)
+    ? showingsData
+    : showingsData?.items ?? []
   const properties = useMemo(() => propertiesQuery.data?.items ?? [], [propertiesQuery.data?.items])
   const templates = useMemo(
     () => (templatesQuery.data ?? []).filter(
@@ -231,7 +235,7 @@ export function RealtorShowingsPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button onClick={() => setManualOpen(true)} type="button" variant="outline">
+          <Button render={<Link href="/dashboard/realtor-showings/new" />} type="button" variant="outline">
             <AppIcon data-icon="inline-start" name="add" />
             {"Add Showing"}
           </Button>
@@ -275,7 +279,7 @@ export function RealtorShowingsPage() {
             <p className="py-10 text-center text-sm text-muted-foreground">{"Loading showings..."}</p>
           ) : showingsQuery.error ? (
             <p className="py-10 text-center text-sm text-destructive">{showingsQuery.error.message}</p>
-          ) : (showingsQuery.data ?? []).length === 0 ? (
+          ) : showings.length === 0 ? (
             <p className="py-10 text-center text-sm text-muted-foreground">{"No realtor showings imported."}</p>
           ) : (
             <div className="overflow-x-auto">
@@ -293,7 +297,7 @@ export function RealtorShowingsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {(showingsQuery.data ?? []).map((showing) => (
+                  {showings.map((showing) => (
                     <TableRow key={showing.id}>
                       <TableCell className="max-w-[230px]">
                         <p className="font-medium">{showing.realtorName}</p>

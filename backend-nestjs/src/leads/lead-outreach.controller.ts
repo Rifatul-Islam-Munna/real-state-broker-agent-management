@@ -3,6 +3,8 @@ import {
   Controller,
   Get,
   NotFoundException,
+  Param,
+  Patch,
   Post,
   Query,
   Res,
@@ -38,6 +40,26 @@ export class LeadOutreachController {
     @Query('status') status?: string,
   ) {
     return this.outreachService.getSchedule(leadId, kind, status);
+  }
+
+  @Patch('schedule/:id/status')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Pause, resume, or cancel scheduled outreach' })
+  async updateScheduleStatus(
+    @Param('id') id: string,
+    @Body('status') status: 'active' | 'paused' | 'cancelled',
+  ) {
+    return this.outreachService.updateScheduleStatus(Number(id), status);
+  }
+
+  @Patch('schedule-status')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Pause, resume, or cancel scheduled outreach from request body' })
+  async updateScheduleStatusFromBody(
+    @Body('id') id: number,
+    @Body('status') status: 'active' | 'paused' | 'cancelled',
+  ) {
+    return this.outreachService.updateScheduleStatus(Number(id), status);
   }
 
   @Get('call-script')

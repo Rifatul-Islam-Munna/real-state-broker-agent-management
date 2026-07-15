@@ -51,7 +51,6 @@ import { RealtorShowingEntryDialogsV2 } from "./realtor-showing-entry-dialogs-v2
 
 export function RealtorShowingsPageV2() {
   const [search, setSearch] = useState("")
-  const [manualOpen, setManualOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
   const [automationEditor, setAutomationEditor] =
     useState<ShowingAutomationEditor | null>(null)
@@ -63,7 +62,13 @@ export function RealtorShowingsPageV2() {
   const propertyMutation = useUpdateRealtorShowingProperty()
   const automationMutation = useUpdateRealtorShowingAutomation()
 
-  const showings = showingsQuery.data ?? []
+  const rawShowings = showingsQuery.data
+  const showings = Array.isArray(rawShowings)
+    ? rawShowings
+    : rawShowings?.items ?? []
+  const totalShowings = Array.isArray(rawShowings)
+    ? rawShowings.length
+    : rawShowings?.totalCount ?? showings.length
   const properties = propertiesQuery.data?.items ?? []
   const timeZone = schedulingQuery.data?.timeZone ?? "UTC"
   const templates = useMemo(
@@ -135,7 +140,7 @@ export function RealtorShowingsPageV2() {
                 <AppIcon name="upload_file" />
                 {"Import CSV"}
               </Button>
-              <Button onClick={() => setManualOpen(true)} type="button">
+              <Button render={<Link href="/dashboard/realtor-showings/new" />} type="button">
                 <AppIcon name="add" />
                 {"Add showing"}
               </Button>
@@ -144,7 +149,7 @@ export function RealtorShowingsPageV2() {
         </Card>
 
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <Metric icon="event" label="Total showings" value={showings.length} />
+          <Metric icon="event" label="Total showings" value={totalShowings} />
           <Metric icon="home_work" label="Matched properties" value={matchedCount} />
           <Metric icon="schedule_send" label="Automation scheduled" value={scheduledCount} />
           <Metric icon="mark_email_read" label="Stopped by reply" value={stoppedCount} />
@@ -333,9 +338,9 @@ export function RealtorShowingsPageV2() {
         directTemplates={directTemplates}
         followUpTemplates={followUpTemplates}
         importOpen={importOpen}
-        manualOpen={manualOpen}
+        manualOpen={false}
         onImportOpenChange={setImportOpen}
-        onManualOpenChange={setManualOpen}
+        onManualOpenChange={() => undefined}
         properties={properties}
         timeZone={timeZone}
       />

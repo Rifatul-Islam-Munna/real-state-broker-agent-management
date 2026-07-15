@@ -66,7 +66,7 @@ export function ContactInboxApiPage() {
           <CardHeader>
             <CardTitle className="text-2xl">{"Contact inbox"}</CardTitle>
             <CardDescription className="max-w-2xl">
-              {"Review public contact submissions and move qualified inquiries into the lead pipeline."}
+              {"Public contact submissions stay here until you press Convert to lead. Converted items link back to lead history."}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -166,8 +166,8 @@ export function ContactInboxApiPage() {
 
                   <div className="flex flex-wrap gap-2 xl:justify-end">
                     {item.leadId ? (
-                      <Button render={<Link href="/dashboard/leads" />} size="sm">
-                        {"Open lead CRM"}
+                      <Button render={<Link href={`/dashboard/lead-history?leadId=${item.leadId}`} />} size="sm">
+                        {"Open lead history"}
                       </Button>
                     ) : (
                       <Button

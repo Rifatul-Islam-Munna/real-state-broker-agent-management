@@ -58,6 +58,32 @@ export class LeadOutreachService {
       : `<Response><Say>${safe}</Say></Response>`;
   }
 
+  async updateScheduleStatus(id: number, status: 'active' | 'paused' | 'cancelled') {
+    if (!Number.isInteger(id) || id <= 0) throw new BadRequestException('Schedule item id is required.');
+    if (!['active', 'paused', 'cancelled'].includes(status)) throw new BadRequestException('Invalid schedule status.');
+
+    const entry = await this.historyRepo.findOne({ where: { id }, relations: ['lead'] });
+    if (!entry) throw new NotFoundException('Schedule item was not found.');
+    if (!['Email', 'Sms', 'Call'].includes(String(entry.kind))) throw new BadRequestException('Only lead outreach items can be controlled here.');
+
+    if (status === 'active') {
+      if (!entry.scheduledAt) throw new BadRequestException('Only scheduled outreach can be resumed.');
+      entry.status = 'Scheduled';
+      entry.direction = 'Scheduled';
+      entry.occurredAt = null;
+      entry.summary = this.scheduledSummary(entry.lead, entry.kind, entry.scheduledAt);
+    } else {
+      entry.status = 'Failed';
+      entry.direction = 'System';
+      entry.occurredAt = new Date();
+      entry.summary = status === 'paused'
+        ? 'Scheduled outreach paused from Lead Activity.'
+        : 'Scheduled outreach canceled from Lead Activity.';
+    }
+
+    return this.mapSchedule(await this.historyRepo.save(entry));
+  }
+
   async sendOutreach(dto: any) {
     if (!dto.leadId) throw new BadRequestException('Lead id is required.');
     if (!['Email', 'Sms', 'Call'].includes(dto.kind ?? 'Email')) throw new BadRequestException('Only email, SMS, and call outreach are supported.');
@@ -209,6 +235,8 @@ export class LeadOutreachService {
       leadName: entry.lead?.name ?? '',
       leadEmail: entry.lead?.email ?? '',
       leadPhone: entry.lead?.phone ?? '',
+      leadStage: entry.lead?.stage ?? '',
+      leadPriority: entry.lead?.priority ?? '',
     };
   }
 

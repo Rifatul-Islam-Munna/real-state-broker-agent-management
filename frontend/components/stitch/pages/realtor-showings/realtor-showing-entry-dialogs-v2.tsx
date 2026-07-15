@@ -369,7 +369,7 @@ export function RealtorShowingEntryDialogsV2({
             <Field label="Property">
               <Select onValueChange={(value) => setManualProperty(value === "none" ? "" : value)} value={manualProperty || "none"}>
                 <SelectTrigger className="w-full"><SelectValue placeholder="Choose property" /></SelectTrigger>
-                <SelectContent><SelectItem value="none">Choose property</SelectItem>{properties.map((property) => <SelectItem key={property.id} value={String(property.id)}>{`${property.title} ? ${property.location}`}</SelectItem>)}</SelectContent>
+                <SelectContent><SelectItem value="none">Choose property</SelectItem>{properties.map((property) => <SelectItem key={property.id} value={String(property.id)}>{`${property.title} - ${property.location}`}</SelectItem>)}</SelectContent>
               </Select>
             </Field>
             <Field label="Showing date"><Input onChange={(event) => setShowingDate(event.target.value)} type="date" value={showingDate} /></Field>

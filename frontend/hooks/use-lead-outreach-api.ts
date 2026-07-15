@@ -98,3 +98,14 @@ export function useLeadOutreachSchedule(params?: QueryParams) {
     "lead-outreach-schedule",
   )
 }
+
+export function useUpdateLeadOutreachScheduleStatus() {
+  const invalidate = useInvalidate(["lead-outreach-schedule", "lead-history", "lead", "leads"])
+
+  return useCommonMutationApi<LeadOutreachScheduleItem, { id: number; status: "active" | "paused" | "cancelled" }>({
+    method: "PATCH",
+    onSuccess: () => void invalidate(),
+    successMessage: "Lead outreach updated",
+    url: "/lead-outreach/schedule-status",
+  })
+}

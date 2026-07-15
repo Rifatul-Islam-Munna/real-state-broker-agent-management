@@ -855,6 +855,8 @@ export type LeadOutreachScheduleItem = {
   leadName: string
   leadEmail: string
   leadPhone: string
+  leadStage?: LeadStage | ""
+  leadPriority?: LeadPriority | ""
   kind: Extract<LeadHistoryKind, "Email" | "Sms" | "Call">
   direction: LeadHistoryDirection
   status: LeadHistoryStatus

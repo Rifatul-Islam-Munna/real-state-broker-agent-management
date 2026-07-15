@@ -35,6 +35,7 @@ import {
   useDispatchLeadOutreach,
   useLeadOutreachSchedule,
   useLeadOutreachTemplates,
+  useUpdateLeadOutreachScheduleStatus,
 } from "@/hooks/use-lead-outreach-api"
 import {
   dealStageOrder,
@@ -150,6 +151,7 @@ export function LeadOutreachSchedulePage() {
   const templatesQuery = useLeadOutreachTemplates()
   const dispatchMutation = useDispatchLeadOutreach()
   const bulkDispatchMutation = useDispatchBulkLeadOutreach()
+  const scheduleStatusMutation = useUpdateLeadOutreachScheduleStatus()
 
   const leadOptions = useMemo(() => leadsQuery.data?.items ?? [], [leadsQuery.data?.items])
   const filteredLeadOptions = useMemo(() => {
@@ -775,13 +777,13 @@ export function LeadOutreachSchedulePage() {
               <Table className="min-w-[1080px]">
                 <TableHeader>
                   <TableRow>
-                    <TableHead>{"Lead"}</TableHead>
+                    <TableHead>{"Lead / stage"}</TableHead>
                     <TableHead>{"Channel"}</TableHead>
                     <TableHead>{"State"}</TableHead>
                     <TableHead>{"Follow-Up"}</TableHead>
                     <TableHead>{"Message"}</TableHead>
                     <TableHead>{"When"}</TableHead>
-                    <TableHead className="text-right">{"History"}</TableHead>
+                    <TableHead className="text-right">{"Control"}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -794,6 +796,10 @@ export function LeadOutreachSchedulePage() {
                           <p className="font-medium">{displayText(entry.leadName, `Lead #${entry.leadId}`)}</p>
                           <p className="truncate text-muted-foreground">{displayText(entry.leadEmail)}</p>
                           <p className="text-muted-foreground">{displayText(entry.leadPhone)}</p>
+                          <div className="mt-2 flex flex-wrap gap-1">
+                            {entry.leadStage ? <Badge variant="outline">{formatLeadStage(entry.leadStage as LeadStage)}</Badge> : null}
+                            {entry.leadPriority ? <Badge variant="secondary">{entry.leadPriority}</Badge> : null}
+                          </div>
                         </TableCell>
                         <TableCell>
                           <Badge variant="outline">{formatKindLabel(entry.kind)}</Badge>
@@ -814,10 +820,36 @@ export function LeadOutreachSchedulePage() {
                           {entry.occurredAt ? <p>{`Occurred: ${formatDateTimeLabel(entry.occurredAt)}`}</p> : null}
                           <p>{`Saved: ${formatDateTimeLabel(entry.createdAt)}`}</p>
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="min-w-[260px] text-right">
+                          <div className="flex flex-wrap justify-end gap-2">
                           <Button render={<Link href={buildHistoryHref(pathname, entry.leadId)} />} size="sm" variant="outline">
                             {"Open"}
                           </Button>
+                          <Button
+                            disabled={entry.status === "Scheduled" || !entry.scheduledAt || scheduleStatusMutation.isPending}
+                            onClick={() => void scheduleStatusMutation.mutateAsync({ id: entry.id, status: "active" })}
+                            size="sm"
+                            variant="outline"
+                          >
+                            {"Resume"}
+                          </Button>
+                          <Button
+                            disabled={entry.status !== "Scheduled" || scheduleStatusMutation.isPending}
+                            onClick={() => void scheduleStatusMutation.mutateAsync({ id: entry.id, status: "paused" })}
+                            size="sm"
+                            variant="outline"
+                          >
+                            {"Pause"}
+                          </Button>
+                          <Button
+                            disabled={entry.status !== "Scheduled" || scheduleStatusMutation.isPending}
+                            onClick={() => void scheduleStatusMutation.mutateAsync({ id: entry.id, status: "cancelled" })}
+                            size="sm"
+                            variant="destructive"
+                          >
+                            {"Cancel"}
+                          </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     )

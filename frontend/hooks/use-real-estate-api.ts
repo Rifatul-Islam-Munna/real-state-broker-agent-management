@@ -838,7 +838,7 @@ export function useUpdateContactRequest() {
 }
 
 export function useConvertContactRequestToLead() {
-  const invalidate = useInvalidate(["contact-requests", "leads", "dashboard"])
+  const invalidate = useInvalidate(["contact-requests", "leads", "lead-history", "dashboard"])
 
   return useCommonMutationApi<LeadItem, { contactRequestId: number }>({
     method: "POST",

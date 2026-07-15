@@ -52,7 +52,7 @@ export function useRealtorShowings(search = "") {
   const query = search.trim()
     ? `?search=${encodeURIComponent(search.trim())}`
     : ""
-  return useQueryWrapper<RealtorShowingItem[]>(
+  return useQueryWrapper<RealtorShowingItem[] | PaginatedResult<RealtorShowingItem>>(
     ["realtor-showings", search],
     `/realtor-showings${query}`,
     { placeholderData: [] },

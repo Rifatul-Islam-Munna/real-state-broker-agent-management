@@ -163,7 +163,7 @@ export class SmsService {
     });
     const saved = await this.smsRepo.save(entity);
     if ((input.direction ?? 'Incoming') === 'Incoming' && input.lead?.id) {
-      await this.cancelScheduledFollowUps(input.lead.id, saved.occurredAt ?? new Date());
+      await this.cancelScheduledLeadAutomation(input.lead.id, saved.occurredAt ?? new Date());
       await this.showingFeedbackService.processInbound({
         channel: 'Sms',
         leadId: input.lead.id,
@@ -209,17 +209,17 @@ export class SmsService {
     });
   }
 
-  private async cancelScheduledFollowUps(leadId: number, repliedAt: Date) {
+  private async cancelScheduledLeadAutomation(leadId: number, repliedAt: Date) {
     await this.historyRepo.createQueryBuilder()
       .update(LeadHistoryEntry)
       .set({
         occurredAt: repliedAt,
         status: 'Failed',
-        summary: 'Automatic follow-up canceled because lead replied by SMS.',
+        summary: 'Automatic outreach canceled because lead replied by SMS.',
       })
       .where('lead_id = :leadId', { leadId })
       .andWhere('status = :status', { status: leadHistoryStatusDb('Scheduled') })
-      .andWhere('kind IN (:...kinds)', { kinds: ['Email', 'Sms'].map(leadHistoryKindDb) })
+      .andWhere('kind IN (:...kinds)', { kinds: ['Email', 'Sms', 'Call'].map(leadHistoryKindDb) })
       .execute();
     await this.leadRepo.update(leadId, {
       followUpStatus: LeadFollowUpStatus.Completed,

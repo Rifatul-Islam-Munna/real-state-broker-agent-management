@@ -85,7 +85,8 @@ export function PropertyDetailsSheet({
     [leadsQuery.data?.items, normalizedTitle]
   )
   const bookings = bookingQuery.data?.items ?? []
-  const realtorShowings = (realtorQuery.data ?? []).filter(
+  const realtorShowingsData = realtorQuery.data
+  const realtorShowings = (Array.isArray(realtorShowingsData) ? realtorShowingsData : realtorShowingsData?.items ?? []).filter(
     (showing) => showing.propertyId === propertyId
   )
   const feedback = feedbackQuery.data?.items ?? []

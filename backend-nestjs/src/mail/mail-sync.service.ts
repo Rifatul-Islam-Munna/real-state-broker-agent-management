@@ -399,7 +399,7 @@ export class MailInboxSyncBackgroundService {
           createdBy: inbound.senderName || inbound.senderEmail,
           occurredAt: inbound.receivedAt,
         }));
-        await this.cancelScheduledFollowUps(historyRepo, lead.id, inbound.receivedAt);
+        await this.cancelScheduledLeadAutomation(historyRepo, lead.id, inbound.receivedAt);
         await leadRepo.update(lead.id, {
           followUpStatus: LeadFollowUpStatus.Completed,
           lastActivityAt: inbound.receivedAt,
@@ -431,17 +431,17 @@ export class MailInboxSyncBackgroundService {
     return outcome;
   }
 
-  private async cancelScheduledFollowUps(historyRepo: Repository<LeadHistoryEntry>, leadId: number, repliedAt: Date) {
+  private async cancelScheduledLeadAutomation(historyRepo: Repository<LeadHistoryEntry>, leadId: number, repliedAt: Date) {
     await historyRepo.createQueryBuilder()
       .update(LeadHistoryEntry)
       .set({
         occurredAt: repliedAt,
         status: 'Failed',
-        summary: 'Automatic follow-up canceled because lead replied by email.',
+        summary: 'Automatic outreach canceled because lead replied by email.',
       })
       .where('lead_id = :leadId', { leadId })
       .andWhere('status = :status', { status: leadHistoryStatusDb('Scheduled') })
-      .andWhere('kind IN (:...kinds)', { kinds: ['Email', 'Sms'].map(leadHistoryKindDb) })
+      .andWhere('kind IN (:...kinds)', { kinds: ['Email', 'Sms', 'Call'].map(leadHistoryKindDb) })
       .execute();
   }
 
