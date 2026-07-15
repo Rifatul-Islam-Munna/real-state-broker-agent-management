@@ -42,6 +42,7 @@ export type LeadCollectionTemplateItem = {
   sampleFromAddress: string
   sampleSubject: string
   senderPatterns: string[]
+  mailboxTags: string[]
   subjectPattern: string
   subjectMatchMode: LeadCollectionSubjectMatchMode
   bodyFingerprint: string[]
@@ -116,6 +117,7 @@ export type LeadCollectionParseResult = {
   missingRequiredFields: string[]
   extractedFields: string[]
   diagnostics: string[]
+  scopeMatched?: boolean
 }
 
 export type LeadCollectionTemplateList = PaginatedResult<LeadCollectionTemplateItem>

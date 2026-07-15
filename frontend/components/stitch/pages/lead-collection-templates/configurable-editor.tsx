@@ -107,6 +107,19 @@ export function ConfigurableLeadCollectionTemplateEditor({
                 placeholder="Provider, e.g. Zillow"
                 value={editor.template.providerName}
               />
+              <Input
+                onChange={(event) =>
+                  editor.setTemplate((current) => ({
+                    ...current,
+                    mailboxTags: event.target.value
+                      .split(",")
+                      .map((item) => item.trim())
+                      .filter(Boolean),
+                  }))
+                }
+                placeholder="Mailbox tags, e.g. gmail, zillow"
+                value={editor.template.mailboxTags.join(", ")}
+              />
               <Textarea
                 onChange={(event) =>
                   editor.setTemplate((current) => ({

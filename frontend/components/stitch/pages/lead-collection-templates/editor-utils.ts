@@ -23,6 +23,7 @@ export function emptyLeadTemplate(mailInboxId?: number): LeadCollectionTemplateS
     sampleFromAddress: "",
     sampleSubject: "",
     senderPatterns: [],
+    mailboxTags: [],
     subjectPattern: "",
     subjectMatchMode: "Contains",
     bodyFingerprint: [],

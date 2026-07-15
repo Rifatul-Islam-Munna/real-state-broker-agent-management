@@ -192,6 +192,105 @@ export class SettingsService {
     return settings?.smtpPayload ? this.readJson(settings.smtpPayload) : null;
   }
 
+  async saveSmtpConfig(config: any) {
+    let settings = await this.integrationRepository.findOne({ where: { id: 1 } });
+    if (!settings) settings = this.integrationRepository.create({ id: 1 });
+    settings.smtpPayload = JSON.stringify(config ?? {});
+    settings.smtpUpdatedAt = new Date();
+    await this.integrationRepository.save(settings);
+  }
+
+  async getGmailConnectUrl(dto: any = {}) {
+    const clientId = this.loose(process.env.GOOGLE_CLIENT_ID);
+    const redirectUri = this.gmailRedirectUri();
+    if (!clientId || !redirectUri) {
+      throw new BadRequestException('GOOGLE_CLIENT_ID and GOOGLE_GMAIL_REDIRECT_URI are required.');
+    }
+    const state = this.base64UrlEncode(JSON.stringify({
+      returnTo: this.loose(dto?.returnTo, '/dashboard/settings'),
+      mailboxTag: this.loose(dto?.mailboxTag, 'gmail'),
+      leadTemplateTags: this.stringList(dto?.leadTemplateTags, []),
+    }));
+    const url = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+    url.searchParams.set('client_id', clientId);
+    url.searchParams.set('redirect_uri', redirectUri);
+    url.searchParams.set('response_type', 'code');
+    url.searchParams.set('access_type', 'offline');
+    url.searchParams.set('prompt', 'consent');
+    url.searchParams.set('scope', [
+      'openid',
+      'email',
+      'profile',
+      'https://www.googleapis.com/auth/gmail.modify',
+      'https://www.googleapis.com/auth/gmail.send',
+    ].join(' '));
+    url.searchParams.set('state', state);
+    return { url: url.toString() };
+  }
+
+  async completeGmailConnect(code: string, state: string) {
+    if (!code) throw new BadRequestException('Missing Gmail authorization code.');
+    const clientId = this.loose(process.env.GOOGLE_CLIENT_ID);
+    const clientSecret = this.loose(process.env.GOOGLE_CLIENT_SECRET);
+    const redirectUri = this.gmailRedirectUri();
+    if (!clientId || !clientSecret || !redirectUri) {
+      throw new BadRequestException('GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_GMAIL_REDIRECT_URI are required.');
+    }
+    const parsedState = this.parseOauthState(state);
+    const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        code,
+        client_id: clientId,
+        client_secret: clientSecret,
+        redirect_uri: redirectUri,
+        grant_type: 'authorization_code',
+      }),
+    });
+    if (!tokenResponse.ok) throw new BadRequestException('Gmail connection failed.');
+    const token: any = await tokenResponse.json();
+    const accessToken = this.loose(token.access_token);
+    const refreshToken = this.loose(token.refresh_token);
+    if (!accessToken || !refreshToken) throw new BadRequestException('Gmail did not return a refresh token. Reconnect and allow offline access.');
+    const profileResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    const profile: any = profileResponse.ok ? await profileResponse.json() : {};
+    const email = this.loose(profile.email);
+    await this.saveSmtpConfig({
+      providerName: 'Gmail',
+      authType: 'gmail-oauth',
+      host: 'smtp.gmail.com',
+      port: 587,
+      username: email,
+      password: '',
+      fromEmail: email,
+      fromName: this.nullText(profile.name),
+      useSsl: true,
+      enableInboxSync: true,
+      imapHost: null,
+      imapPort: 993,
+      imapUsername: null,
+      imapPassword: null,
+      imapUseSsl: true,
+      imapFolder: 'INBOX',
+      mailboxTag: parsedState.mailboxTag || 'gmail',
+      leadTemplateTags: parsedState.leadTemplateTags,
+      duplicatePolicy: 'skip-exact-message',
+      autoCreateLeads: true,
+      syncIntervalMinutes: 5,
+      maxMessagesPerSync: 25,
+      gmailEmail: email,
+      gmailAccessToken: accessToken,
+      gmailRefreshToken: refreshToken,
+      gmailTokenExpiresAt: new Date(Date.now() + (Number(token.expires_in) || 3600) * 1000).toISOString(),
+      gmailLabelIds: ['INBOX'],
+    });
+    const base = this.loose(process.env.FRONTEND_URL, 'http://localhost:3000').replace(/\/+$/, '');
+    return `${base}${parsedState.returnTo || '/dashboard/settings'}?gmail=connected`;
+  }
+
   async getAiProviderConfig() {
     const settings = await this.integrationRepository.findOne({ where: { id: 1 } });
     return settings?.aiProviderPayload ? this.readJson(settings.aiProviderPayload) : null;
@@ -213,17 +312,19 @@ export class SettingsService {
   private normalizeMailProvider(input: any) {
     const providerName = this.loose(input?.providerName, 'Custom');
     const provider = providerName.toLowerCase();
+    const authType = input?.authType === 'gmail-oauth' ? 'gmail-oauth' : 'password';
     const username = this.loose(input?.username);
     const password = this.loose(input?.password);
     const imapHost = this.loose(input?.imapHost, provider === 'gmail' ? 'imap.gmail.com' : provider === 'outlook' ? 'outlook.office365.com' : '');
     const enableInboxSync = input?.enableInboxSync === true;
     const imapUsername = this.loose(input?.imapUsername, username);
     const imapPassword = this.loose(input?.imapPassword, password);
-    if (enableInboxSync && !imapHost) throw new BadRequestException('IMAP host is required when inbox sync is enabled.');
-    if (enableInboxSync && !imapUsername) throw new BadRequestException('IMAP username is required when inbox sync is enabled.');
-    if (enableInboxSync && !imapPassword) throw new BadRequestException('IMAP password is required when inbox sync is enabled.');
+    if (enableInboxSync && authType !== 'gmail-oauth' && !imapHost) throw new BadRequestException('IMAP host is required when inbox sync is enabled.');
+    if (enableInboxSync && authType !== 'gmail-oauth' && !imapUsername) throw new BadRequestException('IMAP username is required when inbox sync is enabled.');
+    if (enableInboxSync && authType !== 'gmail-oauth' && !imapPassword) throw new BadRequestException('IMAP password is required when inbox sync is enabled.');
     return {
       providerName,
+      authType,
       host: this.loose(input?.host),
       port: this.clampInt(input?.port, 587, 1, 65_535),
       username,
@@ -239,11 +340,38 @@ export class SettingsService {
       imapUseSsl: input?.imapUseSsl !== false,
       imapFolder: this.loose(input?.imapFolder, 'INBOX'),
       mailboxTag: this.loose(input?.mailboxTag),
+      leadTemplateTags: this.stringList(input?.leadTemplateTags, []),
       duplicatePolicy: input?.duplicatePolicy === 'process-every-message' ? 'process-every-message' : 'skip-exact-message',
       autoCreateLeads: input?.autoCreateLeads !== false,
       syncIntervalMinutes: this.clampInt(input?.syncIntervalMinutes, 10, 5, 120),
       maxMessagesPerSync: this.clampInt(input?.maxMessagesPerSync, 25, 5, 100),
+      gmailEmail: this.loose(input?.gmailEmail),
+      gmailAccessToken: this.loose(input?.gmailAccessToken),
+      gmailRefreshToken: this.loose(input?.gmailRefreshToken),
+      gmailTokenExpiresAt: this.nullText(input?.gmailTokenExpiresAt),
+      gmailLabelIds: this.stringList(input?.gmailLabelIds, ['INBOX']),
     };
+  }
+
+  private gmailRedirectUri() {
+    return this.loose(process.env.GOOGLE_GMAIL_REDIRECT_URI);
+  }
+
+  private parseOauthState(value: string) {
+    try {
+      const parsed = JSON.parse(Buffer.from(`${value ?? ''}`.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8'));
+      return {
+        returnTo: this.loose(parsed?.returnTo, '/dashboard/settings'),
+        mailboxTag: this.loose(parsed?.mailboxTag, 'gmail'),
+        leadTemplateTags: this.stringList(parsed?.leadTemplateTags, []),
+      };
+    } catch {
+      return { returnTo: '/dashboard/settings', mailboxTag: 'gmail', leadTemplateTags: [] };
+    }
+  }
+
+  private base64UrlEncode(value: string) {
+    return Buffer.from(value).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   }
 
   private normalizeCommunicationProvider(input: any) {

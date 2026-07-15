@@ -75,6 +75,7 @@ function ProfessionalMailWorkspace({ initialMailId }: { initialMailId?: number }
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState("")
   const [status, setStatus] = useState<"all" | "New" | "Replied" | "Converted">("all")
+  const [mailboxTag, setMailboxTag] = useState("all")
   const [selectedId, setSelectedId] = useState<number | null>(initialMailId ?? null)
   const [compose, setCompose] = useState<ComposeState>(emptyCompose)
   const [reply, setReply] = useState("")
@@ -90,6 +91,7 @@ function ProfessionalMailWorkspace({ initialMailId }: { initialMailId?: number }
     pageSize: PAGE_SIZE,
     search: search || undefined,
     status: status === "all" ? undefined : status,
+    mailboxTag: mailboxTag === "all" ? undefined : mailboxTag,
   })
   const selectedQuery = useMailInboxItem(selectedId ?? undefined)
   const syncStatusQuery = useMailInboxSyncStatus()
@@ -101,6 +103,12 @@ function ProfessionalMailWorkspace({ initialMailId }: { initialMailId?: number }
   const convertMutation = useConvertMailInboxToLead()
 
   const messages = inboxQuery.data?.items ?? []
+  const mailboxTags = useMemo(
+    () => [
+      ...new Set(messages.map((item) => item.mailboxTag?.trim()).filter(Boolean) as string[]),
+    ],
+    [messages],
+  )
   const selected = selectedQuery.data ?? messages.find((item) => item.id === selectedId) ?? null
   const documents = documentsQuery.data?.items ?? []
   const pdfTemplates = (pdfQuery.data?.items ?? []).filter((item) => item.status !== "Archived")
@@ -260,6 +268,32 @@ function ProfessionalMailWorkspace({ initialMailId }: { initialMailId?: number }
               label="Converted"
               onClick={() => setStatus("Converted")}
             />
+            <div className="border-t pt-3">
+              <p className="px-3 pb-2 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Tags</p>
+              <FolderButton
+                active={mailboxTag === "all"}
+                count={messages.length}
+                icon="label"
+                label="All tags"
+                onClick={() => {
+                  setMailboxTag("all")
+                  setPage(1)
+                }}
+              />
+              {mailboxTags.map((tag) => (
+                <FolderButton
+                  active={mailboxTag === tag}
+                  count={messages.filter((item) => item.mailboxTag === tag).length}
+                  icon="label"
+                  key={tag}
+                  label={tag}
+                  onClick={() => {
+                    setMailboxTag(tag)
+                    setPage(1)
+                  }}
+                />
+              ))}
+            </div>
           </nav>
           <div className="mt-auto space-y-3 border-t p-4 text-xs">
             <div className="rounded-xl border bg-background p-3">
@@ -364,6 +398,23 @@ function ProfessionalMailWorkspace({ initialMailId }: { initialMailId?: number }
                 </Button>
               ))}
             </div>
+            <Select
+              onValueChange={(value) => {
+                setMailboxTag(value)
+                setPage(1)
+              }}
+              value={mailboxTag}
+            >
+              <SelectTrigger className="mt-2 rounded-xl bg-muted/30">
+                <SelectValue placeholder="Mailbox tag" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All tags</SelectItem>
+                {mailboxTags.map((tag) => (
+                  <SelectItem key={tag} value={tag}>{tag}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </header>
 
           {error ? (
@@ -702,6 +753,11 @@ function MailListRow({
           <Badge className="h-5 px-1.5 text-[10px]" variant="outline">
             {item.status}
           </Badge>
+          {item.mailboxTag ? (
+            <Badge className="h-5 px-1.5 text-[10px]" variant="outline">
+              {item.mailboxTag}
+            </Badge>
+          ) : null}
           {item.extractionMethod ? (
             <Badge className="h-5 px-1.5 text-[10px]" variant="secondary">
               {item.extractionMethod}

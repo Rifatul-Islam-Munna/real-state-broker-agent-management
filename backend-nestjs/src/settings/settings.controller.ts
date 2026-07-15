@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Patch, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Patch, Post, Query, Res, UseGuards } from '@nestjs/common';
+import type { Response } from 'express';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { IntegrationWorkspaceService } from './integration-workspace.service';
@@ -63,6 +64,20 @@ export class SettingsController {
   @ApiOperation({ summary: 'Update integration workspace safely' })
   async updateWorkspace(@Body() dto: any) {
     return this.integrationWorkspaceService.update(dto);
+  }
+
+  @Post('settings/integrations/gmail/connect-url')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Create Gmail OAuth connect URL' })
+  async getGmailConnectUrl(@Body() dto: any) {
+    return this.settingsService.getGmailConnectUrl(dto);
+  }
+
+  @Get('settings/integrations/gmail/callback')
+  @ApiOperation({ summary: 'Complete Gmail OAuth connection' })
+  async completeGmailConnect(@Query('code') code: string, @Query('state') state: string, @Res() res: Response) {
+    const redirectUrl = await this.settingsService.completeGmailConnect(code, state);
+    return res.redirect(redirectUrl);
   }
 
   @Get('settings/scheduling')

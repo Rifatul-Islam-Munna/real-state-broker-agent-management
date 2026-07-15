@@ -8,12 +8,14 @@ export type LeadCollectionEmailInput = {
   subject: string;
   htmlBody?: string;
   textBody?: string;
+  mailboxTag?: string;
 };
 
 export type LeadCollectionTemplateLike = {
   id?: number;
   name: string;
   senderPatterns: string[];
+  mailboxTags?: string[];
   subjectPattern: string;
   subjectMatchMode: string;
   bodyFingerprint: string[];
@@ -33,6 +35,7 @@ export type LeadCollectionParseResult = {
   missingRequiredFields: string[];
   extractedFields: string[];
   diagnostics: string[];
+  scopeMatched?: boolean;
 };
 
 const BLOCK_TAGS = [
@@ -276,6 +279,7 @@ export function parseLeadCollectionTemplate(
     missingRequiredFields,
     extractedFields: Object.keys(values),
     diagnostics,
+    scopeMatched: true,
   };
 }
 
@@ -588,5 +592,6 @@ function emptyParseResult(reason: string): LeadCollectionParseResult {
     missingRequiredFields: [],
     extractedFields: [],
     diagnostics: [reason],
+    scopeMatched: false,
   };
 }

@@ -19,6 +19,7 @@ import type { LeadCollectionParseResult } from './lead-collection-parser';
 
 interface MailProviderConfig {
   providerName: string;
+  authType: 'password' | 'gmail-oauth';
   enableInboxSync: boolean;
   imapHost: string;
   imapPort: number;
@@ -27,10 +28,16 @@ interface MailProviderConfig {
   imapUseSsl: boolean;
   imapFolder: string;
   mailboxTag: string;
+  leadTemplateTags: string[];
   duplicatePolicy: 'skip-exact-message' | 'process-every-message';
   autoCreateLeads: boolean;
   syncIntervalMinutes: number;
   maxMessagesPerSync: number;
+  gmailEmail: string;
+  gmailAccessToken: string;
+  gmailRefreshToken: string;
+  gmailTokenExpiresAt: string | null;
+  gmailLabelIds: string[];
 }
 
 interface InboundEmail {
@@ -193,6 +200,7 @@ export class MailInboxSyncBackgroundService {
 
   private async syncInbox(config: MailProviderConfig, aiConfig: AiProviderConfig | null): Promise<SyncRunResult> {
     this.validateConfig(config);
+    if (config.authType === 'gmail-oauth') return this.syncGmailInbox(config, aiConfig);
     const result: SyncRunResult = {
       importedCount: 0,
       matchedLeadCount: 0,
@@ -277,13 +285,74 @@ export class MailInboxSyncBackgroundService {
     return result;
   }
 
+  private async syncGmailInbox(config: MailProviderConfig, aiConfig: AiProviderConfig | null): Promise<SyncRunResult> {
+    const result: SyncRunResult = { importedCount: 0, matchedLeadCount: 0, createdLeadCount: 0, skippedCount: 0 };
+    const properties = await this.propertyRepo.find({ relations: ['agent'], order: { updatedAt: 'DESC' } });
+    const accessToken = await this.getGmailAccessToken(config);
+    const labels = config.gmailLabelIds.length ? config.gmailLabelIds : ['INBOX'];
+    const listUrl = new URL('https://gmail.googleapis.com/gmail/v1/users/me/messages');
+    listUrl.searchParams.set('maxResults', String(config.maxMessagesPerSync));
+    listUrl.searchParams.set('q', 'is:unread');
+    for (const label of labels) listUrl.searchParams.append('labelIds', label);
+    const listResponse = await fetch(listUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
+    if (!listResponse.ok) throw new Error(`Gmail list failed: ${listResponse.status}`);
+    const list: any = await listResponse.json();
+    for (const item of list.messages ?? []) {
+      const id = `${item.id ?? ''}`.trim();
+      if (!id) continue;
+      const messageResponse = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}?format=raw`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (!messageResponse.ok) {
+        result.skippedCount++;
+        continue;
+      }
+      const message: any = await messageResponse.json();
+      const source = Buffer.from(this.base64UrlDecode(`${message.raw ?? ''}`), 'base64');
+      const parsed = await simpleParser(source, { skipImageLinks: true });
+      const sender = parsed.from?.value?.[0];
+      const inbound: InboundEmail = {
+        senderEmail: (sender?.address ?? '').trim().toLowerCase(),
+        senderName: (sender?.name ?? '').trim(),
+        subject: (parsed.subject ?? '').trim(),
+        body: (parsed.text ?? '').trim(),
+        htmlBody: typeof parsed.html === 'string' ? parsed.html : '',
+        messageId: `gmail:${id}`,
+        inReplyTo: `${parsed.inReplyTo ?? ''}`.trim(),
+        references: this.normalizeReferences(parsed.references),
+        mailboxTag: config.mailboxTag || 'gmail',
+        receivedAt: parsed.date ?? new Date(Number(message.internalDate || Date.now())),
+      };
+      if (!inbound.senderEmail || (!inbound.subject && !inbound.body)) {
+        result.skippedCount++;
+        await this.markGmailRead(id, accessToken);
+        continue;
+      }
+      const saved = await this.saveInbound(inbound, properties, config, aiConfig);
+      if (saved.skipped) result.skippedCount++;
+      else result.importedCount++;
+      if (saved.matchedLead) result.matchedLeadCount++;
+      if (saved.createdLead) result.createdLeadCount++;
+      await this.markGmailRead(id, accessToken);
+    }
+    return result;
+  }
+
   private async saveInbound(inbound: InboundEmail, properties: Property[], config: MailProviderConfig, aiConfig: AiProviderConfig | null) {
     const templateResult = await this.leadCollectionTemplates.extractFromEmail({
       fromAddress: inbound.senderEmail,
       subject: inbound.subject,
       htmlBody: inbound.htmlBody,
       textBody: inbound.body,
+      mailboxTag: inbound.mailboxTag,
     });
+    if (
+      config.leadTemplateTags.length &&
+      !config.leadTemplateTags.map((item) => item.toLowerCase()).includes(inbound.mailboxTag.toLowerCase())
+    ) {
+      templateResult.scopeMatched = false;
+      templateResult.diagnostics.push(`mailbox-tag: ${inbound.mailboxTag || 'untagged'} is not enabled for lead templates`);
+    }
     const fallback = await this.mailboxLeadIntelligence.extractLeadFromEmail({
       ...inbound,
       receivedAt: inbound.receivedAt,
@@ -295,7 +364,8 @@ export class MailInboxSyncBackgroundService {
     extracted.phone = normalizePhoneNumber(extracted.phone, defaultPhoneCountry);
     const matchedProperty = this.matchProperty(properties, inbound, extracted);
     const combined = `${inbound.subject}\n${inbound.body}`.toLowerCase();
-    const isPropertyInquiry = !!matchedProperty || extracted.shouldCreateLead === true || this.isPropertyInquiry(combined);
+    const leadTemplateAllowed = templateResult.scopeMatched !== false && templateResult.matched === true;
+    const isPropertyInquiry = leadTemplateAllowed && (!!matchedProperty || extracted.shouldCreateLead === true || this.isPropertyInquiry(combined));
 
     const outcome = await this.dataSource.transaction(async (manager) => {
       const mailRepo = manager.getRepository(MailInboxItem);
@@ -472,6 +542,7 @@ export class MailInboxSyncBackgroundService {
         : '';
     return {
       providerName,
+      authType: raw.authType === 'gmail-oauth' ? 'gmail-oauth' : 'password',
       enableInboxSync: raw.enableInboxSync === true,
       imapHost: `${raw.imapHost ?? defaultHost}`.trim(),
       imapPort: this.clampInt(raw.imapPort, 993, 1, 65_535),
@@ -480,10 +551,16 @@ export class MailInboxSyncBackgroundService {
       imapUseSsl: raw.imapUseSsl !== false,
       imapFolder: `${raw.imapFolder ?? 'INBOX'}`.trim() || 'INBOX',
       mailboxTag: `${raw.mailboxTag ?? ''}`.trim(),
+      leadTemplateTags: this.stringList(raw.leadTemplateTags),
       duplicatePolicy: raw.duplicatePolicy === 'process-every-message' ? 'process-every-message' : 'skip-exact-message',
       autoCreateLeads: raw.autoCreateLeads !== false,
       syncIntervalMinutes: this.clampInt(raw.syncIntervalMinutes, 10, 5, 120),
       maxMessagesPerSync: this.clampInt(raw.maxMessagesPerSync, 25, 5, 100),
+      gmailEmail: `${raw.gmailEmail ?? ''}`.trim(),
+      gmailAccessToken: `${raw.gmailAccessToken ?? ''}`.trim(),
+      gmailRefreshToken: `${raw.gmailRefreshToken ?? ''}`.trim(),
+      gmailTokenExpiresAt: raw.gmailTokenExpiresAt ? `${raw.gmailTokenExpiresAt}` : null,
+      gmailLabelIds: this.stringList(raw.gmailLabelIds).length ? this.stringList(raw.gmailLabelIds) : ['INBOX'],
     };
   }
 
@@ -511,6 +588,10 @@ export class MailInboxSyncBackgroundService {
   }
 
   private validateConfig(config: MailProviderConfig) {
+    if (config.authType === 'gmail-oauth') {
+      if (!config.gmailRefreshToken) throw new Error('Gmail refresh token is required when Gmail OAuth is enabled.');
+      return;
+    }
     if (!config.imapHost) throw new Error('IMAP host is required when inbox sync is enabled.');
     if (!config.imapUsername) throw new Error('IMAP username is required when inbox sync is enabled.');
     if (!config.imapPassword) throw new Error('IMAP password is required when inbox sync is enabled.');
@@ -525,6 +606,47 @@ export class MailInboxSyncBackgroundService {
       .sort((a, b) => b.score - a.score || b.property.title.length - a.property.title.length)
       .map((item) => item.property)
       .find(Boolean);
+  }
+
+  private async getGmailAccessToken(config: MailProviderConfig) {
+    const expiresAt = config.gmailTokenExpiresAt ? new Date(config.gmailTokenExpiresAt).getTime() : 0;
+    if (config.gmailAccessToken && expiresAt > Date.now() + 60_000) return config.gmailAccessToken;
+    const clientId = `${process.env.GOOGLE_CLIENT_ID ?? ''}`.trim();
+    const clientSecret = `${process.env.GOOGLE_CLIENT_SECRET ?? ''}`.trim();
+    if (!clientId || !clientSecret || !config.gmailRefreshToken) {
+      throw new Error('Google OAuth credentials are required for Gmail sync.');
+    }
+    const response = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        refresh_token: config.gmailRefreshToken,
+        grant_type: 'refresh_token',
+      }),
+    });
+    if (!response.ok) throw new Error(`Gmail token refresh failed: ${response.status}`);
+    const token: any = await response.json();
+    config.gmailAccessToken = `${token.access_token ?? ''}`.trim();
+    config.gmailTokenExpiresAt = new Date(Date.now() + (Number(token.expires_in) || 3600) * 1000).toISOString();
+    await this.settingsService.saveSmtpConfig({
+      ...await this.settingsService.getSmtpConfig(),
+      gmailAccessToken: config.gmailAccessToken,
+      gmailTokenExpiresAt: config.gmailTokenExpiresAt,
+    });
+    return config.gmailAccessToken;
+  }
+
+  private async markGmailRead(id: string, accessToken: string) {
+    await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}/modify`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ removeLabelIds: ['UNREAD'] }),
+    }).catch(() => undefined);
   }
 
   private propertyMatchScore(property: Property, normalizedEmailText: string) {
@@ -595,9 +717,12 @@ export class MailInboxSyncBackgroundService {
       timeline: templateValues.timeline || '',
       interest: templateValues.interest || fallback.interest,
       shouldCreateLead:
-        this.leadCollectionTemplates.isConfident(templateResult) ||
-        this.isPropertyInquiry(`${inbound.subject}
-${inbound.body}`.toLowerCase()),
+        templateResult.scopeMatched !== false &&
+        (
+          this.leadCollectionTemplates.isConfident(templateResult) ||
+          (templateResult.matched && this.isPropertyInquiry(`${inbound.subject}
+${inbound.body}`.toLowerCase()))
+        ),
       confidence: Math.max(templateResult.confidence, 0.45),
       rawFields: templateValues,
     };
@@ -611,7 +736,7 @@ ${inbound.body}`.toLowerCase()),
       };
     }
 
-    if (!aiConfig?.baseUrl) {
+    if (templateResult.scopeMatched === false || !templateResult.matched || !aiConfig?.baseUrl) {
       return {
         info: fallbackInfo,
         method: templateResult.matched ? 'Template+Fallback' : 'Fallback',
@@ -768,6 +893,19 @@ ${inbound.body}`.toLowerCase()),
   private clampInt(value: any, fallback: number, min: number, max: number) {
     const parsed = Number.parseInt(`${value ?? ''}`, 10);
     return Number.isFinite(parsed) ? Math.min(max, Math.max(min, parsed)) : fallback;
+  }
+
+  private stringList(value: any) {
+    return Array.isArray(value)
+      ? [...new Set(value.map((item) => `${item ?? ''}`.trim()).filter(Boolean))]
+      : typeof value === 'string'
+        ? [...new Set(value.split(',').map((item) => item.trim()).filter(Boolean))]
+        : [];
+  }
+
+  private base64UrlDecode(value: string) {
+    const normalized = value.replace(/-/g, '+').replace(/_/g, '/');
+    return normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
   }
 
   private toDate(value?: Date | string) {

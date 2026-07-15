@@ -939,6 +939,14 @@ export function useConvertMailInboxToLead() {
   })
 }
 
+export function useGmailConnectUrl() {
+  return useCommonMutationApi<{ url: string }, { returnTo?: string; mailboxTag?: string; leadTemplateTags?: string[] }>({
+    method: "POST",
+    successMessage: "Opening Gmail connection",
+    url: "/settings/integrations/gmail/connect-url",
+  })
+}
+
 export function useMailInboxItem(id?: number) {
   return useQueryWrapper<MailInboxItem>(
     ["mail-inbox-item", id],

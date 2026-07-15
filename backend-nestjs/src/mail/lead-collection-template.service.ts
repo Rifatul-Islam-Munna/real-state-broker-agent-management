@@ -192,8 +192,9 @@ export class LeadCollectionTemplateService {
   }
 
   async extractFromEmail(input: LeadCollectionEmailInput) {
-    const templates = await this.getActiveTemplates();
+    const templates = this.templatesForMailboxTag(await this.getActiveTemplates(), input.mailboxTag);
     const initial = parseLeadCollectionTemplates(templates, input);
+    initial.scopeMatched = templates.length > 0;
     if (!initial.templateId) return initial;
     const template = templates.find((item) => item.id === initial.templateId);
     if (!template) return initial;
@@ -620,6 +621,7 @@ export class LeadCollectionTemplateService {
       senderPatterns: senderPatterns.length
         ? senderPatterns
         : this.inferSenderPatterns(source.sampleFromAddress),
+      mailboxTags: this.stringArray(dto.mailboxTags),
       subjectPattern: subjectPattern || this.inferSubjectPattern(source.sampleSubject),
       subjectMatchMode,
       bodyFingerprint,
@@ -680,6 +682,14 @@ export class LeadCollectionTemplateService {
     });
     this.cacheExpiresAt = Date.now() + 60_000;
     return this.cachedTemplates;
+  }
+
+  private templatesForMailboxTag(templates: LeadCollectionTemplate[], mailboxTag?: string) {
+    const tag = `${mailboxTag ?? ''}`.trim().toLowerCase();
+    return templates.filter((template) => {
+      const tags = this.stringArray(template.mailboxTags).map((item) => item.toLowerCase());
+      return !tags.length || (!!tag && tags.includes(tag));
+    });
   }
 
   private invalidateCache() {

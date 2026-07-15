@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "next dev --webpack",
     "dev:webpack": "next dev --webpack",
-    "dev:turbopack": "next dev --turbopack",
+    "dev:turbopack": "next dev --webpack",
     "dev:clean": "node -e \"const fs=require('fs'); for (const p of ['.next/cache','.next/dev/cache']) fs.rmSync(p,{recursive:true,force:true});\" && next dev --webpack",
     "build": "next build",
     "start": "next start",

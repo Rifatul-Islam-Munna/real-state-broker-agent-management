@@ -23,7 +23,7 @@ export class MailService {
     private pdfsService: PdfsService,
   ) {}
 
-  async findAll(page = 1, pageSize = 20, search?: string, status?: string) {
+  async findAll(page = 1, pageSize = 20, search?: string, status?: string, mailboxTag?: string) {
     page = toInt(page, 1);
     pageSize = toInt(pageSize, 20);
     const qb = this.mailRepo.createQueryBuilder('mail').leftJoinAndSelect('mail.lead', 'lead');
@@ -31,6 +31,7 @@ export class MailService {
       qb.andWhere('(mail.subject ILIKE :search OR mail.message ILIKE :search OR mail.email ILIKE :search OR mail.name ILIKE :search)', { search: `%${search}%` });
     }
     if (status) qb.andWhere('mail.status = :status', { status: mailInboxStatusDbValue(status) });
+    if (mailboxTag) qb.andWhere('LOWER(mail.mailboxTag) = :mailboxTag', { mailboxTag: mailboxTag.trim().toLowerCase() });
     const [items, total] = await qb.orderBy('mail.createdAt', 'DESC').skip((page - 1) * pageSize).take(pageSize).getManyAndCount();
     return paginated(items.map((item) => this.mapMail(item)), total, page, pageSize);
   }
@@ -55,7 +56,11 @@ export class MailService {
     if (!to) throw new BadRequestException('Recipient email is required.');
     if (!subject) throw new BadRequestException('Subject is required.');
     const config = await this.settingsService.getSmtpConfig();
-    if (!config?.host || !config?.username || !config?.password) throw new BadRequestException('SMTP mail is not configured.');
+    if (config?.authType === 'gmail-oauth') {
+      if (!config.gmailRefreshToken || !config.gmailEmail) throw new BadRequestException('Gmail is not connected.');
+    } else if (!config?.host || !config?.username || !config?.password) {
+      throw new BadRequestException('SMTP mail is not configured.');
+    }
     const lead = await this.leadRepo.createQueryBuilder('lead')
       .where('LOWER(lead.email) = :email', { email: to })
       .getOne();
@@ -64,21 +69,35 @@ export class MailService {
       : [];
     const attachmentUrls = [...this.stringList(dto.attachmentUrls), ...generatedPdfUrls];
     if (!plainBody && !htmlBody && attachmentUrls.length === 0) throw new BadRequestException('Message or attachment is required.');
-    const nodemailer = require('nodemailer');
-    const transporter = nodemailer.createTransport({
-      host: config.host,
-      port: config.port ?? 587,
-      secure: !!config.useSsl && Number(config.port ?? 587) === 465,
-      auth: { user: config.username, pass: config.password },
-    });
-    await transporter.sendMail({
-      from: config.fromName ? `"${config.fromName}" <${config.fromEmail || config.username}>` : (config.fromEmail || config.username),
-      to,
-      subject,
-      text: plainBody,
-      html: htmlBody || this.textToHtml(plainBody),
-      attachments: attachmentUrls.map((url) => ({ filename: url.split('/').pop() || 'attachment', path: url })),
-    });
+    if (config.authType === 'gmail-oauth') {
+      const gmailText = this.messageBodyWithAttachments(plainBody, attachmentUrls);
+      const gmailHtml = [
+        htmlBody || this.textToHtml(plainBody),
+        ...attachmentUrls.map((url) => `<p>Attachment: <a href="${this.escapeHtml(url)}">${this.escapeHtml(url)}</a></p>`),
+      ].filter(Boolean).join('');
+      await this.sendViaGmailApi(config, {
+        to,
+        subject,
+        text: gmailText,
+        html: gmailHtml,
+      });
+    } else {
+      const nodemailer = require('nodemailer');
+      const transporter = nodemailer.createTransport({
+        host: config.host,
+        port: config.port ?? 587,
+        secure: !!config.useSsl && Number(config.port ?? 587) === 465,
+        auth: { user: config.username, pass: config.password },
+      });
+      await transporter.sendMail({
+        from: config.fromName ? `"${config.fromName}" <${config.fromEmail || config.username}>` : (config.fromEmail || config.username),
+        to,
+        subject,
+        text: plainBody,
+        html: htmlBody || this.textToHtml(plainBody),
+        attachments: attachmentUrls.map((url) => ({ filename: url.split('/').pop() || 'attachment', path: url })),
+      });
+    }
     const item = this.mailRepo.create({
       email: to,
       kind: 'Direct',
@@ -186,6 +205,7 @@ export class MailService {
       htmlBody: item.htmlBody,
       kind: item.kind,
       status: item.status,
+      mailboxTag: item.mailboxTag,
       leadId: item.leadId ?? null,
       extractedLead: item.extractedLead ?? {},
       extractionMethod: item.extractionMethod ?? '',
@@ -216,6 +236,7 @@ export class MailService {
       kind: dto.kind ?? 'Direct',
       status: dto.status ?? 'New',
       leadId: dto.leadId ?? null,
+      mailboxTag: `${dto.mailboxTag ?? ''}`.trim(),
     };
   }
 
@@ -225,6 +246,65 @@ export class MailService {
 
   private messageBodyWithAttachments(message: string, attachmentUrls: string[]) {
     return [message, ...attachmentUrls.map((url) => `Attachment: ${url}`)].filter(Boolean).join('\n');
+  }
+
+  private async sendViaGmailApi(config: any, message: { to: string; subject: string; text: string; html: string }) {
+    const accessToken = await this.getGmailAccessToken(config);
+    const from = config.fromName
+      ? `"${config.fromName}" <${config.fromEmail || config.gmailEmail}>`
+      : (config.fromEmail || config.gmailEmail);
+    const raw = [
+      `From: ${from}`,
+      `To: ${message.to}`,
+      `Subject: ${this.encodeHeader(message.subject)}`,
+      'MIME-Version: 1.0',
+      'Content-Type: text/html; charset=UTF-8',
+      '',
+      message.html || this.textToHtml(message.text),
+    ].join('\r\n');
+    const response = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ raw: this.base64UrlEncode(raw) }),
+    });
+    if (!response.ok) throw new BadRequestException(`Gmail send failed: ${response.status}`);
+  }
+
+  private async getGmailAccessToken(config: any) {
+    const expiresAt = config.gmailTokenExpiresAt ? new Date(config.gmailTokenExpiresAt).getTime() : 0;
+    if (config.gmailAccessToken && expiresAt > Date.now() + 60_000) return config.gmailAccessToken;
+    const clientId = `${process.env.GOOGLE_CLIENT_ID ?? ''}`.trim();
+    const clientSecret = `${process.env.GOOGLE_CLIENT_SECRET ?? ''}`.trim();
+    if (!clientId || !clientSecret || !config.gmailRefreshToken) throw new BadRequestException('Google OAuth credentials are missing.');
+    const response = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        refresh_token: config.gmailRefreshToken,
+        grant_type: 'refresh_token',
+      }),
+    });
+    if (!response.ok) throw new BadRequestException(`Gmail token refresh failed: ${response.status}`);
+    const token: any = await response.json();
+    config.gmailAccessToken = `${token.access_token ?? ''}`.trim();
+    config.gmailTokenExpiresAt = new Date(Date.now() + (Number(token.expires_in) || 3600) * 1000).toISOString();
+    await this.settingsService.saveSmtpConfig({ ...await this.settingsService.getSmtpConfig(), ...config });
+    return config.gmailAccessToken;
+  }
+
+  private encodeHeader(value: string) {
+    return /[^\x00-\x7F]/.test(value)
+      ? `=?UTF-8?B?${Buffer.from(value, 'utf8').toString('base64')}?=`
+      : value;
+  }
+
+  private base64UrlEncode(value: string) {
+    return Buffer.from(value).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   }
 
   private cleanOutgoingHtml(value: any) {

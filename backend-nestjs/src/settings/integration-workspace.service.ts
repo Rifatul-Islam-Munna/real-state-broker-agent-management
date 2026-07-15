@@ -36,7 +36,7 @@ export class IntegrationWorkspaceService {
         ? smtp.syncIntervalMinutes ?? 10
         : null,
       smtpConfig: smtp
-        ? this.withSecretFlags(smtp, ['password', 'imapPassword'])
+        ? this.withSecretFlags(smtp, ['password', 'imapPassword', 'gmailAccessToken', 'gmailRefreshToken'])
         : null,
       hasAiProviderConfig: this.aiValid(ai),
       aiProviderUpdatedAt: row?.aiProviderUpdatedAt ?? null,
@@ -82,6 +82,8 @@ export class IntegrationWorkspaceService {
       const value = this.merge(this.parse(row.smtpPayload), input.smtp, [
         'password',
         'imapPassword',
+        'gmailAccessToken',
+        'gmailRefreshToken',
       ]);
       if (value.enableInboxSync) {
         value.imapUsername = value.imapUsername || value.username;
@@ -94,6 +96,7 @@ export class IntegrationWorkspaceService {
       }
       if (
         value.enableInboxSync &&
+        value.authType !== 'gmail-oauth' &&
         (!value.imapHost || !value.imapUsername || !value.imapPassword)
       ) {
         throw new BadRequestException(
@@ -171,6 +174,7 @@ export class IntegrationWorkspaceService {
   }
 
   private smtpValid(value: any) {
+    if (value?.authType === 'gmail-oauth') return !!(value?.gmailEmail && value?.gmailRefreshToken);
     return !!(
       value?.host &&
       value?.username &&

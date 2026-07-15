@@ -21,9 +21,10 @@ export class MailController {
     @Query('pageSize') pageSize: number = 20,
     @Query('search') search?: string,
     @Query('status') status?: string,
+    @Query('mailboxTag') mailboxTag?: string,
   ) {
     if (id) return this.mailService.findOne(id);
-    return this.mailService.findAll(page, pageSize, search, status);
+    return this.mailService.findAll(page, pageSize, search, status, mailboxTag);
   }
 
   @Get('sync-status')

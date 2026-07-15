@@ -22,10 +22,11 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet"
-import { useUpdateAgencyIntegrationSettings } from "@/hooks/use-real-estate-api"
+import { useGmailConnectUrl, useUpdateAgencyIntegrationSettings } from "@/hooks/use-real-estate-api"
 
 type Values = {
   providerName: "Gmail" | "Outlook" | "Custom"
+  authType: "password" | "gmail-oauth"
   host: string
   port: string
   username: string
@@ -41,6 +42,8 @@ type Values = {
   imapUseSsl: boolean
   imapFolder: string
   mailboxTag: string
+  leadTemplateTags: string
+  gmailEmail: string
   duplicatePolicy: "skip-exact-message" | "process-every-message"
   autoCreateLeads: boolean
   syncIntervalMinutes: string
@@ -51,6 +54,7 @@ type Values = {
 
 const emptyValues = (): Values => ({
   providerName: "Gmail",
+  authType: "password",
   host: "smtp.gmail.com",
   port: "587",
   username: "",
@@ -66,6 +70,8 @@ const emptyValues = (): Values => ({
   imapUseSsl: true,
   imapFolder: "INBOX",
   mailboxTag: "",
+  leadTemplateTags: "",
+  gmailEmail: "",
   duplicatePolicy: "skip-exact-message",
   autoCreateLeads: true,
   syncIntervalMinutes: "10",
@@ -79,11 +85,12 @@ export function IntegrationMailSheet({
   onOpenChange,
   open,
 }: {
-  config?: Partial<Values> | null
+  config?: (Partial<Omit<Values, "leadTemplateTags">> & { leadTemplateTags?: string[] | string }) | null
   onOpenChange: (open: boolean) => void
   open: boolean
 }) {
   const mutation = useUpdateAgencyIntegrationSettings()
+  const gmailConnect = useGmailConnectUrl()
   const [values, setValues] = useState<Values>(() => emptyValues())
   const [error, setError] = useState<string | null>(null)
 
@@ -97,6 +104,9 @@ export function IntegrationMailSheet({
       imapPassword: "",
       port: String(config?.port ?? defaults.port),
       imapPort: String(config?.imapPort ?? defaults.imapPort),
+      leadTemplateTags: Array.isArray(config?.leadTemplateTags)
+        ? config.leadTemplateTags.join(", ")
+        : String(config?.leadTemplateTags ?? defaults.leadTemplateTags),
       syncIntervalMinutes: String(config?.syncIntervalMinutes ?? defaults.syncIntervalMinutes),
       maxMessagesPerSync: String(config?.maxMessagesPerSync ?? defaults.maxMessagesPerSync),
     })
@@ -119,16 +129,17 @@ export function IntegrationMailSheet({
 
   async function save() {
     setError(null)
-    if (!values.host.trim() || !values.username.trim() || !values.fromEmail.trim()) {
+    if (values.authType !== "gmail-oauth" && (!values.host.trim() || !values.username.trim() || !values.fromEmail.trim())) {
       setError("SMTP host, username, and from email are required.")
       return
     }
-    if (!values.password.trim() && !values.hasPassword) {
+    if (values.authType !== "gmail-oauth" && !values.password.trim() && !values.hasPassword) {
       setError("SMTP password is required for a new connection.")
       return
     }
     if (
       values.enableInboxSync &&
+      values.authType !== "gmail-oauth" &&
       (!values.imapHost.trim() || !values.imapUsername.trim())
     ) {
       setError("IMAP host and username are required when inbox sync is enabled.")
@@ -136,6 +147,7 @@ export function IntegrationMailSheet({
     }
     if (
       values.enableInboxSync &&
+      values.authType !== "gmail-oauth" &&
       !values.imapPassword.trim() &&
       !values.hasImapPassword &&
       !values.password.trim() &&
@@ -148,6 +160,7 @@ export function IntegrationMailSheet({
     const response = await mutation.mutateAsync({
       smtp: {
         providerName: values.providerName,
+        authType: values.authType,
         host: values.host.trim(),
         port: Math.max(1, Number(values.port) || 587),
         username: values.username.trim(),
@@ -163,6 +176,7 @@ export function IntegrationMailSheet({
         imapUseSsl: values.imapUseSsl,
         imapFolder: values.imapFolder.trim() || null,
         mailboxTag: values.mailboxTag.trim() || null,
+        leadTemplateTags: splitTags(values.leadTemplateTags),
         duplicatePolicy: values.duplicatePolicy,
         autoCreateLeads: values.autoCreateLeads,
         syncIntervalMinutes: Math.max(5, Number(values.syncIntervalMinutes) || 10),
@@ -186,6 +200,20 @@ export function IntegrationMailSheet({
     onOpenChange(false)
   }
 
+  async function connectGmail() {
+    setError(null)
+    const response = await gmailConnect.mutateAsync({
+      returnTo: "/dashboard/settings",
+      mailboxTag: values.mailboxTag.trim() || "gmail",
+      leadTemplateTags: splitTags(values.leadTemplateTags),
+    })
+    if (response.error || !response.data?.url) {
+      setError(response.error?.message ?? "Could not start Gmail connection.")
+      return
+    }
+    window.location.assign(response.data.url)
+  }
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="shadow-none sm:w-[38rem] sm:max-w-[38rem]">
@@ -197,6 +225,23 @@ export function IntegrationMailSheet({
         </SheetHeader>
         <div className="flex-1 space-y-5 overflow-y-auto px-5 pb-5">
           {error ? <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert> : null}
+          <div className="grid gap-3 rounded-xl border bg-muted/30 p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="text-sm font-semibold text-foreground">{"Gmail one-click"}</p>
+                <p className="text-xs text-muted-foreground">
+                  {values.authType === "gmail-oauth" ? `Connected: ${values.gmailEmail || "Gmail"}` : "Connect Gmail for send + inbox sync."}
+                </p>
+              </div>
+              <Button disabled={gmailConnect.isPending} onClick={() => void connectGmail()} size="sm" type="button" variant="outline">
+                {gmailConnect.isPending ? "Opening..." : values.authType === "gmail-oauth" ? "Reconnect Gmail" : "Connect Gmail"}
+              </Button>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Mailbox tag"><Input onChange={(event) => patch({ mailboxTag: event.target.value })} placeholder="gmail, zillow, realtor" value={values.mailboxTag} /></Field>
+              <Field label="Lead template tags"><Input onChange={(event) => patch({ leadTemplateTags: event.target.value })} placeholder="zillow, realtor, contact" value={values.leadTemplateTags} /></Field>
+            </div>
+          </div>
           <Field label="Provider">
             <Select onValueChange={(value) => changeProvider(value as Values["providerName"])} value={values.providerName}>
               <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
@@ -217,7 +262,7 @@ export function IntegrationMailSheet({
           </div>
           <Toggle checked={values.useSsl} label="Secure SMTP" onChange={(checked) => patch({ useSsl: checked })} />
           <Toggle checked={values.enableInboxSync} label="Inbox sync" onChange={(checked) => patch({ enableInboxSync: checked })} />
-          {values.enableInboxSync ? (
+          {values.enableInboxSync && values.authType !== "gmail-oauth" ? (
             <div className="space-y-4 rounded-xl border p-4">
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="IMAP host"><Input onChange={(event) => patch({ imapHost: event.target.value })} value={values.imapHost} /></Field>
@@ -225,7 +270,6 @@ export function IntegrationMailSheet({
                 <Field label="IMAP username"><Input onChange={(event) => patch({ imapUsername: event.target.value })} value={values.imapUsername} /></Field>
                 <Field label={values.hasImapPassword ? "IMAP password (saved)" : "IMAP password"}><Input autoComplete="new-password" onChange={(event) => patch({ imapPassword: event.target.value })} placeholder={values.hasImapPassword ? "Leave blank to keep saved password" : "Defaults to SMTP password"} type="password" value={values.imapPassword} /></Field>
                 <Field label="Folder"><Input onChange={(event) => patch({ imapFolder: event.target.value })} value={values.imapFolder} /></Field>
-                <Field label="Mailbox tag"><Input onChange={(event) => patch({ mailboxTag: event.target.value })} value={values.mailboxTag} /></Field>
                 <Field label="Sync interval"><Input min={5} onChange={(event) => patch({ syncIntervalMinutes: event.target.value })} type="number" value={values.syncIntervalMinutes} /></Field>
                 <Field label="Messages per sync"><Input min={5} onChange={(event) => patch({ maxMessagesPerSync: event.target.value })} type="number" value={values.maxMessagesPerSync} /></Field>
               </div>
@@ -241,6 +285,10 @@ export function IntegrationMailSheet({
       </SheetContent>
     </Sheet>
   )
+}
+
+function splitTags(value: string) {
+  return [...new Set(value.split(",").map((item) => item.trim()).filter(Boolean))]
 }
 
 function Field({ children, label }: { children: React.ReactNode; label: string }) {

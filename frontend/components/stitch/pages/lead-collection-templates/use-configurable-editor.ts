@@ -84,6 +84,7 @@ export function useConfigurableTemplateEditor({
       sampleFromAddress: item.sampleFromAddress,
       sampleSubject: item.sampleSubject,
       senderPatterns: item.senderPatterns,
+      mailboxTags: item.mailboxTags ?? [],
       subjectPattern: item.subjectPattern,
       subjectMatchMode: item.subjectMatchMode,
       bodyFingerprint: item.bodyFingerprint,

@@ -83,6 +83,9 @@ export class LeadCollectionTemplate {
   @Column({ type: 'jsonb', default: [] })
   senderPatterns: string[];
 
+  @Column({ type: 'jsonb', default: [] })
+  mailboxTags: string[];
+
   @Column({ type: 'text', default: '' })
   subjectPattern: string;
 

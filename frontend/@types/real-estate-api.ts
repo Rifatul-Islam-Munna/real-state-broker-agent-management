@@ -257,6 +257,14 @@ export type AgencyIntegrationStatus = {
   smtpProviderName?: string | null
   mailboxSyncEnabled: boolean
   mailboxSyncIntervalMinutes?: number | null
+  smtpConfig?: Partial<SmtpIntegrationWriteInput> & {
+    authType?: "password" | "gmail-oauth"
+    gmailEmail?: string | null
+    hasGmailAccessToken?: boolean
+    hasGmailRefreshToken?: boolean
+    hasPassword?: boolean
+    hasImapPassword?: boolean
+  } | null
   updatedAt?: string | null
 }
 
@@ -284,6 +292,7 @@ export type AiProviderIntegrationWriteInput = {
 
 export type SmtpIntegrationWriteInput = {
   providerName: string
+  authType?: "password" | "gmail-oauth"
   host: string
   port: number
   username: string
@@ -299,6 +308,7 @@ export type SmtpIntegrationWriteInput = {
   imapUseSsl?: boolean
   imapFolder?: string | null
   mailboxTag?: string | null
+  leadTemplateTags?: string[]
   duplicatePolicy?: "skip-exact-message" | "process-every-message"
   autoCreateLeads?: boolean
   syncIntervalMinutes?: number
@@ -1143,6 +1153,7 @@ export type MailInboxItem = {
   htmlBody?: string
   kind: MailInboxKind
   status: MailInboxStatus
+  mailboxTag?: string
   leadId?: number | null
   extractedLead?: Record<string, unknown>
   extractionMethod?: string
