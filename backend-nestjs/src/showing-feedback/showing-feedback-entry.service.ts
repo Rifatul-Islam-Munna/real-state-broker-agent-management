@@ -100,11 +100,12 @@ export class ShowingFeedbackEntryService {
       parseDateTimeInZone(payload?.showingAt, zone) ?? firstMessageAt;
     const receivedAt =
       parseDateTimeInZone(payload?.receivedAt, zone) ?? firstMessageAt;
-    const realtorName = `${payload?.realtorName ?? ''}`.trim() || 'Realtor';
-    const realtorEmail = `${payload?.realtorEmail ?? ''}`.trim().toLowerCase();
-    const realtorPhone = `${payload?.realtorPhone ?? ''}`.trim();
+    const realtorName = `${payload?.realtorName ?? payload?.leadName ?? ''}`.trim() || 'Showing contact';
+    const realtorEmail = `${payload?.realtorEmail ?? payload?.leadEmail ?? ''}`.trim().toLowerCase();
+    const realtorPhone = `${payload?.realtorPhone ?? payload?.leadPhone ?? ''}`.trim();
     const realtorContact =
       `${payload?.realtorContact ?? ''}`.trim() || realtorEmail || realtorPhone;
+
 
     return this.dataSource.transaction(async (manager) => {
       const showingRepo = manager.getRepository(RealtorShowing);
@@ -116,7 +117,10 @@ export class ShowingFeedbackEntryService {
           followUpEnabled: false,
           followUpGapDays: 0,
           followUpTemplateId: '',
-          leadId: null,
+          leadId: Number(payload?.leadId) || null,
+          visitorName: `${payload?.leadName ?? payload?.visitorName ?? ''}`.trim(),
+          visitorEmail: `${payload?.leadEmail ?? payload?.visitorEmail ?? ''}`.trim().toLowerCase(),
+          visitorPhone: `${payload?.leadPhone ?? payload?.visitorPhone ?? ''}`.trim(),
           outreachAt: null,
           propertyId: property.id,
           propertyMatchMethod: source === 'csv' ? 'Auto' : 'Manual',
@@ -131,24 +135,43 @@ export class ShowingFeedbackEntryService {
         }),
       );
 
+      const intelligence = this.feedbackIntelligence(feedbackText, this.sentiment(payload?.sentiment));
+      await showingRepo.update(showing.id, { followUpEnabled: false, replyReceived: true, replyReceivedAt: receivedAt });
       return feedbackRepo.save(
         feedbackRepo.create({
           channel: this.channel(payload?.channel, realtorEmail),
           classifier: source === 'csv' ? 'CSV Import' : 'Manual',
-          confidence: 1,
+          confidence: intelligence.confidence,
           feedbackText,
           firstMessageAt,
-          leadId: null,
+          leadId: Number(payload?.leadId) || null,
           propertyId: property.id,
           realtorContact,
           realtorName,
           realtorShowingId: showing.id,
           receivedAt,
-          sentiment: this.sentiment(payload?.sentiment),
+          sentiment: intelligence.sentiment,
+          intent: intelligence.intent,
+          applyLikelihood: intelligence.applyLikelihood,
+          priorityScore: intelligence.priorityScore,
+          isRead: false,
           sourceMessageId: `${source}-${randomUUID()}`,
         }),
       );
     });
+  }
+
+
+  private feedbackIntelligence(text: string, suppliedSentiment: string) {
+    const value = text.toLowerCase();
+    const positive = ['love', 'interested', 'apply', 'application', 'offer', 'move in', 'ready', 'perfect', 'great', 'yes'].filter((word) => value.includes(word)).length;
+    const negative = ['not interested', 'too expensive', 'small', 'no', 'hate', 'bad', 'issue', 'problem', 'pass'].filter((word) => value.includes(word)).length;
+    const urgency = ['today', 'asap', 'immediately', 'this week', 'ready now', 'apply now'].filter((word) => value.includes(word)).length;
+    const intent = /apply|application/.test(value) ? 'apply' : /offer/.test(value) ? 'offer' : /interested|love|ready|move in/.test(value) ? 'interested' : negative > positive ? 'not_interested' : 'unknown';
+    const sentiment = suppliedSentiment !== 'neutral' ? suppliedSentiment : positive > negative ? 'positive' : negative > positive ? 'negative' : 'neutral';
+    const applyLikelihood = Math.max(0, Math.min(1, 0.15 + positive * 0.18 + urgency * 0.2 + (intent === 'apply' ? 0.35 : 0) - negative * 0.2));
+    const priorityScore = Math.round(Math.max(0, Math.min(100, applyLikelihood * 80 + urgency * 10 + (sentiment === 'positive' ? 10 : 0))));
+    return { sentiment, intent, applyLikelihood: Number(applyLikelihood.toFixed(2)), priorityScore, confidence: suppliedSentiment === 'neutral' ? 0.72 : 1 };
   }
 
   private resolveProperty(payload: any, properties: Property[]) {

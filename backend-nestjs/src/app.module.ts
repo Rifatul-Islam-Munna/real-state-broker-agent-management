@@ -1,4 +1,4 @@
-import { PredictionModule } from "./prediction/prediction.module";
+﻿import { PredictionModule } from "./prediction/prediction.module";
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AppService } from './app.service';
@@ -27,6 +27,7 @@ import { ShowingFeedbackModule } from './showing-feedback/showing-feedback.modul
 import { PdfsModule } from './pdfs/pdfs.module';
 import { DevSeedService } from './dev-seed.service';
 import { PropertyOperationsModule } from './property-operations/property-operations.module';
+import { ToolsModule } from './tools/tools.module';
 
 @Module({
   imports: [
@@ -56,8 +57,10 @@ import { PropertyOperationsModule } from './property-operations/property-operati
     PdfsModule,
     PredictionModule,
     PropertyOperationsModule,
+    ToolsModule,
   ],
   controllers: [],
   providers: [AppService, DevSeedService],
 })
 export class AppModule {}
+

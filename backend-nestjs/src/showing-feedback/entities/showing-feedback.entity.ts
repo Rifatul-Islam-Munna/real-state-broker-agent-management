@@ -49,6 +49,18 @@ export class ShowingFeedback {
   @Column({ default: 'AI' })
   classifier: string;
 
+  @Column({ default: false })
+  isRead: boolean;
+
+  @Column({ type: 'float', default: 0 })
+  priorityScore: number;
+
+  @Column({ default: 'unknown' })
+  intent: string;
+
+  @Column({ type: 'float', default: 0 })
+  applyLikelihood: number;
+
   @Column({ type: 'timestamptz' })
   firstMessageAt: Date;
 

@@ -43,7 +43,7 @@ import {
   formatDocumentType,
 } from "@/components/stitch/pages/document-management-templates/sections/document-repository-shared"
 
-type TemplateAudience = "Lead" | "Realtor" | "OwnerFeedback"
+type TemplateAudience = "Lead" | "LeadShowing" | "Realtor" | "OwnerFeedback"
 type AttachmentMode = "none" | "property" | "pdf" | "document"
 type EditorState =
   | { mode: "create"; audience: TemplateAudience }
@@ -71,6 +71,7 @@ const ownerTokens = [
 
 function newTemplate(audience: TemplateAudience): AgencyCommunicationTemplateItem {
   const owner = audience === "OwnerFeedback"
+  const leadShowing = audience === "LeadShowing"
   return {
     audience,
     attachPropertyDocuments: !owner,
@@ -79,23 +80,27 @@ function newTemplate(audience: TemplateAudience): AgencyCommunicationTemplateIte
     attachmentMode: owner ? "none" : "property",
     body: owner
       ? "Showing feedback for {{property_address}} from {{fromdate}} to {{todate}}:\n\n{{feedback_summary}}\n{{feedback1}}\n{{feedback2}}\n{{feedback3}}"
-      : "Hi {{client_name}}, thanks for your interest in {{property_address}}. Reply here and our team will help with the next step.",
+      : leadShowing
+        ? "Hi {{client_name}}, thank you for visiting {{property_address}}. What did you like, what concerns do you have, and would you like to apply or schedule a second visit?"
+        : "Hi {{client_name}}, thanks for your interest in {{property_address}}. Reply here and our team will help with the next step.",
     channels: ["Email"],
     gapDays: 0,
     id: `custom-${crypto.randomUUID()}`,
     isActive: true,
-    name: owner ? "Owner Feedback Report" : `${audience} Message`,
+    name: owner ? "Owner Feedback Report" : leadShowing ? "Lead Showing Follow-up" : `${audience} Message`,
     sequenceType: "Direct",
     subject: owner
       ? "Showing feedback: {{property_address}}"
-      : "Property update: {{property_address}}",
+      : leadShowing
+        ? "How was your showing at {{property_address}}?"
+        : "Property update: {{property_address}}",
     variableTokens: owner ? ownerTokens : leadTokens,
     pdfTemplateId: "",
   }
 }
 
 function audienceLabel(value?: TemplateAudience) {
-  return value === "OwnerFeedback" ? "Owner feedback" : value ?? "Lead"
+  return value === "OwnerFeedback" ? "Owner feedback" : value === "LeadShowing" ? "Lead showing" : value ?? "Lead"
 }
 
 function TemplateCard({
@@ -175,6 +180,14 @@ export function CommunicationTemplateWorkspaceV2({
           >
             <AppIcon name="add" />
             {"Lead template"}
+          </Button>
+          <Button
+            onClick={() => setEditor({ mode: "create", audience: "LeadShowing" })}
+            size="sm"
+            type="button"
+            variant="outline"
+          >
+            {"Lead showing template"}
           </Button>
           <Button
             onClick={() => setEditor({ mode: "create", audience: "Realtor" })}
@@ -335,6 +348,7 @@ function TemplateSheet({
                   <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="Lead">{"Lead"}</SelectItem>
+                    <SelectItem value="LeadShowing">{"Lead showing"}</SelectItem>
                     <SelectItem value="Realtor">{"Realtor"}</SelectItem>
                     <SelectItem value="OwnerFeedback">{"Owner feedback"}</SelectItem>
                   </SelectContent>

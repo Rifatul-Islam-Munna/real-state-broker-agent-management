@@ -47,6 +47,10 @@ const mappingFields: Array<{ key: MappingKey; label: string; aliases: string[] }
   { key: "realtorPhone", label: "Realtor Phone", aliases: ["realtor phone", "agent phone", "phone", "mobile", "telephone"] },
   { key: "property", label: "Property", aliases: ["property", "property address", "listing", "listing address", "address", "mls address"] },
   { key: "showingAt", label: "Showing Date/Time", aliases: ["showing at", "showing date", "showing time", "date", "appointment"] },
+  { key: "visitorName", label: "Visitor Name", aliases: ["visitor name", "lead name", "tenant name", "client name"] },
+  { key: "visitorEmail", label: "Visitor Email", aliases: ["visitor email", "lead email", "tenant email", "client email"] },
+  { key: "visitorPhone", label: "Visitor Phone", aliases: ["visitor phone", "lead phone", "tenant phone", "client phone"] },
+  { key: "leadId", label: "Existing Lead ID", aliases: ["lead id", "tenant id", "visitor id"] },
 ]
 
 const emptyMapping: RealtorShowingImportInput["mapping"] = {
@@ -55,6 +59,10 @@ const emptyMapping: RealtorShowingImportInput["mapping"] = {
   realtorPhone: "",
   property: "",
   showingAt: "",
+  visitorName: "",
+  visitorEmail: "",
+  visitorPhone: "",
+  leadId: "",
 }
 
 function autoMapHeaders(headers: string[]) {

@@ -394,7 +394,7 @@ export type AgencyCommunicationTemplateItem = {
   attachmentDocumentType?: DocumentType | ""
   attachmentDocumentCategory?: string
   pdfTemplateId?: string
-  audience?: "Lead" | "Realtor" | "OwnerFeedback"
+  audience?: "Lead" | "LeadShowing" | "Realtor" | "OwnerFeedback"
 }
 
 export type AgencySettings = {
@@ -966,7 +966,12 @@ export type RealtorShowingImportInput = {
     realtorPhone: string
     property: string
     showingAt: string
+    visitorName: string
+    visitorEmail: string
+    visitorPhone: string
+    leadId?: string
   }
+  leadId?: number | null
   defaultPhoneCountry?: string
   emailEnabled: boolean
   smsEnabled: boolean
@@ -1000,6 +1005,10 @@ export type RealtorShowingManualInput = Omit<RealtorShowingImportInput, "rows" |
   realtorPhone: string
   property: string
   showingAt?: string | null
+  visitorName?: string
+  visitorEmail?: string
+  visitorPhone?: string
+  leadId?: number | null
 }
 
 export type ShowingFeedbackPropertySummary = {
@@ -1270,3 +1279,4 @@ export type BrokerageReports = {
     openCommission: number
   }
 }
+

@@ -73,6 +73,8 @@ export class ShowingFeedbackQueryService {
     fromDate?: string,
     toDate?: string,
     sentiment?: string,
+    readStatus?: string,
+    leadOnly?: boolean,
   ) {
     page = Math.max(1, Number(page) || 1);
     pageSize = Math.min(100, Math.max(1, Number(pageSize) || 10));
@@ -102,8 +104,13 @@ export class ShowingFeedbackQueryService {
       });
     }
 
+    if (readStatus === 'read') qb.andWhere('feedback.is_read = true');
+    if (readStatus === 'unread') qb.andWhere('feedback.is_read = false');
+    if (leadOnly) qb.andWhere('feedback.lead_id IS NOT NULL');
+
     const [items, totalCount] = await qb
-      .orderBy('feedback.received_at', 'DESC')
+      .orderBy('feedback.priorityScore', 'DESC')
+      .addOrderBy('feedback.receivedAt', 'DESC')
       .skip((page - 1) * pageSize)
       .take(pageSize)
       .getManyAndCount();
@@ -117,6 +124,53 @@ export class ShowingFeedbackQueryService {
       hasNextPage: page * pageSize < totalCount,
       hasPreviousPage: page > 1,
     };
+  }
+
+
+  async markRead(id: number, isRead = true) {
+    const feedback = await this.feedbackRepo.findOne({ where: { id } });
+    if (!feedback) throw new NotFoundException('Showing feedback not found.');
+    feedback.isRead = isRead;
+    return this.feedbackRepo.save(feedback);
+  }
+
+  async leadInbox(fromDate?: string, toDate?: string, readStatus?: string) {
+    const qb = this.feedbackRepo.createQueryBuilder('feedback').where('feedback.lead_id IS NOT NULL');
+    if (fromDate && toDate) {
+      const range = dateRangeInZone(fromDate, toDate, await this.schedulingSettingsService.getTimeZone());
+      if (!range) throw new BadRequestException('Feedback date range is invalid.');
+      qb.andWhere('feedback.received_at >= :start', { start: range.start }).andWhere('feedback.received_at < :end', { end: range.endExclusive });
+    }
+    if (readStatus === 'read') qb.andWhere('feedback.is_read = true');
+    if (readStatus === 'unread') qb.andWhere('feedback.is_read = false');
+    return qb
+      .distinct(true)
+      .leftJoinAndSelect('feedback.realtorShowing', 'showing')
+      .leftJoinAndSelect('showing.lead', 'lead')
+      .leftJoinAndSelect('feedback.property', 'property')
+      .orderBy('feedback.priorityScore', 'DESC')
+      .addOrderBy('feedback.receivedAt', 'DESC')
+      .take(200)
+      .getMany();
+  }
+
+  async bulkMarkRead(ids: number[], isRead = true) {
+    const cleanIds = Array.from(new Set(ids.map(Number).filter((id) => Number.isInteger(id) && id > 0))).slice(0, 500);
+    if (!cleanIds.length) throw new BadRequestException('Select at least one feedback item.');
+    await this.feedbackRepo.createQueryBuilder().update().set({ isRead }).whereInIds(cleanIds).execute();
+    return { updatedCount: cleanIds.length, isRead };
+  }
+
+  async reclassify(id: number, input: { sentiment?: string; intent?: string; priorityScore?: number; applyLikelihood?: number }) {
+    const feedback = await this.feedbackRepo.findOne({ where: { id } });
+    if (!feedback) throw new NotFoundException('Showing feedback not found.');
+    if (['positive', 'neutral', 'negative'].includes(`${input.sentiment}`)) feedback.sentiment = `${input.sentiment}`;
+    if (['apply', 'offer', 'interested', 'not_interested', 'unknown'].includes(`${input.intent}`)) feedback.intent = `${input.intent}`;
+    if (Number.isFinite(Number(input.priorityScore))) feedback.priorityScore = Math.max(0, Math.min(100, Number(input.priorityScore)));
+    if (Number.isFinite(Number(input.applyLikelihood))) feedback.applyLikelihood = Math.max(0, Math.min(1, Number(input.applyLikelihood)));
+    feedback.classifier = 'Human reviewed';
+    feedback.confidence = 1;
+    return this.feedbackRepo.save(feedback);
   }
 
   async previewReport(payload: any) {

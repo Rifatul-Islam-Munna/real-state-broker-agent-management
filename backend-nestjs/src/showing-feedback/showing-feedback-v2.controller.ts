@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ShowingFeedbackEntryService } from './showing-feedback-entry.service';
@@ -28,6 +28,8 @@ export class ShowingFeedbackV2Controller {
     @Query('fromDate') fromDate?: string,
     @Query('toDate') toDate?: string,
     @Query('sentiment') sentiment?: string,
+    @Query('readStatus') readStatus?: string,
+    @Query('leadOnly') leadOnly?: string,
   ) {
     return this.queries.findAll(
       Number(propertyId),
@@ -36,7 +38,30 @@ export class ShowingFeedbackV2Controller {
       fromDate,
       toDate,
       sentiment,
+      readStatus,
+      leadOnly === 'true',
     );
+  }
+
+
+  @Get('lead-inbox')
+  leadInbox(@Query('fromDate') fromDate?: string, @Query('toDate') toDate?: string, @Query('readStatus') readStatus?: string) {
+    return this.queries.leadInbox(fromDate, toDate, readStatus);
+  }
+
+  @Patch('bulk/read')
+  bulkMarkRead(@Body('ids') ids: number[], @Body('isRead') isRead?: boolean) {
+    return this.queries.bulkMarkRead(Array.isArray(ids) ? ids : [], isRead !== false);
+  }
+
+  @Patch(':id/classification')
+  reclassify(@Param('id') id: string, @Body() payload: any) {
+    return this.queries.reclassify(Number(id), payload ?? {});
+  }
+
+  @Patch(':id/read')
+  markRead(@Param('id') id: string, @Body('isRead') isRead?: boolean) {
+    return this.queries.markRead(Number(id), isRead !== false);
   }
 
   @Post()

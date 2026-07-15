@@ -114,6 +114,8 @@ export function LeadOutreachSchedulePage() {
   const [leadSearch, setLeadSearch] = useState("")
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState<"" | LeadHistoryStatus>("")
+  const [page, setPage] = useState(1)
+  const pageSize = 20
   const [composer, setComposer] = useState<ComposerState>({
     audienceType: "SingleLead",
     leadId: Number.isFinite(selectedLeadId) ? String(selectedLeadId) : "",
@@ -216,6 +218,8 @@ export function LeadOutreachSchedulePage() {
       ].some((value) => `${value ?? ""}`.toLowerCase().includes(term))
     })
   }, [followUpFilter, scheduleQuery.data, searchTerm])
+  const totalPages = Math.max(1, Math.ceil(filteredSchedule.length / pageSize))
+  const paginatedSchedule = useMemo(() => filteredSchedule.slice((page - 1) * pageSize, page * pageSize), [filteredSchedule, page])
 
   function updateComposer(patch: Partial<ComposerState>) {
     setSubmitError(null)
@@ -781,7 +785,7 @@ export function LeadOutreachSchedulePage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredSchedule.map((entry) => {
+                  {paginatedSchedule.map((entry) => {
                     const isFollowUp = isFollowUpScheduleEntry(entry)
 
                     return (
@@ -822,6 +826,10 @@ export function LeadOutreachSchedulePage() {
               </Table>
             </div>
           )}
+          {filteredSchedule.length > 0 ? <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t pt-4">
+            <p className="text-sm text-muted-foreground">Showing {(page - 1) * pageSize + 1}-{Math.min(page * pageSize, filteredSchedule.length)} of {filteredSchedule.length}</p>
+            <div className="flex items-center gap-2"><Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>Previous</Button><span className="text-sm font-medium">Page {page} of {totalPages}</span><Button size="sm" variant="outline" disabled={page >= totalPages} onClick={() => setPage((value) => Math.min(totalPages, value + 1))}>Next</Button></div>
+          </div> : null}
           </CardContent>
         </Card>
       </div>

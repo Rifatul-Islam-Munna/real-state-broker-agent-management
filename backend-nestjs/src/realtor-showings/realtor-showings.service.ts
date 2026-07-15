@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+﻿import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { bestPropertyAddressMatch } from '../common/property-address-match';
@@ -18,6 +18,10 @@ type ImportMapping = {
   realtorPhone?: string;
   property?: string;
   showingAt?: string;
+  visitorName?: string;
+  visitorEmail?: string;
+  visitorPhone?: string;
+  leadId?: string;
   showingDate?: string;
   showingTime?: string;
 };
@@ -70,16 +74,22 @@ export class RealtorShowingsService {
         const realtorName = this.value(sourceData, mapping.realtorName);
         const realtorEmail = this.value(sourceData, mapping.realtorEmail).toLowerCase();
         const realtorPhone = normalizePhoneNumber(this.value(sourceData, mapping.realtorPhone), defaultPhoneCountry);
+        const visitorName = this.value(sourceData, mapping.visitorName);
+        const visitorEmail = this.value(sourceData, mapping.visitorEmail).toLowerCase();
+        const visitorPhone = normalizePhoneNumber(this.value(sourceData, mapping.visitorPhone), defaultPhoneCountry);
         const propertyText = this.value(sourceData, mapping.property);
-        if (!realtorEmail && !realtorPhone) throw new Error('Email or phone required.');
+        if (!realtorEmail && !realtorPhone) throw new Error('Realtor email or phone required.');
+        if (!visitorEmail) throw new Error('Lead or tenant email is required.');
 
         const match = bestPropertyAddressMatch(propertyText, properties, 0.36);
         const showingLocalValue = this.mappedDateTime(sourceData, mapping);
         const showingAt = this.dateValue(showingLocalValue, scheduling.timeZone);
-        const lead = await this.findOrCreateRealtorLead({
-          email: realtorEmail,
-          name: realtorName,
-          phone: realtorPhone,
+        const requestedLeadId = Number(payload.leadId || this.value(sourceData, mapping.leadId)) || 0;
+        const existingLead = requestedLeadId ? await this.leadRepo.findOne({ where: { id: requestedLeadId } }) : null;
+        const lead = existingLead ?? await this.findOrCreateRealtorLead({
+          email: visitorEmail,
+          name: visitorName,
+          phone: visitorPhone,
           property: match.property?.title || propertyText,
           timeline: showingAt?.toISOString() ?? '',
         });
@@ -99,6 +109,9 @@ export class RealtorShowingsService {
           realtorEmail,
           realtorName: realtorName || realtorEmail.split('@')[0] || realtorPhone,
           realtorPhone,
+          visitorName: visitorName || lead.name,
+          visitorEmail: visitorEmail || lead.email,
+          visitorPhone: visitorPhone || lead.phone,
           showingAt,
           smsEnabled: !!payload.smsEnabled,
           sourceData,
@@ -126,6 +139,10 @@ export class RealtorShowingsService {
         realtorPhone: 'realtorPhone',
         property: 'property',
         showingAt: 'showingAt',
+        visitorName: 'visitorName',
+        visitorEmail: 'visitorEmail',
+        visitorPhone: 'visitorPhone',
+        leadId: 'leadId',
       },
       rows: [{
         property: payload.property ?? '',
@@ -133,12 +150,25 @@ export class RealtorShowingsService {
         realtorName: payload.realtorName ?? '',
         realtorPhone: payload.realtorPhone ?? '',
         showingAt: payload.showingAt ?? '',
+        visitorName: payload.visitorName ?? '',
+        visitorEmail: payload.visitorEmail ?? '',
+        visitorPhone: payload.visitorPhone ?? '',
+        leadId: payload.leadId ? String(payload.leadId) : '',
       }],
     });
     if (result.createdCount === 0) {
       throw new BadRequestException(result.failures[0] ?? 'Unable to create realtor showing.');
     }
     return result;
+  }
+
+  async updateSequence(id: number, status: 'active' | 'paused' | 'cancelled') {
+    const showing = await this.showingRepo.findOne({ where: { id } });
+    if (!showing) throw new NotFoundException('Showing not found.');
+    showing.sequenceStatus = status;
+    showing.followUpEnabled = status === 'active';
+    if (status === 'cancelled') showing.sequenceStep = 'cancelled';
+    return this.showingRepo.save(showing);
   }
 
   async updateProperty(id: number, propertyId: number | null) {
@@ -277,15 +307,15 @@ export class RealtorShowingsService {
       email: input.email,
       followUpStatus: LeadFollowUpStatus.Scheduled,
       inBoard: false,
-      interest: 'Realtor showing',
+      interest: 'Property showing visitor',
       lastActivityAt: new Date(),
       name: input.name || input.email || input.phone,
       phone: input.phone,
       priority: LeadPriority.FollowUp,
       property: input.property,
-      source: 'Realtor Showing CSV',
+      source: 'Property Showing',
       stage: LeadStage.Contacted,
-      summary: 'Realtor showing imported from CSV.',
+      summary: 'Lead or tenant added as a property showing visitor.',
       timeline: input.timeline,
     }));
   }
@@ -334,3 +364,4 @@ export class RealtorShowingsService {
       .replaceAll('{{showing_time}}', lead.timeline || 'the scheduled time');
   }
 }
+

@@ -35,6 +35,15 @@ export class RealtorShowing {
   @Column({ default: 'Unmatched' })
   propertyMatchMethod: string;
 
+  @Column({ default: '' })
+  visitorName: string;
+
+  @Column({ default: '' })
+  visitorEmail: string;
+
+  @Column({ default: '' })
+  visitorPhone: string;
+
   @Column({ type: 'int', nullable: true })
   leadId: number | null;
 
@@ -53,6 +62,18 @@ export class RealtorShowing {
 
   @Column({ default: false })
   followUpEnabled: boolean;
+
+  @Column({ default: 'active' })
+  sequenceStatus: 'active' | 'paused' | 'cancelled' | 'completed';
+
+  @Column({ default: 'direct' })
+  sequenceStep: string;
+
+  @Column({ default: false })
+  replyReceived: boolean;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  replyReceivedAt: Date | null;
 
   @Column({ default: '' })
   followUpTemplateId: string;

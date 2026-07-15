@@ -49,13 +49,21 @@ const routeGroups = [
     label: "Realtors",
     hrefs: [
       "/dashboard/realtor-showings",
+      "/dashboard/realtor-showings/sequences",
       "/dashboard/showing-feedback",
+      "/dashboard/showing-feedback/leads",
+      "/dashboard/showing-feedback/leads/sequences",
+      "/dashboard/showing-feedback/leads/classifier-controls",
       "/dashboard/showing-feedback-automation",
     ],
   },
   {
     label: "Content",
     hrefs: ["/dashboard/homepage", "/dashboard/blog", "/dashboard/marketing", "/dashboard/documents", "/dashboard/pdfs"],
+  },
+  {
+    label: "Tools",
+    hrefs: ["/dashboard/tools"],
   },
   {
     label: "Business",
@@ -79,6 +87,12 @@ export function DashboardSidebar({
   const pathname = usePathname()
   const navigation = getDashboardRoutesForUser(role, agentRoutePermissions)
   const homeHref = navigation[0]?.href ?? "/dashboard"
+  const activeHref =
+    navigation
+      .filter((item) => !item.href.includes("#"))
+      .map((item) => item.href.split("#")[0])
+      .filter((href) => pathname === href || pathname.startsWith(`${href}/`))
+      .sort((a, b) => b.length - a.length)[0] ?? ""
 
   if (pathname.startsWith("/dashboard/property-operations")) {
     return (
@@ -134,9 +148,7 @@ export function DashboardSidebar({
                       <SidebarMenu className="gap-1">
                         {items.map((item) => {
                           const hrefPath = item.href.split("#")[0]
-                          const isActive =
-                            !item.href.includes("#") &&
-                            (pathname === hrefPath || pathname.startsWith(`${hrefPath}/`))
+                          const isActive = hrefPath === activeHref
 
                           return (
                             <SidebarMenuItem key={item.href}>

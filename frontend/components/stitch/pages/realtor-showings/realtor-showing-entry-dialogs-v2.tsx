@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import Papa from "papaparse"
 
 import type {
@@ -51,6 +51,10 @@ const mappingFields: Array<{
   { key: "realtorPhone", label: "Realtor phone", aliases: ["realtor phone", "agent phone", "phone", "mobile"] },
   { key: "property", label: "Property", aliases: ["property", "property address", "listing", "address"] },
   { key: "showingAt", label: "Showing date/time", aliases: ["showing at", "showing date", "appointment", "date time"] },
+  { key: "visitorName", label: "Visitor name", aliases: ["visitor name", "lead name", "tenant name", "client name"] },
+  { key: "visitorEmail", label: "Visitor email", aliases: ["visitor email", "lead email", "tenant email", "client email"] },
+  { key: "visitorPhone", label: "Visitor phone", aliases: ["visitor phone", "lead phone", "tenant phone", "client phone"] },
+  { key: "leadId", label: "Existing lead ID", aliases: ["lead id", "tenant id", "visitor id", "contact id"] },
 ]
 
 const emptyMapping: RealtorShowingImportInput["mapping"] = {
@@ -59,6 +63,10 @@ const emptyMapping: RealtorShowingImportInput["mapping"] = {
   realtorPhone: "",
   property: "",
   showingAt: "",
+  visitorName: "",
+  visitorEmail: "",
+  visitorPhone: "",
+  leadId: "",
 }
 
 function autoMap(headers: string[]) {
@@ -99,9 +107,15 @@ export function RealtorShowingEntryDialogsV2({
   const importMutation = useImportRealtorShowings()
   const createMutation = useCreateRealtorShowing()
 
+  const [selectedLeadId, setSelectedLeadId] = useState<number | null>(null)
+  const [leadSearch, setLeadSearch] = useState("")
+  const [leadResults, setLeadResults] = useState<Array<{ id: number; name: string; email?: string; phone?: string }>>([])
   const [manualName, setManualName] = useState("")
   const [manualEmail, setManualEmail] = useState("")
   const [manualPhone, setManualPhone] = useState("")
+  const [visitorName, setVisitorName] = useState("")
+  const [visitorEmail, setVisitorEmail] = useState("")
+  const [visitorPhone, setVisitorPhone] = useState("")
   const [manualProperty, setManualProperty] = useState("")
   const [showingDate, setShowingDate] = useState("")
   const [showingTime, setShowingTime] = useState("")
@@ -126,10 +140,30 @@ export function RealtorShowingEntryDialogsV2({
   const outreachAt =
     outreachDate && outreachTime ? `${outreachDate}T${outreachTime}` : ""
 
+  useEffect(() => {
+    if (leadSearch.trim().length < 2) {
+      setLeadResults([])
+      return
+    }
+    const timer = window.setTimeout(async () => {
+      const response = await fetch(`/api/proxy/leads?page=1&pageSize=8&search=${encodeURIComponent(leadSearch.trim())}`)
+      if (!response.ok) return
+      const payload = await response.json()
+      setLeadResults(payload.data ?? payload.items ?? [])
+    }, 250)
+    return () => window.clearTimeout(timer)
+  }, [leadSearch])
+
   function resetManual() {
+    setSelectedLeadId(null)
+    setLeadSearch("")
+    setLeadResults([])
     setManualName("")
     setManualEmail("")
     setManualPhone("")
+    setVisitorName("")
+    setVisitorEmail("")
+    setVisitorPhone("")
     setManualProperty("")
     setShowingDate("")
     setShowingTime("")
@@ -138,8 +172,8 @@ export function RealtorShowingEntryDialogsV2({
 
   async function createManual() {
     setManualError(null)
-    if ((!manualEmail.trim() && !manualPhone.trim()) || !manualProperty) {
-      setManualError("Choose a property and add realtor email or phone.")
+    if ((!manualEmail.trim() && !manualPhone.trim()) || !visitorEmail.trim() || !manualProperty) {
+      setManualError("Choose a property, add realtor contact details, and provide the visitor email.")
       return
     }
     if (!showingDate || !showingTime) {
@@ -165,6 +199,10 @@ export function RealtorShowingEntryDialogsV2({
       realtorPhone: manualPhone.trim(),
       showingAt: `${showingDate}T${showingTime}`,
       smsEnabled,
+      visitorName: visitorName.trim(),
+      visitorEmail: visitorEmail.trim(),
+      visitorPhone: visitorPhone.trim(),
+      leadId: selectedLeadId,
     })
     if (response.error) {
       setManualError(response.error.message)
@@ -206,8 +244,8 @@ export function RealtorShowingEntryDialogsV2({
       setParseError("Choose a CSV file first.")
       return
     }
-    if (!mapping.property || (!mapping.realtorEmail && !mapping.realtorPhone)) {
-      setParseError("Map Property and at least Realtor email or phone.")
+    if (!mapping.property || (!mapping.realtorEmail && !mapping.realtorPhone) || !mapping.visitorEmail) {
+      setParseError("Map Property, realtor email or phone, and visitor email.")
       return
     }
 
@@ -299,7 +337,7 @@ export function RealtorShowingEntryDialogsV2({
         <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-3xl">
           <DialogHeader>
             <div className="flex flex-wrap items-center gap-2">
-              <DialogTitle>{"Add realtor showing"}</DialogTitle>
+              <DialogTitle>{"Add property showing"}</DialogTitle>
               <Badge variant="outline">{timeZone}</Badge>
             </div>
             <DialogDescription>
@@ -307,24 +345,38 @@ export function RealtorShowingEntryDialogsV2({
             </DialogDescription>
           </DialogHeader>
           {manualError ? <Alert variant="destructive"><AlertDescription>{manualError}</AlertDescription></Alert> : null}
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Realtor name"><Input onChange={(event) => setManualName(event.target.value)} value={manualName} /></Field>
+          <div className="grid gap-6 lg:grid-cols-2">
+            <Card className="shadow-none">
+              <CardHeader><CardTitle className="text-base">Realtor conducting the showing</CardTitle><CardDescription>This contact receives the realtor showing workflow.</CardDescription></CardHeader>
+              <CardContent className="grid gap-4">
+                <Field label="Realtor name"><Input onChange={(event) => setManualName(event.target.value)} value={manualName} /></Field>
+                <Field label="Realtor email"><Input onChange={(event) => setManualEmail(event.target.value)} type="email" value={manualEmail} /></Field>
+                <Field label="Realtor phone"><Input onChange={(event) => setManualPhone(event.target.value)} value={manualPhone} /></Field>
+              </CardContent>
+            </Card>
+            <Card className="shadow-none">
+              <CardHeader><CardTitle className="text-base">Lead or tenant visiting</CardTitle><CardDescription>Search an existing lead or enter a new visitor. Email is required.</CardDescription></CardHeader>
+              <CardContent className="space-y-4">
+                <Field label="Search existing lead by name or email"><Input placeholder="Start typing a name or email..." value={leadSearch} onChange={(event) => setLeadSearch(event.target.value)} /></Field>
+                {leadResults.length > 0 ? <div className="space-y-2">{leadResults.map((lead) => <button key={lead.id} type="button" className={`w-full rounded-lg border p-3 text-left text-sm ${selectedLeadId === lead.id ? "border-primary bg-primary/5" : "bg-background"}`} onClick={() => { setSelectedLeadId(lead.id); setVisitorName(lead.name || ""); setVisitorEmail(lead.email || ""); setVisitorPhone(lead.phone || "") }}><strong>{lead.name}</strong><div className="text-muted-foreground">{lead.email || lead.phone || `Lead #${lead.id}`}</div></button>)}</div> : null}
+                <Field label="Visitor name"><Input value={visitorName} onChange={(event) => setVisitorName(event.target.value)} /></Field>
+                <Field label="Visitor email"><Input type="email" value={visitorEmail} onChange={(event) => setVisitorEmail(event.target.value)} /></Field>
+                <Field label="Visitor phone"><Input value={visitorPhone} onChange={(event) => setVisitorPhone(event.target.value)} /></Field>
+              </CardContent>
+            </Card>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-3">
             <Field label="Property">
               <Select onValueChange={(value) => setManualProperty(value === "none" ? "" : value)} value={manualProperty || "none"}>
                 <SelectTrigger className="w-full"><SelectValue placeholder="Choose property" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">{"Choose property"}</SelectItem>
-                  {properties.map((property) => <SelectItem key={property.id} value={String(property.id)}>{`${property.title} — ${property.location}`}</SelectItem>)}
-                </SelectContent>
+                <SelectContent><SelectItem value="none">Choose property</SelectItem>{properties.map((property) => <SelectItem key={property.id} value={String(property.id)}>{`${property.title} ? ${property.location}`}</SelectItem>)}</SelectContent>
               </Select>
             </Field>
-            <Field label="Email"><Input onChange={(event) => setManualEmail(event.target.value)} type="email" value={manualEmail} /></Field>
-            <Field label="Phone"><Input onChange={(event) => setManualPhone(event.target.value)} value={manualPhone} /></Field>
             <Field label="Showing date"><Input onChange={(event) => setShowingDate(event.target.value)} type="date" value={showingDate} /></Field>
             <Field label="Showing time"><Input onChange={(event) => setShowingTime(event.target.value)} type="time" value={showingTime} /></Field>
           </div>
           <Card className="shadow-none">
-            <CardHeader><CardTitle className="text-base">{"Outreach automation"}</CardTitle><CardDescription>{"Replies stop the remaining automatic follow-up for this realtor lead."}</CardDescription></CardHeader>
+            <CardHeader><CardTitle className="text-base">{"Outreach automation"}</CardTitle><CardDescription>{"Replies stop the remaining automatic visitor follow-up for this showing."}</CardDescription></CardHeader>
             <CardContent>{automationFields}</CardContent>
           </Card>
           <DialogFooter>
@@ -338,7 +390,7 @@ export function RealtorShowingEntryDialogsV2({
         <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-5xl">
           <DialogHeader>
             <div className="flex flex-wrap items-center gap-2">
-              <DialogTitle>{"Import realtor showings"}</DialogTitle>
+              <DialogTitle>{"Import property showings"}</DialogTitle>
               <Badge variant="outline">{timeZone}</Badge>
             </div>
             <DialogDescription>

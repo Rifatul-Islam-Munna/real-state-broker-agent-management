@@ -99,6 +99,16 @@ export function ShowingFeedbackDashboard() {
               />
               <Button
                 className="min-w-44"
+                render={<Link href="/dashboard/showing-feedback/leads" />}
+                size="lg"
+                type="button"
+                variant="outline"
+              >
+                <AppIcon name="person_search" />
+                Lead feedback
+              </Button>
+              <Button
+                className="min-w-44"
                 render={<Link href="/dashboard/showing-feedback-automation" />}
                 size="lg"
                 type="button"

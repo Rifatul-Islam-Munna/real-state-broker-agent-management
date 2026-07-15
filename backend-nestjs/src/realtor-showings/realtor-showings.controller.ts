@@ -5,6 +5,7 @@ import {
   Get,
   Patch,
   Post,
+  Param,
   Query,
   UseGuards,
 } from '@nestjs/common';
@@ -38,6 +39,12 @@ export class RealtorShowingsController {
     return this.realtorShowingsService.createManual(
       this.validateAutomation(payload),
     );
+  }
+
+  @Patch(':id/sequence')
+  updateSequence(@Param('id') id: string, @Body('status') status: 'active' | 'paused' | 'cancelled') {
+    if (!['active', 'paused', 'cancelled'].includes(status)) throw new BadRequestException('Invalid sequence status.');
+    return this.realtorShowingsService.updateSequence(Number(id), status);
   }
 
   @Patch('property')
