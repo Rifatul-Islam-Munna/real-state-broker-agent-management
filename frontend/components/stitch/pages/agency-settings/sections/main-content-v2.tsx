@@ -422,8 +422,23 @@ function FirstMessageToggle({
 }) {
   return (
     <div className={`min-h-36 rounded-xl border p-4 ${checked ? "border-primary bg-primary/5" : "bg-muted/30"}`}>
-      <label className="flex cursor-pointer items-start gap-3">
-        <Checkbox checked={checked} onCheckedChange={(value) => onChange(value === true)} />
+      <div
+        className="flex cursor-pointer items-start gap-3"
+        onClick={() => onChange(!checked)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault()
+            onChange(!checked)
+          }
+        }}
+        role="button"
+        tabIndex={0}
+      >
+        <Checkbox
+          checked={checked}
+          onClick={(event) => event.stopPropagation()}
+          onCheckedChange={(value) => onChange(value === true)}
+        />
         <span>
           <span className="block text-sm font-semibold">{label}</span>
           <span className="mt-1 block text-xs leading-5 text-muted-foreground">
@@ -431,7 +446,7 @@ function FirstMessageToggle({
           {description}
           </span>
         </span>
-      </label>
+      </div>
       <div className="mt-3 grid gap-1.5">
         <Label className="text-xs" htmlFor={`first-message-delay-${label}`}>
           {"Delay minutes"}

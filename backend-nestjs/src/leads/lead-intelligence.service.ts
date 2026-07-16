@@ -61,11 +61,15 @@ export class LeadIntelligenceService {
       before.intelligenceAssignedInBoard === true ||
       strongStages.has(before.intelligenceAssignedStage as LeadStage) ||
       before.intelligenceAssignedPriority === LeadPriority.HighPriority;
-    if (!wasStrong) return;
+    const wasWeak = !wasStrong;
     const downgraded = after.inBoard === false || weakStages.has(after.stage) || after.priority === LeadPriority.FollowUp;
     const upgraded = strongStages.has(after.stage) || after.priority === LeadPriority.HighPriority;
     if (after.inBoard === false || (downgraded && !upgraded)) {
       await this.settingsService.addLeadLearningExample('unqualified', before.intelligenceText);
+      return;
+    }
+    if (wasWeak && upgraded) {
+      await this.settingsService.addLeadLearningExample('qualified', before.intelligenceText);
     }
   }
 
