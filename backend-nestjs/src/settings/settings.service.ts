@@ -343,7 +343,7 @@ export class SettingsService {
       leadTemplateTags: this.stringList(input?.leadTemplateTags, []),
       duplicatePolicy: input?.duplicatePolicy === 'process-every-message' ? 'process-every-message' : 'skip-exact-message',
       autoCreateLeads: input?.autoCreateLeads !== false,
-      syncIntervalMinutes: this.clampInt(input?.syncIntervalMinutes, 10, 5, 120),
+      syncIntervalMinutes: this.clampInt(input?.syncIntervalMinutes, 10, 1, 120),
       maxMessagesPerSync: this.clampInt(input?.maxMessagesPerSync, 25, 5, 100),
       gmailEmail: this.loose(input?.gmailEmail),
       gmailAccessToken: this.loose(input?.gmailAccessToken),

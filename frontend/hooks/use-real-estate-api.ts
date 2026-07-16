@@ -985,12 +985,12 @@ export function useCreateMailInboxItem() {
 }
 
 export function useUpdateMailInboxItem() {
-  const invalidate = useInvalidate(["mail-inbox", "dashboard"])
+  const invalidate = useInvalidate(["mail-inbox", "mail-inbox-item", "dashboard"])
 
-  return useCommonMutationApi<MailInboxItem, MailInboxItem>({
+  return useCommonMutationApi<MailInboxItem, Partial<MailInboxItem> & { id: number }>({
     method: "PATCH",
     onSuccess: () => void invalidate(),
-    successMessage: "Mail updated",
+    showSuccessToast: false,
     url: "/mail-inbox",
   })
 }

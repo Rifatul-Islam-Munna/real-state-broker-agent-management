@@ -1239,6 +1239,8 @@ export type MailInboxItem = {
   leadCollectionTemplateId?: number | null
   leadCollectionTemplateName?: string
   aiFallbackUsed?: boolean
+  isRead?: boolean
+  isStarred?: boolean
   extractionDetails?: Record<string, unknown>
   createdAt: string
   updatedAt: string

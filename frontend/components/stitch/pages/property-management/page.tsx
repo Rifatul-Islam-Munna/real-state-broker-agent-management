@@ -312,6 +312,12 @@ export function PropertyManagementPage() {
         setSubmitError(response.error.message)
         return false
       }
+
+      setActiveFilter("all")
+      setActiveType("All")
+      setActiveAgent("")
+      setSearchTerm("")
+      setPage(1)
     }
 
     setModalState(null)

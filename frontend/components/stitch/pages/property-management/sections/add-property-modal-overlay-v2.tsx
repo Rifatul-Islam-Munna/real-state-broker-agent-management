@@ -314,6 +314,7 @@ export function AddPropertyModalOverlaySection({
     if (pendingDocuments.some((document) => !document.name.trim())) {
       setErrors((current) => ({
         ...current,
+        form: "Fix the highlighted document name before creating the listing.",
         propertyDocuments: "Every document needs a name.",
       }))
       return
@@ -325,7 +326,10 @@ export function AddPropertyModalOverlaySection({
     })
 
     if (Object.keys(nextErrors).length > 0) {
-      setErrors(nextErrors)
+      setErrors({
+        ...nextErrors,
+        form: "Some required listing details are missing. Check the highlighted fields above.",
+      })
       return
     }
 

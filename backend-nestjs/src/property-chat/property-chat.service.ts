@@ -87,6 +87,10 @@ export class PropertyChatService {
     if (search) query.andWhere('(conv.contact_name ILIKE :search OR conv.contact_email ILIKE :search OR conv.property_title ILIKE :search OR conv.summary ILIKE :search)', { search: `%${search}%` });
     if (propertyId) query.andWhere('conv.property_id = :propertyId', { propertyId });
     if (leadId) query.andWhere('conv.lead_id = :leadId', { leadId });
+    if (!this.showDemoData()) {
+      query.andWhere('conv.contact_email NOT ILIKE :demoEmail', { demoEmail: '%@demo.local' });
+      query.andWhere("(property.slug IS NULL OR property.slug NOT LIKE 'demo-property-%')");
+    }
     const [items, total] = await query.getManyAndCount();
     return paginated(items.map((item) => this.mapConversation(item)), total, page, pageSize);
   }
@@ -124,5 +128,9 @@ export class PropertyChatService {
       status: item.status, leadId: item.leadId ?? null, createdAt: item.createdAt, updatedAt: item.updatedAt,
       messages: (item.messages ?? []).sort((a, b) => Number(new Date(a.createdAt)) - Number(new Date(b.createdAt)) || a.id - b.id).map((message) => ({ id: message.id, senderRole: message.senderRole, message: message.message, attachmentUrl: message.attachmentUrl ?? null, attachmentObjectName: message.attachmentObjectName ?? null, createdAt: message.createdAt })),
     };
+  }
+
+  private showDemoData() {
+    return `${process.env.isDemoData ?? ''}`.trim().toLowerCase() === 'true';
   }
 }

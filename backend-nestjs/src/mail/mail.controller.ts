@@ -22,9 +22,11 @@ export class MailController {
     @Query('search') search?: string,
     @Query('status') status?: string,
     @Query('mailboxTag') mailboxTag?: string,
+    @Query('isRead') isRead?: string,
+    @Query('isStarred') isStarred?: string,
   ) {
     if (id) return this.mailService.findOne(id);
-    return this.mailService.findAll(page, pageSize, search, status, mailboxTag);
+    return this.mailService.findAll(page, pageSize, search, status, mailboxTag, isRead, isStarred);
   }
 
   @Get('sync-status')

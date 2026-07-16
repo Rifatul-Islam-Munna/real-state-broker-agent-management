@@ -33,6 +33,17 @@ export class IntegrationHealthService {
 
   async testMail(): Promise<CheckResult> {
     const config = await this.settings.getSmtpConfig();
+    if (config?.authType === 'gmail-oauth') {
+      if (!config.gmailEmail || !config.gmailRefreshToken) {
+        return this.result(false, false, 'Gmail OAuth is not connected.');
+      }
+      try {
+        await this.testGmailApi(config, false);
+        return this.result(true, true, 'Gmail OAuth token is valid for mail sending.');
+      } catch (error: any) {
+        return this.result(true, false, this.message(error, 'Gmail OAuth mail check failed.'));
+      }
+    }
     if (!config?.host || !config?.username || !config?.password) {
       return this.result(false, false, 'SMTP is not configured.');
     }
@@ -57,6 +68,17 @@ export class IntegrationHealthService {
   async testInbox(): Promise<CheckResult> {
     const config = await this.settings.getSmtpConfig();
     if (!config?.enableInboxSync) return this.result(false, false, 'Inbox sync is disabled.');
+    if (config.authType === 'gmail-oauth') {
+      if (!config.gmailEmail || !config.gmailRefreshToken) {
+        return this.result(true, false, 'Gmail OAuth is not connected.');
+      }
+      try {
+        await this.testGmailApi(config, true);
+        return this.result(true, true, 'Gmail API inbox access succeeded.');
+      } catch (error: any) {
+        return this.result(true, false, this.message(error, 'Gmail API inbox check failed.'));
+      }
+    }
     if (!config.imapHost || !config.imapUsername || !config.imapPassword) {
       return this.result(true, false, 'IMAP credentials are incomplete.');
     }
@@ -135,6 +157,54 @@ export class IntegrationHealthService {
 
   private async request(url: string, headers: Record<string, string> = {}) {
     return fetch(url, { headers, signal: AbortSignal.timeout(12_000) });
+  }
+
+  private async testGmailApi(config: any, includeInbox: boolean) {
+    const accessToken = await this.gmailAccessToken(config);
+    const profile = await this.request('https://gmail.googleapis.com/gmail/v1/users/me/profile', {
+      Authorization: `Bearer ${accessToken}`,
+    });
+    if (!profile.ok) throw new Error(`Gmail profile failed: ${profile.status} ${await this.safeBody(profile)}`);
+    if (!includeInbox) return;
+    const url = new URL('https://gmail.googleapis.com/gmail/v1/users/me/messages');
+    url.searchParams.set('maxResults', '1');
+    url.searchParams.set('q', 'is:unread');
+    url.searchParams.append('labelIds', 'INBOX');
+    const list = await this.request(url.toString(), {
+      Authorization: `Bearer ${accessToken}`,
+    });
+    if (!list.ok) throw new Error(`Gmail list failed: ${list.status} ${await this.safeBody(list)}`);
+  }
+
+  private async gmailAccessToken(config: any) {
+    if (config.gmailAccessToken && config.gmailTokenExpiresAt && new Date(config.gmailTokenExpiresAt).getTime() > Date.now() + 60_000) {
+      return config.gmailAccessToken;
+    }
+    const clientId = `${process.env.GOOGLE_CLIENT_ID ?? ''}`.trim();
+    const clientSecret = `${process.env.GOOGLE_CLIENT_SECRET ?? ''}`.trim();
+    if (!clientId || !clientSecret || !config.gmailRefreshToken) throw new Error('Google OAuth credentials are missing.');
+    const response = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        refresh_token: config.gmailRefreshToken,
+        grant_type: 'refresh_token',
+      }),
+      signal: AbortSignal.timeout(12_000),
+    });
+    if (!response.ok) throw new Error(`Gmail token refresh failed: ${response.status} ${await this.safeBody(response)}`);
+    const token: any = await response.json();
+    return `${token.access_token ?? ''}`.trim();
+  }
+
+  private async safeBody(response: any) {
+    try {
+      return (await response.text()).replace(/\s+/g, ' ').trim().slice(0, 300);
+    } catch {
+      return '';
+    }
   }
 
   private result(configured: boolean, ok: boolean, message: string): CheckResult {

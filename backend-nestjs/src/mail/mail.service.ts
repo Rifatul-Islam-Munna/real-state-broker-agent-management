@@ -23,7 +23,7 @@ export class MailService {
     private pdfsService: PdfsService,
   ) {}
 
-  async findAll(page = 1, pageSize = 20, search?: string, status?: string, mailboxTag?: string) {
+  async findAll(page = 1, pageSize = 20, search?: string, status?: string, mailboxTag?: string, isRead?: string | boolean, isStarred?: string | boolean) {
     page = toInt(page, 1);
     pageSize = toInt(pageSize, 20);
     const qb = this.mailRepo.createQueryBuilder('mail').leftJoinAndSelect('mail.lead', 'lead');
@@ -32,7 +32,16 @@ export class MailService {
     }
     if (status) qb.andWhere('mail.status = :status', { status: mailInboxStatusDbValue(status) });
     if (mailboxTag) qb.andWhere('LOWER(mail.mailboxTag) = :mailboxTag', { mailboxTag: mailboxTag.trim().toLowerCase() });
-    const [items, total] = await qb.orderBy('mail.createdAt', 'DESC').skip((page - 1) * pageSize).take(pageSize).getManyAndCount();
+    const readFilter = this.booleanFilter(isRead);
+    const starredFilter = this.booleanFilter(isStarred);
+    if (readFilter !== null) qb.andWhere('mail.isRead = :isRead', { isRead: readFilter });
+    if (starredFilter !== null) qb.andWhere('mail.isStarred = :isStarred', { isStarred: starredFilter });
+    const [items, total] = await qb
+      .orderBy('mail.isRead', 'ASC')
+      .addOrderBy('mail.createdAt', 'DESC')
+      .skip((page - 1) * pageSize)
+      .take(pageSize)
+      .getManyAndCount();
     return paginated(items.map((item) => this.mapMail(item)), total, page, pageSize);
   }
 
@@ -146,7 +155,7 @@ export class MailService {
   async update(id: number, dto: any) {
     const entity = await this.mailRepo.findOne({ where: { id } });
     if (!entity) throw new NotFoundException('Mail not found');
-    Object.assign(entity, this.toMailEntity(dto));
+    Object.assign(entity, this.toMailEntity(dto, true));
     return this.mapMail(await this.mailRepo.save(entity));
   }
 
@@ -213,31 +222,44 @@ export class MailService {
       leadCollectionTemplateId: item.leadCollectionTemplateId ?? null,
       leadCollectionTemplateName: item.leadCollectionTemplateName ?? '',
       aiFallbackUsed: item.aiFallbackUsed === true,
+      isRead: item.isRead === true,
+      isStarred: item.isStarred === true,
       extractionDetails: item.extractionDetails ?? {},
       createdAt: item.createdAt,
       updatedAt: item.updatedAt,
     };
   }
 
-  private toMailEntity(dto: any) {
-    return {
-      email: `${dto.email ?? dto.fromAddress ?? ''}`.trim().toLowerCase(),
-      name: `${dto.name ?? dto.fromName ?? ''}`.trim(),
-      subject: `${dto.subject ?? ''}`.trim(),
-      message: dto.message ?? dto.body ?? '',
-      htmlBody: dto.htmlBody ?? dto.html ?? '',
-      extractedLead: dto.extractedLead ?? {},
-      extractionMethod: `${dto.extractionMethod ?? ''}`,
-      extractionConfidence: Number(dto.extractionConfidence ?? 0),
-      leadCollectionTemplateId: dto.leadCollectionTemplateId ?? null,
-      leadCollectionTemplateName: `${dto.leadCollectionTemplateName ?? ''}`,
-      aiFallbackUsed: dto.aiFallbackUsed === true,
-      extractionDetails: dto.extractionDetails ?? {},
-      kind: dto.kind ?? 'Direct',
-      status: dto.status ?? 'New',
-      leadId: dto.leadId ?? null,
-      mailboxTag: `${dto.mailboxTag ?? ''}`.trim(),
+  private toMailEntity(dto: any, partial = false) {
+    const entity: Record<string, any> = {};
+    const set = (key: string, value: any) => {
+      if (!partial || Object.prototype.hasOwnProperty.call(dto, key)) entity[key] = value;
     };
+    set('email', `${dto.email ?? dto.fromAddress ?? ''}`.trim().toLowerCase());
+    set('name', `${dto.name ?? dto.fromName ?? ''}`.trim());
+    set('subject', `${dto.subject ?? ''}`.trim());
+    set('message', dto.message ?? dto.body ?? '');
+    set('htmlBody', dto.htmlBody ?? dto.html ?? '');
+    set('extractedLead', dto.extractedLead ?? {});
+    set('extractionMethod', `${dto.extractionMethod ?? ''}`);
+    set('extractionConfidence', Number(dto.extractionConfidence ?? 0));
+    set('leadCollectionTemplateId', dto.leadCollectionTemplateId ?? null);
+    set('leadCollectionTemplateName', `${dto.leadCollectionTemplateName ?? ''}`);
+    set('aiFallbackUsed', dto.aiFallbackUsed === true);
+    set('isRead', dto.isRead === true);
+    set('isStarred', dto.isStarred === true);
+    set('extractionDetails', dto.extractionDetails ?? {});
+    set('kind', dto.kind ?? 'Direct');
+    set('status', dto.status ?? 'New');
+    set('leadId', dto.leadId ?? null);
+    set('mailboxTag', `${dto.mailboxTag ?? ''}`.trim());
+    return entity;
+  }
+
+  private booleanFilter(value: string | boolean | undefined) {
+    if (value === true || value === 'true') return true;
+    if (value === false || value === 'false') return false;
+    return null;
   }
 
   private stringList(value: any) {

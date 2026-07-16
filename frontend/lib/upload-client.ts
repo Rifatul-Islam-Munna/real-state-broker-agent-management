@@ -43,8 +43,8 @@ async function parseJson(response: Response) {
 
 export async function uploadPropertyAsset(file: File, folder: string) {
   const formData = new FormData()
-  formData.set("File", file)
-  formData.set("Folder", folder)
+  formData.set("file", file)
+  formData.set("folder", folder)
 
   const response = await fetch("/api/upload", {
     body: formData,

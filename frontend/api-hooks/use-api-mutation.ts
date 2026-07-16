@@ -20,6 +20,7 @@ interface UseApiMutationConfig<TData, TVariables> {
   method: HttpMethod
   mutationKey?: string[]
   successMessage?: string
+  showSuccessToast?: boolean
   onSuccess?: (data: TData | null) => void
   onError?: (error: ApiError) => void
 }
@@ -27,7 +28,7 @@ interface UseApiMutationConfig<TData, TVariables> {
 export function useCommonMutationApi<TData = unknown, TVariables = unknown>(
   config: UseApiMutationConfig<TData, TVariables>,
 ) {
-  const { url, method, mutationKey, successMessage, onSuccess, onError } = config
+  const { url, method, mutationKey, successMessage, showSuccessToast = true, onSuccess, onError } = config
 
   async function runMutation(variables: TVariables): Promise<MutationResult<TData>> {
     if (method === "POST") {
@@ -63,7 +64,7 @@ export function useCommonMutationApi<TData = unknown, TVariables = unknown>(
     mutationFn: runMutation,
     onSuccess: (result) => {
       if (!result.error) {
-        sileo.success({ title: successMessage || "Success" })
+        if (showSuccessToast) sileo.success({ title: successMessage || "Success" })
         onSuccess?.(result.data)
         return
       }

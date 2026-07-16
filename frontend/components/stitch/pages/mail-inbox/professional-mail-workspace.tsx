@@ -3,7 +3,6 @@
 import Link from "next/link"
 import type { KeyboardEventHandler } from "react"
 import { useEffect, useMemo, useRef, useState } from "react"
-import { useRouter } from "next/navigation"
 import PostalMime from "postal-mime"
 
 import type { MailInboxItem } from "@/@types/real-estate-api"
@@ -30,6 +29,7 @@ import {
   useMailInboxSyncStatus,
   useRunMailInboxSync,
   useSendMailMessage,
+  useUpdateMailInboxItem,
 } from "@/hooks/use-real-estate-api"
 import { usePdfTemplates } from "@/hooks/use-pdfs-api"
 import { formatDateTimeLabel } from "@/lib/admin-portal"
@@ -71,12 +71,12 @@ export function ProfessionalMailDetailPage({ mailId }: { mailId: number }) {
 }
 
 function ProfessionalMailWorkspace({ initialMailId }: { initialMailId?: number }) {
-  const router = useRouter()
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState("")
-  const [status, setStatus] = useState<"all" | "New" | "Replied" | "Converted">("all")
+  const [status, setStatus] = useState<"all" | "unread" | "read" | "starred" | "Replied" | "Converted">("all")
   const [mailboxTag, setMailboxTag] = useState("all")
   const [selectedId, setSelectedId] = useState<number | null>(initialMailId ?? null)
+  const [replyOpen, setReplyOpen] = useState(false)
   const [compose, setCompose] = useState<ComposeState>(emptyCompose)
   const [reply, setReply] = useState("")
   const [replyFiles, setReplyFiles] = useState<File[]>([])
@@ -85,12 +85,15 @@ function ProfessionalMailWorkspace({ initialMailId }: { initialMailId?: number }
   const [attachmentDrawerOpen, setAttachmentDrawerOpen] = useState(false)
   const [optimisticReplies, setOptimisticReplies] = useState<OptimisticReply[]>([])
   const threadBottomRef = useRef<HTMLDivElement | null>(null)
+  const autoReadIdRef = useRef<number | null>(null)
 
   const inboxQuery = useMailInbox({
     page,
     pageSize: PAGE_SIZE,
     search: search || undefined,
-    status: status === "all" ? undefined : status,
+    status: status === "Replied" || status === "Converted" ? status : undefined,
+    isRead: status === "unread" ? "false" : status === "read" ? "true" : undefined,
+    isStarred: status === "starred" ? "true" : undefined,
     mailboxTag: mailboxTag === "all" ? undefined : mailboxTag,
   })
   const selectedQuery = useMailInboxItem(selectedId ?? undefined)
@@ -100,6 +103,7 @@ function ProfessionalMailWorkspace({ initialMailId }: { initialMailId?: number }
   const syncMutation = useRunMailInboxSync()
   const sendMutation = useSendMailMessage()
   const createInboxMutation = useCreateMailInboxItem()
+  const updateMailMutation = useUpdateMailInboxItem()
   const convertMutation = useConvertMailInboxToLead()
 
   const messages = inboxQuery.data?.items ?? []
@@ -125,6 +129,7 @@ function ProfessionalMailWorkspace({ initialMailId }: { initialMailId?: number }
     setDocumentIds([])
     setPdfTemplateId("")
     setAttachmentDrawerOpen(false)
+    setReplyOpen(false)
   }, [selectedId])
 
   const thread = useMemo(() => {
@@ -137,16 +142,28 @@ function ProfessionalMailWorkspace({ initialMailId }: { initialMailId?: number }
   const stats = useMemo(
     () => ({
       all: inboxQuery.data?.totalCount ?? messages.length,
-      new: messages.filter((item) => item.status === "New").length,
+      unread: messages.filter((item) => item.isRead !== true).length,
+      read: messages.filter((item) => item.isRead === true).length,
+      starred: messages.filter((item) => item.isStarred === true).length,
       replied: messages.filter((item) => item.status === "Replied").length,
       converted: messages.filter((item) => item.status === "Converted").length,
     }),
     [inboxQuery.data?.totalCount, messages]
   )
 
+  useEffect(() => {
+    if (!selected || selected.isRead === true || autoReadIdRef.current === selected.id) return
+    autoReadIdRef.current = selected.id
+    void updateMailMutation.mutateAsync({ id: selected.id, isRead: true })
+  }, [selected?.id, selected?.isRead, updateMailMutation])
+
+  function updateMailFlags(id: number, values: { isRead?: boolean; isStarred?: boolean }) {
+    void updateMailMutation.mutateAsync({ id, ...values })
+  }
+
   function chooseMessage(id: number) {
     setSelectedId(id)
-    router.replace(`/dashboard/mail/${id}`, { scroll: false })
+    window.history.replaceState(null, "", `/dashboard/mail/${id}`)
   }
 
   async function sendReply() {
@@ -185,6 +202,7 @@ function ProfessionalMailWorkspace({ initialMailId }: { initialMailId?: number }
     setDocumentIds([])
     setPdfTemplateId("")
     setAttachmentDrawerOpen(false)
+    setReplyOpen(false)
     requestAnimationFrame(() =>
       threadBottomRef.current?.scrollIntoView({ behavior: "smooth" })
     )
@@ -226,8 +244,8 @@ function ProfessionalMailWorkspace({ initialMailId }: { initialMailId?: number }
     inboxQuery.error ?? selectedQuery.error ?? syncStatusQuery.error ?? sendMutation.error
 
   return (
-    <main className="h-[calc(100dvh-4rem)] min-h-[720px] overflow-hidden bg-muted/20 p-3 lg:p-5">
-      <div className="mx-auto grid h-full max-w-[1700px] overflow-hidden rounded-2xl border bg-background shadow-sm lg:grid-cols-[230px_390px_minmax(0,1fr)]">
+    <main className="h-[calc(100dvh-4rem)] min-h-[720px] overflow-hidden bg-slate-50 p-2 lg:p-3">
+      <div className="mx-auto grid h-full max-w-[1880px] overflow-hidden rounded-2xl border bg-background shadow-sm lg:grid-cols-[220px_350px_minmax(0,1fr)] xl:grid-cols-[220px_370px_minmax(0,1fr)]">
         <aside className="hidden min-h-0 border-r bg-muted/10 lg:flex lg:flex-col">
           <div className="border-b p-4">
             <Button
@@ -248,11 +266,25 @@ function ProfessionalMailWorkspace({ initialMailId }: { initialMailId?: number }
               onClick={() => setStatus("all")}
             />
             <FolderButton
-              active={status === "New"}
-              count={stats.new}
+              active={status === "unread"}
+              count={stats.unread}
               icon="mark_email_unread"
-              label="New"
-              onClick={() => setStatus("New")}
+              label="Unseen"
+              onClick={() => setStatus("unread")}
+            />
+            <FolderButton
+              active={status === "read"}
+              count={stats.read}
+              icon="drafts"
+              label="Seen"
+              onClick={() => setStatus("read")}
+            />
+            <FolderButton
+              active={status === "starred"}
+              count={stats.starred}
+              icon="star"
+              label="Starred"
+              onClick={() => setStatus("starred")}
             />
             <FolderButton
               active={status === "Replied"}
@@ -387,14 +419,14 @@ function ProfessionalMailWorkspace({ initialMailId }: { initialMailId?: number }
               />
             </div>
             <div className="flex gap-2 overflow-x-auto lg:hidden">
-              {(["all", "New", "Replied", "Converted"] as const).map((item) => (
+              {(["all", "unread", "read", "starred", "Replied", "Converted"] as const).map((item) => (
                 <Button
                   key={item}
                   onClick={() => setStatus(item)}
                   size="sm"
                   variant={status === item ? "secondary" : "outline"}
                 >
-                  {item === "all" ? "Inbox" : item}
+                  {item === "all" ? "Inbox" : item === "unread" ? "Unseen" : item === "read" ? "Seen" : item === "starred" ? "Starred" : item}
                 </Button>
               ))}
             </div>
@@ -435,6 +467,8 @@ function ProfessionalMailWorkspace({ initialMailId }: { initialMailId?: number }
                   item={item}
                   key={item.id}
                   onClick={() => chooseMessage(item.id)}
+                  onToggleRead={() => updateMailFlags(item.id, { isRead: item.isRead === true ? false : true })}
+                  onToggleStar={() => updateMailFlags(item.id, { isStarred: item.isStarred !== true })}
                 />
               ))
             )}
@@ -465,10 +499,10 @@ function ProfessionalMailWorkspace({ initialMailId }: { initialMailId?: number }
           </footer>
         </section>
 
-        <section className="hidden min-h-0 flex-col md:flex">
+        <section className="hidden min-h-0 flex-col bg-slate-50/70 md:flex">
           {selected ? (
             <>
-              <header className="border-b px-5 py-4">
+              <header className="border-b bg-background px-5 py-4 xl:px-7">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
@@ -476,12 +510,43 @@ function ProfessionalMailWorkspace({ initialMailId }: { initialMailId?: number }
                       <Badge variant={selected.status === "New" ? "default" : "outline"}>
                         {selected.status}
                       </Badge>
+                      {selected.isRead !== true ? <Badge>Unseen</Badge> : null}
+                      {selected.isStarred ? (
+                        <Badge className="border-amber-200 bg-amber-50 text-amber-700" variant="outline">
+                          Starred
+                        </Badge>
+                      ) : null}
                     </div>
                     <p className="mt-1 text-sm text-muted-foreground">
                       {selected.name || selected.email} · {selected.email}
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
+                    <Button
+                      onClick={() => setReplyOpen(true)}
+                      size="sm"
+                      variant={replyOpen ? "default" : "outline"}
+                    >
+                      <AppIcon name="reply" />
+                      Reply
+                    </Button>
+                    <Button
+                      className={selected.isStarred ? "border-amber-200 text-amber-600" : ""}
+                      onClick={() => updateMailFlags(selected.id, { isStarred: selected.isStarred !== true })}
+                      size="sm"
+                      variant="outline"
+                    >
+                      <AppIcon name={selected.isStarred ? "star" : "star_border"} />
+                      {selected.isStarred ? "Starred" : "Star"}
+                    </Button>
+                    <Button
+                      onClick={() => updateMailFlags(selected.id, { isRead: selected.isRead === true ? false : true })}
+                      size="sm"
+                      variant="outline"
+                    >
+                      <AppIcon name={selected.isRead === true ? "mark_email_unread" : "drafts"} />
+                      {selected.isRead === true ? "Mark unseen" : "Mark read"}
+                    </Button>
                     <Button
                       render={
                         <Link
@@ -533,8 +598,8 @@ function ProfessionalMailWorkspace({ initialMailId }: { initialMailId?: number }
                 </div>
               </header>
 
-              <div className="min-h-0 flex-1 overflow-y-auto bg-muted/10 px-4 py-5 sm:px-6">
-                <div className="mx-auto max-w-4xl space-y-4">
+              <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6 xl:px-8">
+                <div className="mx-auto w-full max-w-[1180px] space-y-4">
                   {thread.map((item) => (
                     <MailMessageCard item={item} key={item.id} />
                   ))}
@@ -545,8 +610,9 @@ function ProfessionalMailWorkspace({ initialMailId }: { initialMailId?: number }
                 </div>
               </div>
 
-              <div className="border-t bg-background p-3 sm:p-4">
-                <div className="mx-auto max-w-4xl rounded-2xl border bg-background shadow-sm focus-within:ring-2 focus-within:ring-ring/30">
+              {replyOpen ? (
+              <div className="border-t bg-background/95 p-3 shadow-[0_-12px_30px_rgba(15,23,42,0.06)] sm:p-4 xl:px-8">
+                <div className="mx-auto w-full max-w-[1180px] rounded-2xl border bg-background shadow-sm focus-within:ring-2 focus-within:ring-ring/30">
                   <RichMailEditor
                     className="min-h-24"
                     onChange={(html, text) => setReply(html.trim() ? html : text)}
@@ -585,23 +651,29 @@ function ProfessionalMailWorkspace({ initialMailId }: { initialMailId?: number }
                         Ctrl/⌘ + Enter to send
                       </span>
                     </div>
-                    <Button
-                      className="rounded-full px-5"
-                      disabled={
-                        sendMutation.isPending ||
-                        (!htmlToText(reply).trim() &&
-                          !replyFiles.length &&
-                          !documentIds.length &&
-                          !pdfTemplateId)
-                      }
-                      onClick={() => void sendReply()}
-                    >
-                      {sendMutation.isPending ? "Sending..." : "Send"}
-                      <AppIcon name="send" />
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button onClick={() => setReplyOpen(false)} size="sm" variant="ghost">
+                        Cancel
+                      </Button>
+                      <Button
+                        className="rounded-full px-5"
+                        disabled={
+                          sendMutation.isPending ||
+                          (!htmlToText(reply).trim() &&
+                            !replyFiles.length &&
+                            !documentIds.length &&
+                            !pdfTemplateId)
+                        }
+                        onClick={() => void sendReply()}
+                      >
+                        {sendMutation.isPending ? "Sending..." : "Send"}
+                        <AppIcon name="send" />
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </div>
+              ) : null}
             </>
           ) : (
             <div className="flex h-full items-center justify-center p-8 text-center">
@@ -720,36 +792,42 @@ function MailListRow({
   active,
   item,
   onClick,
+  onToggleRead,
+  onToggleStar,
 }: {
   active: boolean
   item: MailInboxItem
   onClick: () => void
+  onToggleRead: () => void
+  onToggleStar: () => void
 }) {
+  const unread = item.isRead !== true
   return (
-    <button
-      className={`grid w-full grid-cols-[2.5rem_minmax(0,1fr)] gap-3 border-b px-4 py-3 text-left transition-colors ${
-        active ? "bg-primary/8" : "hover:bg-muted/40"
+    <div
+      className={`grid w-full grid-cols-[2.5rem_minmax(0,1fr)_2rem] gap-3 border-b px-4 py-3 transition-colors ${
+        active ? "bg-primary/8" : unread ? "bg-primary/[0.04] hover:bg-primary/[0.07]" : "hover:bg-muted/40"
       }`}
-      onClick={onClick}
-      type="button"
     >
       <Avatar value={item.name || item.email} />
-      <span className="min-w-0">
+      <button className="min-w-0 text-left" onClick={onClick} type="button">
         <span className="flex items-center justify-between gap-3">
-          <span className={`truncate text-sm ${item.status === "New" ? "font-bold" : "font-medium"}`}>
+          <span className={`truncate text-sm ${unread ? "font-bold" : "font-medium"}`}>
             {item.name || item.email}
           </span>
           <span className="shrink-0 text-[11px] text-muted-foreground">
             {shortDate(item.createdAt)}
           </span>
         </span>
-        <span className={`mt-0.5 block truncate text-sm ${item.status === "New" ? "font-semibold" : ""}`}>
+        <span className={`mt-0.5 block truncate text-sm ${unread ? "font-semibold" : ""}`}>
           {item.subject || "No subject"}
         </span>
         <span className="mt-1 block truncate text-xs text-muted-foreground">
           {plainSnippet(item.message || item.htmlBody || "")}
         </span>
         <span className="mt-2 flex flex-wrap gap-1.5">
+          {unread ? (
+            <Badge className="h-5 px-1.5 text-[10px]">Unseen</Badge>
+          ) : null}
           <Badge className="h-5 px-1.5 text-[10px]" variant="outline">
             {item.status}
           </Badge>
@@ -764,16 +842,56 @@ function MailListRow({
             </Badge>
           ) : null}
         </span>
+      </button>
+      <span className="flex min-h-[4.75rem] flex-col items-center justify-between">
+        {unread ? (
+          <Button
+            aria-label="Mark read"
+            className="text-primary"
+            onClick={onToggleRead}
+            size="icon-sm"
+            type="button"
+            variant="ghost"
+          >
+            <AppIcon name="mark_email_unread" />
+          </Button>
+        ) : (
+          <span className="size-7" />
+        )}
+        <Button
+          aria-label={item.isStarred ? "Unstar email" : "Star email"}
+          className={item.isStarred ? "text-amber-500" : ""}
+          onClick={onToggleStar}
+          size="icon-sm"
+          type="button"
+          variant="ghost"
+        >
+          <AppIcon name={item.isStarred ? "star" : "star_border"} />
+        </Button>
+        {unread ? (
+          <span className="size-7" />
+        ) : (
+          <Button
+            aria-label="Mark unseen"
+            className="text-muted-foreground"
+            onClick={onToggleRead}
+            size="icon-sm"
+            type="button"
+            variant="ghost"
+          >
+            <AppIcon name="drafts" />
+          </Button>
+        )}
       </span>
-    </button>
+    </div>
   )
 }
 
 function MailMessageCard({ item }: { item: MailInboxItem }) {
   return (
-    <Card className="overflow-hidden shadow-none">
+    <Card className="overflow-hidden rounded-2xl border-slate-200 shadow-[0_12px_35px_rgba(15,23,42,0.06)]">
       <CardContent className="p-0">
-        <div className="flex items-start gap-3 border-b px-4 py-3">
+        <div className="flex items-start gap-3 border-b bg-white px-4 py-3 sm:px-5">
           <Avatar value={item.name || item.email} />
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -787,7 +905,7 @@ function MailMessageCard({ item }: { item: MailInboxItem }) {
             </div>
           </div>
         </div>
-        <div className="p-4">
+        <div className="bg-slate-100/70 p-3 sm:p-4">
           <MailBody html={item.htmlBody} text={item.message} />
         </div>
       </CardContent>
@@ -797,7 +915,7 @@ function MailMessageCard({ item }: { item: MailInboxItem }) {
 
 function OutgoingMailCard({ item }: { item: OptimisticReply }) {
   return (
-    <Card className="ml-auto max-w-[92%] border-primary/20 bg-primary/[0.03] shadow-none">
+    <Card className="ml-auto max-w-[92%] rounded-2xl border-primary/20 bg-primary/[0.03] shadow-sm">
       <CardContent className="p-4">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
@@ -963,7 +1081,7 @@ function MailBody({ html, text }: { html?: string; text: string }) {
   if (html?.trim()) {
     return (
       <iframe
-        className="h-[420px] w-full rounded-xl border bg-white"
+        className="h-[min(58vh,620px)] min-h-[420px] w-full rounded-xl border bg-white shadow-inner"
         sandbox=""
         srcDoc={safeMailDocument(html)}
         title="Email content"
@@ -1041,7 +1159,7 @@ function safeMailDocument(html: string) {
     .replace(/<script[\s\S]*?<\/script>/gi, "")
     .replace(/\son\w+\s*=\s*"[^"]*"/gi, "")
     .replace(/\son\w+\s*=\s*'[^']*'/gi, "")
-  return `<!doctype html><html><head><base target="_blank"><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body{margin:0;background:#fff;color:#111;font:14px Arial,sans-serif}body{padding:16px}img{max-width:100%;height:auto}table{max-width:100%}a{color:#2563eb}</style></head><body>${clean}</body></html>`
+  return `<!doctype html><html><head><base target="_blank"><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body{margin:0;background:#fff;color:#111;font:14px Arial,sans-serif}body{padding:20px}img{max-width:100%;height:auto}table{max-width:100%}a{color:#2563eb}</style></head><body>${clean}</body></html>`
 }
 
 function shortDate(value: string) {

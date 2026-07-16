@@ -104,6 +104,15 @@ export function IntegrationMailSheet({
       imapPassword: "",
       port: String(config?.port ?? defaults.port),
       imapPort: String(config?.imapPort ?? defaults.imapPort),
+      host: String(config?.host ?? defaults.host),
+      username: String(config?.username ?? defaults.username),
+      fromEmail: String(config?.fromEmail ?? defaults.fromEmail),
+      fromName: String(config?.fromName ?? defaults.fromName),
+      imapHost: String(config?.imapHost ?? defaults.imapHost),
+      imapUsername: String(config?.imapUsername ?? defaults.imapUsername),
+      imapFolder: String(config?.imapFolder ?? defaults.imapFolder),
+      mailboxTag: String(config?.mailboxTag ?? defaults.mailboxTag),
+      gmailEmail: String(config?.gmailEmail ?? defaults.gmailEmail),
       leadTemplateTags: Array.isArray(config?.leadTemplateTags)
         ? config.leadTemplateTags.join(", ")
         : String(config?.leadTemplateTags ?? defaults.leadTemplateTags),
@@ -129,18 +138,18 @@ export function IntegrationMailSheet({
 
   async function save() {
     setError(null)
-    if (values.authType !== "gmail-oauth" && (!values.host.trim() || !values.username.trim() || !values.fromEmail.trim())) {
+    if (values.authType !== "gmail-oauth" && (!safeText(values.host) || !safeText(values.username) || !safeText(values.fromEmail))) {
       setError("SMTP host, username, and from email are required.")
       return
     }
-    if (values.authType !== "gmail-oauth" && !values.password.trim() && !values.hasPassword) {
+    if (values.authType !== "gmail-oauth" && !safeText(values.password) && !values.hasPassword) {
       setError("SMTP password is required for a new connection.")
       return
     }
     if (
       values.enableInboxSync &&
       values.authType !== "gmail-oauth" &&
-      (!values.imapHost.trim() || !values.imapUsername.trim())
+      (!safeText(values.imapHost) || !safeText(values.imapUsername))
     ) {
       setError("IMAP host and username are required when inbox sync is enabled.")
       return
@@ -148,9 +157,9 @@ export function IntegrationMailSheet({
     if (
       values.enableInboxSync &&
       values.authType !== "gmail-oauth" &&
-      !values.imapPassword.trim() &&
+      !safeText(values.imapPassword) &&
       !values.hasImapPassword &&
-      !values.password.trim() &&
+      !safeText(values.password) &&
       !values.hasPassword
     ) {
       setError("IMAP password is required when inbox sync is enabled.")
@@ -161,25 +170,25 @@ export function IntegrationMailSheet({
       smtp: {
         providerName: values.providerName,
         authType: values.authType,
-        host: values.host.trim(),
+        host: safeText(values.host),
         port: Math.max(1, Number(values.port) || 587),
-        username: values.username.trim(),
+        username: safeText(values.username),
         password: values.password,
-        fromEmail: values.fromEmail.trim(),
-        fromName: values.fromName.trim() || null,
+        fromEmail: safeText(values.fromEmail),
+        fromName: safeText(values.fromName) || null,
         useSsl: values.useSsl,
         enableInboxSync: values.enableInboxSync,
-        imapHost: values.imapHost.trim() || null,
+        imapHost: safeText(values.imapHost) || null,
         imapPort: Math.max(1, Number(values.imapPort) || 993),
-        imapUsername: values.imapUsername.trim() || null,
-        imapPassword: values.imapPassword.trim() || null,
+        imapUsername: safeText(values.imapUsername) || null,
+        imapPassword: safeText(values.imapPassword) || null,
         imapUseSsl: values.imapUseSsl,
-        imapFolder: values.imapFolder.trim() || null,
-        mailboxTag: values.mailboxTag.trim() || null,
+        imapFolder: safeText(values.imapFolder) || null,
+        mailboxTag: safeText(values.mailboxTag) || null,
         leadTemplateTags: splitTags(values.leadTemplateTags),
         duplicatePolicy: values.duplicatePolicy,
         autoCreateLeads: values.autoCreateLeads,
-        syncIntervalMinutes: Math.max(5, Number(values.syncIntervalMinutes) || 10),
+        syncIntervalMinutes: Math.max(1, Number(values.syncIntervalMinutes) || 10),
         maxMessagesPerSync: Math.max(5, Number(values.maxMessagesPerSync) || 25),
       },
     })
@@ -204,7 +213,7 @@ export function IntegrationMailSheet({
     setError(null)
     const response = await gmailConnect.mutateAsync({
       returnTo: "/dashboard/settings",
-      mailboxTag: values.mailboxTag.trim() || "gmail",
+      mailboxTag: safeText(values.mailboxTag) || "gmail",
       leadTemplateTags: splitTags(values.leadTemplateTags),
     })
     if (response.error || !response.data?.url) {
@@ -262,18 +271,29 @@ export function IntegrationMailSheet({
           </div>
           <Toggle checked={values.useSsl} label="Secure SMTP" onChange={(checked) => patch({ useSsl: checked })} />
           <Toggle checked={values.enableInboxSync} label="Inbox sync" onChange={(checked) => patch({ enableInboxSync: checked })} />
-          {values.enableInboxSync && values.authType !== "gmail-oauth" ? (
+          {values.enableInboxSync ? (
             <div className="space-y-4 rounded-xl border p-4">
+              {values.authType === "gmail-oauth" ? (
+                <p className="text-xs leading-5 text-muted-foreground">
+                  {"Gmail OAuth uses the Gmail API. Set how often unread inbox messages should be imported."}
+                </p>
+              ) : null}
+              {values.authType !== "gmail-oauth" ? (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field label="IMAP host"><Input onChange={(event) => patch({ imapHost: event.target.value })} value={values.imapHost} /></Field>
+                  <Field label="IMAP port"><Input onChange={(event) => patch({ imapPort: event.target.value })} type="number" value={values.imapPort} /></Field>
+                  <Field label="IMAP username"><Input onChange={(event) => patch({ imapUsername: event.target.value })} value={values.imapUsername} /></Field>
+                  <Field label={values.hasImapPassword ? "IMAP password (saved)" : "IMAP password"}><Input autoComplete="new-password" onChange={(event) => patch({ imapPassword: event.target.value })} placeholder={values.hasImapPassword ? "Leave blank to keep saved password" : "Defaults to SMTP password"} type="password" value={values.imapPassword} /></Field>
+                  <Field label="Folder"><Input onChange={(event) => patch({ imapFolder: event.target.value })} value={values.imapFolder} /></Field>
+                </div>
+              ) : null}
               <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="IMAP host"><Input onChange={(event) => patch({ imapHost: event.target.value })} value={values.imapHost} /></Field>
-                <Field label="IMAP port"><Input onChange={(event) => patch({ imapPort: event.target.value })} type="number" value={values.imapPort} /></Field>
-                <Field label="IMAP username"><Input onChange={(event) => patch({ imapUsername: event.target.value })} value={values.imapUsername} /></Field>
-                <Field label={values.hasImapPassword ? "IMAP password (saved)" : "IMAP password"}><Input autoComplete="new-password" onChange={(event) => patch({ imapPassword: event.target.value })} placeholder={values.hasImapPassword ? "Leave blank to keep saved password" : "Defaults to SMTP password"} type="password" value={values.imapPassword} /></Field>
-                <Field label="Folder"><Input onChange={(event) => patch({ imapFolder: event.target.value })} value={values.imapFolder} /></Field>
-                <Field label="Sync interval"><Input min={5} onChange={(event) => patch({ syncIntervalMinutes: event.target.value })} type="number" value={values.syncIntervalMinutes} /></Field>
+                <Field label="Sync interval"><Input min={1} onChange={(event) => patch({ syncIntervalMinutes: event.target.value })} type="number" value={values.syncIntervalMinutes} /></Field>
                 <Field label="Messages per sync"><Input min={5} onChange={(event) => patch({ maxMessagesPerSync: event.target.value })} type="number" value={values.maxMessagesPerSync} /></Field>
               </div>
-              <Toggle checked={values.imapUseSsl} label="Secure IMAP" onChange={(checked) => patch({ imapUseSsl: checked })} />
+              {values.authType !== "gmail-oauth" ? (
+                <Toggle checked={values.imapUseSsl} label="Secure IMAP" onChange={(checked) => patch({ imapUseSsl: checked })} />
+              ) : null}
               <Toggle checked={values.autoCreateLeads} label="Auto-create leads" onChange={(checked) => patch({ autoCreateLeads: checked })} />
             </div>
           ) : null}
@@ -289,6 +309,10 @@ export function IntegrationMailSheet({
 
 function splitTags(value: string) {
   return [...new Set(value.split(",").map((item) => item.trim()).filter(Boolean))]
+}
+
+function safeText(value: unknown) {
+  return `${value ?? ""}`.trim()
 }
 
 function Field({ children, label }: { children: React.ReactNode; label: string }) {

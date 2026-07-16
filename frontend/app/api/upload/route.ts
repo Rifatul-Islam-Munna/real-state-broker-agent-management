@@ -18,16 +18,16 @@ async function forwardResponse(response: Response) {
 
 export async function POST(request: Request) {
   const formData = await request.formData()
-  const file = formData.get("File")
-  const folder = formData.get("Folder")
+  const file = formData.get("file") ?? formData.get("File")
+  const folder = formData.get("folder") ?? formData.get("Folder")
 
   if (!(file instanceof File)) {
     return NextResponse.json({ message: "No file was provided." }, { status: 400 })
   }
 
   const payload = new FormData()
-  payload.set("File", file)
-  payload.set("Folder", typeof folder === "string" && folder.trim().length > 0 ? folder : "properties")
+  payload.set("file", file)
+  payload.set("folder", typeof folder === "string" && folder.trim().length > 0 ? folder : "properties")
 
   const response = await fetch(`${baseUrl}/upload`, {
     body: payload,

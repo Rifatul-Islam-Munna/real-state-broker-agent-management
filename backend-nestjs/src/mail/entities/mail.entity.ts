@@ -91,6 +91,12 @@ export class MailInboxItem {
   @Column({ default: false })
   aiFallbackUsed: boolean;
 
+  @Column({ type: 'boolean', default: false })
+  isRead: boolean = false;
+
+  @Column({ type: 'boolean', default: false })
+  isStarred: boolean = false;
+
   @Column({ type: 'jsonb', default: {} })
   extractionDetails: Record<string, any>;
 

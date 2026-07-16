@@ -80,6 +80,7 @@ import {
   MdDelete,
   MdDescription,
   MdDraw,
+  MdDrafts,
   MdEventBusy,
   MdFavorite,
   MdFavoriteBorder,
@@ -108,6 +109,7 @@ import {
   MdSms,
   MdSquareFoot,
   MdStar,
+  MdStarBorder,
   MdStraighten,
   MdTableView,
   MdTextsms,
@@ -227,6 +229,7 @@ const appIconMap: Record<string, IconComponent> = {
   social_leaderboard: MdLeaderboard,
   square_foot: MdSquareFoot,
   star: MdStar,
+  star_border: MdStarBorder,
   straighten: MdStraighten,
   sync: SlidersHorizontal,
   table_view: MdTableView,
@@ -244,6 +247,7 @@ const appIconMap: Record<string, IconComponent> = {
   x_social: FaXTwitter,
   youtube: FaYoutube,
   tiktok: FaTiktok,
+  drafts: MdDrafts,
 }
 
 export function AppIcon({

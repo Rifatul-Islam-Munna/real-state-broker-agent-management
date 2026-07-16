@@ -40,6 +40,7 @@ export class PropertiesService {
     if (listingType) qb.andWhere('property.listing_type = :listingType', { listingType: numericEnumValue(propertyListingTypes, listingType) });
     if (status) qb.andWhere('property.status = :status', { status: numericEnumValue(propertyStatuses, status) });
     if (agent) qb.andWhere("concat(agent.first_name, ' ', agent.last_name) ILIKE :agent", { agent: `%${agent}%` });
+    if (!this.showDemoData()) qb.andWhere("property.slug NOT LIKE 'demo-property-%'");
 
     const [properties, total] = await qb
       .orderBy('property.updatedAt', 'DESC')
@@ -324,5 +325,9 @@ export class PropertiesService {
     return [PropertyStatus.Closed, PropertyStatus.Sold, PropertyStatus.Rented].includes(status)
       ? existing ?? new Date()
       : null;
+  }
+
+  private showDemoData() {
+    return `${process.env.isDemoData ?? ''}`.trim().toLowerCase() === 'true';
   }
 }

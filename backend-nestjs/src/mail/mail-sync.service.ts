@@ -116,7 +116,7 @@ export class MailInboxSyncBackgroundService {
     private leadLearner: LeadIntelligenceService,
   ) {}
 
-  @Cron(CronExpression.EVERY_5_MINUTES)
+  @Cron(CronExpression.EVERY_MINUTE)
   async handleCron() {
     try {
       await this.runSync('Scheduled', false);
@@ -295,7 +295,7 @@ export class MailInboxSyncBackgroundService {
     listUrl.searchParams.set('q', 'is:unread');
     for (const label of labels) listUrl.searchParams.append('labelIds', label);
     const listResponse = await fetch(listUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
-    if (!listResponse.ok) throw new Error(`Gmail list failed: ${listResponse.status}`);
+    if (!listResponse.ok) throw new Error(`Gmail list failed: ${listResponse.status} ${await this.safeErrorBody(listResponse)}`);
     const list: any = await listResponse.json();
     for (const item of list.messages ?? []) {
       const id = `${item.id ?? ''}`.trim();
@@ -554,7 +554,7 @@ export class MailInboxSyncBackgroundService {
       leadTemplateTags: this.stringList(raw.leadTemplateTags),
       duplicatePolicy: raw.duplicatePolicy === 'process-every-message' ? 'process-every-message' : 'skip-exact-message',
       autoCreateLeads: raw.autoCreateLeads !== false,
-      syncIntervalMinutes: this.clampInt(raw.syncIntervalMinutes, 10, 5, 120),
+      syncIntervalMinutes: this.clampInt(raw.syncIntervalMinutes, 10, 1, 120),
       maxMessagesPerSync: this.clampInt(raw.maxMessagesPerSync, 25, 5, 100),
       gmailEmail: `${raw.gmailEmail ?? ''}`.trim(),
       gmailAccessToken: `${raw.gmailAccessToken ?? ''}`.trim(),
@@ -647,6 +647,14 @@ export class MailInboxSyncBackgroundService {
       },
       body: JSON.stringify({ removeLabelIds: ['UNREAD'] }),
     }).catch(() => undefined);
+  }
+
+  private async safeErrorBody(response: any) {
+    try {
+      return (await response.text()).replace(/\s+/g, ' ').trim().slice(0, 500);
+    } catch {
+      return '';
+    }
   }
 
   private propertyMatchScore(property: Property, normalizedEmailText: string) {
