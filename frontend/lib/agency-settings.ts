@@ -22,6 +22,8 @@ export type LeadAutomationSettings = {
   enabled: boolean
   channels: Array<"Email" | "SMS">
   directTemplateId: string
+  leadShowingTemplateId: string
+  realtorShowingTemplateId: string
   followUpEnabled: boolean
 }
 
@@ -29,6 +31,10 @@ export type FirstMessageAutomationSettings = {
   lead: boolean
   leadShowing: boolean
   realtorShowing: boolean
+  delayMinutes?: number
+  leadDelayMinutes: number
+  leadShowingDelayMinutes: number
+  realtorShowingDelayMinutes: number
 }
 
 export type LeadIntelligenceSettings = {
@@ -78,15 +84,20 @@ export const defaultAgencySettings: AgencyWorkspaceSettings = {
     ].join("\n"),
   },
   leadAutomation: {
-    enabled: false,
+    enabled: true,
     channels: ["Email"],
     directTemplateId: "new-lead-welcome",
+    leadShowingTemplateId: "lead-showing-confirmation",
+    realtorShowingTemplateId: "showing-confirmation",
     followUpEnabled: true,
   },
   firstMessageAutomation: {
     lead: true,
     leadShowing: true,
     realtorShowing: true,
+    leadDelayMinutes: 0,
+    leadShowingDelayMinutes: 0,
+    realtorShowingDelayMinutes: 0,
   },
   leadIntelligence: {
     qualifiedKnowledge: [
@@ -118,6 +129,23 @@ export const defaultAgencySettings: AgencyWorkspaceSettings = {
       audience: "Lead",
     },
     {
+      body: "Hi {{client_name}}, your showing request for {{property_address}} is received. {{agent_name}} will confirm the best time shortly.",
+      channels: ["Email", "SMS"],
+      id: "lead-showing-confirmation",
+      name: "Lead Showing Confirmation",
+      subject: "Showing request received for {{property_address}}",
+      variableTokens: [
+        "{{client_name}}",
+        "{{property_address}}",
+        "{{agent_name}}",
+      ],
+      sequenceType: "Direct",
+      gapDays: 0,
+      isActive: true,
+      attachPropertyDocuments: true,
+      audience: "LeadShowing",
+    },
+    {
       body: "Hi {{client_name}}, your showing for {{property_address}} is confirmed for {{showing_time}}. Reach out to {{agent_name}} if you need to reschedule.",
       channels: ["Email", "SMS"],
       id: "showing-confirmation",
@@ -129,6 +157,10 @@ export const defaultAgencySettings: AgencyWorkspaceSettings = {
         "{{showing_time}}",
         "{{agent_name}}",
       ],
+      sequenceType: "Direct",
+      gapDays: 0,
+      isActive: true,
+      attachPropertyDocuments: true,
       audience: "Realtor",
     },
     {
@@ -191,6 +223,8 @@ export function cloneAgencySettings(
     showingFeedbackAutomation?: Partial<ShowingFeedbackAutomationSettings>
   }
 ): AgencyWorkspaceSettings {
+  const normalizeDelay = (value: unknown) =>
+    Math.min(1440, Math.max(0, Number(value ?? 0) || 0))
   const profile = settings.profile ?? defaultAgencySettings.profile
   const automation = settings.showingFeedbackAutomation ?? {}
   const leadAutomation = settings.leadAutomation ?? {}
@@ -199,24 +233,38 @@ export function cloneAgencySettings(
   const leadAutomationChannels = (leadAutomation.channels ?? ["Email"]).filter(
     (item): item is "Email" | "SMS" => item === "Email" || item === "SMS"
   )
+  const communicationTemplates = (
+    settings.communicationTemplates ??
+    defaultAgencySettings.communicationTemplates
+  ).map((item) => ({
+    ...item,
+    attachmentDocumentCategory: item.attachmentDocumentCategory ?? "",
+    attachmentDocumentType: item.attachmentDocumentType ?? "",
+    attachmentMode:
+      item.attachmentMode ??
+      (item.attachPropertyDocuments !== false ? "property" : "none"),
+    channels: (item.channels ?? []).filter(
+      (channel): channel is "Email" | "SMS" =>
+        channel === "Email" || channel === "SMS"
+    ),
+    pdfTemplateId: item.pdfTemplateId ?? "",
+    variableTokens: [...(item.variableTokens ?? [])],
+  }))
+  const existingShowingConfirmation = communicationTemplates.find((item) => item.id === "showing-confirmation")
+  if (existingShowingConfirmation) {
+    existingShowingConfirmation.audience = "Realtor"
+    existingShowingConfirmation.sequenceType = "Direct"
+    existingShowingConfirmation.gapDays = 0
+  }
+  const addDefaultTemplate = (templateId: string) => {
+    if (communicationTemplates.some((item) => item.id === templateId)) return
+    const template = defaultAgencySettings.communicationTemplates.find((item) => item.id === templateId)
+    if (template) communicationTemplates.push({ ...template, variableTokens: [...(template.variableTokens ?? [])] })
+  }
+  addDefaultTemplate("lead-showing-confirmation")
+  addDefaultTemplate("showing-confirmation")
   return {
-    communicationTemplates: (
-      settings.communicationTemplates ??
-      defaultAgencySettings.communicationTemplates
-    ).map((item) => ({
-      ...item,
-      attachmentDocumentCategory: item.attachmentDocumentCategory ?? "",
-      attachmentDocumentType: item.attachmentDocumentType ?? "",
-      attachmentMode:
-        item.attachmentMode ??
-        (item.attachPropertyDocuments !== false ? "property" : "none"),
-      channels: (item.channels ?? []).filter(
-        (channel): channel is "Email" | "SMS" =>
-          channel === "Email" || channel === "SMS"
-      ),
-      pdfTemplateId: item.pdfTemplateId ?? "",
-      variableTokens: [...(item.variableTokens ?? [])],
-    })),
+    communicationTemplates,
     profile: {
       ...defaultAgencySettings.profile,
       ...profile,
@@ -236,17 +284,35 @@ export function cloneAgencySettings(
       ),
     },
     leadAutomation: {
-      enabled: leadAutomation.enabled === true,
+      enabled: firstMessageAutomation.lead !== false,
       channels: leadAutomationChannels.length ? leadAutomationChannels : ["Email"],
       directTemplateId:
         leadAutomation.directTemplateId ||
         defaultAgencySettings.leadAutomation.directTemplateId,
+      leadShowingTemplateId:
+        leadAutomation.leadShowingTemplateId ||
+        defaultAgencySettings.leadAutomation.leadShowingTemplateId,
+      realtorShowingTemplateId:
+        leadAutomation.realtorShowingTemplateId ||
+        defaultAgencySettings.leadAutomation.realtorShowingTemplateId,
       followUpEnabled: leadAutomation.followUpEnabled !== false,
     },
     firstMessageAutomation: {
       lead: firstMessageAutomation.lead !== false,
       leadShowing: firstMessageAutomation.leadShowing !== false,
       realtorShowing: firstMessageAutomation.realtorShowing !== false,
+      leadDelayMinutes: normalizeDelay(
+        firstMessageAutomation.leadDelayMinutes ??
+          firstMessageAutomation.delayMinutes
+      ),
+      leadShowingDelayMinutes: normalizeDelay(
+        firstMessageAutomation.leadShowingDelayMinutes ??
+          firstMessageAutomation.delayMinutes
+      ),
+      realtorShowingDelayMinutes: normalizeDelay(
+        firstMessageAutomation.realtorShowingDelayMinutes ??
+          firstMessageAutomation.delayMinutes
+      ),
     },
     leadIntelligence: {
       qualifiedKnowledge:

@@ -50,6 +50,7 @@ const routeGroups = [
     label: "Realtors",
     hrefs: [
       "/dashboard/realtor-showings",
+      "/dashboard/realtors",
       "/dashboard/realtor-showings/sequences",
       "/dashboard/showing-feedback",
       "/dashboard/showing-feedback-automation",
@@ -111,19 +112,23 @@ export function DashboardSidebar({
   }
 
   return (
-    <Sidebar collapsible="offcanvas" variant="sidebar">
-      <SidebarHeader className="border-b border-sidebar-border/80 p-4">
+    <Sidebar
+      className="dashboard-sidebar bg-slate-950 text-slate-100"
+      collapsible="offcanvas"
+      variant="sidebar"
+    >
+      <SidebarHeader className="border-b border-white/10 bg-slate-950 p-4 text-slate-100">
         <PortalBrandLink
           agencyName={agencyName}
-          className="min-w-0 text-sidebar-foreground"
+          className="min-w-0 text-white"
           href={homeHref}
-          iconWrapperClassName="bg-sidebar-primary p-2 text-sidebar-primary-foreground shadow-sm"
+          iconWrapperClassName="bg-blue-500 p-2 text-white shadow-sm"
           logoUrl={logoUrl}
-          nameClassName="text-sidebar-foreground font-bold tracking-tight group-data-[collapsible=icon]:hidden"
+          nameClassName="font-bold tracking-tight text-white group-data-[collapsible=icon]:hidden"
         />
       </SidebarHeader>
 
-      <SidebarContent className="py-2">
+      <SidebarContent className="bg-slate-950 py-2 text-slate-100">
         <ScrollArea className="min-h-0 flex-1">
           <nav aria-label="Dashboard">
             {navigation.length === 0 ? (
@@ -145,11 +150,11 @@ export function DashboardSidebar({
                 if (items.length === 0) return null
 
                 return (
-                  <SidebarGroup className="px-3 py-2" key={group.label}>
-                    <SidebarGroupLabel className="px-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-sidebar-foreground/55">
+                  <SidebarGroup className="px-3 py-2 text-slate-100" key={group.label}>
+                    <SidebarGroupLabel className="px-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-300">
                       {group.label}
                     </SidebarGroupLabel>
-                    <SidebarSeparator className="mx-2 opacity-60" />
+                    <SidebarSeparator className="mx-2 bg-white/10 opacity-100" />
                     <SidebarGroupContent>
                       <SidebarMenu className="gap-1">
                         {items.map((item) => {
@@ -159,13 +164,13 @@ export function DashboardSidebar({
                           return (
                             <SidebarMenuItem key={item.href}>
                               <SidebarMenuButton
-                                className="h-10 rounded-xl px-3 font-medium"
+                                className="h-10 rounded-xl px-3 font-medium text-slate-200 hover:bg-white/10 hover:text-white data-active:bg-blue-500/20 data-active:text-white [&>svg]:text-slate-400 hover:[&>svg]:text-white data-active:[&>svg]:text-blue-200"
                                 isActive={isActive}
                                 render={<Link href={item.href} />}
                                 tooltip={item.label}
                               >
                                 <AppIcon name={item.icon} />
-                                <span>{item.label}</span>
+                                <span className="!text-slate-200">{item.label}</span>
                               </SidebarMenuButton>
                             </SidebarMenuItem>
                           )
@@ -179,14 +184,14 @@ export function DashboardSidebar({
           </nav>
         </ScrollArea>
       </SidebarContent>
-      <SidebarFooter className="border-t border-sidebar-border/80 p-3">
+      <SidebarFooter className="border-t border-white/10 bg-slate-950 p-3 text-slate-100">
         <SidebarGroup className="p-0">
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem>
-                <SidebarMenuButton className="h-10 rounded-xl px-3" tooltip={role}>
+                <SidebarMenuButton className="h-10 rounded-xl px-3 text-slate-100 hover:bg-white/10 hover:text-white [&>svg]:text-slate-400" tooltip={role}>
                   <AppIcon name={role === "Admin" ? "verified" : "badge"} />
-                  <span>{role}</span>
+                  <span className="!text-slate-100">{role}</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>

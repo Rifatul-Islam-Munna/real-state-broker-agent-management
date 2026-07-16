@@ -398,6 +398,22 @@ export function LeadFormDialog({
             />
             <FieldError error={errors.budget} />
           </div>
+          <div className="flex flex-col gap-2">
+            <Input
+              className="rounded-none border-slate-200 dark:border-white/10"
+              onChange={(event) => updateField("creditScore", event.target.value)}
+              placeholder="Credit score"
+              value={formValues.creditScore}
+            />
+          </div>
+          <div className="flex flex-col gap-2">
+            <Input
+              className="rounded-none border-slate-200 dark:border-white/10"
+              onChange={(event) => updateField("combinedCreditScore", event.target.value)}
+              placeholder="Combined credit score"
+              value={formValues.combinedCreditScore}
+            />
+          </div>
           <label className="flex flex-col gap-2 text-xs font-bold uppercase tracking-wide text-slate-500">
             {"Assigned Agent"}
             <Select

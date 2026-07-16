@@ -21,6 +21,7 @@ export const dashboardRoutes: readonly DashboardRoute[] = [
   { href: "/dashboard/replies", label: "Reply Inbox", icon: "mark_email_unread", permission: "lead" },
   { href: "/dashboard/lead-collection-templates", label: "Lead Templates", icon: "document_scanner", permission: "mail" },
   { href: "/dashboard/realtor-showings", label: "Realtor Showings", icon: "real_estate_agent", permission: "lead" },
+  { href: "/dashboard/realtors", label: "Realtors", icon: "group", permission: "lead" },
   { href: "/dashboard/realtor-showings/sequences", label: "Realtor Message Sequences", icon: "forward_to_inbox", permission: "lead" },
   { href: "/dashboard/showing-feedback", label: "Feedback Registry", icon: "rate_review", adminOnly: true },
   { href: "/dashboard/showing-feedback/leads", label: "Lead Showing Feedback", icon: "person_search", permission: "lead" },

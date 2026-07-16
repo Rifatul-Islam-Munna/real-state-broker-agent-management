@@ -10,6 +10,7 @@ import { Property } from '../properties/entities/property.entity';
 import { isPropertyLeadEligible } from '../properties/property-availability';
 import { SchedulingSettingsService } from '../settings/scheduling-settings.service';
 import { SettingsService } from '../settings/settings.service';
+import { RealtorsService } from '../realtors/realtors.service';
 import { RealtorShowing } from './entities/realtor-showing.entity';
 import { RealtorShowingsService } from './realtor-showings.service';
 
@@ -33,8 +34,9 @@ export class RealtorShowingsV2Service extends RealtorShowingsService {
     outreach: LeadOutreachService,
     settings: SettingsService,
     scheduling: SchedulingSettingsService,
+    realtorsService: RealtorsService,
   ) {
-    super(v2ShowingRepo, v2PropertyRepo, v2LeadRepo, historyRepo, outreach, settings, scheduling);
+    super(v2ShowingRepo, v2PropertyRepo, v2LeadRepo, historyRepo, outreach, settings, scheduling, realtorsService);
     this.settings = settings;
     this.scheduling = scheduling;
   }
@@ -54,6 +56,7 @@ export class RealtorShowingsV2Service extends RealtorShowingsService {
     const liveProperties = allProperties.filter(isPropertyLeadEligible);
     const unavailable = allProperties.filter((item) => !isPropertyLeadEligible(item));
     const defaultCountry = payload.defaultPhoneCountry || settings.profile?.defaultPhoneCountry;
+    const defaultDirectTemplateId = this.defaultShowingTemplateId(settings, payload.directTemplateId);
     const failures: string[] = [];
     let createdCount = 0;
 
@@ -66,18 +69,29 @@ export class RealtorShowingsV2Service extends RealtorShowingsService {
         if (!match.property && blockedMatch.score >= 0.9) throw new Error('Matched property is paused, sold, rented, closed, or unpublished.');
         const realtorEmail = this.cell(sourceData, mapping.realtorEmail).toLowerCase();
         const realtorPhone = normalizePhoneNumber(this.cell(sourceData, mapping.realtorPhone), defaultCountry);
-        if (!realtorEmail && !realtorPhone) throw new Error('Email or phone required.');
-        const showingAt = parseDateTimeInZone(this.combinedDateTime(sourceData, mapping), scheduling.timeZone);
+        const savedRealtor = await this.realtorsService.findMatching(realtorEmail, realtorPhone);
+        const effectiveRealtorEmail = realtorEmail || savedRealtor?.email || '';
+        const effectiveRealtorPhone = realtorPhone || savedRealtor?.phone || '';
+        const effectiveRealtorName = this.cell(sourceData, mapping.realtorName) || savedRealtor?.name || effectiveRealtorEmail.split('@')[0] || effectiveRealtorPhone;
+        if (!effectiveRealtorEmail && !effectiveRealtorPhone) throw new Error('Email or phone required.');
+        if (!savedRealtor) {
+          await this.realtorsService.create({
+            email: effectiveRealtorEmail,
+            name: effectiveRealtorName,
+            phone: effectiveRealtorPhone,
+          });
+        }
+        const showingAt = parseDateTimeInZone(this.combinedDateTime(sourceData, mapping, scheduling.morningOutreachHour), scheduling.timeZone);
         const lead = await this.findOrCreateLead({
-          email: realtorEmail,
-          name: this.cell(sourceData, mapping.realtorName),
-          phone: realtorPhone,
+          email: effectiveRealtorEmail,
+          name: effectiveRealtorName,
+          phone: effectiveRealtorPhone,
           property: match.property?.title || propertyText,
           propertyId: match.property?.id ?? null,
           timeline: showingAt?.toISOString() ?? '',
         });
         const showing = await this.v2ShowingRepo.save(this.v2ShowingRepo.create({
-          directTemplateId: `${payload.directTemplateId ?? ''}`,
+          directTemplateId: defaultDirectTemplateId,
           emailEnabled: !!payload.emailEnabled,
           followUpEnabled: !!payload.followUpEnabled,
           followUpGapDays: Math.max(0, Number(payload.followUpGapDays ?? 0) || 0),
@@ -88,9 +102,9 @@ export class RealtorShowingsV2Service extends RealtorShowingsService {
           propertyMatchMethod: match.property ? 'Auto' : 'Unmatched',
           propertyMatchScore: match.score,
           propertyText,
-          realtorEmail,
-          realtorName: this.cell(sourceData, mapping.realtorName) || realtorEmail.split('@')[0] || realtorPhone,
-          realtorPhone,
+          realtorEmail: effectiveRealtorEmail,
+          realtorName: effectiveRealtorName,
+          realtorPhone: effectiveRealtorPhone,
           showingAt,
           smsEnabled: !!payload.smsEnabled,
           sourceData,
@@ -197,12 +211,15 @@ export class RealtorShowingsV2Service extends RealtorShowingsService {
   }
   private clean(input: any) { return Object.fromEntries(Object.entries(input ?? {}).map(([key, value]) => [`${key}`.trim(), `${value ?? ''}`.trim()])); }
   private cell(record: Record<string, string>, column?: string) { return column ? `${record[column] ?? ''}`.trim() : ''; }
-  private combinedDateTime(record: Record<string, string>, mapping: Mapping) {
+  private combinedDateTime(record: Record<string, string>, mapping: Mapping, defaultHour = 9) {
     const combined = this.cell(record, mapping.showingAt);
     if (combined) return combined;
     const date = this.cell(record, mapping.showingDate);
     const time = this.cell(record, mapping.showingTime);
-    return date && time ? `${date}T${time}` : date;
+    if (!date) return '';
+    if (time) return `${date}T${time}`;
+    const hour = Math.min(23, Math.max(0, Number(defaultHour) || 9));
+    return `${date}T${String(hour).padStart(2, '0')}:00`;
   }
   private normalizeText(value: unknown) { return `${value ?? ''}`.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim(); }
 }

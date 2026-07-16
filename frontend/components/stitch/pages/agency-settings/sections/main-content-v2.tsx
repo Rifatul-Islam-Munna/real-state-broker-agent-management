@@ -16,6 +16,7 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import {
@@ -101,6 +102,26 @@ export function MainContentSectionV2() {
         (template) =>
           template.isActive !== false &&
           (template.audience ?? "Lead") === "Lead" &&
+          (template.sequenceType ?? "Direct") === "Direct",
+      ),
+    [values.communicationTemplates],
+  )
+  const directLeadShowingTemplates = useMemo(
+    () =>
+      values.communicationTemplates.filter(
+        (template) =>
+          template.isActive !== false &&
+          template.audience === "LeadShowing" &&
+          (template.sequenceType ?? "Direct") === "Direct",
+      ),
+    [values.communicationTemplates],
+  )
+  const directRealtorTemplates = useMemo(
+    () =>
+      values.communicationTemplates.filter(
+        (template) =>
+          template.isActive !== false &&
+          template.audience === "Realtor" &&
           (template.sequenceType ?? "Direct") === "Direct",
       ),
     [values.communicationTemplates],
@@ -238,7 +259,14 @@ export function MainContentSectionV2() {
 
         <FirstMessageAutomationPanel
           onChange={(firstMessageAutomation) => {
-            setValues((current) => ({ ...current, firstMessageAutomation }))
+            setValues((current) => ({
+              ...current,
+              firstMessageAutomation,
+              leadAutomation: {
+                ...current.leadAutomation,
+                enabled: firstMessageAutomation.lead,
+              },
+            }))
             setError(null)
           }}
           settings={values.firstMessageAutomation}
@@ -250,7 +278,9 @@ export function MainContentSectionV2() {
             setError(null)
           }}
           settings={values.leadAutomation}
-          templates={directLeadTemplates}
+          leadShowingTemplates={directLeadShowingTemplates}
+          leadTemplates={directLeadTemplates}
+          realtorTemplates={directRealtorTemplates}
         />
 
         <PhoneCountryPanel
@@ -343,25 +373,33 @@ function FirstMessageAutomationPanel({
           </Badge>
         </div>
       </CardHeader>
-      <CardContent className="grid gap-3 p-4 md:grid-cols-3">
-        <FirstMessageToggle
-          checked={settings.lead}
-          description="New CRM leads get the first lead template automatically."
-          label="Lead"
-          onChange={(lead) => patch({ lead })}
-        />
-        <FirstMessageToggle
-          checked={settings.leadShowing}
-          description="Lead showing first message sends automatically when a Lead Showing template is used."
-          label="Lead showing"
-          onChange={(leadShowing) => patch({ leadShowing })}
-        />
-        <FirstMessageToggle
-          checked={settings.realtorShowing}
-          description="Realtor showing first message sends automatically from the showing workflow."
-          label="Realtor showing"
-          onChange={(realtorShowing) => patch({ realtorShowing })}
-        />
+      <CardContent className="space-y-4 p-4">
+        <div className="grid gap-3 md:grid-cols-3">
+          <FirstMessageToggle
+            checked={settings.lead}
+            delayMinutes={settings.leadDelayMinutes}
+            description="New CRM leads get the first lead template automatically."
+            label="Lead"
+            onDelayChange={(leadDelayMinutes) => patch({ leadDelayMinutes })}
+            onChange={(lead) => patch({ lead })}
+          />
+          <FirstMessageToggle
+            checked={settings.leadShowing}
+            delayMinutes={settings.leadShowingDelayMinutes}
+            description="Lead showing first message sends automatically when a Lead Showing template is used."
+            label="Lead showing"
+            onDelayChange={(leadShowingDelayMinutes) => patch({ leadShowingDelayMinutes })}
+            onChange={(leadShowing) => patch({ leadShowing })}
+          />
+          <FirstMessageToggle
+            checked={settings.realtorShowing}
+            delayMinutes={settings.realtorShowingDelayMinutes}
+            description="Realtor showing first message sends automatically from the showing workflow."
+            label="Realtor showing"
+            onDelayChange={(realtorShowingDelayMinutes) => patch({ realtorShowingDelayMinutes })}
+            onChange={(realtorShowing) => patch({ realtorShowing })}
+          />
+        </div>
       </CardContent>
     </Card>
   )
@@ -369,40 +407,71 @@ function FirstMessageAutomationPanel({
 
 function FirstMessageToggle({
   checked,
+  delayMinutes,
   description,
   label,
+  onDelayChange,
   onChange,
 }: {
   checked: boolean
+  delayMinutes: number
   description: string
   label: string
+  onDelayChange: (minutes: number) => void
   onChange: (checked: boolean) => void
 }) {
   return (
-    <label className={`flex min-h-28 cursor-pointer items-start gap-3 rounded-xl border p-4 ${checked ? "border-primary bg-primary/5" : "bg-muted/30"}`}>
-      <Checkbox checked={checked} onCheckedChange={(value) => onChange(value === true)} />
-      <span>
-        <span className="block text-sm font-semibold">{label}</span>
-        <span className="mt-1 block text-xs leading-5 text-muted-foreground">
+    <div className={`min-h-36 rounded-xl border p-4 ${checked ? "border-primary bg-primary/5" : "bg-muted/30"}`}>
+      <label className="flex cursor-pointer items-start gap-3">
+        <Checkbox checked={checked} onCheckedChange={(value) => onChange(value === true)} />
+        <span>
+          <span className="block text-sm font-semibold">{label}</span>
+          <span className="mt-1 block text-xs leading-5 text-muted-foreground">
           {checked ? "Auto first message on. " : "Manual first message. "}
           {description}
+          </span>
         </span>
-      </span>
-    </label>
+      </label>
+      <div className="mt-3 grid gap-1.5">
+        <Label className="text-xs" htmlFor={`first-message-delay-${label}`}>
+          {"Delay minutes"}
+        </Label>
+        <Input
+          id={`first-message-delay-${label}`}
+          min={0}
+          max={1440}
+          onChange={(event) =>
+            onDelayChange(
+              Math.min(1440, Math.max(0, Number(event.target.value) || 0)),
+            )
+          }
+          type="number"
+          value={delayMinutes}
+        />
+      </div>
+    </div>
   )
 }
 
 function LeadAutomationPanel({
+  leadShowingTemplates,
+  leadTemplates,
   onChange,
+  realtorTemplates,
   settings,
-  templates,
 }: {
+  leadShowingTemplates: AgencyCommunicationTemplateItem[]
+  leadTemplates: AgencyCommunicationTemplateItem[]
   onChange: (settings: AgencyWorkspaceSettings["leadAutomation"]) => void
+  realtorTemplates: AgencyCommunicationTemplateItem[]
   settings: AgencyWorkspaceSettings["leadAutomation"]
-  templates: AgencyCommunicationTemplateItem[]
 }) {
-  const selectedTemplate = templates.find((template) => template.id === settings.directTemplateId)
-  const selectedTemplateId = selectedTemplate?.id ?? templates[0]?.id ?? "none"
+  const selectedLeadTemplate = leadTemplates.find((template) => template.id === settings.directTemplateId)
+  const selectedLeadTemplateId = selectedLeadTemplate?.id ?? leadTemplates[0]?.id ?? "none"
+  const selectedLeadShowingTemplate = leadShowingTemplates.find((template) => template.id === settings.leadShowingTemplateId)
+  const selectedLeadShowingTemplateId = selectedLeadShowingTemplate?.id ?? leadShowingTemplates[0]?.id ?? "none"
+  const selectedRealtorTemplate = realtorTemplates.find((template) => template.id === settings.realtorShowingTemplateId)
+  const selectedRealtorTemplateId = selectedRealtorTemplate?.id ?? realtorTemplates[0]?.id ?? "none"
   const channelLabel = settings.channels.join(" + ") || "No channel"
   const patch = (next: Partial<AgencyWorkspaceSettings["leadAutomation"]>) =>
     onChange({
@@ -427,13 +496,11 @@ function LeadAutomationPanel({
             </span>
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <CardTitle className="text-lg">{"Lead automation"}</CardTitle>
-                <Badge variant={settings.enabled ? "secondary" : "outline"}>
-                  {settings.enabled ? "Enabled" : "Paused"}
-                </Badge>
+                <CardTitle className="text-lg">{"Message template defaults"}</CardTitle>
+                <Badge variant="outline">{"Used by manual, CSV, and auto flows"}</Badge>
               </div>
               <CardDescription className="mt-1">
-                {"Auto-send the first lead message, then stop pending automation when the lead replies."}
+                {"Pick the default first-message templates here. Automatic on/off stays only in the Automatic first message block above."}
               </CardDescription>
             </div>
           </div>
@@ -449,52 +516,50 @@ function LeadAutomationPanel({
           </div>
         </div>
       </CardHeader>
-      <CardContent className="grid gap-4 p-4 lg:grid-cols-[minmax(220px,0.8fr)_minmax(280px,1.4fr)_minmax(260px,1fr)]">
-        <label
-          className={`flex items-center justify-between gap-3 rounded-xl border p-4 text-left transition-colors ${settings.enabled ? "border-primary bg-primary/5" : "bg-muted/30"}`}
-        >
-          <span>
-            <span className="block text-sm font-semibold">{"Auto-send for new leads"}</span>
-            <span className="mt-1 block text-xs text-muted-foreground">{settings.enabled ? "New leads get the default template." : "No automatic lead message sends."}</span>
-          </span>
-          <Checkbox checked={settings.enabled} onCheckedChange={(checked) => patch({ enabled: checked === true })} />
-        </label>
+      <CardContent className="grid gap-4 p-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_260px]">
         <div className="rounded-xl border bg-background p-4">
           <div className="mb-2 flex items-center justify-between gap-2">
-            <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Default direct template"}</Label>
+            <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Lead default"}</Label>
             <Badge variant="outline">{"Lead"}</Badge>
           </div>
-          <div className="grid gap-2 md:grid-cols-[1fr_auto]">
-            <Select
-              onValueChange={(value) => value !== "none" && patch({ directTemplateId: value })}
-              value={selectedTemplateId}
-            >
-              <SelectTrigger className="w-full"><SelectValue placeholder="Choose lead template" /></SelectTrigger>
-              <SelectContent>
-                {!templates.length ? <SelectItem value="none">{"No direct lead template"}</SelectItem> : null}
-                {templates.map((template) => (
-                  <SelectItem key={template.id} value={template.id}>
-                    {template.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button
-              onClick={() =>
-                document
-                  .getElementById("communication-templates")
-                  ?.scrollIntoView({ behavior: "smooth" })
-              }
-              type="button"
-              variant="outline"
-            >
-              {"Templates"}
-            </Button>
+          <TemplateDefaultSelect
+            empty="No direct Lead template"
+            onChange={(directTemplateId) => patch({ directTemplateId })}
+            templates={leadTemplates}
+            value={selectedLeadTemplateId}
+          />
+          <p className={`mt-2 text-xs ${leadTemplates.length ? "text-muted-foreground" : "text-destructive"}`}>
+            {leadTemplates.length ? (selectedLeadTemplate?.subject || "Used for new lead first message.") : "Create one active Lead / Direct template first."}
+          </p>
+        </div>
+        <div className="rounded-xl border bg-background p-4">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Lead showing default"}</Label>
+            <Badge variant="outline">{"LeadShowing"}</Badge>
           </div>
-          <p className={`mt-2 text-xs ${templates.length ? "text-muted-foreground" : "text-destructive"}`}>
-            {templates.length
-              ? (selectedTemplate?.subject || "This template is used first.")
-              : "Create one active Lead / Direct template first."}
+          <TemplateDefaultSelect
+            empty="No direct Lead Showing template"
+            onChange={(leadShowingTemplateId) => patch({ leadShowingTemplateId })}
+            templates={leadShowingTemplates}
+            value={selectedLeadShowingTemplateId}
+          />
+          <p className={`mt-2 text-xs ${leadShowingTemplates.length ? "text-muted-foreground" : "text-destructive"}`}>
+            {leadShowingTemplates.length ? (selectedLeadShowingTemplate?.subject || "Used for lead showing first message.") : "Create one active Lead Showing / Direct template first."}
+          </p>
+        </div>
+        <div className="rounded-xl border bg-background p-4">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Realtor CSV default"}</Label>
+            <Badge variant="outline">{"Realtor"}</Badge>
+          </div>
+          <TemplateDefaultSelect
+            empty="No direct Realtor template"
+            onChange={(realtorShowingTemplateId) => patch({ realtorShowingTemplateId })}
+            templates={realtorTemplates}
+            value={selectedRealtorTemplateId}
+          />
+          <p className={`mt-2 text-xs ${realtorTemplates.length ? "text-muted-foreground" : "text-destructive"}`}>
+            {realtorTemplates.length ? (selectedRealtorTemplate?.subject || "Used by realtor showing CSV/manual first message.") : "Create one active Realtor / Direct template first."}
           </p>
         </div>
         <div className="grid grid-cols-2 gap-2">
@@ -513,6 +578,32 @@ function LeadAutomationPanel({
         </div>
       </CardContent>
     </Card>
+  )
+}
+
+function TemplateDefaultSelect({
+  empty,
+  onChange,
+  templates,
+  value,
+}: {
+  empty: string
+  onChange: (value: string) => void
+  templates: AgencyCommunicationTemplateItem[]
+  value: string
+}) {
+  return (
+    <Select onValueChange={(next) => next !== "none" && onChange(next)} value={value}>
+      <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+      <SelectContent>
+        {!templates.length ? <SelectItem value="none">{empty}</SelectItem> : null}
+        {templates.map((template) => (
+          <SelectItem key={template.id} value={template.id}>
+            {template.name}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   )
 }
 

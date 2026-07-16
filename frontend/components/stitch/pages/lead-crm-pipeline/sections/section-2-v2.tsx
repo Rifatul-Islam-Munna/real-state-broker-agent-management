@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { usePathname, useSearchParams } from "next/navigation"
 import { ReactSortable } from "react-sortablejs"
+import Papa from "papaparse"
 
 import { PagePagination } from "@/components/stitch/shared/page-pagination"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -16,13 +17,19 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Sheet, SheetContent } from "@/components/ui/sheet"
 import type {
   AgentUserOption,
+  LeadImportInput,
   LeadItem,
   LeadStage,
   PropertyItem,
 } from "@/hooks/use-real-estate-api"
+import { useImportLeads } from "@/hooks/use-real-estate-api"
 import { formatLeadPriority } from "@/lib/admin-portal"
 import { getPortalRoutes } from "@/lib/portal-routes"
 import { cn } from "@/lib/utils"
@@ -39,12 +46,41 @@ import {
 } from "./lead-shared"
 
 type LeadView = "board" | "list"
+type LeadMappingKey = keyof LeadImportInput["mapping"]
 type LeadDialogState =
   | {
       type: "cancel" | "create" | "edit" | LeadOutreachMode
       leadId?: number
     }
   | null
+
+const emptyLeadMapping: LeadImportInput["mapping"] = {
+  budget: "",
+  combinedCreditScore: "",
+  creditScore: "",
+  email: "",
+  interest: "",
+  name: "",
+  phone: "",
+  property: "",
+  source: "",
+  summary: "",
+  timeline: "",
+}
+
+const leadCsvFields: Array<{ aliases: string[]; key: LeadMappingKey; label: string }> = [
+  { key: "name", label: "Name", aliases: ["name", "lead", "client"] },
+  { key: "email", label: "Email", aliases: ["email"] },
+  { key: "phone", label: "Phone", aliases: ["phone", "mobile"] },
+  { key: "property", label: "Property", aliases: ["property", "address"] },
+  { key: "budget", label: "Budget", aliases: ["budget", "price"] },
+  { key: "creditScore", label: "Credit score", aliases: ["credit score", "credit"] },
+  { key: "combinedCreditScore", label: "Combined credit score", aliases: ["combined credit", "combined score"] },
+  { key: "source", label: "Source", aliases: ["source"] },
+  { key: "interest", label: "Interest", aliases: ["interest"] },
+  { key: "timeline", label: "Timeline", aliases: ["timeline"] },
+  { key: "summary", label: "Summary", aliases: ["summary", "note"] },
+]
 
 type Section2SectionProps = {
   createDialogVersion: number
@@ -102,6 +138,12 @@ export function Section2Section({
   const [selectedLeadId, setSelectedLeadId] = useState<number | null>(null)
   const [viewMode, setViewMode] = useState<LeadView>("board")
   const [dialogState, setDialogState] = useState<LeadDialogState>(null)
+  const [importOpen, setImportOpen] = useState(false)
+  const [csvHeaders, setCsvHeaders] = useState<string[]>([])
+  const [csvRows, setCsvRows] = useState<Array<Record<string, string>>>([])
+  const [csvMapping, setCsvMapping] = useState({ ...emptyLeadMapping })
+  const [csvMessage, setCsvMessage] = useState<string | null>(null)
+  const importLeadsMutation = useImportLeads()
 
   useEffect(() => {
     if (createDialogVersion > 0) {
@@ -117,6 +159,47 @@ export function Section2Section({
 
     setSelectedLeadId(parsedLeadId)
   }, [searchParams])
+
+  function downloadLeadSample() {
+    const sample = "name,email,phone,property,budget,creditScore,combinedCreditScore,source,interest,timeline,summary\nBradley Weneck,bradley@example.com,754-223-9582,6750 Royal Palm Blvd #209E,$2500/mo,710,690,Zillow,Rent,Immediate,Interested in applying\n"
+    const url = URL.createObjectURL(new Blob([sample], { type: "text/csv" }))
+    const link = document.createElement("a")
+    link.href = url
+    link.download = "leads-sample.csv"
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
+  function parseLeadCsv(file?: File) {
+    if (!file) return
+    Papa.parse<Record<string, string>>(file, {
+      complete: (result) => {
+        const headers = result.meta.fields ?? []
+        const normalized = headers.map((header) => ({ header, text: header.toLowerCase().replace(/[_-]+/g, " ").trim() }))
+        setCsvHeaders(headers)
+        setCsvRows(result.data.filter((row) => Object.values(row).some((value) => `${value ?? ""}`.trim())))
+        setCsvMapping(leadCsvFields.reduce((next, field) => {
+          next[field.key] = normalized.find((item) => field.aliases.some((alias) => item.text === alias || item.text.includes(alias)))?.header ?? ""
+          return next
+        }, { ...emptyLeadMapping }))
+      },
+      header: true,
+      skipEmptyLines: "greedy",
+      transformHeader: (header) => header.trim(),
+    })
+  }
+
+  async function importLeadRows() {
+    const response = await importLeadsMutation.mutateAsync({ mapping: csvMapping, rows: csvRows })
+    if (response.error) {
+      setCsvMessage(response.error.message)
+      return
+    }
+    setCsvMessage(response.data ? `${response.data.createdCount} leads saved. ${response.data.failedCount} failed.` : null)
+    setCsvHeaders([])
+    setCsvRows([])
+    setCsvMapping({ ...emptyLeadMapping })
+  }
 
   const boardColumns = useMemo(
     () =>
@@ -210,6 +293,14 @@ export function Section2Section({
                   {"List"}
                 </Button>
               </div>
+              <Button onClick={downloadLeadSample} type="button" variant="outline">
+                <AppIcon name="download" />
+                {"Sample CSV"}
+              </Button>
+              <Button onClick={() => setImportOpen(true)} type="button" variant="outline">
+                <AppIcon name="upload_file" />
+                {"Import CSV"}
+              </Button>
               <Button onClick={() => setDialogState({ type: "create" })} type="button">
                 <AppIcon name="person_add" />
                 {"Add lead"}
@@ -452,6 +543,42 @@ export function Section2Section({
         open={dialogState?.type === "create" || dialogState?.type === "edit"}
         propertyOptions={propertyOptions}
       />
+      <Dialog onOpenChange={setImportOpen} open={importOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>{"Import leads"}</DialogTitle>
+            <DialogDescription>{"Upload CSV, map columns manually, then import."}</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3">
+            {csvMessage ? <Alert><AlertDescription>{csvMessage}</AlertDescription></Alert> : null}
+            <Input accept=".csv,text/csv" onChange={(event) => parseLeadCsv(event.target.files?.[0])} type="file" />
+            <div className="grid max-h-80 gap-3 overflow-y-auto pr-1 md:grid-cols-2">
+              {leadCsvFields.map((field) => (
+                <label className="grid gap-1.5" key={field.key}>
+                  <Label>{field.label}</Label>
+                  <Select
+                    onValueChange={(value) => setCsvMapping((current) => ({ ...current, [field.key]: value === "none" ? "" : value }))}
+                    value={csvMapping[field.key] || "none"}
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">{"Do not import"}</SelectItem>
+                      {csvHeaders.map((header) => <SelectItem key={header} value={header}>{header}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </label>
+              ))}
+            </div>
+            <Button
+              disabled={csvRows.length === 0 || importLeadsMutation.isPending}
+              onClick={() => void importLeadRows()}
+              type="button"
+            >
+              {`Import ${csvRows.length} row${csvRows.length === 1 ? "" : "s"}`}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </main>
   )
 }

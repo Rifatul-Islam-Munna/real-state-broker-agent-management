@@ -8,6 +8,7 @@ import type {
   LeadCollectionTemplateSaveInput,
 } from "@/@types/lead-collection-template"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { AppIcon } from "@/components/ui/app-icon"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -57,16 +58,20 @@ export function ProviderTemplateList() {
   }
 
   return (
-    <div className="space-y-6 p-4 md:p-6">
+    <div className="min-w-0 max-w-full space-y-6 overflow-x-hidden p-4 md:p-6">
       <div className="flex flex-col gap-4 border-b pb-5 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h1 className="text-2xl font-black">Lead collection templates</h1>
+          <h1 className="text-xl font-bold">Lead collection templates</h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
             Create one template for each provider. Detail-page templates can collect information
             that is behind a link in the email.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button render={<Link href="/dashboard" />} variant="outline">
+            <AppIcon name="arrow_back" />
+            Back
+          </Button>
           <Button render={<Link href="/dashboard/lead-collection-templates/new?preset=zillow" />}>
             Zillow template
           </Button>

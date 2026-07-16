@@ -28,6 +28,13 @@ export class LeadsController {
     return this.leadsService.create(await this.normalizeNextAction(createDto), req.user?.email ?? 'CRM');
   }
 
+  @Post('import')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Import mapped leads from CSV rows' })
+  async importRows(@Body() payload: any, @Req() req: any) {
+    return this.leadsService.importRows(payload, req.user?.email ?? 'CRM');
+  }
+
   @Patch()
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Update lead' })

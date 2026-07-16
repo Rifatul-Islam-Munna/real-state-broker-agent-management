@@ -414,12 +414,18 @@ export type AgencySettings = {
     enabled: boolean
     channels: AgencyCommunicationChannel[]
     directTemplateId: string
+    leadShowingTemplateId?: string
+    realtorShowingTemplateId?: string
     followUpEnabled: boolean
   }
   firstMessageAutomation?: {
     lead: boolean
     leadShowing: boolean
     realtorShowing: boolean
+    delayMinutes?: number
+    leadDelayMinutes?: number
+    leadShowingDelayMinutes?: number
+    realtorShowingDelayMinutes?: number
   }
   leadIntelligence?: {
     qualifiedKnowledge: string
@@ -758,7 +764,10 @@ export type LeadItem = {
   phone: string
   summary: string
   property: string
+  propertyId?: number | null
   budget: string
+  creditScore?: string
+  combinedCreditScore?: string
   stage: LeadStage
   priority: LeadPriority
   agent: string
@@ -780,6 +789,68 @@ export type LeadItem = {
   lastActivityAt: string
   linkedDealId?: number | null
   linkedDealTitle?: string | null
+}
+
+export type CsvImportResult = {
+  createdCount: number
+  failedCount: number
+  failures: string[]
+}
+
+export type LeadImportInput = {
+  rows: Array<Record<string, string>>
+  mapping: {
+    name: string
+    email: string
+    phone: string
+    property: string
+    budget: string
+    creditScore: string
+    combinedCreditScore: string
+    source: string
+    interest: string
+    timeline: string
+    summary: string
+  }
+}
+
+export type RealtorItem = {
+  id: number
+  name: string
+  email: string
+  phone: string
+  brokerage: string
+  notes: string
+  createdAt: string
+  updatedAt: string
+}
+
+export type RealtorImportInput = {
+  rows: Array<Record<string, string>>
+  mapping: {
+    name: string
+    email: string
+    phone: string
+    brokerage: string
+    notes: string
+  }
+}
+
+export type RealtorHistoryItem = {
+  id: string
+  kind: "Showing" | "Feedback"
+  at: string
+  title: string
+  detail: string
+  status?: string
+  sentiment?: string
+}
+
+export type RealtorHistory = {
+  realtor: RealtorItem
+  showingCount: number
+  feedbackCount: number
+  timeline: RealtorHistoryItem[]
 }
 
 export type LeadHistoryKind =
@@ -1001,6 +1072,8 @@ export type RealtorShowingImportInput = {
     realtorPhone: string
     property: string
     showingAt: string
+    showingDate?: string
+    showingTime?: string
     visitorName: string
     visitorEmail: string
     visitorPhone: string

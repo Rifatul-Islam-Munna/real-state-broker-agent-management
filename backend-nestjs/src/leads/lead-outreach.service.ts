@@ -180,8 +180,8 @@ export class LeadOutreachService {
       }
       await this.leadRepo.save(lead);
     }
-    if (status === 'Sent' && ['Email', 'Sms'].includes(kind) && dto.templateId) {
-      await this.queueFollowUpTemplates(lead, kind, dto.templateId, provider, dto.createdBy?.trim() || 'CRM', now);
+    if ((status === 'Sent' || status === 'Scheduled') && ['Email', 'Sms'].includes(kind) && dto.templateId) {
+      await this.queueFollowUpTemplates(lead, kind, dto.templateId, provider, dto.createdBy?.trim() || 'CRM', shouldSchedule ? scheduledAt! : now);
     }
     if (status === 'Sent' && ['Email', 'Sms'].includes(kind) && !source.startsWith('Realtor Showing #')) {
       await this.cancelRealtorFollowUpsAfterManualMessage(lead.id, now);

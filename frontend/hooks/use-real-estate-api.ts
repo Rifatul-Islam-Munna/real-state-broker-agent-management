@@ -30,8 +30,10 @@ import type {
   DocumentRepositoryItem,
   DocumentRepositorySaveInput,
   DocumentRepositorySummary,
+  CsvImportResult,
   HomePageSettings,
   LeadItem,
+  LeadImportInput,
   LeadAssignmentRuleItem,
   LeadHistoryEntry,
   MailboxSyncStatus,
@@ -42,6 +44,9 @@ import type {
   PropertyItem,
   PropertyChatConversationItem,
   PropertySaveInput,
+  RealtorImportInput,
+  RealtorHistory,
+  RealtorItem,
   ReviewBrokerageApprovalInput,
   ShowingAvailabilitySlot,
   ShowingBookingItem,
@@ -109,7 +114,9 @@ export type {
   HomePageTeamSection,
   HomePageTestimonialSection,
   HomePageWhyChooseUsSection,
+  CsvImportResult,
   LeadItem,
+  LeadImportInput,
   LeadAssignmentRuleItem,
   LeadFollowUpStatus,
   LeadHistoryDirection,
@@ -150,6 +157,9 @@ export type {
   PropertyPreQuestion,
   PropertySaveInput,
   PropertySellPrediction,
+  RealtorImportInput,
+  RealtorHistory,
+  RealtorItem,
   ReviewBrokerageApprovalInput,
   ShowingAvailabilitySlot,
   ShowingBookingItem,
@@ -734,6 +744,17 @@ export function useUpdateLead() {
   })
 }
 
+export function useImportLeads() {
+  const invalidate = useInvalidate(["leads", "dashboard"])
+
+  return useCommonMutationApi<CsvImportResult, LeadImportInput>({
+    method: "POST",
+    onSuccess: () => void invalidate(),
+    successMessage: "Leads imported",
+    url: "/leads/import",
+  })
+}
+
 export function useDeleteLead() {
   const invalidate = useInvalidate(["leads", "deals", "dashboard"])
 
@@ -742,6 +763,52 @@ export function useDeleteLead() {
     onSuccess: () => void invalidate(),
     successMessage: "Lead deleted",
     url: "/leads",
+  })
+}
+
+export function useRealtors(params?: QueryParams) {
+  return useQueryWrapper<RealtorItem[]>(
+    ["realtors", params],
+    `/realtors${buildQuery(params)}`,
+    defaultQueryOptions,
+    0,
+    "realtors",
+  )
+}
+
+export function useRealtorHistory(realtorId?: number | null) {
+  return useQueryWrapper<RealtorHistory>(
+    ["realtor-history", realtorId],
+    `/realtors/${realtorId}/history`,
+    {
+      ...defaultQueryOptions,
+      enabled: Boolean(realtorId),
+      placeholderData: undefined,
+    },
+    0,
+    "realtor-history",
+  )
+}
+
+export function useCreateRealtor() {
+  const invalidate = useInvalidate(["realtors"])
+
+  return useCommonMutationApi<RealtorItem, Partial<RealtorItem>>({
+    method: "POST",
+    onSuccess: () => void invalidate(),
+    successMessage: "Realtor saved",
+    url: "/realtors",
+  })
+}
+
+export function useImportRealtors() {
+  const invalidate = useInvalidate(["realtors"])
+
+  return useCommonMutationApi<CsvImportResult, RealtorImportInput>({
+    method: "POST",
+    onSuccess: () => void invalidate(),
+    successMessage: "Realtors imported",
+    url: "/realtors/import",
   })
 }
 

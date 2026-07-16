@@ -28,6 +28,7 @@ import { PdfsModule } from './pdfs/pdfs.module';
 import { DevSeedService } from './dev-seed.service';
 import { PropertyOperationsModule } from './property-operations/property-operations.module';
 import { ToolsModule } from './tools/tools.module';
+import { RealtorsModule } from './realtors/realtors.module';
 
 @Module({
   imports: [
@@ -58,6 +59,7 @@ import { ToolsModule } from './tools/tools.module';
     PredictionModule,
     PropertyOperationsModule,
     ToolsModule,
+    RealtorsModule,
   ],
   controllers: [],
   providers: [AppService, DevSeedService],

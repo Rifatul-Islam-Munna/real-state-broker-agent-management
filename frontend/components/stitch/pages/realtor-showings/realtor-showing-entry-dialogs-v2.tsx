@@ -50,7 +50,9 @@ const mappingFields: Array<{
   { key: "realtorEmail", label: "Realtor email", aliases: ["realtor email", "agent email", "email"] },
   { key: "realtorPhone", label: "Realtor phone", aliases: ["realtor phone", "agent phone", "phone", "mobile"] },
   { key: "property", label: "Property", aliases: ["property", "property address", "listing", "address"] },
-  { key: "showingAt", label: "Showing date/time", aliases: ["showing at", "showing date", "appointment", "date time"] },
+  { key: "showingDate", label: "Showing date", aliases: ["showing date", "date", "appointment date"] },
+  { key: "showingTime", label: "Showing time", aliases: ["showing time", "time", "appointment time"] },
+  { key: "showingAt", label: "Showing date/time", aliases: ["showing at", "date time", "appointment"] },
   { key: "visitorName", label: "Visitor name", aliases: ["visitor name", "lead name", "tenant name", "client name"] },
   { key: "visitorEmail", label: "Visitor email", aliases: ["visitor email", "lead email", "tenant email", "client email"] },
   { key: "visitorPhone", label: "Visitor phone", aliases: ["visitor phone", "lead phone", "tenant phone", "client phone"] },
@@ -63,6 +65,8 @@ const emptyMapping: RealtorShowingImportInput["mapping"] = {
   realtorPhone: "",
   property: "",
   showingAt: "",
+  showingDate: "",
+  showingTime: "",
   visitorName: "",
   visitorEmail: "",
   visitorPhone: "",
@@ -72,7 +76,11 @@ const emptyMapping: RealtorShowingImportInput["mapping"] = {
 function autoMap(headers: string[]) {
   const normalized = headers.map((header) => ({
     header,
-    normalized: header.toLowerCase().replace(/[_-]+/g, " ").trim(),
+    normalized: header
+      .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+      .toLowerCase()
+      .replace(/[_-]+/g, " ")
+      .trim(),
   }))
   return mappingFields.reduce((result, field) => {
     const match = normalized.find((item) =>
@@ -139,6 +147,10 @@ export function RealtorShowingEntryDialogsV2({
 
   const outreachAt =
     outreachDate && outreachTime ? `${outreachDate}T${outreachTime}` : ""
+  const sampleCsv = [
+    "realtorName,realtorEmail,realtorPhone,property,showingDate,showingTime,visitorName,visitorEmail,visitorPhone",
+    "Jane Realtor,jane@example.com,754-222-1111,6750 Royal Palm Blvd #209E,2026-07-20,14:30,Bradley Weneck,bradley@example.com,754-223-9582",
+  ].join("\n")
 
   useEffect(() => {
     if (leadSearch.trim().length < 2) {
@@ -153,6 +165,18 @@ export function RealtorShowingEntryDialogsV2({
     }, 250)
     return () => window.clearTimeout(timer)
   }, [leadSearch])
+
+  useEffect(() => {
+    if (!directTemplateId && directTemplates.length) {
+      setDirectTemplateId(directTemplates.find((template) => template.id === "showing-confirmation")?.id ?? directTemplates[0].id)
+    }
+    if (!followUpTemplateId && followUpTemplates.length) {
+      setFollowUpTemplateId(followUpTemplates[0].id)
+    }
+    if (!followUpTemplates.length && followUpEnabled) {
+      setFollowUpEnabled(false)
+    }
+  }, [directTemplateId, directTemplates, followUpEnabled, followUpTemplateId, followUpTemplates])
 
   function resetManual() {
     setSelectedLeadId(null)
@@ -238,6 +262,15 @@ export function RealtorShowingEntryDialogsV2({
     })
   }
 
+  function downloadSampleCsv() {
+    const url = URL.createObjectURL(new Blob([sampleCsv], { type: "text/csv" }))
+    const link = document.createElement("a")
+    link.href = url
+    link.download = "realtor-showings-sample.csv"
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
   async function importCsv() {
     setParseError(null)
     if (rows.length === 0) {
@@ -276,12 +309,12 @@ export function RealtorShowingEntryDialogsV2({
   }
 
   const automationFields = (
-    <div className="space-y-4">
-      <div className="grid gap-3 sm:grid-cols-2">
+    <div className="flex flex-col gap-3">
+      <div className="grid gap-2 sm:grid-cols-2">
         <Toggle checked={emailEnabled} label="Email" onChange={setEmailEnabled} />
         <Toggle checked={smsEnabled} label="SMS" onChange={setSmsEnabled} />
       </div>
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-3 sm:grid-cols-2">
         <Field label="First message date">
           <Input onChange={(event) => setOutreachDate(event.target.value)} type="date" value={outreachDate} />
         </Field>
@@ -296,7 +329,7 @@ export function RealtorShowingEntryDialogsV2({
         <Select onValueChange={(value) => setDirectTemplateId(value === "none" ? "" : value)} value={directTemplateId || "none"}>
           <SelectTrigger className="w-full"><SelectValue placeholder="Choose template" /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="none">{"Default reminder"}</SelectItem>
+            {!directTemplates.length ? <SelectItem value="none">{"No realtor template"}</SelectItem> : null}
             {directTemplates.map((template) => (
               <SelectItem key={template.id} value={template.id}>{template.name}</SelectItem>
             ))}
@@ -305,7 +338,7 @@ export function RealtorShowingEntryDialogsV2({
       </Field>
       <Toggle checked={followUpEnabled} label="Enable follow-up" onChange={setFollowUpEnabled} />
       {followUpEnabled ? (
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Follow-up template">
             <Select onValueChange={(value) => setFollowUpTemplateId(value === "none" ? "" : value)} value={followUpTemplateId || "none"}>
               <SelectTrigger className="w-full"><SelectValue placeholder="Choose follow-up" /></SelectTrigger>
@@ -401,9 +434,14 @@ export function RealtorShowingEntryDialogsV2({
           {importSummary ? <Alert><AlertDescription>{importSummary}</AlertDescription></Alert> : null}
           <div className="space-y-5">
             <div className="rounded-xl border border-dashed p-4">
-              <Label htmlFor="showing-csv">{"CSV file"}</Label>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <Label htmlFor="showing-csv">{"CSV file"}</Label>
+                <Button onClick={downloadSampleCsv} size="sm" type="button" variant="outline">
+                  {"Download sample CSV"}
+                </Button>
+              </div>
               <Input accept=".csv,text/csv" className="mt-2" id="showing-csv" onChange={(event) => parseFile(event.target.files?.[0])} type="file" />
-              <p className="mt-2 text-xs text-muted-foreground">{fileName ? `${fileName} — ${rows.length} rows` : "Maximum 2,000 rows with a header row."}</p>
+              <p className="mt-2 text-xs text-muted-foreground">{fileName ? `${fileName} - ${rows.length} rows` : "Maximum 2,000 rows with a header row. Saved realtors match by email/phone; unknown realtors are created."}</p>
             </div>
             {headers.length > 0 ? (
               <div>

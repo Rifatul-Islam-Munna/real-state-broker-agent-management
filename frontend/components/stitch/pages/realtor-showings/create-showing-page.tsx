@@ -96,6 +96,18 @@ export function CreateRealtorShowingPage() {
   const followUpTemplates = templates.filter((template) => (template.sequenceType ?? "Direct") !== "Direct")
   const outreachAt = outreachDate && outreachTime ? `${outreachDate}T${outreachTime}` : ""
 
+  useEffect(() => {
+    if (!directTemplateId && directTemplates.length) {
+      setDirectTemplateId(directTemplates.find((template) => template.id === "showing-confirmation")?.id ?? directTemplates[0].id)
+    }
+    if (!followUpTemplateId && followUpTemplates.length) {
+      setFollowUpTemplateId(followUpTemplates[0].id)
+    }
+    if (!followUpTemplates.length && followUpEnabled) {
+      setFollowUpEnabled(false)
+    }
+  }, [directTemplateId, directTemplates, followUpEnabled, followUpTemplateId, followUpTemplates])
+
   async function createShowing() {
     setError(null)
     if (!selectedProperty) {
@@ -141,33 +153,41 @@ export function CreateRealtorShowingPage() {
   }
 
   return (
-    <main className="min-h-full bg-muted/20 p-3 md:p-5">
-      <div className="mx-auto flex max-w-6xl flex-col gap-4">
+    <main className="min-h-full bg-muted/20 p-3 md:p-4">
+      <div className="mx-auto flex max-w-7xl flex-col gap-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-2xl font-semibold">{"Add property showing"}</h1>
+              <h1 className="text-xl font-semibold">{"Add property showing"}</h1>
               <Badge variant="outline">{timeZone}</Badge>
             </div>
-            <p className="mt-1 text-sm text-muted-foreground">{"Search property, attach visitor/lead, set first message and follow-up."}</p>
+            <p className="mt-1 text-xs text-muted-foreground">{"Search property, attach visitor/lead, set first message and follow-up."}</p>
           </div>
-          <Button render={<Link href="/dashboard/realtor-showings" />} variant="outline">
-            {"Back"}
-          </Button>
+          <div className="flex gap-2">
+            <Button render={<Link href="/dashboard/realtor-showings?import=1" />} variant="outline">
+              <AppIcon name="upload_file" />
+              {"Import CSV"}
+            </Button>
+            <Button render={<Link href="/dashboard/realtor-showings" />} variant="outline">
+              {"Back"}
+            </Button>
+          </div>
         </div>
 
         {error ? <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert> : null}
 
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]">
-          <div className="space-y-4">
+        <div className="grid gap-3 xl:grid-cols-[minmax(0,1.25fr)_minmax(360px,0.75fr)]">
+          <div className="flex flex-col gap-3">
             <Card className="shadow-none">
-              <CardHeader className="py-4">
-                <CardTitle className="text-base">{"Property"}</CardTitle>
-                <CardDescription>{"Search and select one property for this showing."}</CardDescription>
+              <CardHeader className="grid gap-3 py-3 md:grid-cols-[1fr_320px] md:items-center">
+                <div>
+                  <CardTitle className="text-base">{"Property search"}</CardTitle>
+                  <CardDescription>{"Live properties only. Search title, address, city, or unit."}</CardDescription>
+                </div>
+                <Input className="h-9" placeholder="Search property..." value={propertySearch} onChange={(event) => setPropertySearch(event.target.value)} />
               </CardHeader>
-              <CardContent className="space-y-3">
-                <Input className="h-9" placeholder="Search title, area, exact location..." value={propertySearch} onChange={(event) => setPropertySearch(event.target.value)} />
-                <div className="grid gap-2 sm:grid-cols-2">
+              <CardContent className="grid gap-3 md:grid-cols-[minmax(0,1fr)_260px]">
+                <div className="grid max-h-72 gap-2 overflow-y-auto pr-1 sm:grid-cols-2 2xl:grid-cols-3">
                   {filteredProperties.map((property) => {
                     const active = propertyId === String(property.id)
                     return (
@@ -177,28 +197,38 @@ export function CreateRealtorShowingPage() {
                         onClick={() => setPropertyId(String(property.id))}
                         type="button"
                       >
-                        <span className="block font-semibold">{property.title}</span>
-                        <span className="mt-1 line-clamp-1 text-xs text-muted-foreground">{property.exactLocation || property.location}</span>
+                        <span className="line-clamp-1 block font-semibold">{property.title}</span>
+                        <span className="mt-1 line-clamp-2 text-xs leading-4 text-muted-foreground">{property.exactLocation || property.location}</span>
                       </button>
                     )
                   })}
+                  {!filteredProperties.length ? (
+                    <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+                      {"No property found."}
+                    </div>
+                  ) : null}
+                </div>
+                <div className="rounded-lg border bg-background p-3 text-sm">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Selected"}</p>
+                  <p className="mt-2 font-semibold">{selectedProperty?.title || "No property selected"}</p>
+                  <p className="mt-1 line-clamp-3 text-xs leading-5 text-muted-foreground">{display(selectedProperty?.exactLocation || selectedProperty?.location)}</p>
                 </div>
               </CardContent>
             </Card>
 
             <Card className="shadow-none">
-              <CardHeader className="py-4">
+              <CardHeader className="py-3">
                 <CardTitle className="text-base">{"People"}</CardTitle>
                 <CardDescription>{"Realtor receives workflow. Visitor is linked to lead history."}</CardDescription>
               </CardHeader>
-              <CardContent className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-3">
+              <CardContent className="grid gap-3 md:grid-cols-2">
+                <div className="flex flex-col gap-2">
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Realtor"}</p>
                   <Field label="Name"><Input className="h-9" value={realtorName} onChange={(event) => setRealtorName(event.target.value)} /></Field>
                   <Field label="Email"><Input className="h-9" type="email" value={realtorEmail} onChange={(event) => setRealtorEmail(event.target.value)} /></Field>
                   <Field label="Phone"><Input className="h-9" value={realtorPhone} onChange={(event) => setRealtorPhone(event.target.value)} /></Field>
                 </div>
-                <div className="space-y-3">
+                <div className="flex flex-col gap-2">
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Lead / visitor"}</p>
                   <Field label="Search lead"><Input className="h-9" placeholder="Name or email" value={leadSearch} onChange={(event) => setLeadSearch(event.target.value)} /></Field>
                   {leadResults.length ? (
@@ -229,9 +259,9 @@ export function CreateRealtorShowingPage() {
             </Card>
           </div>
 
-          <div className="space-y-4">
+          <div className="flex flex-col gap-3">
             <Card className="shadow-none">
-              <CardHeader className="py-4">
+              <CardHeader className="py-3">
                 <CardTitle className="text-base">{"Timing"}</CardTitle>
               </CardHeader>
               <CardContent className="grid gap-3 sm:grid-cols-2">
@@ -243,11 +273,11 @@ export function CreateRealtorShowingPage() {
             </Card>
 
             <Card className="shadow-none">
-              <CardHeader className="py-4">
+              <CardHeader className="py-3">
                 <CardTitle className="text-base">{"Automation"}</CardTitle>
-                <CardDescription>{"Empty first message time sends immediately."}</CardDescription>
+                <CardDescription>{"Default template is preselected. Empty first message time sends immediately."}</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-3">
+              <CardContent className="flex flex-col gap-3">
                 <div className="grid grid-cols-2 gap-2">
                   <Toggle checked={emailEnabled} label="Email" onChange={setEmailEnabled} />
                   <Toggle checked={smsEnabled} label="SMS" onChange={setSmsEnabled} />
@@ -255,7 +285,10 @@ export function CreateRealtorShowingPage() {
                 <Field label="Direct template">
                   <Select onValueChange={(value) => setDirectTemplateId(value === "none" ? "" : value)} value={directTemplateId || "none"}>
                     <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                    <SelectContent><SelectItem value="none">Default reminder</SelectItem>{directTemplates.map((template) => <SelectItem key={template.id} value={template.id}>{template.name}</SelectItem>)}</SelectContent>
+                    <SelectContent>
+                      {!directTemplates.length ? <SelectItem value="none">No realtor template</SelectItem> : null}
+                      {directTemplates.map((template) => <SelectItem key={template.id} value={template.id}>{template.name}</SelectItem>)}
+                    </SelectContent>
                   </Select>
                 </Field>
                 <Toggle checked={followUpEnabled} label="Enable follow-up" onChange={setFollowUpEnabled} />
@@ -274,11 +307,7 @@ export function CreateRealtorShowingPage() {
             </Card>
 
             <Card className="shadow-none">
-              <CardContent className="space-y-3 p-4">
-                <div className="rounded-lg border bg-background p-3 text-sm">
-                  <p className="font-semibold">{selectedProperty?.title || "No property selected"}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">{display(selectedProperty?.location)}</p>
-                </div>
+              <CardContent className="p-3">
                 <Button className="w-full" disabled={createMutation.isPending} onClick={() => void createShowing()} type="button">
                   <AppIcon name="add" />
                   {createMutation.isPending ? "Creating..." : "Create showing"}

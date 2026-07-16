@@ -10,6 +10,7 @@ import { LeadOutreachService } from '../leads/lead-outreach.service';
 import { Property } from '../properties/entities/property.entity';
 import { SchedulingSettingsService } from '../settings/scheduling-settings.service';
 import { SettingsService } from '../settings/settings.service';
+import { RealtorsService } from '../realtors/realtors.service';
 import { RealtorShowing } from './entities/realtor-showing.entity';
 
 type ImportMapping = {
@@ -36,6 +37,7 @@ export class RealtorShowingsService {
     private readonly outreachService: LeadOutreachService,
     private readonly settingsService: SettingsService,
     private readonly schedulingSettingsService: SchedulingSettingsService,
+    protected readonly realtorsService: RealtorsService,
   ) {}
 
   async findAll(search?: string, page = 1, pageSize = 25) {
@@ -79,6 +81,7 @@ export class RealtorShowingsService {
     const scheduling = await this.schedulingSettingsService.getSettings();
     const templates = settings.communicationTemplates ?? [];
     const defaultPhoneCountry = payload.defaultPhoneCountry || settings.profile?.defaultPhoneCountry;
+    const defaultDirectTemplateId = this.defaultShowingTemplateId(settings, payload.directTemplateId);
     const created: RealtorShowing[] = [];
     const failures: string[] = [];
 
@@ -88,15 +91,26 @@ export class RealtorShowingsService {
         const realtorName = this.value(sourceData, mapping.realtorName);
         const realtorEmail = this.value(sourceData, mapping.realtorEmail).toLowerCase();
         const realtorPhone = normalizePhoneNumber(this.value(sourceData, mapping.realtorPhone), defaultPhoneCountry);
+        const savedRealtor = await this.realtorsService.findMatching(realtorEmail, realtorPhone);
+        const effectiveRealtorEmail = realtorEmail || savedRealtor?.email || '';
+        const effectiveRealtorPhone = realtorPhone || savedRealtor?.phone || '';
+        const effectiveRealtorName = realtorName || savedRealtor?.name || effectiveRealtorEmail.split('@')[0] || effectiveRealtorPhone;
         const visitorName = this.value(sourceData, mapping.visitorName);
         const visitorEmail = this.value(sourceData, mapping.visitorEmail).toLowerCase();
         const visitorPhone = normalizePhoneNumber(this.value(sourceData, mapping.visitorPhone), defaultPhoneCountry);
         const propertyText = this.value(sourceData, mapping.property);
-        if (!realtorEmail && !realtorPhone) throw new Error('Realtor email or phone required.');
+        if (!effectiveRealtorEmail && !effectiveRealtorPhone) throw new Error('Realtor email or phone required.');
+        if (!savedRealtor) {
+          await this.realtorsService.create({
+            email: effectiveRealtorEmail,
+            name: effectiveRealtorName,
+            phone: effectiveRealtorPhone,
+          });
+        }
         if (!visitorEmail) throw new Error('Lead or tenant email is required.');
 
         const match = bestPropertyAddressMatch(propertyText, properties, 0.36);
-        const showingLocalValue = this.mappedDateTime(sourceData, mapping);
+        const showingLocalValue = this.mappedDateTime(sourceData, mapping, scheduling.morningOutreachHour);
         const showingAt = this.dateValue(showingLocalValue, scheduling.timeZone);
         const requestedLeadId = Number(payload.leadId || this.value(sourceData, mapping.leadId)) || 0;
         const existingLead = requestedLeadId ? await this.leadRepo.findOne({ where: { id: requestedLeadId } }) : null;
@@ -109,7 +123,7 @@ export class RealtorShowingsService {
         });
         const outreachAt = this.dateValue(payload.outreachAt, scheduling.timeZone);
         const showing = await this.showingRepo.save(this.showingRepo.create({
-          directTemplateId: `${payload.directTemplateId ?? ''}`,
+          directTemplateId: defaultDirectTemplateId,
           emailEnabled: !!payload.emailEnabled,
           followUpEnabled: !!payload.followUpEnabled,
           followUpGapDays: Math.max(0, Number(payload.followUpGapDays ?? 0) || 0),
@@ -120,9 +134,9 @@ export class RealtorShowingsService {
           propertyMatchMethod: match.property ? 'Auto' : 'Unmatched',
           propertyMatchScore: match.score,
           propertyText,
-          realtorEmail,
-          realtorName: realtorName || realtorEmail.split('@')[0] || realtorPhone,
-          realtorPhone,
+          realtorEmail: effectiveRealtorEmail,
+          realtorName: effectiveRealtorName,
+          realtorPhone: effectiveRealtorPhone,
           visitorName: visitorName || lead.name,
           visitorEmail: visitorEmail || lead.email,
           visitorPhone: visitorPhone || lead.phone,
@@ -294,8 +308,12 @@ export class RealtorShowingsService {
       return;
     }
     const failures: string[] = [];
-    await this.sendShowingMessages(showing, lead, direct, showing.outreachAt?.toISOString() ?? null, this.automationCreators(showing.id)[0], failures);
-    await this.scheduleShowingFollowUp(showing, lead, templates, showing.outreachAt ?? new Date(), failures);
+    const delayMinutes = direct?.audience === 'LeadShowing'
+      ? settings.firstMessageAutomation?.leadShowingDelayMinutes ?? settings.firstMessageAutomation?.delayMinutes
+      : settings.firstMessageAutomation?.realtorShowingDelayMinutes ?? settings.firstMessageAutomation?.delayMinutes;
+    const firstAt = showing.outreachAt ?? this.firstMessageDelayAt(delayMinutes);
+    await this.sendShowingMessages(showing, lead, direct, firstAt?.toISOString() ?? null, this.automationCreators(showing.id)[0], failures);
+    await this.scheduleShowingFollowUp(showing, lead, templates, firstAt ?? new Date(), failures);
     if (failures.length > 0) throw new BadRequestException(failures.join('; '));
   }
 
@@ -399,13 +417,16 @@ export class RealtorShowingsService {
     return column ? `${record[column] ?? ''}`.trim() : '';
   }
 
-  private mappedDateTime(record: Record<string, string>, mapping: ImportMapping) {
+  private mappedDateTime(record: Record<string, string>, mapping: ImportMapping, defaultHour = 9) {
     const combined = this.value(record, mapping.showingAt);
     if (combined) return combined;
 
     const date = this.value(record, mapping.showingDate);
     const time = this.value(record, mapping.showingTime);
-    return date && time ? `${date}T${time}` : date;
+    if (!date) return '';
+    if (time) return `${date}T${time}`;
+    const hour = Math.min(23, Math.max(0, Number(defaultHour) || 9));
+    return `${date}T${String(hour).padStart(2, '0')}:00`;
   }
 
   private dateValue(value: any, timeZone: string) {
@@ -416,6 +437,11 @@ export class RealtorShowingsService {
     return [`Realtor Showing #${showingId}`, `Realtor Showing #${showingId} Follow-up`];
   }
 
+  private firstMessageDelayAt(delayMinutes: unknown) {
+    const minutes = Math.min(1440, Math.max(0, Number(delayMinutes) || 0));
+    return minutes > 0 ? new Date(Date.now() + minutes * 60_000) : null;
+  }
+
   private resolveTokens(text: string, lead: Lead) {
     return `${text ?? ''}`
       .replaceAll('{{client_name}}', lead.name || 'Realtor')
@@ -423,6 +449,22 @@ export class RealtorShowingsService {
       .replaceAll('{{agent_name}}', lead.agent || 'our team')
       .replaceAll('{{agency_name}}', 'EstateBlue')
       .replaceAll('{{showing_time}}', lead.timeline || 'the scheduled time');
+  }
+
+  protected defaultShowingTemplateId(settings: any, requested?: string) {
+    const explicit = `${requested ?? ''}`.trim();
+    if (explicit) return explicit;
+    const templates = settings.communicationTemplates ?? [];
+    const configured = `${settings.leadAutomation?.realtorShowingTemplateId ?? ''}`.trim();
+    const directRealtor = templates.find((item: any) =>
+      item.isActive !== false &&
+      item.audience === 'Realtor' &&
+      (item.sequenceType ?? 'Direct') === 'Direct' &&
+      (!configured || item.id === configured),
+    );
+    return directRealtor?.id
+      ?? templates.find((item: any) => item.id === 'showing-confirmation')?.id
+      ?? '';
   }
 }
 

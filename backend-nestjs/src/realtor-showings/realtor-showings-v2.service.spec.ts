@@ -13,7 +13,7 @@ describe('RealtorShowingsV2Service', () => {
     const showingRepo: any = { create: jest.fn((value) => value), save: jest.fn(async (value) => ({ id: 20, ...value })) };
     const settings: any = { getAdminSettings: jest.fn(async () => ({ profile: { defaultPhoneCountry: 'US' }, communicationTemplates: [] })) };
     const scheduling: any = { getSettings: jest.fn(async () => ({ timeZone: 'America/Chicago' })) };
-    const service = new RealtorShowingsV2Service(showingRepo, propertyRepo, leadRepo, {} as never, {} as never, settings, scheduling);
+    const service = new RealtorShowingsV2Service(showingRepo, propertyRepo, leadRepo, {} as never, {} as never, settings, scheduling, { create: jest.fn(), findMatching: jest.fn().mockResolvedValue(null) } as never);
 
     const result = await service.importRows({
       rows: [{ Email: 'agent@example.com', Property: '402 Lake View' }],

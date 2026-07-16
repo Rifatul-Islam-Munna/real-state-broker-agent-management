@@ -1,5 +1,7 @@
 "use client"
 
+import Link from "next/link"
+
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { AppIcon } from "@/components/ui/app-icon"
 import { Badge } from "@/components/ui/badge"
@@ -30,17 +32,25 @@ export function ConfigurableLeadCollectionTemplateEditor({
   const senderChoices = inferSenderChoices(editor.template.sampleFromAddress)
 
   return (
-    <div className="space-y-4 p-3 md:p-4">
-      <header className="flex flex-col gap-3 border-b pb-3 lg:flex-row lg:items-center lg:justify-between">
+    <div className="min-w-0 max-w-full space-y-4 overflow-x-hidden p-3 md:p-4">
+      <header className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <div className="flex items-center gap-2">
-            <AppIcon name="document_scanner" />
-            <h1 className="text-xl font-black tracking-tight">
-              {templateId ? "Edit lead template" : "New lead template"}
-            </h1>
-          </div>
+          <p className="text-sm font-semibold text-foreground">
+            {templateId ? "Edit parser rules" : "Create parser rules"}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {"Map exact email values, choose optional button URLs, then test extraction."}
+          </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button
+            render={<Link href="/dashboard/lead-collection-templates" />}
+            type="button"
+            variant="outline"
+          >
+            <AppIcon name="arrow_back" />
+            Back
+          </Button>
           <Button
             onClick={() =>
               editor.setTemplate((current) => applyZillowTemplatePreset(current))
@@ -66,8 +76,8 @@ export function ConfigurableLeadCollectionTemplateEditor({
         </Alert>
       ) : null}
 
-      <div className="grid gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
-        <div className="space-y-3">
+      <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(300px,360px)_minmax(0,1fr)]">
+        <div className="min-w-0 space-y-3">
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Template</CardTitle>
@@ -205,7 +215,7 @@ export function ConfigurableLeadCollectionTemplateEditor({
           ) : null}
         </div>
 
-        <div className="space-y-3">
+        <div className="min-w-0 space-y-3">
           <Card>
             <CardContent className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between">
               <div>

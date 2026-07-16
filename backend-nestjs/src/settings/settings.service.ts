@@ -422,6 +422,16 @@ export class SettingsService {
     });
     const defaultOwnerTemplate = fallback.communicationTemplates.find((item: any) => item.audience === 'OwnerFeedback');
     if (defaultOwnerTemplate && !templates.some((item: any) => item.audience === 'OwnerFeedback')) templates.push(defaultOwnerTemplate);
+    const defaultLeadShowingTemplate = fallback.communicationTemplates.find((item: any) => item.audience === 'LeadShowing' && (item.sequenceType ?? 'Direct') === 'Direct');
+    if (defaultLeadShowingTemplate && !templates.some((item: any) => item.audience === 'LeadShowing' && (item.sequenceType ?? 'Direct') === 'Direct')) templates.push(defaultLeadShowingTemplate);
+    const existingShowingConfirmation = templates.find((item: any) => item.id === 'showing-confirmation');
+    if (existingShowingConfirmation) {
+      existingShowingConfirmation.audience = 'Realtor';
+      existingShowingConfirmation.sequenceType = 'Direct';
+      existingShowingConfirmation.gapDays = 0;
+    }
+    const defaultRealtorTemplate = fallback.communicationTemplates.find((item: any) => item.id === 'showing-confirmation');
+    if (defaultRealtorTemplate && !templates.some((item: any) => item.audience === 'Realtor' && (item.sequenceType ?? 'Direct') === 'Direct')) templates.push(defaultRealtorTemplate);
     const leadAutomationInput = input?.leadAutomation ?? {};
     const defaultLeadAutomation = fallback.leadAutomation;
     const leadAutomationChannels = this.communicationChannels(leadAutomationInput.channels, defaultLeadAutomation.channels);
@@ -457,15 +467,21 @@ export class SettingsService {
       },
       communicationTemplates: templates,
       leadAutomation: {
-        enabled: leadAutomationInput.enabled === true,
+        enabled: input?.firstMessageAutomation?.lead !== false,
         channels: leadAutomationChannels.length ? leadAutomationChannels : defaultLeadAutomation.channels,
         directTemplateId: this.loose(leadAutomationInput.directTemplateId, defaultLeadAutomation.directTemplateId),
+        leadShowingTemplateId: this.loose(leadAutomationInput.leadShowingTemplateId, defaultLeadAutomation.leadShowingTemplateId),
+        realtorShowingTemplateId: this.loose(leadAutomationInput.realtorShowingTemplateId, defaultLeadAutomation.realtorShowingTemplateId),
         followUpEnabled: leadAutomationInput.followUpEnabled !== false,
       },
       firstMessageAutomation: {
         lead: input?.firstMessageAutomation?.lead !== false,
         leadShowing: input?.firstMessageAutomation?.leadShowing !== false,
         realtorShowing: input?.firstMessageAutomation?.realtorShowing !== false,
+        delayMinutes: this.clampInt(input?.firstMessageAutomation?.delayMinutes, fallback.firstMessageAutomation.delayMinutes, 0, 1440),
+        leadDelayMinutes: this.clampInt(input?.firstMessageAutomation?.leadDelayMinutes ?? input?.firstMessageAutomation?.delayMinutes, fallback.firstMessageAutomation.leadDelayMinutes, 0, 1440),
+        leadShowingDelayMinutes: this.clampInt(input?.firstMessageAutomation?.leadShowingDelayMinutes ?? input?.firstMessageAutomation?.delayMinutes, fallback.firstMessageAutomation.leadShowingDelayMinutes, 0, 1440),
+        realtorShowingDelayMinutes: this.clampInt(input?.firstMessageAutomation?.realtorShowingDelayMinutes ?? input?.firstMessageAutomation?.delayMinutes, fallback.firstMessageAutomation.realtorShowingDelayMinutes, 0, 1440),
       },
       leadIntelligence: {
         qualifiedKnowledge: this.loose(input?.leadIntelligence?.qualifiedKnowledge, fallback.leadIntelligence.qualifiedKnowledge).slice(0, 6000),
@@ -570,15 +586,21 @@ export class SettingsService {
         deliveryState: {},
       },
       leadAutomation: {
-        enabled: false,
+        enabled: true,
         channels: ['Email'],
         directTemplateId: 'new-lead-welcome',
+        leadShowingTemplateId: 'lead-showing-confirmation',
+        realtorShowingTemplateId: 'showing-confirmation',
         followUpEnabled: true,
       },
       firstMessageAutomation: {
         lead: true,
         leadShowing: true,
         realtorShowing: true,
+        delayMinutes: 0,
+        leadDelayMinutes: 0,
+        leadShowingDelayMinutes: 0,
+        realtorShowingDelayMinutes: 0,
       },
       leadIntelligence: {
         qualifiedKnowledge: [
@@ -605,13 +627,22 @@ export class SettingsService {
           sequenceType: 'Direct', gapDays: 0, isActive: true, attachPropertyDocuments: true, attachmentMode: 'property', attachmentDocumentType: '', attachmentDocumentCategory: '', pdfTemplateId: '', audience: 'Lead',
         },
         {
+          id: 'lead-showing-confirmation',
+          name: 'Lead Showing Confirmation',
+          subject: 'Showing request received for {{property_address}}',
+          body: 'Hi {{client_name}}, your showing request for {{property_address}} is received. {{agent_name}} will confirm the best time shortly.',
+          channels: ['Email', 'SMS'],
+          variableTokens: ['{{client_name}}', '{{property_address}}', '{{agent_name}}'],
+          sequenceType: 'Direct', gapDays: 0, isActive: true, attachPropertyDocuments: true, attachmentMode: 'property', attachmentDocumentType: '', attachmentDocumentCategory: '', pdfTemplateId: '', audience: 'LeadShowing',
+        },
+        {
           id: 'showing-confirmation',
           name: 'Showing Confirmation',
           subject: 'Your showing is confirmed for {{property_address}}',
           body: 'Hi {{client_name}}, your showing for {{property_address}} is confirmed for {{showing_time}}. Reach out to {{agent_name}} if you need to reschedule.',
           channels: ['Email', 'SMS'],
           variableTokens: ['{{client_name}}', '{{property_address}}', '{{showing_time}}', '{{agent_name}}'],
-          sequenceType: 'FollowUp1', gapDays: 2, isActive: true, attachPropertyDocuments: true, attachmentMode: 'property', attachmentDocumentType: '', attachmentDocumentCategory: '', pdfTemplateId: '', audience: 'Realtor',
+          sequenceType: 'Direct', gapDays: 0, isActive: true, attachPropertyDocuments: true, attachmentMode: 'property', attachmentDocumentType: '', attachmentDocumentCategory: '', pdfTemplateId: '', audience: 'Realtor',
         },
         {
           id: 'contract-executed', name: 'Contract Executed', subject: 'Contract executed for {{property_address}}',

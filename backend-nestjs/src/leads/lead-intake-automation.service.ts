@@ -80,6 +80,10 @@ export class LeadIntakeAutomationService {
         continue;
       }
       try {
+        const scheduledAt = this.firstMessageDelayAt(
+          agency.firstMessageAutomation?.leadDelayMinutes ??
+            agency.firstMessageAutomation?.delayMinutes,
+        );
         const result = await this.outreach.sendOutreach({
           attachPropertyDocuments: selectedTemplate.attachPropertyDocuments !== false,
           attachmentDocumentCategory: selectedTemplate.attachmentDocumentCategory,
@@ -90,6 +94,7 @@ export class LeadIntakeAutomationService {
           leadId: lead.id,
           message: this.render(selectedTemplate.body, lead),
           pdfTemplateId: selectedTemplate.pdfTemplateId,
+          scheduledAt: scheduledAt?.toISOString() ?? null,
           templateId: automation.followUpEnabled === false ? undefined : selectedTemplate.id,
           title: this.render(selectedTemplate.subject || selectedTemplate.name, lead),
         });
@@ -122,6 +127,11 @@ export class LeadIntakeAutomationService {
       .replaceAll('{{agent_name}}', lead.agent || 'our team')
       .replaceAll('{{agency_name}}', 'EstateBlue')
       .replaceAll('{{showing_time}}', lead.timeline || 'the requested time');
+  }
+
+  private firstMessageDelayAt(delayMinutes: unknown) {
+    const minutes = Math.min(1440, Math.max(0, Number(delayMinutes) || 0));
+    return minutes > 0 ? new Date(Date.now() + minutes * 60_000) : null;
   }
 
   private normalize(value: unknown) {

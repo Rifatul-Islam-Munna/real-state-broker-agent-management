@@ -80,6 +80,38 @@ export class LeadsService {
     return this.findOne(saved.id);
   }
 
+  async importRows(payload: any, actor = 'CRM') {
+    const rows = Array.isArray(payload?.rows) ? payload.rows.slice(0, 2000) : [];
+    if (!rows.length) throw new BadRequestException('CSV has no data rows.');
+    const mapping = payload?.mapping ?? {};
+    const failures: string[] = [];
+    let createdCount = 0;
+    for (let index = 0; index < rows.length; index++) {
+      try {
+        const row = this.cleanRecord(rows[index]);
+        const dto = {
+          budget: this.cell(row, mapping.budget),
+          combinedCreditScore: this.cell(row, mapping.combinedCreditScore),
+          creditScore: this.cell(row, mapping.creditScore),
+          email: this.cell(row, mapping.email),
+          interest: this.cell(row, mapping.interest),
+          name: this.cell(row, mapping.name),
+          phone: this.cell(row, mapping.phone),
+          property: this.cell(row, mapping.property),
+          source: this.cell(row, mapping.source) || 'CSV Import',
+          summary: this.cell(row, mapping.summary),
+          timeline: this.cell(row, mapping.timeline),
+        };
+        if (!dto.name && !dto.email && !dto.phone) throw new Error('Name, email, or phone required.');
+        await this.create(dto, actor, true);
+        createdCount++;
+      } catch (error: any) {
+        failures.push(`Row ${index + 2}: ${error?.message ?? 'Import failed.'}`);
+      }
+    }
+    return { createdCount, failedCount: failures.length, failures };
+  }
+
   async delete(id: number): Promise<Lead> {
     const lead = await this.leadsRepository.findOne({ where: { id } });
     if (!lead) throw new NotFoundException('Lead not found');
@@ -131,6 +163,8 @@ export class LeadsService {
       property: `${dto.property ?? ''}`,
       propertyId: dto.propertyId ? Number(dto.propertyId) : null,
       budget: `${dto.budget ?? ''}`,
+      creditScore: `${dto.creditScore ?? ''}`.trim(),
+      combinedCreditScore: `${dto.combinedCreditScore ?? ''}`.trim(),
       agent: `${dto.agent ?? ''}`.trim(),
       source: `${dto.source ?? ''}`.trim(),
       interest: `${dto.interest ?? ''}`,
@@ -149,7 +183,9 @@ export class LeadsService {
     const overdue = !!nextActionDate && nextActionDate < new Date() && ['Open', 'Scheduled'].includes(String(lead.followUpStatus)) && !['Deal', 'Canceled'].includes(String(lead.stage));
     return {
       id: lead.id, name: lead.name, email: lead.email, phone: lead.phone, summary: lead.summary,
-      property: lead.property, propertyId: lead.propertyId ?? null, budget: lead.budget, stage: lead.stage, priority: lead.priority,
+      property: lead.property, propertyId: lead.propertyId ?? null, budget: lead.budget,
+      creditScore: lead.creditScore, combinedCreditScore: lead.combinedCreditScore,
+      stage: lead.stage, priority: lead.priority,
       agent: lead.agent, agentId: lead.agentId ?? null,
       assignedAgentName: lead.assignedAgent ? `${lead.assignedAgent.firstName ?? ''} ${lead.assignedAgent.lastName ?? ''}`.trim() : null,
       source: lead.source, interest: lead.interest, timeline: lead.timeline, inBoard: lead.inBoard,
@@ -159,5 +195,13 @@ export class LeadsService {
       isFollowUpOverdue: overdue, notes: lead.notes ?? [], createdAt: lead.createdAt, updatedAt: lead.updatedAt,
       lastActivityAt: lead.lastActivityAt, linkedDealId: linkedDeal?.id ?? null, linkedDealTitle: linkedDeal?.title ?? null,
     };
+  }
+
+  private cleanRecord(input: any) {
+    return Object.fromEntries(Object.entries(input ?? {}).map(([key, value]) => [`${key}`.trim(), `${value ?? ''}`.trim()]));
+  }
+
+  private cell(record: Record<string, string>, column?: string) {
+    return column ? `${record[column] ?? ''}`.trim() : '';
   }
 }

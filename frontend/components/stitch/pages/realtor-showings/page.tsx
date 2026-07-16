@@ -46,7 +46,9 @@ const mappingFields: Array<{ key: MappingKey; label: string; aliases: string[] }
   { key: "realtorEmail", label: "Realtor Email", aliases: ["realtor email", "agent email", "email", "email address"] },
   { key: "realtorPhone", label: "Realtor Phone", aliases: ["realtor phone", "agent phone", "phone", "mobile", "telephone"] },
   { key: "property", label: "Property", aliases: ["property", "property address", "listing", "listing address", "address", "mls address"] },
-  { key: "showingAt", label: "Showing Date/Time", aliases: ["showing at", "showing date", "showing time", "date", "appointment"] },
+  { key: "showingDate", label: "Showing Date", aliases: ["showing date", "date", "appointment date"] },
+  { key: "showingTime", label: "Showing Time", aliases: ["showing time", "time", "appointment time"] },
+  { key: "showingAt", label: "Showing Date/Time", aliases: ["showing at", "date time", "appointment"] },
   { key: "visitorName", label: "Visitor Name", aliases: ["visitor name", "lead name", "tenant name", "client name"] },
   { key: "visitorEmail", label: "Visitor Email", aliases: ["visitor email", "lead email", "tenant email", "client email"] },
   { key: "visitorPhone", label: "Visitor Phone", aliases: ["visitor phone", "lead phone", "tenant phone", "client phone"] },
@@ -59,6 +61,8 @@ const emptyMapping: RealtorShowingImportInput["mapping"] = {
   realtorPhone: "",
   property: "",
   showingAt: "",
+  showingDate: "",
+  showingTime: "",
   visitorName: "",
   visitorEmail: "",
   visitorPhone: "",
@@ -66,7 +70,14 @@ const emptyMapping: RealtorShowingImportInput["mapping"] = {
 }
 
 function autoMapHeaders(headers: string[]) {
-  const normalized = headers.map((header) => ({ header, normalized: header.toLowerCase().replace(/[_-]+/g, " ").trim() }))
+  const normalized = headers.map((header) => ({
+    header,
+    normalized: header
+      .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+      .toLowerCase()
+      .replace(/[_-]+/g, " ")
+      .trim(),
+  }))
   return mappingFields.reduce((mapping, field) => {
     const match = normalized.find((item) => field.aliases.some((alias) => item.normalized === alias || item.normalized.includes(alias)))
     mapping[field.key] = match?.header ?? ""

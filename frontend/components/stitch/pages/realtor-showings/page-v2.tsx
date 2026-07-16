@@ -1,7 +1,8 @@
 "use client"
 
 import Link from "next/link"
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
+import { useSearchParams } from "next/navigation"
 
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { AppIcon } from "@/components/ui/app-icon"
@@ -20,7 +21,6 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
 } from "@/components/ui/select"
 import {
   Table,
@@ -51,6 +51,7 @@ import {
 import { RealtorShowingEntryDialogsV2 } from "./realtor-showing-entry-dialogs-v2"
 
 export function RealtorShowingsPageV2() {
+  const searchParams = useSearchParams()
   const [search, setSearch] = useState("")
   const [importOpen, setImportOpen] = useState(false)
   const [automationEditor, setAutomationEditor] =
@@ -63,6 +64,10 @@ export function RealtorShowingsPageV2() {
   const propertyMutation = useUpdateRealtorShowingProperty()
   const automationMutation = useUpdateRealtorShowingAutomation()
   const sendMessageMutation = useSendRealtorShowingMessage()
+
+  useEffect(() => {
+    if (searchParams.get("import") === "1") setImportOpen(true)
+  }, [searchParams])
 
   const rawShowings = showingsQuery.data
   const showings = Array.isArray(rawShowings)
@@ -106,6 +111,19 @@ export function RealtorShowingsPageV2() {
     (item) => item.automationStatus === "StoppedByReply",
   ).length
 
+  function downloadSampleCsv() {
+    const sample = [
+      "realtorName,realtorEmail,realtorPhone,property,showingDate,showingTime,visitorName,visitorEmail,visitorPhone",
+      "Jane Realtor,jane@example.com,754-222-1111,6750 Royal Palm Blvd #209E,2026-07-20,14:30,Bradley Weneck,bradley@example.com,754-223-9582",
+    ].join("\n")
+    const url = URL.createObjectURL(new Blob([sample], { type: "text/csv" }))
+    const link = document.createElement("a")
+    link.href = url
+    link.download = "realtor-showings-sample.csv"
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
   async function saveAutomation() {
     if (!automationEditor) return
     const response = await automationMutation.mutateAsync(automationEditor)
@@ -134,6 +152,14 @@ export function RealtorShowingsPageV2() {
                 variant="outline"
               >
                 {"Manage templates"}
+              </Button>
+              <Button
+                onClick={downloadSampleCsv}
+                type="button"
+                variant="outline"
+              >
+                <AppIcon name="download" />
+                {"Sample CSV"}
               </Button>
               <Button
                 onClick={() => setImportOpen(true)}
@@ -208,7 +234,9 @@ export function RealtorShowingsPageV2() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {showings.map((showing) => (
+                    {showings.map((showing) => {
+                      const selectedProperty = properties.find((property) => property.id === showing.propertyId)
+                      return (
                       <TableRow key={showing.id}>
                         <TableCell className="max-w-[230px]">
                           <p className="font-medium text-foreground">
@@ -240,7 +268,11 @@ export function RealtorShowingsPageV2() {
                             }
                           >
                             <SelectTrigger className="w-full">
-                              <SelectValue placeholder="Choose property" />
+                              <span className="line-clamp-1 text-left">
+                                {selectedProperty
+                                  ? `${selectedProperty.title} - ${selectedProperty.location}`
+                                  : showing.propertyText || "Choose property"}
+                              </span>
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="none">{"Unmatched"}</SelectItem>
@@ -346,7 +378,7 @@ export function RealtorShowingsPageV2() {
                           </div>
                         </TableCell>
                       </TableRow>
-                    ))}
+                    )})}
                   </TableBody>
                 </Table>
               </div>

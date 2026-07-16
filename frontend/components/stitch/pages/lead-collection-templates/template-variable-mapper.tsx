@@ -60,7 +60,7 @@ export function TemplateVariableMapper({
   }
 
   return (
-    <Card>
+    <Card className="min-w-0 overflow-hidden">
       <CardHeader className="pb-3">
         <CardTitle className="text-base">Map fields</CardTitle>
       </CardHeader>
@@ -89,12 +89,12 @@ export function TemplateVariableMapper({
             </div>
 
             {sourceHtml ? (
-              <div className="overflow-hidden rounded-lg border bg-white">
+              <div className="min-w-0 overflow-hidden rounded-lg border bg-white">
                 <div className="border-b px-3 py-2 text-xs font-bold uppercase tracking-wide text-muted-foreground">
                   Select a value directly from this {source === "linked" ? "selected button result" : "email"}
                 </div>
                 <div
-                  className="max-h-[360px] overflow-auto bg-white p-3 text-sm text-slate-900 [&_img]:max-w-full [&_table]:max-w-full"
+                  className="max-h-[360px] max-w-full overflow-auto bg-white p-3 text-sm text-slate-900 [&_img]:max-w-full [&_table]:max-w-full"
                   dangerouslySetInnerHTML={{ __html: sanitizeTemplateHtml(sourceHtml) }}
                   onClick={(event) => {
                     const target = event.target as HTMLElement | null
@@ -110,15 +110,22 @@ export function TemplateVariableMapper({
               </div>
             )}
 
-            <div className="rounded-lg border bg-muted/20 p-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Detected variables
-              </p>
-              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            <div className="rounded-lg border bg-muted/20 p-2">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Detected variables
+                </p>
+                {detected.length ? (
+                  <span className="rounded-full bg-background px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                    {detected.length}
+                  </span>
+                ) : null}
+              </div>
+              <div className="mt-2 grid max-h-56 gap-1.5 overflow-y-auto pr-1 sm:grid-cols-2 xl:grid-cols-3">
                 {detected.length ? (
                   detected.map((item, index) => (
                     <button
-                      className={`rounded-md border p-2 text-left transition-colors hover:border-primary ${
+                      className={`min-h-14 rounded-md border px-2 py-1.5 text-left transition-colors hover:border-primary ${
                         selection.text === item.value
                           ? "border-primary bg-primary/5"
                           : "bg-background"
@@ -131,25 +138,27 @@ export function TemplateVariableMapper({
                       }
                       type="button"
                     >
-                      <span className="block text-xs font-semibold text-muted-foreground">
+                      <span className="block truncate text-[11px] font-semibold leading-4 text-muted-foreground">
                         {item.label}
                       </span>
-                      <span className="mt-1 block break-words text-sm">{item.value}</span>
+                      <span className="mt-0.5 block max-h-8 overflow-hidden break-words text-xs leading-4">
+                        {item.value}
+                      </span>
                     </button>
                   ))
                 ) : (
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-xs text-muted-foreground">
                     Highlight a value directly in the preview above.
                   </p>
                 )}
               </div>
             </div>
 
-            <div className="rounded-lg border bg-muted/30 p-3">
+            <div className="rounded-lg border bg-muted/30 p-2">
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Selected value
               </p>
-              <p className="mt-2 break-words text-sm">
+              <p className="mt-1 max-h-16 overflow-y-auto break-words text-sm leading-5">
                 {selection.text || "Choose a detected variable or highlight text above."}
               </p>
               {selectedLink ? (
