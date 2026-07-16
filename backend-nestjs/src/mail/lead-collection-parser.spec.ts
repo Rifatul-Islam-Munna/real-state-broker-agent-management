@@ -233,4 +233,40 @@ describe('lead collection template parser', () => {
 
     expect(result.values.property).toBeUndefined();
   });
+
+  it('uses the exact selected text for multi-line text mappings before newline anchors', () => {
+    const emailText = [
+      'Hello,',
+      'Please find the client and property details below:',
+      'Property Name: 750 Royal Palm Blvd #209E',
+      'Margate, FL 33063',
+      'Client Name: fwafawfawf',
+      'Email: g@gmail.com',
+      'Phone Number: 01901111111',
+    ].join('\n');
+    const sampleValue = '750 Royal Palm Blvd #209E Margate, FL 33063';
+    const [propertyMapping] = buildLeadCollectionMappings(emailText, [{
+      field: 'property',
+      label: 'Property',
+      source: 'EmailBody',
+      sampleValue,
+      selectionStart: emailText.indexOf('750 Royal Palm'),
+      selectionEnd: emailText.indexOf('Margate, FL 33063') + 'Margate, FL 33063'.length,
+      prefix: 'Property Name:',
+      required: true,
+      transform: 'Text',
+    }]);
+    const result = parseLeadCollectionTemplate({
+      ...template,
+      mappings: [propertyMapping],
+      requiredFields: ['property'],
+    }, {
+      fromAddress: 'test@example.com',
+      subject: 'Property details',
+      textBody: emailText,
+    });
+
+    expect(result.values.property).toBe(sampleValue);
+    expect(result.missingRequiredFields).not.toContain('property');
+  });
 });

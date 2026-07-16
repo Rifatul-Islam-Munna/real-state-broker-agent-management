@@ -355,6 +355,9 @@ export function scoreLeadCollectionTemplate(
 }
 
 function extractMappedValue(text: string, mapping: LeadCollectionFieldMapping) {
+  const exactSelected = exactSampleCandidate(text, mapping);
+  if (exactSelected) return exactSelected;
+
   const prefixCandidates = anchorCandidates(mapping.prefix, 'tail');
   const suffixCandidates = anchorCandidates(mapping.suffix, 'head');
   let start = -1;
@@ -370,16 +373,12 @@ function extractMappedValue(text: string, mapping: LeadCollectionFieldMapping) {
   }
 
   if (start < 0 && !mapping.prefix) {
-    const exact = exactSampleCandidate(text, mapping);
-    if (exact) return exact;
     const generic = genericTransformCandidate(text, mapping.transform);
     return generic
       ? { value: generic, score: 0.45, reason: 'generic field validator fallback' }
       : { value: '', score: 0, reason: 'no stable anchor for selected text' };
   }
   if (start < 0) {
-    const exact = exactSampleCandidate(text, mapping);
-    if (exact) return exact;
     const generic = genericTransformCandidate(text, mapping.transform);
     return generic
       ? { value: generic, score: 0.45, reason: 'generic field validator fallback' }
@@ -405,8 +404,6 @@ function extractMappedValue(text: string, mapping: LeadCollectionFieldMapping) {
   const raw = text.slice(start, end).trim().replace(/^[\s:|\-–—]+|[\s:|\-–—]+$/g, '');
   const transformed = transformMappedValue(raw, mapping.transform);
   if (!transformed) {
-    const exact = exactSampleCandidate(text, mapping);
-    if (exact) return exact;
     const generic = genericTransformCandidate(text, mapping.transform);
     return generic
       ? { value: generic, score: 0.45, reason: 'anchors matched but validator used generic fallback' }
@@ -491,7 +488,7 @@ function senderPatternScore(patterns: string[], fromAddress: string) {
 
 function exactSampleCandidate(text: string, mapping: LeadCollectionFieldMapping) {
   const sample = normalizeLeadCollectionText(mapping.sampleValue);
-  if (!sample || findInsensitive(text, sample) < 0) return null;
+  if (!sample || !hasFlexibleText(text, sample)) return null;
   const value = transformMappedValue(sample, mapping.transform);
   return value
     ? { value, score: 0.9, reason: 'exact selected sample matched' }
@@ -516,16 +513,17 @@ function subjectPatternScore(pattern: string, mode: string, subject: string) {
 }
 
 function transformMappedValue(value: string, transform: LeadCollectionFieldTransform) {
-  const clean = normalizeLeadCollectionText(value).split('\n')[0]?.trim() ?? '';
+  const normalized = normalizeLeadCollectionText(value);
+  const clean = normalized.split('\n')[0]?.trim() ?? '';
   if (!clean) return '';
-  if (transform === 'Email') return firstEmail(clean) ?? '';
-  if (transform === 'Phone') return firstPhone(clean) ?? '';
+  if (transform === 'Email') return firstEmail(normalized) ?? '';
+  if (transform === 'Phone') return firstPhone(normalized) ?? '';
   if (transform === 'Number') {
-    const match = clean.match(/[-+]?\d[\d,.]*(?:\s*[a-z%]+)?/i);
+    const match = normalized.match(/[-+]?\d[\d,.]*(?:\s*[a-z%]+)?/i);
     return match?.[0]?.trim() ?? '';
   }
   if (transform === 'Date') return clean.slice(0, 80);
-  return clean.slice(0, 2000);
+  return normalized.replace(/\n+/g, ' ').slice(0, 2000).trim();
 }
 
 function genericTransformCandidate(text: string, transform: LeadCollectionFieldTransform) {
@@ -609,6 +607,17 @@ function findOccurrence(value: string, search: string, occurrence: number) {
     from = found + search.length;
   }
   return found;
+}
+
+function hasFlexibleText(value: string, search: string) {
+  const direct = findInsensitive(value, search);
+  if (direct >= 0) return true;
+  const pattern = search
+    .split(/\s+/)
+    .filter(Boolean)
+    .map(escapeRegExp)
+    .join('\\s+');
+  return pattern ? new RegExp(pattern, 'i').test(value) : false;
 }
 
 function looksMostlyDynamic(value: string) {
