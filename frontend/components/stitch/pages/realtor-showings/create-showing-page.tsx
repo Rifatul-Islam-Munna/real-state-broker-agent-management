@@ -89,7 +89,7 @@ export function CreateRealtorShowingPage() {
   }, [properties, propertySearch])
   const selectedProperty = properties.find((property) => String(property.id) === propertyId)
   const templates = useMemo(
-    () => (templatesQuery.data ?? []).filter((template) => template.isActive !== false && (template.audience === "Realtor" || template.id === "showing-confirmation")),
+    () => (templatesQuery.data ?? []).filter((template) => template.isActive !== false && (template.audience === "Realtor" || template.audience === "LeadShowing" || template.id === "showing-confirmation")),
     [templatesQuery.data],
   )
   const directTemplates = templates.filter((template) => (template.sequenceType ?? "Direct") === "Direct")

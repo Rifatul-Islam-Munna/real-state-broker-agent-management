@@ -214,7 +214,7 @@ export function selectedTemplateValue(
 ): SelectedTemplateValue {
   const normalizedSource = normalizeTemplateText(sourceText)
   const normalizedValue = normalizeTemplateText(text)
-  const start = normalizedSource.toLowerCase().indexOf(normalizedValue.toLowerCase())
+  const start = findSelectedTextStart(normalizedSource, normalizedValue)
   return {
     start: Math.max(0, start),
     end: Math.max(0, start) + normalizedValue.length,
@@ -222,6 +222,22 @@ export function selectedTemplateValue(
     label,
     source,
   }
+}
+
+function findSelectedTextStart(sourceText: string, selectedText: string) {
+  if (!selectedText) return -1
+  const direct = sourceText.toLowerCase().indexOf(selectedText.toLowerCase())
+  if (direct >= 0) return direct
+
+  const pattern = selectedText
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    .join("\\s+")
+  if (!pattern) return -1
+
+  const match = sourceText.match(new RegExp(pattern, "i"))
+  return match?.index ?? -1
 }
 
 export function mergeMapping(

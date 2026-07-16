@@ -144,8 +144,6 @@ export function useConfigurableTemplateEditor({
       linkedPageSampleUrl: prepared.linkedPageSampleUrl,
       linkedPageSourceHtml: prepared.linkedPageSourceHtml,
       linkedPageSourceText: prepared.linkedPageSourceText,
-      mappings: [],
-      requiredFields: [],
     }))
     setMappingSource(prepared.linkedPageSourceText ? "linked" : "email")
   }

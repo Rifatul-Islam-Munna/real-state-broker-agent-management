@@ -47,6 +47,12 @@ export class RealtorShowingsController {
     return this.realtorShowingsService.updateSequence(Number(id), status);
   }
 
+  @Post(':id/send-message')
+  @ApiOperation({ summary: 'Manually send the first showing message' })
+  sendFirstMessage(@Param('id') id: string) {
+    return this.realtorShowingsService.sendManualFirstMessage(Number(id));
+  }
+
   @Patch('property')
   @ApiOperation({ summary: 'Manually match a realtor showing to a property' })
   updateProperty(@Body() payload: { id: number; propertyId?: number | null }) {

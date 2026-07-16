@@ -128,35 +128,39 @@ export function buildLeadCollectionMappings(
   mappings: Array<Partial<LeadCollectionFieldMapping>>,
 ): LeadCollectionFieldMapping[] {
   const text = normalizeLeadCollectionText(sourceText);
+  const sourceParts = splitLeadCollectionSources(text);
   return mappings
     .map<LeadCollectionFieldMapping | null>((mapping, index) => {
       const field = `${mapping.field ?? ''}`.trim();
       const sampleValue = normalizeLeadCollectionText(mapping.sampleValue ?? '');
       if (!field || !sampleValue) return null;
+      const source = mapping.source === 'LinkedPage' ? 'LinkedPage' : 'EmailBody';
+      const mappingText = source === 'LinkedPage'
+        ? sourceParts.linkedText || text
+        : sourceParts.emailText;
 
       let selectionStart = finiteInt(mapping.selectionStart, -1);
       let selectionEnd = finiteInt(mapping.selectionEnd, -1);
       const selected =
         selectionStart >= 0 && selectionEnd > selectionStart
-          ? normalizeLeadCollectionText(text.slice(selectionStart, selectionEnd))
+          ? normalizeLeadCollectionText(mappingText.slice(selectionStart, selectionEnd))
           : '';
       if (!selected || selected !== sampleValue) {
         const occurrence = Math.max(0, finiteInt(mapping.occurrence, 0));
-        selectionStart = findOccurrence(text, sampleValue, occurrence);
+        selectionStart = findOccurrence(mappingText, sampleValue, occurrence);
         selectionEnd = selectionStart >= 0 ? selectionStart + sampleValue.length : -1;
       }
       const prefix = `${mapping.prefix ?? ''}`.trim()
         ? normalizeLeadCollectionText(mapping.prefix)
         : selectionStart >= 0
-          ? buildPrefixAnchor(text, selectionStart)
+          ? buildPrefixAnchor(mappingText, selectionStart)
           : '';
       const suffix = `${mapping.suffix ?? ''}`.trim()
         ? normalizeLeadCollectionText(mapping.suffix)
         : selectionEnd > selectionStart
-          ? buildSuffixAnchor(text, selectionEnd)
+          ? buildSuffixAnchor(mappingText, selectionEnd)
           : '';
       const transform = normalizeTransform(mapping.transform, field);
-      const source = mapping.source === 'LinkedPage' ? 'LinkedPage' : 'EmailBody';
       const foundSelection = selectionStart >= 0 && selectionEnd > selectionStart;
       const fallbackStart = Math.max(0, finiteInt(mapping.selectionStart, 0));
       const fallbackEnd = Math.max(
@@ -240,9 +244,13 @@ export function parseLeadCollectionTemplate(
   const values: Record<string, string> = {};
   const diagnostics: string[] = [];
   let extractionScore = 0;
+  const sourceTexts = splitLeadCollectionSources(text);
 
   for (const mapping of template.mappings ?? []) {
-    const result = extractMappedValue(text, mapping);
+    const mappingText = mapping.source === 'LinkedPage'
+      ? sourceTexts.linkedText || text
+      : sourceTexts.emailText;
+    const result = extractMappedValue(mappingText, mapping);
     if (result.value) values[mapping.field] = result.value;
     extractionScore += result.score;
     diagnostics.push(`${mapping.field}: ${result.reason}`);
@@ -361,7 +369,14 @@ function extractMappedValue(text: string, mapping: LeadCollectionFieldMapping) {
     }
   }
 
-  if (start < 0 && !mapping.prefix) start = 0;
+  if (start < 0 && !mapping.prefix) {
+    const exact = exactSampleCandidate(text, mapping);
+    if (exact) return exact;
+    const generic = genericTransformCandidate(text, mapping.transform);
+    return generic
+      ? { value: generic, score: 0.45, reason: 'generic field validator fallback' }
+      : { value: '', score: 0, reason: 'no stable anchor for selected text' };
+  }
   if (start < 0) {
     const exact = exactSampleCandidate(text, mapping);
     if (exact) return exact;
@@ -405,6 +420,18 @@ function extractMappedValue(text: string, mapping: LeadCollectionFieldMapping) {
     value: transformed,
     score,
     reason: fullPrefix && fullSuffix ? 'exact anchors matched' : 'partial anchors matched',
+  };
+}
+
+function splitLeadCollectionSources(text: string) {
+  const marker = text.match(/(?:^|\n)Linked detail page \([^)]+\)\n/i);
+  if (!marker || marker.index === undefined) {
+    return { emailText: text, linkedText: '' };
+  }
+  const linkedStart = marker.index + marker[0].length;
+  return {
+    emailText: text.slice(0, marker.index).trim(),
+    linkedText: text.slice(linkedStart).trim(),
   };
 }
 

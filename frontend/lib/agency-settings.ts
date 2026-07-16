@@ -25,6 +25,12 @@ export type LeadAutomationSettings = {
   followUpEnabled: boolean
 }
 
+export type FirstMessageAutomationSettings = {
+  lead: boolean
+  leadShowing: boolean
+  realtorShowing: boolean
+}
+
 export type LeadIntelligenceSettings = {
   qualifiedKnowledge: string
   unqualifiedKnowledge: string
@@ -34,6 +40,7 @@ export type LeadIntelligenceSettings = {
 
 export type AgencyWorkspaceSettings = AgencySettings & {
   leadAutomation: LeadAutomationSettings
+  firstMessageAutomation: FirstMessageAutomationSettings
   leadIntelligence: LeadIntelligenceSettings
   showingFeedbackAutomation: ShowingFeedbackAutomationSettings
 }
@@ -75,6 +82,11 @@ export const defaultAgencySettings: AgencyWorkspaceSettings = {
     channels: ["Email"],
     directTemplateId: "new-lead-welcome",
     followUpEnabled: true,
+  },
+  firstMessageAutomation: {
+    lead: true,
+    leadShowing: true,
+    realtorShowing: true,
   },
   leadIntelligence: {
     qualifiedKnowledge: [
@@ -174,6 +186,7 @@ export const defaultAgencySettings: AgencyWorkspaceSettings = {
 export function cloneAgencySettings(
   settings: AgencySettings & {
     leadAutomation?: Partial<LeadAutomationSettings>
+    firstMessageAutomation?: Partial<FirstMessageAutomationSettings>
     leadIntelligence?: Partial<LeadIntelligenceSettings>
     showingFeedbackAutomation?: Partial<ShowingFeedbackAutomationSettings>
   }
@@ -181,6 +194,7 @@ export function cloneAgencySettings(
   const profile = settings.profile ?? defaultAgencySettings.profile
   const automation = settings.showingFeedbackAutomation ?? {}
   const leadAutomation = settings.leadAutomation ?? {}
+  const firstMessageAutomation = settings.firstMessageAutomation ?? {}
   const leadIntelligence = settings.leadIntelligence ?? {}
   const leadAutomationChannels = (leadAutomation.channels ?? ["Email"]).filter(
     (item): item is "Email" | "SMS" => item === "Email" || item === "SMS"
@@ -228,6 +242,11 @@ export function cloneAgencySettings(
         leadAutomation.directTemplateId ||
         defaultAgencySettings.leadAutomation.directTemplateId,
       followUpEnabled: leadAutomation.followUpEnabled !== false,
+    },
+    firstMessageAutomation: {
+      lead: firstMessageAutomation.lead !== false,
+      leadShowing: firstMessageAutomation.leadShowing !== false,
+      realtorShowing: firstMessageAutomation.realtorShowing !== false,
     },
     leadIntelligence: {
       qualifiedKnowledge:

@@ -45,7 +45,10 @@ export function TemplateVariableMapper({
 }) {
   const sourceText = source === "linked" ? template.linkedPageSourceText : template.sourceText
   const sourceHtml = source === "linked" ? template.linkedPageSourceHtml : template.sourceHtml
-  const detected = detectTemplateValues(sourceText)
+  const detected = mergeDetectedValues(
+    detectTemplateValues(sourceText),
+    source === "email" ? extractTemplateLinks(sourceHtml, sourceText) : [],
+  )
   const selectedLink = source === "email"
     ? findSelectedLink(template.sourceHtml, template.sourceText, selection.text)
     : null
@@ -93,6 +96,10 @@ export function TemplateVariableMapper({
                 <div
                   className="max-h-[360px] overflow-auto bg-white p-3 text-sm text-slate-900 [&_img]:max-w-full [&_table]:max-w-full"
                   dangerouslySetInnerHTML={{ __html: sanitizeTemplateHtml(sourceHtml) }}
+                  onClick={(event) => {
+                    const target = event.target as HTMLElement | null
+                    if (target?.closest("a")) event.preventDefault()
+                  }}
                   onKeyUp={captureVisibleSelection}
                   onMouseUp={captureVisibleSelection}
                 />
@@ -197,6 +204,21 @@ function findSelectedLink(html: string, text: string, selected: string) {
     const label = normalizeTemplateText(link.text || link.host).toLowerCase()
     return label && (label.includes(needle) || needle.includes(label))
   }) ?? null
+}
+
+function mergeDetectedValues(
+  values: Array<{ label: string; value: string }>,
+  links: Array<{ text: string; url: string; host: string }>,
+) {
+  const merged = [...values]
+  const seen = new Set(values.map((item) => item.value.trim().toLowerCase()))
+  for (const link of links) {
+    const value = normalizeTemplateText(link.text)
+    if (!value || seen.has(value.toLowerCase())) continue
+    merged.push({ label: "Link text", value })
+    seen.add(value.toLowerCase())
+  }
+  return merged.slice(0, 40)
 }
 
 export function MappedLeadFields({

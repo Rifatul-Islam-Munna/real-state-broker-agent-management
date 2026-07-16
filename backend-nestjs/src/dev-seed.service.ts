@@ -27,8 +27,7 @@ export class DevSeedService implements OnApplicationBootstrap {
   constructor(private readonly config: ConfigService, private readonly dataSource: DataSource) {}
 
   async onApplicationBootstrap() {
-    if ((this.config.get<string>('NODE_ENV') ?? 'development') !== 'development') return;
-    if (this.config.get<string>('DEV_DEMO_SEED') === 'false') return;
+    if (this.config.get<string>('isDemoData') !== 'true') return;
     try {
       await this.dataSource.transaction(async (manager) => {
         await manager.query('CREATE TABLE IF NOT EXISTS development_seed_state (seed_key varchar(120) PRIMARY KEY, completed_at timestamptz NOT NULL DEFAULT NOW())');

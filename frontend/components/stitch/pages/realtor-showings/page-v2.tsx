@@ -33,6 +33,7 @@ import {
 import { useLeadOutreachTemplates } from "@/hooks/use-lead-outreach-api"
 import {
   useRealtorShowings,
+  useSendRealtorShowingMessage,
   useUpdateRealtorShowingAutomation,
   useUpdateRealtorShowingProperty,
 } from "@/hooks/use-realtor-showings-api"
@@ -61,6 +62,7 @@ export function RealtorShowingsPageV2() {
   const schedulingQuery = useSchedulingSettings()
   const propertyMutation = useUpdateRealtorShowingProperty()
   const automationMutation = useUpdateRealtorShowingAutomation()
+  const sendMessageMutation = useSendRealtorShowingMessage()
 
   const rawShowings = showingsQuery.data
   const showings = Array.isArray(rawShowings)
@@ -77,6 +79,7 @@ export function RealtorShowingsPageV2() {
         (template) =>
           template.isActive !== false &&
           (template.audience === "Realtor" ||
+            template.audience === "LeadShowing" ||
             template.id === "showing-confirmation"),
       ),
     [templatesQuery.data],
@@ -300,29 +303,47 @@ export function RealtorShowingsPageV2() {
                           </Badge>
                         </TableCell>
                         <TableCell className="text-right">
-                          <Button
-                            onClick={() =>
-                              setAutomationEditor({
-                                directTemplateId: showing.directTemplateId,
-                                emailEnabled: showing.emailEnabled,
-                                followUpEnabled: showing.followUpEnabled,
-                                followUpGapDays: showing.followUpGapDays,
-                                followUpTemplateId: showing.followUpTemplateId,
-                                id: showing.id,
-                                outreachAt: toDateTimeLocalInZone(
-                                  showing.outreachAt,
-                                  timeZone,
-                                ),
-                                realtorName: showing.realtorName,
-                                smsEnabled: showing.smsEnabled,
-                              })
-                            }
-                            size="sm"
-                            type="button"
-                            variant="outline"
-                          >
-                            {"Edit schedule"}
-                          </Button>
+                          <div className="flex flex-wrap justify-end gap-2">
+                            {showing.automationStatus === "NotScheduled" &&
+                            (showing.emailEnabled || showing.smsEnabled) ? (
+                              <Button
+                                disabled={sendMessageMutation.isPending}
+                                onClick={() =>
+                                  void sendMessageMutation.mutateAsync({
+                                    id: showing.id,
+                                  })
+                                }
+                                size="sm"
+                                type="button"
+                              >
+                                <AppIcon name="send" />
+                                {"Send message"}
+                              </Button>
+                            ) : null}
+                            <Button
+                              onClick={() =>
+                                setAutomationEditor({
+                                  directTemplateId: showing.directTemplateId,
+                                  emailEnabled: showing.emailEnabled,
+                                  followUpEnabled: showing.followUpEnabled,
+                                  followUpGapDays: showing.followUpGapDays,
+                                  followUpTemplateId: showing.followUpTemplateId,
+                                  id: showing.id,
+                                  outreachAt: toDateTimeLocalInZone(
+                                    showing.outreachAt,
+                                    timeZone,
+                                  ),
+                                  realtorName: showing.realtorName,
+                                  smsEnabled: showing.smsEnabled,
+                                })
+                              }
+                              size="sm"
+                              type="button"
+                              variant="outline"
+                            >
+                              {"Edit schedule"}
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}

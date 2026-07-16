@@ -175,4 +175,62 @@ describe('lead collection template parser', () => {
       sampleValue: '6750 Royal Palm Blvd #209E, Margate, FL, 33063.',
     });
   });
+
+  it('does not let linked-page text override an email-body property mapping', () => {
+    const emailText = [
+      'New application request',
+      '6750 Royal Palm Blvd #209E, Margate, FL, 33063.',
+      'bradley weneck requested an application:',
+    ].join('\n');
+    const [propertyMapping] = buildLeadCollectionMappings(emailText, [{
+      field: 'property',
+      label: 'Property',
+      source: 'EmailBody',
+      sampleValue: '6750 Royal Palm Blvd #209E, Margate, FL, 33063.',
+      selectionStart: emailText.indexOf('6750 Royal Palm'),
+      selectionEnd: emailText.indexOf('6750 Royal Palm') + '6750 Royal Palm Blvd #209E, Margate, FL, 33063.'.length,
+      required: false,
+      transform: 'Text',
+    }]);
+    const result = parseLeadCollectionTemplate({
+      ...template,
+      mappings: [propertyMapping],
+      requiredFields: [],
+    }, {
+      fromAddress: 'leads@example.com',
+      subject: 'New application request',
+      textBody: [
+        emailText,
+        'Linked detail page (https://example.com/contact)',
+        'Name: bradley weneck',
+        'Phone: 754-223-9582',
+      ].join('\n'),
+    });
+
+    expect(result.values.property).toBe('6750 Royal Palm Blvd #209E, Margate, FL, 33063.');
+  });
+
+  it('does not extract the first email line when a text mapping has no stable anchor', () => {
+    const [propertyMapping] = buildLeadCollectionMappings('New application request', [{
+      field: 'property',
+      label: 'Property',
+      source: 'EmailBody',
+      sampleValue: '6750 Royal Palm Blvd #209E, Margate, FL, 33063.',
+      selectionStart: 0,
+      selectionEnd: 52,
+      required: false,
+      transform: 'Text',
+    }]);
+    const result = parseLeadCollectionTemplate({
+      ...template,
+      mappings: [propertyMapping],
+      requiredFields: [],
+    }, {
+      fromAddress: 'leads@example.com',
+      subject: 'New application request',
+      textBody: 'New application request\nbradley weneck requested an application:',
+    });
+
+    expect(result.values.property).toBeUndefined();
+  });
 });

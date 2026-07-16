@@ -37,6 +37,9 @@ export class LeadIntakeAutomationService {
     if (automation.enabled !== true) {
       return { sent: 0, skipped: 1, failures: ['Lead automation is disabled.'] };
     }
+    if (agency.firstMessageAutomation?.lead === false) {
+      return { sent: 0, skipped: 1, failures: ['Automatic first lead message is disabled. Send the first message manually.'] };
+    }
     const directTemplates = (agency.communicationTemplates ?? []).filter((item: any) =>
       item.isActive !== false &&
       (item.audience ?? 'Lead') === 'Lead' &&

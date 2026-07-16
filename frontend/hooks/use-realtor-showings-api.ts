@@ -1,7 +1,9 @@
 "use client"
 
-import { useQueryClient } from "@tanstack/react-query"
+import { useMutation, useQueryClient } from "@tanstack/react-query"
+import { sileo } from "sileo"
 
+import { PostRequestAxios } from "@/api-hooks/api-hooks"
 import type {
   RealtorShowingImportInput,
   RealtorShowingImportResult,
@@ -114,6 +116,27 @@ export function useUpdateRealtorShowingAutomation() {
       void queryClient.invalidateQueries({ queryKey: ["realtor-showings"] }),
     successMessage: "Showing automation updated",
     url: "/realtor-showings/automation",
+  })
+}
+
+export function useSendRealtorShowingMessage() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id }: { id: number }) => {
+      const [data, error] = await PostRequestAxios<RealtorShowingItem, Record<string, never>>(
+        `/realtor-showings/${id}/send-message`,
+        {},
+      )
+      return { data, error }
+    },
+    onSuccess: (result) => {
+      if (result.error) {
+        sileo.error({ title: "Request failed", description: result.error.message })
+        return
+      }
+      sileo.success({ title: "Showing message sent" })
+      void queryClient.invalidateQueries({ queryKey: ["realtor-showings"] })
+    },
   })
 }
 

@@ -236,6 +236,14 @@ export function MainContentSectionV2() {
           </Card>
         </section>
 
+        <FirstMessageAutomationPanel
+          onChange={(firstMessageAutomation) => {
+            setValues((current) => ({ ...current, firstMessageAutomation }))
+            setError(null)
+          }}
+          settings={values.firstMessageAutomation}
+        />
+
         <LeadAutomationPanel
           onChange={(leadAutomation) => {
             setValues((current) => ({ ...current, leadAutomation }))
@@ -301,6 +309,86 @@ export function MainContentSectionV2() {
         timeZone={timeZone}
       />
     </main>
+  )
+}
+
+function FirstMessageAutomationPanel({
+  onChange,
+  settings,
+}: {
+  onChange: (settings: AgencyWorkspaceSettings["firstMessageAutomation"]) => void
+  settings: AgencyWorkspaceSettings["firstMessageAutomation"]
+}) {
+  const patch = (next: Partial<AgencyWorkspaceSettings["firstMessageAutomation"]>) =>
+    onChange({ ...settings, ...next })
+
+  return (
+    <Card className="overflow-hidden shadow-none">
+      <CardHeader className="border-b bg-background/70">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex min-w-0 gap-3">
+            <span className="flex size-11 shrink-0 items-center justify-center rounded-xl border bg-primary/10 text-primary">
+              <AppIcon name="schedule_send" />
+            </span>
+            <div>
+              <CardTitle className="text-lg">{"Automatic first message"}</CardTitle>
+              <CardDescription className="mt-1">
+                {"Turn off any first message here. When off, use Send message manually; follow-up still starts after that first manual send."}
+              </CardDescription>
+            </div>
+          </div>
+          <Badge variant="outline">
+            {[settings.lead, settings.leadShowing, settings.realtorShowing].filter(Boolean).length}
+            {"/3 auto"}
+          </Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="grid gap-3 p-4 md:grid-cols-3">
+        <FirstMessageToggle
+          checked={settings.lead}
+          description="New CRM leads get the first lead template automatically."
+          label="Lead"
+          onChange={(lead) => patch({ lead })}
+        />
+        <FirstMessageToggle
+          checked={settings.leadShowing}
+          description="Lead showing first message sends automatically when a Lead Showing template is used."
+          label="Lead showing"
+          onChange={(leadShowing) => patch({ leadShowing })}
+        />
+        <FirstMessageToggle
+          checked={settings.realtorShowing}
+          description="Realtor showing first message sends automatically from the showing workflow."
+          label="Realtor showing"
+          onChange={(realtorShowing) => patch({ realtorShowing })}
+        />
+      </CardContent>
+    </Card>
+  )
+}
+
+function FirstMessageToggle({
+  checked,
+  description,
+  label,
+  onChange,
+}: {
+  checked: boolean
+  description: string
+  label: string
+  onChange: (checked: boolean) => void
+}) {
+  return (
+    <label className={`flex min-h-28 cursor-pointer items-start gap-3 rounded-xl border p-4 ${checked ? "border-primary bg-primary/5" : "bg-muted/30"}`}>
+      <Checkbox checked={checked} onCheckedChange={(value) => onChange(value === true)} />
+      <span>
+        <span className="block text-sm font-semibold">{label}</span>
+        <span className="mt-1 block text-xs leading-5 text-muted-foreground">
+          {checked ? "Auto first message on. " : "Manual first message. "}
+          {description}
+        </span>
+      </span>
+    </label>
   )
 }
 

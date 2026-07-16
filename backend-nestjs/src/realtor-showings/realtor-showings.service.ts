@@ -255,35 +255,51 @@ export class RealtorShowingsService {
     return this.mapShowing(await this.showingRepo.findOneOrFail({ where: { id }, relations: ['lead', 'property'] }));
   }
 
+  async sendManualFirstMessage(id: number) {
+    const showing = await this.showingRepo.findOne({ where: { id }, relations: ['lead', 'property'] });
+    if (!showing) throw new NotFoundException('Realtor showing not found.');
+    if (!showing.lead) throw new BadRequestException('Showing does not have a linked lead.');
+    if (!showing.emailEnabled && !showing.smsEnabled) throw new BadRequestException('Enable Email or SMS before sending.');
+
+    const alreadyStarted = await this.historyRepo.createQueryBuilder('history')
+      .where('history.lead_id = :leadId', { leadId: showing.lead.id })
+      .andWhere('history.created_by = :createdBy', { createdBy: this.automationCreators(showing.id)[0] })
+      .andWhere('history.status IN (:...statuses)', { statuses: ['Sent', 'Completed', 'Scheduled'].map(leadHistoryStatusDb) })
+      .getExists();
+    if (alreadyStarted) throw new BadRequestException('First message is already sent or scheduled.');
+
+    const settings = await this.settingsService.getAdminSettings();
+    const templates = settings.communicationTemplates ?? [];
+    const direct = templates.find((item: any) => item.id === showing.directTemplateId);
+    const failures = await this.sendShowingMessages(showing, showing.lead, direct, null, this.automationCreators(showing.id)[0]);
+    if (failures.length > 0) throw new BadRequestException(failures.join('; '));
+    await this.scheduleShowingFollowUp(showing, showing.lead, templates, new Date(), failures);
+    if (failures.length > 0) throw new BadRequestException(failures.join('; '));
+    showing.sequenceStatus = 'active';
+    showing.sequenceStep = 'follow-up';
+    return this.mapShowing(await this.showingRepo.save(showing));
+  }
+
   private async scheduleOutreach(showing: RealtorShowing, lead: Lead, templates: any[]) {
     if (!showing.emailEnabled && !showing.smsEnabled) return;
     const direct = templates.find((item: any) => item.id === showing.directTemplateId);
-    const failures: string[] = [];
-    const channels = [
-      showing.emailEnabled ? 'Email' : null,
-      showing.smsEnabled ? 'Sms' : null,
-    ].filter(Boolean) as Array<'Email' | 'Sms'>;
-
-    for (const kind of channels) {
-      try {
-        await this.outreachService.sendOutreach({
-          attachPropertyDocuments: direct?.attachPropertyDocuments !== false,
-          attachmentDocumentCategory: direct?.attachmentDocumentCategory,
-          attachmentDocumentType: direct?.attachmentDocumentType,
-          attachmentMode: direct?.attachmentMode,
-          createdBy: this.automationCreators(showing.id)[0],
-          kind,
-          leadId: lead.id,
-          message: this.resolveTokens(direct?.body || 'Hi {{client_name}}, this is a reminder for the showing at {{property_address}}.', lead),
-          pdfTemplateId: direct?.pdfTemplateId,
-          scheduledAt: showing.outreachAt?.toISOString() ?? null,
-          title: this.resolveTokens(direct?.subject || 'Property showing follow-up', lead),
-        });
-      } catch (error: any) {
-        failures.push(`${kind}: ${error?.message ?? 'send failed'}`);
-      }
+    const settings = await this.settingsService.getAdminSettings();
+    const firstMessageAuto = (direct?.audience === 'LeadShowing')
+      ? settings.firstMessageAutomation?.leadShowing !== false
+      : settings.firstMessageAutomation?.realtorShowing !== false;
+    if (!firstMessageAuto) {
+      showing.sequenceStatus = 'paused';
+      showing.sequenceStep = 'manual-first-message';
+      await this.showingRepo.save(showing);
+      return;
     }
+    const failures: string[] = [];
+    await this.sendShowingMessages(showing, lead, direct, showing.outreachAt?.toISOString() ?? null, this.automationCreators(showing.id)[0], failures);
+    await this.scheduleShowingFollowUp(showing, lead, templates, showing.outreachAt ?? new Date(), failures);
+    if (failures.length > 0) throw new BadRequestException(failures.join('; '));
+  }
 
+  private async scheduleShowingFollowUp(showing: RealtorShowing, lead: Lead, templates: any[], baseAt: Date, failures: string[]) {
     if (!showing.followUpEnabled || !showing.followUpTemplateId || showing.followUpGapDays <= 0) {
       if (failures.length > 0) throw new BadRequestException(failures.join('; '));
       return;
@@ -293,28 +309,36 @@ export class RealtorShowingsService {
       if (failures.length > 0) throw new BadRequestException(failures.join('; '));
       return;
     }
-    const followUpAt = new Date(showing.outreachAt ?? new Date());
+    const followUpAt = new Date(baseAt);
     followUpAt.setUTCDate(followUpAt.getUTCDate() + showing.followUpGapDays);
+    await this.sendShowingMessages(showing, lead, followUp, followUpAt.toISOString(), this.automationCreators(showing.id)[1], failures, true);
+  }
+
+  private async sendShowingMessages(showing: RealtorShowing, lead: Lead, template: any, scheduledAt: string | null, createdBy: string, failures: string[] = [], isFollowUp = false) {
+    const channels = [
+      showing.emailEnabled ? 'Email' : null,
+      showing.smsEnabled ? 'Sms' : null,
+    ].filter(Boolean) as Array<'Email' | 'Sms'>;
     for (const kind of channels) {
       try {
         await this.outreachService.sendOutreach({
-          attachPropertyDocuments: followUp.attachPropertyDocuments !== false,
-          attachmentDocumentCategory: followUp.attachmentDocumentCategory,
-          attachmentDocumentType: followUp.attachmentDocumentType,
-          attachmentMode: followUp.attachmentMode,
-          createdBy: this.automationCreators(showing.id)[1],
+          attachPropertyDocuments: template?.attachPropertyDocuments !== false,
+          attachmentDocumentCategory: template?.attachmentDocumentCategory,
+          attachmentDocumentType: template?.attachmentDocumentType,
+          attachmentMode: template?.attachmentMode,
+          createdBy,
           kind,
           leadId: lead.id,
-          message: this.resolveTokens(followUp.body || '', lead),
-          pdfTemplateId: followUp.pdfTemplateId,
-          scheduledAt: followUpAt.toISOString(),
-          title: this.resolveTokens(followUp.subject || followUp.name || 'Showing follow-up', lead),
+          message: this.resolveTokens(template?.body || 'Hi {{client_name}}, this is a reminder for the showing at {{property_address}}.', lead),
+          pdfTemplateId: template?.pdfTemplateId,
+          scheduledAt,
+          title: this.resolveTokens(template?.subject || template?.name || (isFollowUp ? 'Showing follow-up' : 'Property showing follow-up'), lead),
         });
       } catch (error: any) {
-        failures.push(`${kind} follow-up: ${error?.message ?? 'schedule failed'}`);
+        failures.push(`${kind}${isFollowUp ? ' follow-up' : ''}: ${error?.message ?? 'send failed'}`);
       }
     }
-    if (failures.length > 0) throw new BadRequestException(failures.join('; '));
+    return failures;
   }
 
   private async findOrCreateRealtorLead(input: { name: string; email: string; phone: string; property: string; timeline: string }) {
@@ -358,9 +382,10 @@ export class RealtorShowingsService {
 
   private mapShowing(item: RealtorShowing) {
     const responded = item.lead?.followUpStatus === LeadFollowUpStatus.Completed;
+    const waitingForManualFirstMessage = item.sequenceStatus === 'paused' && item.sequenceStep === 'manual-first-message';
     return {
       ...item,
-      automationStatus: responded ? 'StoppedByReply' : (item.emailEnabled || item.smsEnabled ? 'Scheduled' : 'NotScheduled'),
+      automationStatus: responded ? 'StoppedByReply' : waitingForManualFirstMessage ? 'NotScheduled' : (item.emailEnabled || item.smsEnabled ? 'Scheduled' : 'NotScheduled'),
       lead: item.lead ? { id: item.lead.id, name: item.lead.name, email: item.lead.email, phone: item.lead.phone, followUpStatus: item.lead.followUpStatus } : null,
       property: item.property ? { id: item.property.id, title: item.property.title, location: item.property.location } : null,
     };

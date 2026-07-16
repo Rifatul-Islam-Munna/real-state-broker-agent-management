@@ -416,7 +416,7 @@ export class SettingsService {
         attachmentDocumentCategory: this.loose(item?.attachmentDocumentCategory),
         attachmentDocumentType: ['System', 'Property', 'Other', 'Lead', 'Realtor', 'OwnerFeedback'].includes(item?.attachmentDocumentType) ? item.attachmentDocumentType : '',
         attachmentMode: ['none', 'property', 'pdf', 'document'].includes(item?.attachmentMode) ? item.attachmentMode : (item?.attachPropertyDocuments !== false ? 'property' : 'none'),
-        audience: item?.audience === 'OwnerFeedback' ? 'OwnerFeedback' : item?.audience === 'Realtor' || item?.id === 'showing-confirmation' ? 'Realtor' : 'Lead',
+        audience: item?.audience === 'OwnerFeedback' ? 'OwnerFeedback' : item?.audience === 'LeadShowing' ? 'LeadShowing' : item?.audience === 'Realtor' || item?.id === 'showing-confirmation' ? 'Realtor' : 'Lead',
         pdfTemplateId: this.loose(item?.pdfTemplateId),
       };
     });
@@ -461,6 +461,11 @@ export class SettingsService {
         channels: leadAutomationChannels.length ? leadAutomationChannels : defaultLeadAutomation.channels,
         directTemplateId: this.loose(leadAutomationInput.directTemplateId, defaultLeadAutomation.directTemplateId),
         followUpEnabled: leadAutomationInput.followUpEnabled !== false,
+      },
+      firstMessageAutomation: {
+        lead: input?.firstMessageAutomation?.lead !== false,
+        leadShowing: input?.firstMessageAutomation?.leadShowing !== false,
+        realtorShowing: input?.firstMessageAutomation?.realtorShowing !== false,
       },
       leadIntelligence: {
         qualifiedKnowledge: this.loose(input?.leadIntelligence?.qualifiedKnowledge, fallback.leadIntelligence.qualifiedKnowledge).slice(0, 6000),
@@ -569,6 +574,11 @@ export class SettingsService {
         channels: ['Email'],
         directTemplateId: 'new-lead-welcome',
         followUpEnabled: true,
+      },
+      firstMessageAutomation: {
+        lead: true,
+        leadShowing: true,
+        realtorShowing: true,
       },
       leadIntelligence: {
         qualifiedKnowledge: [

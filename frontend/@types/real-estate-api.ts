@@ -416,6 +416,11 @@ export type AgencySettings = {
     directTemplateId: string
     followUpEnabled: boolean
   }
+  firstMessageAutomation?: {
+    lead: boolean
+    leadShowing: boolean
+    realtorShowing: boolean
+  }
   leadIntelligence?: {
     qualifiedKnowledge: string
     unqualifiedKnowledge: string
