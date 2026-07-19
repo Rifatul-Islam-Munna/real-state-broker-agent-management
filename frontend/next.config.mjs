@@ -7,6 +7,7 @@ const nextConfig = {
       module: "./lib/pdf/module-stub.ts",
     },
   },
+  output: "standalone",
   webpack(config) {
     config.resolve = config.resolve ?? {}
     config.resolve.alias = {
