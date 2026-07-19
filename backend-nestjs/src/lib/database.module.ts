@@ -15,15 +15,27 @@ import { SnakeNamingStrategy } from 'typeorm-naming-strategies';
         const syncSetting = config.get<string>('TYPEORM_SYNCHRONIZE') ?? config.get<string>('DB_SYNCHRONIZE');
         const synchronize = syncSetting ? syncSetting === 'true' : nodeEnv !== 'production';
         const logging = config.get<string>('TYPEORM_LOGGING') === 'true';
-        const databaseUrl = config.get<string>('DATABASE_URL');
+        const internalDatabaseUrl =
+          config.get<string>('DATABASE_INTERNAL_URL')?.trim() || config.get<string>('DATABASE_URL_INTERNAL')?.trim();
+        const databaseUrl = internalDatabaseUrl || config.get<string>('DATABASE_URL')?.trim();
+        const dbHost = config.get<string>('DB_HOST')?.trim();
+        const dbPort = Number(config.get<string>('DB_PORT') ?? 5432);
 
         return {
           type: 'postgres' as const,
-          ...(databaseUrl
-            ? { url: databaseUrl }
+          ...(dbHost
+            ? {
+                host: dbHost,
+                port: Number.isFinite(dbPort) ? dbPort : 5432,
+                username: config.get<string>('DB_USERNAME'),
+                password: config.get<string>('DB_PASSWORD'),
+                database: config.get<string>('DB_NAME'),
+              }
+            : databaseUrl
+              ? { url: databaseUrl }
             : {
-                host: config.get<string>('DB_HOST'),
-                port: config.get<number>('DB_PORT'),
+                host: 'localhost',
+                port: 5432,
                 username: config.get<string>('DB_USERNAME'),
                 password: config.get<string>('DB_PASSWORD'),
                 database: config.get<string>('DB_NAME'),
