@@ -25,4 +25,4 @@ COPY --from=build /app/migrations ./migrations
 
 EXPOSE 80
 
-CMD ["npm", "run", "start:prod"]
+CMD ["node", "dist/main.js"]

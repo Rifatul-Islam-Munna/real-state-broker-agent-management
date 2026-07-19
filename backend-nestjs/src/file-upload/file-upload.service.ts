@@ -14,10 +14,11 @@ export class FileUploadService implements OnModuleInit {
 
   private getMinioClientOptions(): Minio.ClientOptions {
     const endpoint = this.getMinioEndpointUrl();
+    const port = endpoint.port ? Number(endpoint.port) : undefined;
 
     return {
-      endPoint: endpoint.hostname,
-      ...(endpoint.port ? { port: Number(endpoint.port) } : {}),
+      endPoint: endpoint.hostname.replace(/^\[|\]$/g, ''),
+      ...(port ? { port } : {}),
       useSSL: endpoint.protocol === 'https:',
       accessKey: this.configService.get<string>('MINIO_ACCESS_KEY') || 'admin',
       secretKey: this.configService.get<string>('MINIO_SECRET_KEY') || 'admin12345',
