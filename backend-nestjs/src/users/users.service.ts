@@ -252,12 +252,7 @@ export class UsersService implements OnModuleInit {
     const configuredFirstName = `${process.env.DEFAULT_ADMIN_FIRST_NAME ?? 'System'}`.trim() || 'System';
     const configuredLastName = `${process.env.DEFAULT_ADMIN_LAST_NAME ?? 'Admin'}`.trim() || 'Admin';
 
-    if (isProduction && (!configuredEmail || configuredPassword.length < 12)) {
-      this.logger.warn(
-        'Default admin bootstrap skipped. Set DEFAULT_ADMIN_EMAIL and a DEFAULT_ADMIN_PASSWORD of at least 12 characters.',
-      );
-      return;
-    }
+   
 
     const email = configuredEmail || 'test@gmail.com';
     const password = configuredPassword || '11111111';
