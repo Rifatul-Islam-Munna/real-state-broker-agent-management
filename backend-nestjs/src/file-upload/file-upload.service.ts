@@ -8,14 +8,38 @@ export class FileUploadService implements OnModuleInit {
   private bucketName: string;
 
   constructor(private configService: ConfigService) {
-    this.minioClient = new Minio.Client({
-      endPoint: this.configService.get<string>('MINIO_ENDPOINT') || 'localhost',
-      port: parseInt(this.configService.get<string>('MINIO_PORT') || '9000'),
-      useSSL: this.configService.get<string>('MINIO_USE_SSL') === 'true',
+    this.minioClient = new Minio.Client(this.getMinioClientOptions());
+    this.bucketName = this.configService.get<string>('MINIO_BUCKET_NAME') || 'eliteestates';
+  }
+
+  private getMinioClientOptions(): Minio.ClientOptions {
+    const endpoint = this.getMinioEndpointUrl();
+
+    return {
+      endPoint: endpoint.hostname,
+      ...(endpoint.port ? { port: Number(endpoint.port) } : {}),
+      useSSL: endpoint.protocol === 'https:',
       accessKey: this.configService.get<string>('MINIO_ACCESS_KEY') || 'admin',
       secretKey: this.configService.get<string>('MINIO_SECRET_KEY') || 'admin12345',
-    });
-    this.bucketName = this.configService.get<string>('MINIO_BUCKET_NAME') || 'eliteestates';
+    };
+  }
+
+  private getMinioEndpointUrl() {
+    const configuredEndpoint = (this.configService.get<string>('MINIO_ENDPOINT') || 'http://localhost:9000').trim();
+    if (configuredEndpoint.includes('://')) {
+      return new URL(configuredEndpoint);
+    }
+
+    const protocol = this.configService.get<string>('MINIO_USE_SSL') === 'true' ? 'https' : 'http';
+    return new URL(`${protocol}://${configuredEndpoint}`);
+  }
+
+  private getMinioPublicBaseUrl() {
+    const configuredBaseUrl = this.configService.get<string>('MINIO_PUBLIC_BASE_URL')?.trim();
+    if (configuredBaseUrl) return configuredBaseUrl.replace(/\/+$/, '');
+
+    const endpoint = this.getMinioEndpointUrl();
+    return endpoint.origin.replace(/\/+$/, '');
   }
 
   async onModuleInit() {
@@ -46,7 +70,7 @@ export class FileUploadService implements OnModuleInit {
         },
       );
 
-      const baseUrl = this.configService.get<string>('MINIO_PUBLIC_BASE_URL') || 'http://localhost:9000';
+      const baseUrl = this.getMinioPublicBaseUrl();
       return {
         objectName: fileName,
         url: `${baseUrl}/${this.bucketName}/${fileName}`,
