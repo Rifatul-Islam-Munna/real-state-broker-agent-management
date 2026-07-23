@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 
+import { NavUser } from "@/components/nav-user"
 import { PortalBrandLink } from "@/components/stitch/shared/portal-brand-link"
 import { AppIcon } from "@/components/ui/app-icon"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -21,6 +22,7 @@ import {
   SidebarSeparator,
 } from "@/components/ui/sidebar"
 import { propertyOperationsModules } from "@/data/property-operations-modules"
+import { useLogoutMutation } from "@/hooks/use-auth"
 
 const workspaceItems = [
   { href: "/dashboard/property-operations?tab=overview", label: "Overview", icon: "dashboard", tab: "overview" },
@@ -42,14 +44,21 @@ const categoryIcons: Record<string, string> = {
 }
 
 export function PropertyOperationsSidebar({
+  avatarUrl,
+  email,
   logoUrl,
   role,
+  userName,
 }: {
   agencyName: string
+  avatarUrl?: string | null
+  email: string
   logoUrl?: string
   role: string
+  userName: string
 }) {
   const searchParams = useSearchParams()
+  const { mutate: logout, isPending } = useLogoutMutation()
   const currentTab = searchParams.get("tab") ?? "overview"
   const currentModule = searchParams.get("module")
   const categories = Array.from(new Set(propertyOperationsModules.map((module) => module.category)))
@@ -141,13 +150,12 @@ export function PropertyOperationsSidebar({
               <span>Back to main dashboard</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
-          <SidebarMenuItem>
-            <SidebarMenuButton className="h-10 rounded-xl px-3" tooltip={role}>
-              <AppIcon name="verified" />
-              <span>{role}</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
         </SidebarMenu>
+        <NavUser
+          user={{ name: userName, email, avatar: avatarUrl ?? "", role }}
+          onLogout={() => logout()}
+          isLoggingOut={isPending}
+        />
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>

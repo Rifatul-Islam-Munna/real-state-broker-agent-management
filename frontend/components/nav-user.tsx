@@ -115,7 +115,7 @@ export function NavUser({
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuItem
-              onSelect={(event) => {
+              onClick={(event) => {
                 event.preventDefault()
                 onLogout?.()
               }}

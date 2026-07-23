@@ -29,8 +29,11 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
       <DashboardSidebar
         agencyName={agencyName}
         agentRoutePermissions={user.agentRoutePermissions}
+        avatarUrl={user.avatarUrl}
+        email={user.email}
         logoUrl={logoUrl}
         role={user.role}
+        userName={user.fullName}
       />
       <SidebarInset className="min-w-0 bg-muted/20">
         <div className="border-b bg-background/95 px-4 py-3 backdrop-blur md:hidden">

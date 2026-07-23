@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation"
 
 import { PropertyOperationsSidebar } from "@/components/stitch/pages/property-operations/property-operations-sidebar"
 import { PortalBrandLink } from "@/components/stitch/shared/portal-brand-link"
+import { NavUser } from "@/components/nav-user"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { AppIcon } from "@/components/ui/app-icon"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -23,6 +24,7 @@ import {
   SidebarSeparator,
 } from "@/components/ui/sidebar"
 import { getDashboardRoutesForUser, type DashboardRoute } from "@/lib/dashboard-routes"
+import { useLogoutMutation } from "@/hooks/use-auth"
 
 const routeGroups = [
   {
@@ -80,18 +82,25 @@ const routeGroups = [
 
 type DashboardSidebarProps = {
   agencyName: string
+  avatarUrl?: string | null
+  email: string
   logoUrl?: string
   role: string
+  userName: string
   agentRoutePermissions?: string[]
 }
 
 export function DashboardSidebar({
   agencyName,
+  avatarUrl,
+  email,
   logoUrl,
   role,
+  userName,
   agentRoutePermissions,
 }: DashboardSidebarProps) {
   const pathname = usePathname()
+  const { mutate: logout, isPending } = useLogoutMutation()
   const navigation = getDashboardRoutesForUser(role, agentRoutePermissions)
   const homeHref = navigation[0]?.href ?? "/dashboard"
   const activeHref =
@@ -105,8 +114,11 @@ export function DashboardSidebar({
     return (
       <PropertyOperationsSidebar
         agencyName={agencyName}
+        avatarUrl={avatarUrl}
+        email={email}
         logoUrl={logoUrl}
         role={role}
+        userName={userName}
       />
     )
   }
@@ -185,18 +197,11 @@ export function DashboardSidebar({
         </ScrollArea>
       </SidebarContent>
       <SidebarFooter className="border-t border-white/10 bg-slate-950 p-3 text-slate-100">
-        <SidebarGroup className="p-0">
-          <SidebarGroupContent>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton className="h-10 rounded-xl px-3 text-slate-100 hover:bg-white/10 hover:text-white [&>svg]:text-slate-400" tooltip={role}>
-                  <AppIcon name={role === "Admin" ? "verified" : "badge"} />
-                  <span className="!text-slate-100">{role}</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        <NavUser
+          user={{ name: userName, email, avatar: avatarUrl ?? "", role }}
+          onLogout={() => logout()}
+          isLoggingOut={isPending}
+        />
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>
