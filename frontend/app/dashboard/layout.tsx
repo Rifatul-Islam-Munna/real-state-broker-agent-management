@@ -25,7 +25,7 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
   const { agencyName, logoUrl } = resolvePortalBranding(publicAgencySettings.profile)
 
   return (
-    <SidebarProvider className="min-h-screen bg-background text-foreground">
+    <SidebarProvider className="min-h-screen bg-[var(--ether-surface)] text-[var(--ether-on-surface)]" style={{ "--sidebar-width": "280px" } as React.CSSProperties}>
       <DashboardSidebar
         agencyName={agencyName}
         agentRoutePermissions={user.agentRoutePermissions}
@@ -35,7 +35,7 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
         role={user.role}
         userName={user.fullName}
       />
-      <SidebarInset className="min-w-0 bg-muted/20">
+      <SidebarInset className="min-w-0 bg-[var(--ether-surface)]">
         <div className="border-b bg-background/95 px-4 py-3 backdrop-blur md:hidden">
           <div className="flex items-center justify-between gap-4">
             <PortalBrandLink

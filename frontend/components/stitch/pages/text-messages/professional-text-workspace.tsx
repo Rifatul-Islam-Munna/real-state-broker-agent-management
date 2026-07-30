@@ -62,6 +62,7 @@ function ProfessionalTextWorkspace({ initialMessageId }: { initialMessageId?: nu
   const [newTo, setNewTo] = useState("")
   const [newBody, setNewBody] = useState("")
   const [newFiles, setNewFiles] = useState<File[]>([])
+  const [showLeadDetails, setShowLeadDetails] = useState(true)
 
   const messagesQuery = useSmsMessages({
     page: 1,
@@ -73,7 +74,7 @@ function ProfessionalTextWorkspace({ initialMessageId }: { initialMessageId?: nu
   const sendMutation = useSendSmsMessage()
   const syncMutation = useSyncSmsMessages()
 
-  const messages = messagesQuery.data?.items ?? []
+  const messages = useMemo(() => messagesQuery.data?.items ?? [], [messagesQuery.data?.items])
   const selectedMessage = selectedQuery.data ?? messages.find((item) => item.id === selectedId) ?? null
   const conversations = useMemo(() => groupConversations(messages), [messages])
   const selectedConversation = useMemo(() => {
@@ -145,40 +146,74 @@ function ProfessionalTextWorkspace({ initialMessageId }: { initialMessageId?: nu
   const error = messagesQuery.error ?? selectedQuery.error ?? sendMutation.error
 
   return (
-    <main className="h-[calc(100dvh-4rem)] min-h-[720px] overflow-hidden bg-muted/20 p-3 lg:p-5">
-      <div className="mx-auto grid h-full max-w-[1650px] overflow-hidden rounded-2xl border bg-background shadow-sm lg:grid-cols-[360px_minmax(0,1fr)_280px]">
-        <section className="flex min-h-0 flex-col border-r">
-          <header className="space-y-3 border-b p-4">
+    <main className="h-[calc(100dvh-4rem)] min-h-[720px] overflow-hidden bg-[var(--ether-surface)] p-0">
+      <div
+        className={`mx-auto grid h-full max-w-[1680px] overflow-hidden bg-white shadow-[var(--shadow-surface-1)] ${
+          showLeadDetails
+            ? "lg:grid-cols-[360px_minmax(0,1fr)_320px]"
+            : "lg:grid-cols-[360px_minmax(0,1fr)]"
+        }`}
+      >
+        <section className="flex min-h-0 flex-col border-r border-[color-mix(in_srgb,var(--ether-outline-variant)_38%,transparent)] bg-white">
+          <header className="space-y-4 border-b border-[color-mix(in_srgb,var(--ether-outline-variant)_32%,transparent)] p-4">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Unified messaging</p>
-                <h1 className="text-xl font-bold">Text messages</h1>
+                <p className="ether-label-caps text-[10px] text-[var(--ether-outline)]">Unified Messaging</p>
+                <h1 className="mt-1 text-xl font-bold text-[var(--ether-on-surface)]">Communications</h1>
               </div>
               <div className="flex gap-2">
-                <Button disabled={syncMutation.isPending} onClick={() => void syncMutation.mutateAsync({})} size="icon-sm" variant="outline">
+                <Button
+                  className="rounded-lg border-[var(--ether-outline-variant)] bg-white"
+                  disabled={syncMutation.isPending}
+                  onClick={() => void syncMutation.mutateAsync({})}
+                  size="icon-sm"
+                  title="Sync messages"
+                  variant="outline"
+                >
                   <AppIcon name="sync" />
                 </Button>
-                <Button onClick={() => setNewOpen(true)} size="icon-sm">
+                <Button
+                  className="rounded-lg bg-[var(--ether-primary)] text-white"
+                  onClick={() => setNewOpen(true)}
+                  size="icon-sm"
+                  title="New message"
+                >
                   <AppIcon name="edit" />
                 </Button>
               </div>
             </div>
+
             <div className="relative">
-              <AppIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" name="search" />
-              <Input className="rounded-xl bg-muted/30 pl-9" onChange={(event) => setSearch(event.target.value)} placeholder="Search conversations" value={search} />
+              <AppIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--ether-outline)]" name="search" />
+              <Input
+                className="h-11 rounded-xl border-0 bg-[var(--ether-surface-container-low)] pl-9 shadow-none focus-visible:ring-2 focus-visible:ring-[var(--ether-primary)]/20"
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search conversations..."
+                value={search}
+              />
             </div>
-            <div className="grid grid-cols-3 gap-2">
+
+            <div className="grid grid-cols-3 rounded-xl bg-[var(--ether-surface-container)] p-1">
               {(["all", "Incoming", "Outgoing"] as const).map((item) => (
-                <Button key={item} onClick={() => setDirection(item)} size="sm" variant={direction === item ? "secondary" : "outline"}>
+                <button
+                  className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${
+                    direction === item
+                      ? "bg-white text-[var(--ether-primary)] shadow-sm"
+                      : "text-[var(--ether-on-surface-variant)] hover:text-[var(--ether-on-surface)]"
+                  }`}
+                  key={item}
+                  onClick={() => setDirection(item)}
+                  type="button"
+                >
                   {item === "all" ? "All" : item === "Incoming" ? "Inbox" : "Sent"}
-                </Button>
+                </button>
               ))}
             </div>
           </header>
 
           {error ? <Alert className="m-3" variant="destructive"><AlertDescription>{error.message}</AlertDescription></Alert> : null}
 
-          <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto">
             {messagesQuery.isLoading && !conversations.length ? (
               <EmptyState text="Loading conversations..." />
             ) : !conversations.length ? (
@@ -187,36 +222,56 @@ function ProfessionalTextWorkspace({ initialMessageId }: { initialMessageId?: nu
               <ConversationRow active={item.key === selectedConversation?.key} item={item} key={item.key} onClick={() => selectConversation(item)} />
             ))}
           </div>
-          <footer className="border-t px-4 py-3 text-xs text-muted-foreground">
+
+          <footer className="border-t border-[color-mix(in_srgb,var(--ether-outline-variant)_30%,transparent)] px-4 py-3 text-xs text-[var(--ether-outline)]">
             {conversations.length} conversation{conversations.length === 1 ? "" : "s"}
           </footer>
         </section>
 
-        <section className="hidden min-h-0 flex-col md:flex">
+        <section className="hidden min-h-0 flex-col bg-[var(--ether-surface)] md:flex">
           {selectedConversation ? (
             <>
-              <header className="border-b px-5 py-4">
+              <header className="border-b border-[color-mix(in_srgb,var(--ether-outline-variant)_32%,transparent)] bg-white px-5 py-4">
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex min-w-0 items-center gap-3">
                     <Avatar value={selectedConversation.leadName || selectedConversation.number} />
                     <div className="min-w-0">
-                      <h2 className="truncate text-lg font-semibold">{selectedConversation.leadName || selectedConversation.number}</h2>
-                      <p className="truncate text-sm text-muted-foreground">{selectedConversation.number} · {selectedConversation.provider}</p>
+                      <h2 className="truncate text-lg font-bold text-[var(--ether-on-surface)]">{selectedConversation.leadName || selectedConversation.number}</h2>
+                      <p className="truncate text-sm text-[var(--ether-on-surface-variant)]">{selectedConversation.number} ? {selectedConversation.provider}</p>
                     </div>
                   </div>
-                  {selectedConversation.leadId ? (
-                    <Button render={<Link href={`/dashboard/leads?leadId=${selectedConversation.leadId}`} />} size="sm" variant="outline">
-                      <AppIcon name="person" />
-                      Open lead
+
+                  <div className="flex items-center gap-2">
+                    {selectedConversation.leadId ? (
+                      <Button
+                        className="rounded-lg border-[var(--ether-outline-variant)] bg-white"
+                        render={<Link href={`/dashboard/leads?leadId=${selectedConversation.leadId}`} />}
+                        size="sm"
+                        variant="outline"
+                      >
+                        <AppIcon name="person" />
+                        Open lead
+                      </Button>
+                    ) : null}
+                    <Button
+                      className="rounded-lg border-[var(--ether-outline-variant)] bg-white"
+                      onClick={() => setShowLeadDetails((current) => !current)}
+                      size="icon-sm"
+                      title={showLeadDetails ? "Close lead details" : "Open lead details"}
+                      variant="outline"
+                    >
+                      <AppIcon name={showLeadDetails ? "close" : "info"} />
                     </Button>
-                  ) : null}
+                  </div>
                 </div>
               </header>
 
-              <div className="min-h-0 flex-1 overflow-y-auto bg-muted/10 px-4 py-5 sm:px-6">
-                <div className="mx-auto max-w-3xl space-y-3">
-                  <div className="flex items-center gap-3 py-2 text-[11px] font-medium text-muted-foreground">
-                    <span className="h-px flex-1 bg-border" />Conversation<span className="h-px flex-1 bg-border" />
+              <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto bg-[var(--ether-surface)] px-4 py-6 sm:px-6">
+                <div className="mx-auto max-w-3xl space-y-4">
+                  <div className="flex items-center gap-3 py-2 text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--ether-outline)]">
+                    <span className="h-px flex-1 bg-[color-mix(in_srgb,var(--ether-outline-variant)_45%,transparent)]" />
+                    Conversation
+                    <span className="h-px flex-1 bg-[color-mix(in_srgb,var(--ether-outline-variant)_45%,transparent)]" />
                   </div>
                   {selectedConversation.messages.map((message) => <MessageBubble key={message.id} message={message} />)}
                   {localReplies.map((message) => <LocalBubble key={message.id} message={message} />)}
@@ -224,10 +279,10 @@ function ProfessionalTextWorkspace({ initialMessageId }: { initialMessageId?: nu
                 </div>
               </div>
 
-              <div className="border-t bg-background p-3 sm:p-4">
-                <div className="mx-auto max-w-3xl rounded-2xl border bg-background shadow-sm focus-within:ring-2 focus-within:ring-ring/30">
+              <div className="border-t border-[color-mix(in_srgb,var(--ether-outline-variant)_32%,transparent)] bg-white p-3 sm:p-4">
+                <div className="mx-auto max-w-3xl overflow-hidden rounded-2xl border border-[var(--ether-outline-variant)] bg-[var(--ether-surface-container-low)] shadow-[var(--shadow-surface-1)] focus-within:ring-2 focus-within:ring-[var(--ether-primary)]/20">
                   <Textarea
-                    className="min-h-20 resize-none border-0 bg-transparent px-4 pt-4 shadow-none focus-visible:ring-0"
+                    className="min-h-24 resize-none border-0 bg-transparent px-4 pt-4 shadow-none focus-visible:ring-0"
                     onChange={(event) => setBody(event.target.value)}
                     onKeyDown={(event) => {
                       if (event.key === "Enter" && !event.shiftKey) {
@@ -238,20 +293,32 @@ function ProfessionalTextWorkspace({ initialMessageId }: { initialMessageId?: nu
                     placeholder={`Message ${selectedConversation.leadName || selectedConversation.number}`}
                     value={body}
                   />
+
                   {showAttachments ? (
-                    <div className="border-t bg-muted/10 p-3">
+                    <div className="border-t border-[color-mix(in_srgb,var(--ether-outline-variant)_35%,transparent)] bg-white/60 p-3">
                       <Input multiple onChange={(event) => setFiles(Array.from(event.target.files ?? []))} type="file" />
-                      <p className="mt-2 text-xs text-muted-foreground">{files.length ? `${files.length} MMS attachment(s) selected` : "Choose files for MMS"}</p>
+                      <p className="mt-2 text-xs text-[var(--ether-outline)]">{files.length ? `${files.length} MMS attachment(s) selected` : "Choose files for MMS"}</p>
                     </div>
                   ) : null}
-                  <div className="flex items-center justify-between gap-3 border-t px-3 py-2">
+
+                  <div className="flex items-center justify-between gap-3 border-t border-[color-mix(in_srgb,var(--ether-outline-variant)_35%,transparent)] px-3 py-2">
                     <div className="flex items-center gap-2">
-                      <Button onClick={() => setShowAttachments((current) => !current)} size="icon-sm" variant={showAttachments ? "secondary" : "ghost"}>
+                      <Button
+                        className="rounded-lg"
+                        onClick={() => setShowAttachments((current) => !current)}
+                        size="icon-sm"
+                        variant={showAttachments ? "secondary" : "ghost"}
+                      >
                         <AppIcon name="attach_file" />
                       </Button>
-                      <span className="text-xs text-muted-foreground">Enter to send · Shift+Enter for a new line</span>
+                      <span className="text-xs text-[var(--ether-outline)]">Enter to send ? Shift+Enter for a new line</span>
                     </div>
-                    <Button className="rounded-full" disabled={sendMutation.isPending || (!body.trim() && !files.length)} onClick={() => void sendReply()} size="icon">
+                    <Button
+                      className="rounded-full bg-[var(--ether-primary)] text-white"
+                      disabled={sendMutation.isPending || (!body.trim() && !files.length)}
+                      onClick={() => void sendReply()}
+                      size="icon"
+                    >
                       <AppIcon name="send" />
                     </Button>
                   </div>
@@ -261,48 +328,80 @@ function ProfessionalTextWorkspace({ initialMessageId }: { initialMessageId?: nu
           ) : <EmptyConversation />}
         </section>
 
-        <aside className="hidden min-h-0 overflow-y-auto border-l bg-muted/10 p-4 lg:block">
-          {selectedConversation ? (
-            <div className="space-y-4">
-              <div className="text-center">
-                <Avatar className="mx-auto size-16 text-lg" value={selectedConversation.leadName || selectedConversation.number} />
-                <h3 className="mt-3 font-semibold">{selectedConversation.leadName || "Unknown contact"}</h3>
-                <p className="mt-1 text-sm text-muted-foreground">{selectedConversation.number}</p>
-              </div>
-              <div className="grid grid-cols-2 gap-2 text-center text-xs">
-                <Metric label="Messages" value={selectedConversation.messages.length} />
-                <Metric label="Incoming" value={selectedConversation.messages.filter((item) => item.direction === "Incoming").length} />
-              </div>
-              <div className="space-y-3 rounded-xl border bg-background p-3 text-sm">
-                <Info label="Provider" value={selectedConversation.provider || "Unknown"} />
-                <Info label="Last activity" value={formatDateTimeLabel(selectedConversation.latest.occurredAt || selectedConversation.latest.createdAt)} />
-                <Info label="Status" value={selectedConversation.latest.status} />
-              </div>
-              {selectedConversation.leadId ? (
-                <div className="grid gap-2">
-                  <Button render={<Link href={`/dashboard/leads?leadId=${selectedConversation.leadId}`} />} variant="outline"><AppIcon name="person" />Open lead</Button>
-                  <Button render={<Link href={`/dashboard/lead-history?leadId=${selectedConversation.leadId}`} />} variant="outline"><AppIcon name="history" />Open history</Button>
+        {showLeadDetails ? (
+          <aside className="hidden min-h-0 overflow-y-auto border-l border-[color-mix(in_srgb,var(--ether-outline-variant)_32%,transparent)] bg-white lg:block">
+            {selectedConversation ? (
+              <div className="flex min-h-full flex-col p-5">
+                <div className="flex items-center justify-end">
+                  <button
+                    className="flex size-9 items-center justify-center rounded-full text-[var(--ether-on-surface-variant)] transition hover:bg-[var(--ether-surface-container-high)]"
+                    onClick={() => setShowLeadDetails(false)}
+                    title="Close lead details"
+                    type="button"
+                  >
+                    <AppIcon name="close" />
+                  </button>
                 </div>
-              ) : <div className="rounded-xl border border-dashed p-4 text-center text-xs text-muted-foreground">This number is not linked to a lead.</div>}
-            </div>
-          ) : null}
-        </aside>
+
+                <div className="text-center">
+                  <div className="relative mx-auto w-fit">
+                    <Avatar className="size-20 text-2xl" value={selectedConversation.leadName || selectedConversation.number} />
+                    <span className="absolute bottom-1 right-0 size-4 rounded-full border-2 border-white bg-[var(--ether-secondary)]" />
+                  </div>
+                  <h3 className="mt-4 text-xl font-bold text-[var(--ether-on-surface)]">{selectedConversation.leadName || "Unknown contact"}</h3>
+                  <p className="mt-1 text-sm text-[var(--ether-on-surface-variant)]">{selectedConversation.number}</p>
+                </div>
+
+                <div className="mt-6 grid grid-cols-2 gap-3 text-center">
+                  <Metric label="Messages" value={selectedConversation.messages.length} />
+                  <Metric label="Incoming" value={selectedConversation.messages.filter((item) => item.direction === "Incoming").length} />
+                </div>
+
+                <div className="mt-6 space-y-5 border-t border-[color-mix(in_srgb,var(--ether-outline-variant)_30%,transparent)] pt-5 text-sm">
+                  <div>
+                    <p className="ether-label-caps text-[10px] text-[var(--ether-outline)]">Provider</p>
+                    <p className="mt-2 font-semibold text-[var(--ether-on-surface)]">{selectedConversation.provider || "Unknown"}</p>
+                  </div>
+                  <div>
+                    <p className="ether-label-caps text-[10px] text-[var(--ether-outline)]">Last activity</p>
+                    <p className="mt-2 font-semibold text-[var(--ether-on-surface)]">{formatDateTimeLabel(selectedConversation.latest.occurredAt || selectedConversation.latest.createdAt)}</p>
+                  </div>
+                  <div>
+                    <p className="ether-label-caps text-[10px] text-[var(--ether-outline)]">Status</p>
+                    <p className="mt-2 flex items-center gap-2 font-semibold text-[var(--ether-on-surface)]"><span className="size-2 rounded-full bg-[var(--ether-secondary)]" />{selectedConversation.latest.status}</p>
+                  </div>
+                </div>
+
+                <div className="mt-auto grid gap-3 pt-8">
+                  {selectedConversation.leadId ? (
+                    <>
+                      <Button className="h-11 rounded-lg border-[var(--ether-outline-variant)]" render={<Link href={`/dashboard/leads?leadId=${selectedConversation.leadId}`} />} variant="outline"><AppIcon name="person" />Open lead</Button>
+                      <Button className="h-11 rounded-lg border-[var(--ether-outline-variant)]" render={<Link href={`/dashboard/lead-history?leadId=${selectedConversation.leadId}`} />} variant="outline"><AppIcon name="timeline" />Open history</Button>
+                    </>
+                  ) : (
+                    <div className="rounded-xl border border-dashed border-[var(--ether-outline-variant)] p-4 text-center text-xs text-[var(--ether-outline)]">This number is not linked to a lead.</div>
+                  )}
+                </div>
+              </div>
+            ) : null}
+          </aside>
+        ) : null}
       </div>
 
       <Dialog open={newOpen} onOpenChange={setNewOpen}>
-        <DialogContent className="max-w-xl overflow-hidden p-0">
-          <DialogHeader className="border-b px-5 py-4">
-            <DialogTitle>New text message</DialogTitle>
+        <DialogContent className="max-w-xl overflow-hidden rounded-[20px] border-0 p-0 shadow-[0_30px_90px_rgba(11,28,48,0.24)]">
+          <DialogHeader className="border-b border-[var(--ether-outline-variant)] px-5 py-4">
+            <DialogTitle className="text-xl font-bold">New text message</DialogTitle>
             <DialogDescription>Start a new SMS or MMS conversation.</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 px-5 py-4">
-            <Input onChange={(event) => setNewTo(event.target.value)} placeholder="Phone number" value={newTo} />
-            <Textarea className="min-h-40 resize-none" onChange={(event) => setNewBody(event.target.value)} placeholder="Write a message" value={newBody} />
+          <div className="space-y-4 px-5 py-5">
+            <Input className="h-11 rounded-lg border-[var(--ether-outline-variant)]" onChange={(event) => setNewTo(event.target.value)} placeholder="Phone number" value={newTo} />
+            <Textarea className="min-h-40 resize-none rounded-lg border-[var(--ether-outline-variant)]" onChange={(event) => setNewBody(event.target.value)} placeholder="Write a message" value={newBody} />
             <Input multiple onChange={(event) => setNewFiles(Array.from(event.target.files ?? []))} type="file" />
           </div>
-          <div className="flex items-center justify-between border-t px-5 py-3">
-            <span className="text-xs text-muted-foreground">{newFiles.length ? `${newFiles.length} attachment(s)` : "SMS without attachments"}</span>
-            <Button disabled={sendMutation.isPending || !newTo.trim() || (!newBody.trim() && !newFiles.length)} onClick={() => void sendNew()}>
+          <div className="flex items-center justify-between border-t border-[var(--ether-outline-variant)] px-5 py-4">
+            <span className="text-xs text-[var(--ether-outline)]">{newFiles.length ? `${newFiles.length} attachment(s)` : "SMS without attachments"}</span>
+            <Button className="rounded-lg bg-[var(--ether-primary)] text-white" disabled={sendMutation.isPending || !newTo.trim() || (!newBody.trim() && !newFiles.length)} onClick={() => void sendNew()}>
               {sendMutation.isPending ? "Sending..." : newFiles.length ? "Send MMS" : "Send SMS"}<AppIcon name="send" />
             </Button>
           </div>
@@ -353,9 +452,6 @@ function Metric({ label, value }: { label: string; value: number }) {
   return <div className="rounded-xl border bg-background p-3"><p className="text-xl font-semibold">{value}</p><p className="mt-1 text-muted-foreground">{label}</p></div>
 }
 
-function Info({ label, value }: { label: string; value: string }) {
-  return <div className="flex items-start justify-between gap-3"><span className="text-muted-foreground">{label}</span><span className="text-right font-medium">{value}</span></div>
-}
 
 function EmptyState({ text }: { text: string }) {
   return <div className="flex h-full min-h-64 items-center justify-center p-8 text-center"><div><span className="mx-auto flex size-12 items-center justify-center rounded-xl border bg-muted/30"><AppIcon name="sms" /></span><p className="mt-3 text-sm text-muted-foreground">{text}</p></div></div>

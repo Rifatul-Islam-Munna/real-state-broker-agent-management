@@ -1,5 +1,6 @@
 import "./globals.css"
 import "./contrast.css"
+import "./ether-design-system.css"
 
 import { ThemeProvider } from "@/components/theme-provider"
 import { Toaster } from "@/components/ui/sileo"

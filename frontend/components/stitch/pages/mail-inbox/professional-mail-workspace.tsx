@@ -83,6 +83,7 @@ function ProfessionalMailWorkspace({ initialMailId }: { initialMailId?: number }
   const [documentIds, setDocumentIds] = useState<number[]>([])
   const [pdfTemplateId, setPdfTemplateId] = useState("")
   const [attachmentDrawerOpen, setAttachmentDrawerOpen] = useState(false)
+  const [showLeadDetails, setShowLeadDetails] = useState(true)
   const [optimisticReplies, setOptimisticReplies] = useState<OptimisticReply[]>([])
   const threadBottomRef = useRef<HTMLDivElement | null>(null)
   const autoReadIdRef = useRef<number | null>(null)
@@ -106,7 +107,7 @@ function ProfessionalMailWorkspace({ initialMailId }: { initialMailId?: number }
   const updateMailMutation = useUpdateMailInboxItem()
   const convertMutation = useConvertMailInboxToLead()
 
-  const messages = inboxQuery.data?.items ?? []
+  const messages = useMemo(() => inboxQuery.data?.items ?? [], [inboxQuery.data?.items])
   const mailboxTags = useMemo(
     () => [
       ...new Set(messages.map((item) => item.mailboxTag?.trim()).filter(Boolean) as string[]),
@@ -155,7 +156,7 @@ function ProfessionalMailWorkspace({ initialMailId }: { initialMailId?: number }
     if (!selected || selected.isRead === true || autoReadIdRef.current === selected.id) return
     autoReadIdRef.current = selected.id
     void updateMailMutation.mutateAsync({ id: selected.id, isRead: true })
-  }, [selected?.id, selected?.isRead, updateMailMutation])
+  }, [selected, updateMailMutation])
 
   function updateMailFlags(id: number, values: { isRead?: boolean; isStarred?: boolean }) {
     void updateMailMutation.mutateAsync({ id, ...values })
@@ -499,10 +500,10 @@ function ProfessionalMailWorkspace({ initialMailId }: { initialMailId?: number }
           </footer>
         </section>
 
-        <section className="hidden min-h-0 flex-col bg-slate-50/70 md:flex">
+        <section className="relative hidden min-h-0 flex-col bg-[var(--ether-surface)] md:flex">
           {selected ? (
             <>
-              <header className="border-b bg-background px-5 py-4 xl:px-7">
+              <header className={`border-b bg-white px-5 py-4 transition-[margin] xl:px-7 ${showLeadDetails ? "xl:mr-[320px]" : ""}`}>
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
@@ -559,6 +560,15 @@ function ProfessionalMailWorkspace({ initialMailId }: { initialMailId?: number }
                       <AppIcon name="document_scanner" />
                       Create parser
                     </Button>
+                    <Button
+                      onClick={() => setShowLeadDetails((current) => !current)}
+                      size="sm"
+                      title={showLeadDetails ? "Close lead profile" : "Open lead profile"}
+                      variant="outline"
+                    >
+                      <AppIcon name={showLeadDetails ? "close" : "person"} />
+                      {showLeadDetails ? "Close profile" : "Lead profile"}
+                    </Button>
                     {selected.leadId ? (
                       <Button
                         render={<Link href={`/dashboard/leads?leadId=${selected.leadId}`} />}
@@ -598,7 +608,7 @@ function ProfessionalMailWorkspace({ initialMailId }: { initialMailId?: number }
                 </div>
               </header>
 
-              <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6 xl:px-8">
+              <div className={`min-h-0 flex-1 overflow-y-auto px-4 py-5 transition-[margin] sm:px-6 xl:px-8 ${showLeadDetails ? "xl:mr-[320px]" : ""}`}>
                 <div className="mx-auto w-full max-w-[1180px] space-y-4">
                   {thread.map((item) => (
                     <MailMessageCard item={item} key={item.id} />
@@ -611,7 +621,7 @@ function ProfessionalMailWorkspace({ initialMailId }: { initialMailId?: number }
               </div>
 
               {replyOpen ? (
-              <div className="border-t bg-background/95 p-3 shadow-[0_-12px_30px_rgba(15,23,42,0.06)] sm:p-4 xl:px-8">
+              <div className={`border-t bg-white/95 p-3 shadow-[0_-12px_30px_rgba(15,23,42,0.06)] transition-[margin] sm:p-4 xl:px-8 ${showLeadDetails ? "xl:mr-[320px]" : ""}`}>
                 <div className="mx-auto w-full max-w-[1180px] rounded-2xl border bg-background shadow-sm focus-within:ring-2 focus-within:ring-ring/30">
                   <RichMailEditor
                     className="min-h-24"
@@ -673,6 +683,66 @@ function ProfessionalMailWorkspace({ initialMailId }: { initialMailId?: number }
                   </div>
                 </div>
               </div>
+              ) : null}
+
+              {showLeadDetails ? (
+                <aside className="absolute inset-y-0 right-0 hidden w-[320px] overflow-y-auto border-l border-[color-mix(in_srgb,var(--ether-outline-variant)_35%,transparent)] bg-[var(--ether-surface-container-low)]/55 xl:block">
+                  <div className="flex min-h-full flex-col p-5">
+                    <div className="flex items-center justify-between">
+                      <p className="ether-label-caps text-[10px] text-[var(--ether-outline)]">Lead Profile</p>
+                      <button
+                        className="flex size-9 items-center justify-center rounded-full text-[var(--ether-on-surface-variant)] transition hover:bg-white"
+                        onClick={() => setShowLeadDetails(false)}
+                        title="Close lead profile"
+                        type="button"
+                      >
+                        <AppIcon name="close" />
+                      </button>
+                    </div>
+
+                    <div className="mt-5 text-center">
+                      <Avatar value={selected.name || selected.email} />
+                      <h3 className="mt-4 text-xl font-bold text-[var(--ether-on-surface)]">{selected.name || selected.email}</h3>
+                      <p className="mt-1 text-sm text-[var(--ether-on-surface-variant)]">{selected.email}</p>
+                      <div className="mt-4 flex flex-wrap justify-center gap-2">
+                        <Badge className="rounded-full border-0 bg-[var(--ether-secondary-container)]/35 px-3 py-1 text-[10px] font-bold text-[var(--ether-secondary)]">{selected.status}</Badge>
+                        {selected.mailboxTag ? <Badge className="rounded-full border-0 bg-[var(--ether-primary-fixed)] px-3 py-1 text-[10px] font-bold text-[var(--ether-primary)]">{selected.mailboxTag}</Badge> : null}
+                      </div>
+                    </div>
+
+                    <div className="mt-6 space-y-5 border-t border-[color-mix(in_srgb,var(--ether-outline-variant)_35%,transparent)] pt-5 text-sm">
+                      <div>
+                        <p className="ether-label-caps text-[10px] text-[var(--ether-outline)]">Subject</p>
+                        <p className="mt-2 font-semibold leading-6 text-[var(--ether-on-surface)]">{selected.subject}</p>
+                      </div>
+                      <div>
+                        <p className="ether-label-caps text-[10px] text-[var(--ether-outline)]">Last Activity</p>
+                        <p className="mt-2 font-semibold text-[var(--ether-on-surface)]">{formatDateTimeLabel(selected.createdAt)}</p>
+                      </div>
+                      <div>
+                        <p className="ether-label-caps text-[10px] text-[var(--ether-outline)]">Thread</p>
+                        <p className="mt-2 font-semibold text-[var(--ether-on-surface)]">{thread.length + optimisticReplies.length} message{thread.length + optimisticReplies.length === 1 ? "" : "s"}</p>
+                      </div>
+                      {selected.extractionMethod ? (
+                        <div>
+                          <p className="ether-label-caps text-[10px] text-[var(--ether-outline)]">Parser</p>
+                          <p className="mt-2 font-semibold text-[var(--ether-on-surface)]">{selected.extractionMethod} ? {Math.round((selected.extractionConfidence ?? 0) * 100)}%</p>
+                        </div>
+                      ) : null}
+                    </div>
+
+                    <div className="mt-auto grid gap-3 pt-8">
+                      {selected.leadId ? (
+                        <>
+                          <Button className="h-11 rounded-lg border-[var(--ether-outline-variant)] bg-white" render={<Link href={`/dashboard/leads?leadId=${selected.leadId}`} />} variant="outline"><AppIcon name="person" />Open lead</Button>
+                          <Button className="h-11 rounded-lg border-[var(--ether-outline-variant)] bg-white" render={<Link href={`/dashboard/lead-history?leadId=${selected.leadId}`} />} variant="outline"><AppIcon name="timeline" />Open history</Button>
+                        </>
+                      ) : (
+                        <Button className="h-11 rounded-lg bg-[var(--ether-primary)] text-white" disabled={convertMutation.isPending} onClick={() => void convertMutation.mutateAsync({ mailInboxId: selected.id })}><AppIcon name="person_add" />{convertMutation.isPending ? "Converting..." : "Convert to lead"}</Button>
+                      )}
+                    </div>
+                  </div>
+                </aside>
               ) : null}
             </>
           ) : (

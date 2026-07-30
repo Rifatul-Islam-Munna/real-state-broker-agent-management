@@ -14,14 +14,21 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { AppIcon } from "@/components/ui/app-icon"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Command,
+  CommandDialog,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Textarea } from "@/components/ui/textarea"
 import { useCreateLeadHistory, useLead, useLeadHistory, useLeads } from "@/hooks/use-real-estate-api"
 import { formatDateTimeLabel } from "@/lib/admin-portal"
 import { getPortalRoutes } from "@/lib/portal-routes"
+import { cn } from "@/lib/utils"
 
 type FormState = {
   kind: LeadHistoryKind
@@ -73,6 +80,7 @@ export function LeadHistoryPageV2() {
   const mutation = useCreateLeadHistory()
   const [form, setForm] = useState<FormState>(() => blankForm())
   const [error, setError] = useState<string | null>(null)
+  const [leadPickerOpen, setLeadPickerOpen] = useState(false)
 
   const leads = useMemo(() => leadsQuery.data?.items ?? [], [leadsQuery.data?.items])
   const timeline = useMemo(() => historyQuery.data ?? [], [historyQuery.data])
@@ -117,149 +125,169 @@ export function LeadHistoryPageV2() {
     setForm(blankForm())
   }
 
+  const selectedLead = leadQuery.data
+  const initials = (selectedLead?.name ?? "Lead").split(" ").filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase()
+
   return (
-    <main className="min-h-full bg-muted/20 p-4 sm:p-6 lg:p-8">
-      <div className="mx-auto max-w-[1500px] space-y-6">
-        <Card className="shadow-none">
-          <CardHeader className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <Badge variant="outline">{"Lead workspace"}</Badge>
-              <CardTitle className="mt-3 text-2xl">{"Communication history"}</CardTitle>
-              <CardDescription className="mt-1 max-w-3xl leading-6">
-                {"Review mail, SMS, calls, property chat, contact forms, system events, and scheduled follow-ups in one professional timeline."}
-              </CardDescription>
+    <main className="min-h-full bg-[var(--ether-surface)] p-4 sm:p-6 lg:p-8">
+      <div className="mx-auto max-w-[1600px] space-y-6">
+        <section className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <span className="inline-flex rounded-md bg-[var(--ether-primary-fixed)] px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--ether-primary)]">Lead Workspace</span>
+            <h1 className="ether-display-lg mt-3 text-[var(--ether-on-surface)]">Communication History</h1>
+            <div className="mt-4 inline-flex items-center gap-3 rounded-xl bg-white p-3 shadow-[var(--shadow-surface-1)]">
+              <span className="flex size-10 items-center justify-center rounded-lg bg-[var(--ether-primary-fixed)] font-bold text-[var(--ether-primary)]">{initials}</span>
+              <div>
+                <p className="text-sm font-bold text-[var(--ether-on-surface)]">{selectedLead?.name ?? "Select a lead"}</p>
+                <p className="mt-1 text-[10px] text-[var(--ether-on-surface-variant)]">{selected ? `Lead ID: #${leadId}` : "No lead selected"}</p>
+              </div>
             </div>
-            <Button render={<Link href={portalRoutes.leads} />} variant="outline">
-              <AppIcon name="arrow_back" />
-              {"Back to leads"}
-            </Button>
-          </CardHeader>
-        </Card>
-
-        <Card className="shadow-none">
-          <CardContent className="grid gap-4 p-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
-            <div className="space-y-2">
-              <Label>{"Select lead"}</Label>
-              <Select onValueChange={selectLead} value={selected ? String(leadId) : "none"}>
-                <SelectTrigger className="w-full"><SelectValue placeholder="Choose a lead" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">{"Choose a lead"}</SelectItem>
-                  {leads.map((lead) => (
-                    <SelectItem key={lead.id} value={String(lead.id)}>
-                      {`${lead.name} — ${lead.property || "No property"}`}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="text-sm text-muted-foreground">
-              {leadQuery.data ? `${leadQuery.data.email || "No email"} · ${leadQuery.data.phone || "No phone"}` : "Select a lead to open the timeline."}
-            </div>
-          </CardContent>
-        </Card>
-
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <MetricCard icon="history" label="Total activity" value={counts.total} />
-          <MetricCard icon="call_received" label="Incoming" value={counts.incoming} />
-          <MetricCard icon="call_made" label="Outgoing" value={counts.outgoing} />
-          <MetricCard icon="schedule" label="Scheduled" value={counts.scheduled} />
+          </div>
+          <Button className="h-10 rounded-lg border-[var(--ether-outline-variant)] bg-[var(--ether-surface-container-low)] px-4 font-semibold text-[var(--ether-on-surface-variant)]" render={<Link href={portalRoutes.leads} />} variant="outline">
+            <AppIcon name="arrow_back" /> Back to leads
+          </Button>
         </section>
 
-        {!selected ? (
-          <Alert><AlertDescription>{"Choose a lead above to review and add communication activity."}</AlertDescription></Alert>
-        ) : null}
+        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <MetricCard icon="stacked_line_chart" label="Total Activities" value={counts.total} tone="primary" />
+          <MetricCard icon="call_received" label="Incoming" value={counts.incoming} tone="secondary" />
+          <MetricCard icon="call_made" label="Outgoing" value={counts.outgoing} tone="primary" />
+          <MetricCard icon="schedule" label="Scheduled" value={counts.scheduled} tone="tertiary" />
+        </section>
 
-        <div className="grid gap-6 xl:grid-cols-[390px_minmax(0,1fr)]">
-          <Card className="h-fit shadow-none">
-            <CardHeader>
-              <CardTitle className="text-lg">{"Add activity"}</CardTitle>
-              <CardDescription>{"Log a note, call, message, email, or scheduled action."}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1">
-                <Field label="Type">
-                  <Select onValueChange={(value) => patch({ kind: value as LeadHistoryKind })} value={form.kind}>
-                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                    <SelectContent>{["Call", "Sms", "Email", "Note", "System"].map((value) => <SelectItem key={value} value={value}>{kindLabels[value]}</SelectItem>)}</SelectContent>
-                  </Select>
-                </Field>
-                <Field label="Direction">
-                  <Select onValueChange={(value) => patch({ direction: value as LeadHistoryDirection })} value={form.direction}>
-                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                    <SelectContent>{["Internal", "Incoming", "Outgoing", "Scheduled"].map((value) => <SelectItem key={value} value={value}>{value}</SelectItem>)}</SelectContent>
-                  </Select>
-                </Field>
-              </div>
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1">
-                <Field label="Status">
-                  <Select onValueChange={(value) => patch({ status: value as LeadHistoryStatus })} value={form.status}>
-                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                    <SelectContent>{["Logged", "Scheduled", "Sent", "Completed", "Failed"].map((value) => <SelectItem key={value} value={value}>{value}</SelectItem>)}</SelectContent>
-                  </Select>
-                </Field>
-                <Field label="Scheduled time"><Input onChange={(event) => patch({ scheduledAt: event.target.value })} type="datetime-local" value={form.scheduledAt} /></Field>
-              </div>
-              <Field label="Title"><Input onChange={(event) => patch({ title: event.target.value })} placeholder="Viewing reminder call" value={form.title} /></Field>
-              <Field label="Summary"><Input onChange={(event) => patch({ summary: event.target.value })} placeholder="Client requested a follow-up" value={form.summary} /></Field>
-              <Field label="Details"><Textarea className="min-h-32" onChange={(event) => patch({ body: event.target.value })} placeholder="Add complete notes or instructions." value={form.body} /></Field>
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1">
-                <Field label="Provider / channel"><Input onChange={(event) => patch({ provider: event.target.value })} placeholder="Twilio, Gmail, Manual" value={form.provider} /></Field>
-                <Field label="Created by"><Input onChange={(event) => patch({ createdBy: event.target.value })} value={form.createdBy} /></Field>
-              </div>
-              {error ? <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert> : null}
-              <Button className="w-full" disabled={!selected || mutation.isPending} onClick={() => void save()} type="button">
-                <AppIcon name="add_circle" />
-                {mutation.isPending ? "Saving..." : "Save activity"}
-              </Button>
-            </CardContent>
-          </Card>
+        <section className="rounded-[24px] bg-white p-3 shadow-[var(--shadow-surface-1)]">
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+            <div className="flex-1">
+              <button
+                className="flex h-11 w-full items-center justify-between rounded-lg bg-[var(--ether-surface-container-low)] px-3 text-left text-sm text-[var(--ether-on-surface)] transition hover:bg-[var(--ether-surface-container-high)]"
+                onClick={() => setLeadPickerOpen(true)}
+                type="button"
+              >
+                <span className="flex min-w-0 items-center gap-3">
+                  <AppIcon className="shrink-0 text-[var(--ether-outline)]" name="person_search" />
+                  <span className="min-w-0">
+                    <span className="block truncate font-semibold">{selectedLead?.name ?? "Search or select a lead"}</span>
+                    {selectedLead ? <span className="mt-0.5 block truncate text-[10px] text-[var(--ether-outline)]">{selectedLead.property || "No property selected"}</span> : null}
+                  </span>
+                </span>
+                <AppIcon className="shrink-0 text-[var(--ether-outline)]" name="expand_more" />
+              </button>
 
-          <Card className="shadow-none">
-            <CardHeader className="border-b">
-              <CardTitle className="text-lg">{leadQuery.data ? leadQuery.data.name : "Timeline"}</CardTitle>
-              <CardDescription>{leadQuery.data?.property || "All communication for the selected lead."}</CardDescription>
-            </CardHeader>
-            <CardContent className="p-0">
-              {historyQuery.isLoading ? <EmptyState text="Loading timeline..." /> : historyQuery.error ? <div className="p-5"><Alert variant="destructive"><AlertDescription>{historyQuery.error.message}</AlertDescription></Alert></div> : timeline.length === 0 ? <EmptyState text="No activity has been recorded for this lead." /> : (
-                <div className="divide-y">
-                  {timeline.map((entry) => (
-                    <article className="p-5" key={`${entry.id}-${entry.createdAt}`}>
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div className="flex min-w-0 items-start gap-3">
-                          <span className="flex size-10 shrink-0 items-center justify-center rounded-xl border bg-muted/30"><AppIcon name={iconForKind(entry.kind)} /></span>
+              <CommandDialog
+                className="max-w-xl rounded-[20px]! border-0 bg-white shadow-[0_30px_90px_rgba(11,28,48,0.24)]"
+                description="Search and choose a lead to view its communication history."
+                onOpenChange={setLeadPickerOpen}
+                open={leadPickerOpen}
+                showCloseButton
+                title="Select Lead"
+              >
+                <Command className="rounded-[20px]! p-2">
+                  <div className="px-3 pb-2 pt-3">
+                    <p className="text-lg font-bold text-[var(--ether-on-surface)]">Select a lead</p>
+                    <p className="mt-1 text-sm text-[var(--ether-on-surface-variant)]">Search by client, property, email, or phone.</p>
+                  </div>
+                  <CommandInput className="h-10" placeholder="Search leads..." />
+                  <CommandList className="max-h-[420px] p-2">
+                    <CommandEmpty>No matching leads found.</CommandEmpty>
+                    <CommandGroup heading={`${leads.length} leads available`}>
+                      {leads.map((lead) => {
+                        const itemInitials = lead.name.split(" ").filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase()
+                        return (
+                          <CommandItem
+                            checked={selected && lead.id === leadId}
+                            className="gap-3 rounded-xl! px-3 py-3"
+                            key={lead.id}
+                            onSelect={() => {
+                              const nextLeadId = String(lead.id)
+                              setLeadPickerOpen(false)
+                              window.setTimeout(() => selectLead(nextLeadId), 100)
+                            }}
+                            value={`${lead.name} ${lead.property ?? ""} ${lead.email ?? ""} ${lead.phone ?? ""}`}
+                          >
+                            <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-[var(--ether-primary-fixed)] text-xs font-bold text-[var(--ether-primary)]">{itemInitials || "LD"}</span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate font-semibold text-[var(--ether-on-surface)]">{lead.name}</span>
+                              <span className="mt-1 block truncate text-xs text-[var(--ether-on-surface-variant)]">{lead.property || "No property selected"}</span>
+                              <span className="mt-1 block truncate text-[10px] text-[var(--ether-outline)]">{lead.email || lead.phone || `Lead #${lead.id}`}</span>
+                            </span>
+                          </CommandItem>
+                        )
+                      })}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </CommandDialog>
+            </div>
+            <Select onValueChange={(value) => patch({ kind: value as LeadHistoryKind })} value={form.kind}>
+              <SelectTrigger className="h-11 w-full rounded-lg border-0 bg-[var(--ether-surface-container-low)] px-4 shadow-none xl:w-44"><SelectValue /></SelectTrigger>
+              <SelectContent>{["Call", "Sms", "Email", "Note", "System"].map((value) => <SelectItem key={value} value={value}>{kindLabels[value]}</SelectItem>)}</SelectContent>
+            </Select>
+            <Select onValueChange={(value) => patch({ status: value as LeadHistoryStatus })} value={form.status}>
+              <SelectTrigger className="h-11 w-full rounded-lg border-0 bg-[var(--ether-surface-container-low)] px-4 shadow-none xl:w-40"><SelectValue /></SelectTrigger>
+              <SelectContent>{["Logged", "Scheduled", "Sent", "Completed", "Failed"].map((value) => <SelectItem key={value} value={value}>{value}</SelectItem>)}</SelectContent>
+            </Select>
+            <Input className="h-11 rounded-lg border-0 bg-[var(--ether-surface-container-low)] shadow-none xl:w-52" onChange={(event) => patch({ scheduledAt: event.target.value })} type="datetime-local" value={form.scheduledAt} />
+            <Button className="h-11 rounded-lg bg-[var(--ether-primary)] px-5 font-semibold text-white" disabled={!selected || mutation.isPending} onClick={() => void save()} type="button">
+              <AppIcon name="add" /> {mutation.isPending ? "Saving..." : "Log Activity"}
+            </Button>
+          </div>
+        </section>
+
+        {!selected ? <Alert><AlertDescription>Choose a lead above to review and add communication activity.</AlertDescription></Alert> : null}
+        {error ? <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert> : null}
+
+        <section className="overflow-hidden rounded-[24px] bg-white shadow-[var(--shadow-surface-1)]">
+          <div className="flex items-center justify-between gap-4 px-5 py-4 sm:px-6">
+            <div>
+              <h2 className="ether-headline-sm text-[var(--ether-on-surface)]">Activity Timeline</h2>
+              <p className="mt-1 text-sm text-[var(--ether-on-surface-variant)]">{selectedLead?.property || "All communication for the selected lead."}</p>
+            </div>
+            <button className="text-xs font-bold uppercase tracking-[0.08em] text-[var(--ether-primary)]" type="button">Export to CSV</button>
+          </div>
+
+          <div className="relative p-5 sm:p-6">
+            <div className="absolute bottom-6 left-[37px] top-0 w-px bg-[color-mix(in_srgb,var(--ether-outline-variant)_45%,transparent)]" />
+            {historyQuery.isLoading ? <EmptyState text="Loading timeline..." /> : historyQuery.error ? <Alert variant="destructive"><AlertDescription>{historyQuery.error.message}</AlertDescription></Alert> : timeline.length === 0 ? <EmptyState text="No activity has been recorded for this lead." /> : (
+              <div className="space-y-4">
+                {timeline.map((entry) => {
+                  const failed = entry.status === "Failed"
+                  const tone = failed ? "error" : entry.direction === "Incoming" ? "secondary" : entry.direction === "Outgoing" ? "primary" : "neutral"
+                  return (
+                    <article className="relative pl-12" key={`${entry.id}-${entry.createdAt}`}>
+                      <span className={cn("absolute left-0 top-2 flex size-7 items-center justify-center rounded-full border-2 border-white", tone === "error" ? "bg-[var(--ether-error-container)] text-[var(--ether-error)]" : tone === "secondary" ? "bg-[var(--ether-secondary)] text-white" : tone === "primary" ? "bg-[var(--ether-primary)] text-white" : "bg-[var(--ether-outline-variant)] text-white")}>
+                        <AppIcon className="text-sm" name={iconForKind(entry.kind)} />
+                      </span>
+                      <div className="rounded-xl bg-[var(--ether-surface-container-low)]/55 p-4 transition hover:bg-[var(--ether-surface-container-low)]">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                           <div className="min-w-0">
-                            <p className="font-semibold text-foreground">{entry.title || kindLabels[entry.kind]}</p>
-                            <p className="mt-1 text-sm leading-6 text-muted-foreground">{entry.summary}</p>
+                            <div className="flex items-center gap-2"><AppIcon className="text-base text-[var(--ether-on-surface-variant)]" name={iconForKind(entry.kind)} /><h3 className="text-sm font-bold text-[var(--ether-on-surface)]">{entry.title || kindLabels[entry.kind]}</h3></div>
+                            <p className="mt-2 text-sm leading-6 text-[var(--ether-on-surface-variant)]">{entry.summary || entry.body}</p>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <Badge className="rounded-md border-0 bg-[var(--ether-surface-container-high)] px-2 py-1 text-[9px] font-bold uppercase text-[var(--ether-on-surface-variant)]">{kindLabels[entry.kind] ?? entry.kind}</Badge>
+                            <Badge className={cn("rounded-md border-0 px-2 py-1 text-[9px] font-bold uppercase", failed ? "bg-[var(--ether-error-container)] text-[var(--ether-error)]" : "bg-[var(--ether-secondary-container)] text-[var(--ether-on-secondary-container)]")}>{entry.status}</Badge>
                           </div>
                         </div>
-                        <div className="flex gap-2"><Badge variant="outline">{kindLabels[entry.kind] ?? entry.kind}</Badge><Badge variant={entry.status === "Failed" ? "destructive" : "secondary"}>{entry.status}</Badge></div>
-                      </div>
-                      {entry.body ? <div className="mt-4 whitespace-pre-wrap rounded-xl border bg-muted/20 p-4 text-sm leading-6 text-foreground">{entry.body}</div> : null}
-                      <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-xs text-muted-foreground">
-                        <span>{entry.direction}</span>
-                        <span>{entry.provider || "No provider"}</span>
-                        <span>{entry.createdBy || "System"}</span>
-                        {entry.scheduledAt ? <span>{`Scheduled ${formatDateTimeLabel(entry.scheduledAt)}`}</span> : null}
-                        <span>{formatDateTimeLabel(entry.occurredAt ?? entry.createdAt)}</span>
+                        <div className="mt-3 flex flex-col gap-2 border-t border-[color-mix(in_srgb,var(--ether-outline-variant)_30%,transparent)] pt-3 text-[10px] font-semibold text-[var(--ether-on-surface-variant)] sm:flex-row sm:items-center sm:justify-between">
+                          <span>{entry.provider || "System"} ? {entry.direction}</span>
+                          <span>{formatDateTimeLabel(entry.occurredAt ?? entry.createdAt)}</span>
+                        </div>
                       </div>
                     </article>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        </section>
       </div>
     </main>
   )
 }
 
-function Field({ children, label }: { children: React.ReactNode; label: string }) {
-  return <div className="space-y-2"><Label>{label}</Label>{children}</div>
-}
-
-function MetricCard({ icon, label, value }: { icon: string; label: string; value: number }) {
-  return <Card className="shadow-none"><CardContent className="flex items-center gap-4 p-5"><span className="flex size-10 items-center justify-center rounded-xl border bg-muted/30"><AppIcon name={icon} /></span><div><p className="text-2xl font-semibold">{value}</p><p className="text-xs text-muted-foreground">{label}</p></div></CardContent></Card>
+function MetricCard({ icon, label, value, tone }: { icon: string; label: string; value: number; tone: "primary" | "secondary" | "tertiary" }) {
+  const toneClass = tone === "secondary" ? "bg-[color-mix(in_srgb,var(--ether-secondary-container)_30%,white)] text-[var(--ether-secondary)]" : tone === "tertiary" ? "bg-[var(--ether-error-container)] text-[var(--ether-error)]" : "bg-[var(--ether-primary-fixed)] text-[var(--ether-primary)]"
+  return <article className="rounded-[24px] bg-white p-5 shadow-[var(--shadow-surface-1)]"><div className="flex items-center gap-4"><span className={`flex size-10 items-center justify-center rounded-xl ${toneClass}`}><AppIcon name={icon} /></span><div><p className="ether-numeric-lg text-[var(--ether-on-surface)]">{value}</p><p className="mt-1 ether-label-caps text-[10px] text-[var(--ether-on-surface-variant)]">{label}</p></div></div></article>
 }
 
 function EmptyState({ text }: { text: string }) {

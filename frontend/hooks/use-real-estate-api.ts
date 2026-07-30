@@ -470,10 +470,10 @@ export function useDeleteDocumentRepositoryItem() {
   })
 }
 
-export function useDashboardSummary() {
+export function useDashboardSummary(params?: QueryParams) {
   return useQueryWrapper<DashboardSummary>(
-    ["dashboard"],
-    "/dashboard/summary",
+    ["dashboard", params],
+    `/dashboard/summary${buildQuery(params)}`,
     defaultQueryOptions,
     0,
     "dashboard",
@@ -1086,3 +1086,4 @@ export function useSyncSmsMessages() {
     url: "/sms-inbox/sync",
   })
 }
+

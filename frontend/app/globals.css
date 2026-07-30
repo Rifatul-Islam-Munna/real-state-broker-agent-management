@@ -184,24 +184,14 @@
   display: none;
 }
 
+.dashboard-sidebar {
+  color: #344054;
+  opacity: 1;
+}
+
 .dashboard-sidebar a,
-.dashboard-sidebar button,
-.dashboard-sidebar span {
-  color: rgb(226 232 240) !important;
+.dashboard-sidebar button {
   text-decoration: none !important;
-}
-
-.dashboard-sidebar [data-active="true"],
-.dashboard-sidebar [data-active="true"] span {
-  color: rgb(255 255 255) !important;
-}
-
-.dashboard-sidebar svg {
-  color: rgb(148 163 184) !important;
-}
-
-.dashboard-sidebar [data-active="true"] svg {
-  color: rgb(191 219 254) !important;
 }
 
 @utility font-800 {

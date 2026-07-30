@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import Link from "next/link"
 import { usePathname, useSearchParams } from "next/navigation"
 import { ReactSortable } from "react-sortablejs"
 import Papa from "papaparse"
@@ -12,7 +13,6 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   Card,
-  CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
@@ -34,7 +34,7 @@ import { formatLeadPriority } from "@/lib/admin-portal"
 import { getPortalRoutes } from "@/lib/portal-routes"
 import { cn } from "@/lib/utils"
 
-import { LeadActions, LeadDetailsPanel, LeadKanbanCard } from "./lead-detail-components"
+import { LeadDetailsPanel, LeadKanbanCard } from "./lead-detail-components"
 import { LeadCancelDialog, LeadFormDialog } from "./lead-dialogs"
 import { LeadOutreachDialog } from "./lead-outreach-dialog"
 import type { LeadOutreachComposerValues, LeadOutreachMode } from "./lead-outreach-types"
@@ -137,6 +137,7 @@ export function Section2Section({
 
   const [selectedLeadId, setSelectedLeadId] = useState<number | null>(null)
   const [viewMode, setViewMode] = useState<LeadView>("board")
+  const [stageFilter, setStageFilter] = useState<LeadStage | "all">("all")
   const [dialogState, setDialogState] = useState<LeadDialogState>(null)
   const [importOpen, setImportOpen] = useState(false)
   const [csvHeaders, setCsvHeaders] = useState<string[]>([])
@@ -212,13 +213,15 @@ export function Section2Section({
 
   const orderedLeads = useMemo(
     () =>
-      [...leads].sort((left, right) => {
-        const stageDelta =
-          leadStageOrder.indexOf(left.stage) - leadStageOrder.indexOf(right.stage)
-        if (stageDelta !== 0) return stageDelta
-        return Number(right.inBoard) - Number(left.inBoard)
-      }),
-    [leads],
+      [...leads]
+        .filter((lead) => stageFilter === "all" || lead.stage === stageFilter)
+        .sort((left, right) => {
+          const stageDelta =
+            leadStageOrder.indexOf(left.stage) - leadStageOrder.indexOf(right.stage)
+          if (stageDelta !== 0) return stageDelta
+          return Number(right.inBoard) - Number(left.inBoard)
+        }),
+    [leads, stageFilter],
   )
 
   const selectedLead = useMemo(
@@ -262,68 +265,78 @@ export function Section2Section({
   )
 
   return (
-    <main className="min-w-0 flex-1 bg-muted/20 p-4 sm:p-6 lg:p-8">
+    <main className="min-w-0 flex-1 bg-[var(--ether-surface)] p-4 pt-6 sm:p-6 sm:pt-7 lg:p-8 lg:pt-8">
       <div className="mx-auto max-w-[1600px] space-y-6">
-        <Card>
-          <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <CardTitle className="text-2xl">{"Pipeline"}</CardTitle>
-              <CardDescription>
-                {"Move selected leads across the board, or review every record in a detailed list."}
-              </CardDescription>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="flex rounded-xl border bg-background p-1 shadow-xs">
-                <Button
-                  onClick={() => setViewMode("board")}
-                  size="sm"
-                  type="button"
-                  variant={viewMode === "board" ? "secondary" : "ghost"}
-                >
-                  <AppIcon name="view_kanban" />
-                  {"Board"}
-                </Button>
-                <Button
-                  onClick={() => setViewMode("list")}
-                  size="sm"
-                  type="button"
-                  variant={viewMode === "list" ? "secondary" : "ghost"}
-                >
-                  <AppIcon name="view_list" />
-                  {"List"}
-                </Button>
-              </div>
-              <Button onClick={downloadLeadSample} type="button" variant="outline">
-                <AppIcon name="download" />
-                {"Sample CSV"}
-              </Button>
-              <Button onClick={() => setImportOpen(true)} type="button" variant="outline">
-                <AppIcon name="upload_file" />
-                {"Import CSV"}
-              </Button>
-              <Button onClick={() => setDialogState({ type: "create" })} type="button">
-                <AppIcon name="person_add" />
-                {"Add lead"}
-              </Button>
-            </div>
-          </CardHeader>
-        </Card>
+        <div className="flex flex-col gap-3 lg:-mt-[86px] lg:flex-row lg:items-center lg:justify-end">
+          <div className="inline-flex self-start rounded-lg bg-[var(--ether-surface-container)] p-1 lg:self-auto">
+            <button
+              className={cn(
+                "inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold transition",
+                viewMode === "board"
+                  ? "bg-white text-[var(--ether-on-surface)] shadow-sm"
+                  : "text-[var(--ether-on-surface-variant)] hover:text-[var(--ether-on-surface)]",
+              )}
+              onClick={() => setViewMode("board")}
+              type="button"
+            >
+              <AppIcon className="text-lg" name="view_kanban" />
+              Board
+            </button>
+            <button
+              className={cn(
+                "inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold transition",
+                viewMode === "list"
+                  ? "bg-white text-[var(--ether-on-surface)] shadow-sm"
+                  : "text-[var(--ether-on-surface-variant)] hover:text-[var(--ether-on-surface)]",
+              )}
+              onClick={() => setViewMode("list")}
+              type="button"
+            >
+              <AppIcon className="text-lg" name="view_list" />
+              List
+            </button>
+          </div>
+          <Button
+            className="h-10 rounded-lg border-[var(--ether-secondary)] bg-transparent px-4 font-semibold text-[var(--ether-secondary)] hover:bg-[color-mix(in_srgb,var(--ether-secondary-container)_20%,white)]"
+            onClick={downloadLeadSample}
+            type="button"
+            variant="outline"
+          >
+            <AppIcon name="download" />
+            Sample CSV
+          </Button>
+          <Button
+            className="h-10 rounded-lg border-[var(--ether-outline-variant)] bg-white px-4 font-semibold text-[var(--ether-on-surface-variant)] shadow-[var(--shadow-surface-1)]"
+            onClick={() => setImportOpen(true)}
+            type="button"
+            variant="outline"
+          >
+            <AppIcon name="upload_file" />
+            Import CSV
+          </Button>
+          <Button
+            className="h-10 rounded-lg bg-[var(--ether-primary)] px-5 font-semibold text-white shadow-[0_10px_24px_rgba(67,67,213,0.22)] hover:bg-[var(--ether-primary-container)]"
+            onClick={() => setDialogState({ type: "create" })}
+            type="button"
+          >
+            <AppIcon name="person_add" />
+            Add lead
+          </Button>
+        </div>
 
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <section className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4">
           {stats.map((stat) => (
-            <Card key={stat.label}>
-              <CardHeader className="flex flex-row items-start justify-between space-y-0">
+            <Card className={cn("relative h-[188px] overflow-hidden rounded-[24px] border-0 bg-white shadow-[var(--shadow-surface-1)] transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-surface-2)]", stat.label === "Overdue" && "border-b-4 border-b-[color-mix(in_srgb,var(--ether-error)_24%,transparent)]")} key={stat.label}>
+              <CardHeader className="flex h-full flex-row items-start justify-between space-y-0 p-6">
                 <div>
-                  <CardDescription>{stat.label}</CardDescription>
-                  <CardTitle className="mt-2 text-3xl">{stat.value}</CardTitle>
+                  <CardDescription className={cn("ether-label-caps", stat.label === "Overdue" ? "text-[var(--ether-error)]" : "text-[var(--ether-on-surface-variant)]")}>{stat.label}</CardDescription>
+                  <CardTitle className="ether-numeric-lg mt-3 text-[var(--ether-on-surface)]">{stat.value}</CardTitle>
+                  <p className="mt-3 max-w-32 text-sm leading-5 text-[var(--ether-on-surface-variant)]">{stat.detail}</p>
                 </div>
-                <span className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                <span className={cn("flex size-12 items-center justify-center rounded-2xl", stat.label === "On board" ? "bg-[color-mix(in_srgb,var(--ether-secondary-container)_24%,white)] text-[var(--ether-secondary)]" : stat.label === "Overdue" ? "bg-[var(--ether-error-container)] text-[var(--ether-error)]" : "bg-[var(--ether-primary-fixed)] text-[var(--ether-primary)]")}>
                   <AppIcon className="text-xl" name={stat.icon} />
                 </span>
               </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground">{stat.detail}</p>
-              </CardContent>
             </Card>
           ))}
         </section>
@@ -337,12 +350,12 @@ export function Section2Section({
             <AlertDescription>{errorMessage}</AlertDescription>
           </Alert>
         ) : viewMode === "board" ? (
-          <div className="overflow-x-auto pb-2">
+          <div className="kanban-scroll overflow-x-auto pb-3">
             {leads.some((lead) => lead.inBoard && lead.stage !== "Canceled") ? (
-              <div className="flex min-h-[28rem] min-w-max gap-4">
+              <div className="flex min-h-[35rem] min-w-max gap-4">
                 {boardLeadStages.map((stage) => (
-                  <Card className="w-80 shrink-0 gap-0 py-0" key={stage}>
-                    <CardHeader className="border-b py-4">
+                  <Card className="w-[300px] shrink-0 gap-0 overflow-hidden rounded-2xl border-0 bg-[color-mix(in_srgb,var(--ether-surface-container)_32%,white)] py-0 shadow-none" key={stage}>
+                    <CardHeader className="border-0 bg-transparent px-4 pb-2 pt-4">
                       <div className="flex items-center justify-between gap-3">
                         <div className="flex items-center gap-2">
                           <span
@@ -351,14 +364,14 @@ export function Section2Section({
                               leadStageMeta[stage].dotClassName,
                             )}
                           />
-                          <CardTitle className="text-sm">{leadStageMeta[stage].label}</CardTitle>
+                          <CardTitle className="text-sm font-bold uppercase tracking-tight text-[var(--ether-on-surface)]">{leadStageMeta[stage].label}</CardTitle>
                         </div>
-                        <Badge variant="secondary">{boardColumns[stage].length}</Badge>
+                        <Badge className="rounded-full border-0 bg-white px-2.5 py-0.5 text-xs font-bold text-[var(--ether-primary)]" variant="secondary">{boardColumns[stage].length}</Badge>
                       </div>
                     </CardHeader>
                     <ReactSortable
                       animation={150}
-                      className="min-h-[20rem] flex-1 space-y-3 bg-muted/30 p-3"
+                      className="min-h-[30rem] flex-1 space-y-3 px-4 pb-4"
                       ghostClass="opacity-40"
                       group="lead-board"
                       handle=".drag-handle"
@@ -371,7 +384,12 @@ export function Section2Section({
                           })
                       }}
                     >
-                      {boardColumns[stage].map((lead) => (
+                      {boardColumns[stage].length === 0 ? (
+                        <div className="flex min-h-[470px] flex-col items-center justify-center rounded-xl border-2 border-dashed border-[color-mix(in_srgb,var(--ether-outline-variant)_35%,transparent)] bg-white/30 px-6 text-center opacity-70">
+                          <AppIcon className="text-4xl text-[var(--ether-outline-variant)]" name="move_to_inbox" />
+                          <p className="mt-3 text-xs font-semibold text-[var(--ether-on-surface-variant)]">Ready for {leadStageMeta[stage].label.toLowerCase()}</p>
+                        </div>
+                      ) : boardColumns[stage].map((lead) => (
                         <LeadKanbanCard
                           isActive={selectedLeadId === lead.id}
                           key={lead.id}
@@ -384,7 +402,7 @@ export function Section2Section({
                 ))}
               </div>
             ) : (
-              <div className="rounded-2xl border border-dashed bg-card p-10 text-center">
+              <div className="rounded-[24px] bg-white p-10 text-center shadow-[var(--shadow-surface-1)]">
                 <p className="font-semibold">{"No leads on the active board"}</p>
                 <p className="mt-2 text-sm text-muted-foreground">
                   {"Add a lead or move one onto the board from the list view."}
@@ -400,57 +418,77 @@ export function Section2Section({
             )}
           </div>
         ) : orderedLeads.length > 0 ? (
-          <div className="space-y-3">
-            {orderedLeads.map((lead) => (
-              <Card
-                className={cn(selectedLeadId === lead.id && "border-primary")}
-                key={lead.id}
-              >
-                <CardContent className="grid gap-5 pt-1 xl:grid-cols-[minmax(0,1.15fr)_minmax(220px,0.85fr)_auto] xl:items-center">
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="font-semibold">{lead.name}</h3>
-                      <Badge variant="outline">{formatLeadPriority(lead.priority)}</Badge>
-                      {lead.isFollowUpOverdue ? (
-                        <Badge variant="destructive">{"Overdue"}</Badge>
-                      ) : null}
-                      {lead.inBoard ? <Badge variant="secondary">{"On board"}</Badge> : null}
-                    </div>
-                    <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                      {lead.summary}
-                    </p>
-                  </div>
-                  <div className="rounded-xl bg-muted/45 p-4">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      {"Property / stage"}
-                    </p>
-                    <p className="mt-2 text-sm font-semibold">{lead.property}</p>
-                    <p className="text-sm text-primary">{leadStageMeta[lead.stage].label}</p>
-                  </div>
-                  <div className="flex flex-wrap gap-2 xl:justify-end">
-                    <Button
-                      onClick={() => setSelectedLeadId(lead.id)}
-                      size="sm"
-                      type="button"
-                      variant="outline"
-                    >
-                      {"View details"}
-                    </Button>
-                    <LeadActions
-                      dealHref={portalRoutes.deals}
-                      historyHref={buildHistoryHref(portalRoutes.leadHistory, lead.id)}
-                      lead={lead}
-                      onConvertLeadToDeal={onConvertLeadToDeal}
-                      onDialogOpen={(type, leadId) => setDialogState({ type, leadId })}
-                      onToggleBoard={onSetLeadBoard}
-                    />
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+          <section className="overflow-hidden rounded-[24px] bg-white shadow-[var(--shadow-surface-1)]">
+            <div className="flex flex-col gap-4 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+              <div className="flex items-center gap-3">
+                <div className="inline-flex rounded-lg bg-[var(--ether-surface-container)] p-1">
+                  <button className="rounded-md bg-white px-4 py-2 text-sm font-bold text-[var(--ether-primary)] shadow-sm" onClick={() => setViewMode("list")} type="button"><AppIcon className="mr-2 inline text-base" name="view_list" />List View</button>
+                  <button className="rounded-md px-4 py-2 text-sm font-semibold text-[var(--ether-on-surface-variant)]" onClick={() => setViewMode("board")} type="button"><AppIcon className="mr-2 inline text-base" name="view_kanban" />Board View</button>
+                </div>
+              </div>
+              <Select onValueChange={(value) => setStageFilter((value ?? "all") as LeadStage | "all")} value={stageFilter}>
+                <SelectTrigger className="h-10 w-full rounded-lg border-0 bg-[var(--ether-surface-container-low)] px-4 font-semibold shadow-none sm:w-48"><SelectValue placeholder="Filter by stage" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All stages</SelectItem>
+                  {leadStageOrder.map((stage) => <SelectItem key={stage} value={stage}>{leadStageMeta[stage].label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[1050px] text-left">
+                <thead className="bg-[color-mix(in_srgb,var(--ether-surface-container-low)_72%,white)]">
+                  <tr>
+                    <th className="px-6 py-4 ether-label-caps text-[var(--ether-on-surface-variant)]">Client Identity</th>
+                    <th className="px-6 py-4 ether-label-caps text-[var(--ether-on-surface-variant)]">Property & Interest</th>
+                    <th className="px-6 py-4 ether-label-caps text-[var(--ether-on-surface-variant)]">Stage</th>
+                    <th className="px-6 py-4 ether-label-caps text-[var(--ether-on-surface-variant)]">Quick Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {orderedLeads.map((lead, index) => {
+                    const initials = lead.name.split(" ").filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase()
+                    const avatarTone = index % 3 === 0 ? "bg-[var(--ether-primary-fixed)] text-[var(--ether-primary)]" : index % 3 === 1 ? "bg-[var(--ether-tertiary-fixed)] text-[var(--ether-tertiary)]" : "bg-[color-mix(in_srgb,var(--ether-secondary-container)_35%,white)] text-[var(--ether-secondary)]"
+                    return (
+                      <tr className="group transition hover:bg-[var(--ether-surface-container-low)]" key={lead.id}>
+                        <td className="px-6 py-5">
+                          <div className="flex items-center gap-4">
+                            <span className={cn("flex size-11 shrink-0 items-center justify-center rounded-full text-sm font-bold", avatarTone)}>{initials || "LD"}</span>
+                            <div>
+                              <p className="text-base font-bold text-[var(--ether-on-surface)]">{lead.name}</p>
+                              <div className="mt-2 flex flex-wrap gap-2">
+                                <Badge className="rounded-full border-0 bg-[var(--ether-surface-container-high)] px-2.5 py-1 text-[10px] font-bold uppercase text-[var(--ether-on-surface-variant)]">{formatLeadPriority(lead.priority)}</Badge>
+                                {lead.inBoard ? <Badge className="rounded-full border-0 bg-[color-mix(in_srgb,var(--ether-secondary-container)_32%,white)] px-2.5 py-1 text-[10px] font-bold uppercase text-[var(--ether-secondary)]">On board</Badge> : null}
+                                {lead.isFollowUpOverdue ? <Badge className="rounded-full border-0 bg-[var(--ether-error-container)] px-2.5 py-1 text-[10px] font-bold uppercase text-[var(--ether-error)]">Overdue</Badge> : null}
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-5">
+                          <p className="max-w-64 font-semibold text-[var(--ether-on-surface)]">{lead.property || "No property selected"}</p>
+                          <p className="mt-1 text-sm text-[var(--ether-on-surface-variant)]">{lead.interest || "General interest"} ? {lead.budget || "Budget not set"}</p>
+                        </td>
+                        <td className="px-6 py-5"><span className="rounded-lg bg-[var(--ether-primary-fixed)] px-3 py-1.5 text-sm font-bold text-[var(--ether-primary)]">{leadStageMeta[lead.stage].label}</span></td>
+                        <td className="px-6 py-5">
+                          <div className="flex items-center gap-1">
+                            <button className="flex size-9 items-center justify-center rounded-lg text-[var(--ether-on-surface-variant)] hover:bg-[var(--ether-primary-fixed)] hover:text-[var(--ether-primary)]" onClick={() => setSelectedLeadId(lead.id)} title="View details" type="button"><AppIcon name="visibility" /></button>
+                            <button className="flex size-9 items-center justify-center rounded-lg text-[var(--ether-on-surface-variant)] hover:bg-[var(--ether-primary-fixed)] hover:text-[var(--ether-primary)]" onClick={() => void onConvertLeadToDeal(lead.id)} title={lead.linkedDealId ? "Open deal" : "Create deal"} type="button"><AppIcon name="handshake" /></button>
+                            <Link className="flex size-9 items-center justify-center rounded-lg text-[var(--ether-on-surface-variant)] hover:bg-[var(--ether-primary-fixed)] hover:text-[var(--ether-primary)]" href={buildHistoryHref(portalRoutes.leadHistory, lead.id)} title="History"><AppIcon name="history" /></Link>
+                            <span className="mx-2 h-5 w-px bg-[color-mix(in_srgb,var(--ether-outline-variant)_40%,transparent)]" />
+                            <button className="flex size-9 items-center justify-center rounded-lg text-[var(--ether-on-surface-variant)] hover:bg-[color-mix(in_srgb,var(--ether-secondary-container)_25%,white)] hover:text-[var(--ether-secondary)]" onClick={() => setDialogState({ type: "email", leadId: lead.id })} title="Email" type="button"><AppIcon name="mail" /></button>
+                            <button className="flex size-9 items-center justify-center rounded-lg text-[var(--ether-on-surface-variant)] hover:bg-[color-mix(in_srgb,var(--ether-secondary-container)_25%,white)] hover:text-[var(--ether-secondary)]" onClick={() => setDialogState({ type: "message", leadId: lead.id })} title="Message" type="button"><AppIcon name="chat" /></button>
+                            <button className="flex size-9 items-center justify-center rounded-lg text-[var(--ether-on-surface-variant)] hover:bg-[color-mix(in_srgb,var(--ether-secondary-container)_25%,white)] hover:text-[var(--ether-secondary)]" onClick={() => setDialogState({ type: "call", leadId: lead.id })} title="Call" type="button"><AppIcon name="call" /></button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </section>
         ) : (
-          <div className="rounded-2xl border border-dashed bg-card p-10 text-center">
+          <div className="rounded-[24px] bg-white p-10 text-center shadow-[var(--shadow-surface-1)]">
             <p className="font-semibold">{"No leads found"}</p>
             <p className="mt-2 text-sm text-muted-foreground">
               {"Create a lead to start populating the CRM."}
@@ -458,7 +496,7 @@ export function Section2Section({
           </div>
         )}
 
-        <div className="rounded-2xl border bg-card p-3 shadow-sm">
+        <div className="rounded-[24px] bg-white p-3 shadow-[var(--shadow-surface-1)]">
           <PagePagination
             currentPage={currentPage}
             onPageChange={onPageChange}

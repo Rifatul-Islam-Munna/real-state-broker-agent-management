@@ -9,12 +9,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
+import { AppIcon } from "@/components/ui/app-icon"
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import type { AgentUserOption, LeadItem, PropertyItem } from "@/hooks/use-real-estate-api"
@@ -40,7 +40,7 @@ function FieldError({ error }: { error?: string }) {
 }
 
 const formSelectClassName =
-  "h-10 w-full rounded-none border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 dark:border-white/10 dark:bg-slate-900 dark:text-slate-200"
+  "h-11 w-full rounded-lg border-[var(--ether-outline-variant)] bg-white px-3 text-sm font-medium text-[var(--ether-on-surface)] shadow-none"
 
 const emptySelectValue = "__empty__"
 
@@ -314,6 +314,27 @@ export function LeadFormDialog({
     setSubmitError(null)
   }
 
+  const inputClassName = "h-11 rounded-lg border-[var(--ether-outline-variant)] bg-white px-3 text-sm shadow-none focus-visible:ring-2 focus-visible:ring-[var(--ether-primary)]/20"
+  const fieldLabelClassName = "text-xs font-semibold text-[var(--ether-on-surface-variant)]"
+
+  async function handleSave() {
+    const nextErrors = validateLeadForm(formValues)
+    if (Object.keys(nextErrors).length > 0) {
+      setErrors(nextErrors)
+      return
+    }
+
+    const responseError = await onSubmit(formValues)
+    if (responseError) {
+      setSubmitError(responseError)
+      return
+    }
+
+    setErrors({})
+    setSubmitError(null)
+    onOpenChange(false)
+  }
+
   return (
     <Dialog
       open={open}
@@ -326,360 +347,76 @@ export function LeadFormDialog({
         onOpenChange(nextOpen)
       }}
     >
-      <DialogContent className="rounded-none border border-slate-200 bg-white p-0 shadow-none dark:border-white/10 dark:bg-slate-900">
-        <div className="border-b border-slate-200 px-6 py-5 dark:border-white/10">
-          <DialogTitle className="text-lg font-bold text-slate-900 dark:text-white">
-            {mode === "create" ? "Add Lead" : "Edit Lead"}
-          </DialogTitle>
-          <DialogDescription className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-            {mode === "create"
-              ? "Create the lead from a modal and keep the workflow inside the CRM."
-              : "Update the lead details without leaving the CRM list."}
-          </DialogDescription>
-        </div>
-        <div className="grid gap-4 px-6 py-5 md:grid-cols-2">
-          <div className="flex flex-col gap-2">
-            <Input
-              className="rounded-none border-slate-200 dark:border-white/10"
-              onChange={(event) => updateField("name", event.target.value)}
-              placeholder="Lead name"
-              value={formValues.name}
-            />
-            <FieldError error={errors.name} />
+      <DialogContent className="!flex h-[90dvh] max-h-[90dvh] w-[96vw] max-w-3xl flex-col gap-0 overflow-hidden rounded-[20px] border-0 bg-white p-0 shadow-[0_30px_90px_rgba(11,28,48,0.24)]">
+        <header className="flex items-start justify-between border-b border-[var(--ether-outline-variant)] px-6 py-5 sm:px-8 sm:py-6">
+          <div>
+            <DialogTitle className="text-2xl font-bold tracking-[-0.02em] text-[var(--ether-on-surface)]">
+              {mode === "create" ? "Add Lead" : "Edit Lead"}
+            </DialogTitle>
+            <DialogDescription className="mt-1 text-sm text-[var(--ether-on-surface-variant)]">
+              {mode === "create" ? "Create a new lead and configure its workflow." : "Update lead intelligence and status parameters."}
+            </DialogDescription>
           </div>
-          <div className="flex flex-col gap-2">
-            <Input
-              className="rounded-none border-slate-200 dark:border-white/10"
-              onChange={(event) => updateField("email", event.target.value)}
-              placeholder="Email"
-              type="email"
-              value={formValues.email}
-            />
-            <FieldError error={errors.email} />
-          </div>
-          <div className="flex flex-col gap-2">
-            <Input
-              className="rounded-none border-slate-200 dark:border-white/10"
-              onChange={(event) => updateField("phone", event.target.value)}
-              placeholder="Phone"
-              value={formValues.phone}
-            />
-            <FieldError error={errors.phone} />
-          </div>
-          <label className="flex flex-col gap-2 text-xs font-bold uppercase tracking-wide text-slate-500">
-            {"Property"}
-            <Select
-              modal={false}
-              onValueChange={(value) => updateField("property", !value || value === emptySelectValue ? "" : value)}
-              value={formValues.property || emptySelectValue}
-            >
-              <SelectTrigger className={formSelectClassName}>
-                <SelectValue>
-                  {selectedPropertyLabel}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={emptySelectValue}>{"Select property"}</SelectItem>
-                {propertyTitles.map((title) => (
-                  <SelectItem key={title} value={title}>
-                    {title}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <FieldError error={errors.property} />
-          </label>
-          <div className="flex flex-col gap-2">
-            <Input
-              className="rounded-none border-slate-200 dark:border-white/10"
-              onChange={(event) => updateField("budget", event.target.value)}
-              placeholder="Budget"
-              value={formValues.budget}
-            />
-            <FieldError error={errors.budget} />
-          </div>
-          <div className="flex flex-col gap-2">
-            <Input
-              className="rounded-none border-slate-200 dark:border-white/10"
-              onChange={(event) => updateField("creditScore", event.target.value)}
-              placeholder="Credit score"
-              value={formValues.creditScore}
-            />
-          </div>
-          <div className="flex flex-col gap-2">
-            <Input
-              className="rounded-none border-slate-200 dark:border-white/10"
-              onChange={(event) => updateField("combinedCreditScore", event.target.value)}
-              placeholder="Combined credit score"
-              value={formValues.combinedCreditScore}
-            />
-          </div>
-          <label className="flex flex-col gap-2 text-xs font-bold uppercase tracking-wide text-slate-500">
-            {"Assigned Agent"}
-            <Select
-              modal={false}
-              onValueChange={(value) => {
-                if (!value || value === emptySelectValue) {
-                  updateField("agentId", null)
-                  updateField("agent", "")
-                  return
-                }
-
-                const selectedAgent = agentOptions.find((agent) => `${agent.id}` === value)
-                updateField("agentId", selectedAgent ? selectedAgent.id : null)
-                updateField("agent", selectedAgent?.fullName ?? value)
-              }}
-              value={formValues.agentId ? `${formValues.agentId}` : formValues.agent || emptySelectValue}
-            >
-              <SelectTrigger className={formSelectClassName}>
-                <SelectValue>
-                  {selectedAgentLabel}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={emptySelectValue}>{"Auto assign"}</SelectItem>
-                {agentSelectOptions.map(([value, label]) => (
-                  <SelectItem key={value} value={value}>
-                    {label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <FieldError error={errors.agent} />
-          </label>
-          <label className="flex flex-col gap-2 text-xs font-bold uppercase tracking-wide text-slate-500">
-            {"Source"}
-            <Select
-              modal={false}
-              onValueChange={(value) => updateField("source", !value || value === emptySelectValue ? "" : value)}
-              value={formValues.source || emptySelectValue}
-            >
-              <SelectTrigger className={formSelectClassName}>
-                <SelectValue>
-                  {selectedSourceLabel}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={emptySelectValue}>{"Select source"}</SelectItem>
-                {sourceOptions.map((source) => (
-                  <SelectItem key={source} value={source}>
-                    {source}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <FieldError error={errors.source} />
-          </label>
-          <label className="flex flex-col gap-2 text-xs font-bold uppercase tracking-wide text-slate-500">
-            {"Interest"}
-            <Select
-              modal={false}
-              onValueChange={(value) => updateField("interest", !value || value === emptySelectValue ? "" : value)}
-              value={formValues.interest || emptySelectValue}
-            >
-              <SelectTrigger className={formSelectClassName}>
-                <SelectValue>
-                  {selectedInterestLabel}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={emptySelectValue}>{"Select interest"}</SelectItem>
-                {interestOptions.map((interest) => (
-                  <SelectItem key={interest} value={interest}>
-                    {interest}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <FieldError error={errors.interest} />
-          </label>
-          <label className="flex flex-col gap-2 text-xs font-bold uppercase tracking-wide text-slate-500">
-            {"Timeline"}
-            <Select
-              modal={false}
-              onValueChange={(value) => updateField("timeline", !value || value === emptySelectValue ? "" : value)}
-              value={formValues.timeline || emptySelectValue}
-            >
-              <SelectTrigger className={formSelectClassName}>
-                <SelectValue>
-                  {selectedTimelineLabel}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={emptySelectValue}>{"Select timeline"}</SelectItem>
-                {timelineOptions.map((timeline) => (
-                  <SelectItem key={timeline} value={timeline}>
-                    {timeline}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <FieldError error={errors.timeline} />
-          </label>
-          <label className="flex flex-col gap-2 text-xs font-bold uppercase tracking-wide text-slate-500">
-            {"Priority"}
-            <Select
-              modal={false}
-              onValueChange={(value) => updateField("priority", (value ?? formValues.priority) as LeadFormValues["priority"])}
-              value={formValues.priority}
-            >
-              <SelectTrigger className={formSelectClassName}>
-                <SelectValue>
-                  {selectedPriorityLabel}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {leadFormSelectOptions.priorities.map((priority) => (
-                  <SelectItem key={priority} value={priority}>
-                    {formatLeadPriority(priority)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </label>
-          <label className="flex flex-col gap-2 text-xs font-bold uppercase tracking-wide text-slate-500">
-            {"Next Action"}
-            <Input
-              className="rounded-none border-slate-200 dark:border-white/10"
-              onChange={(event) => updateField("nextActionDate", event.target.value)}
-              type="datetime-local"
-              value={formValues.nextActionDate}
-            />
-            <FieldError error={errors.nextActionDate} />
-          </label>
-          <label className="flex flex-col gap-2 text-xs font-bold uppercase tracking-wide text-slate-500">
-            {"Action Type"}
-            <Select
-              modal={false}
-              onValueChange={(value) => updateField("nextActionType", !value || value === emptySelectValue ? "" : value)}
-              value={formValues.nextActionType || emptySelectValue}
-            >
-              <SelectTrigger className={formSelectClassName}>
-                <SelectValue>
-                  {formValues.nextActionType || "Select action"}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={emptySelectValue}>{"Select action"}</SelectItem>
-                {leadFormSelectOptions.nextActionTypes.map((type) => (
-                  <SelectItem key={type} value={type}>
-                    {type}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <FieldError error={errors.nextActionType} />
-          </label>
-          <label className="flex flex-col gap-2 text-xs font-bold uppercase tracking-wide text-slate-500">
-            {"Follow-Up Status"}
-            <Select
-              modal={false}
-              onValueChange={(value) => updateField("followUpStatus", (value ?? "Open") as LeadFormValues["followUpStatus"])}
-              value={formValues.followUpStatus}
-            >
-              <SelectTrigger className={formSelectClassName}>
-                <SelectValue>
-                  {formValues.followUpStatus.replace(/([A-Z])/g, " $1").trim()}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {leadFormSelectOptions.followUpStatuses.map((status) => (
-                  <SelectItem key={status} value={status}>
-                    {status.replace(/([A-Z])/g, " $1").trim()}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </label>
-          <label className="flex flex-col gap-2 text-xs font-bold uppercase tracking-wide text-slate-500">
-            {"Stage"}
-            <Select
-              modal={false}
-              onValueChange={(value) => updateField("stage", (value ?? formValues.stage) as LeadFormValues["stage"])}
-              value={formValues.stage}
-            >
-              <SelectTrigger className={formSelectClassName}>
-                <SelectValue>
-                  {selectedStageLabel}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {leadFormSelectOptions.stages.map((stage) => (
-                  <SelectItem key={stage} value={stage}>
-                    {leadStageMeta[stage].label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </label>
-          <label className="flex items-center gap-3 text-sm font-semibold text-slate-600 dark:text-slate-300">
-            <input
-              checked={formValues.inBoard}
-              className="form-checkbox rounded border-slate-300 text-primary focus:ring-primary"
-              onChange={(event) => updateField("inBoard", event.target.checked)}
-              type="checkbox"
-            />
-            {"Place on active board immediately"}
-          </label>
-          <div className="hidden md:block" />
-          <div className="flex flex-col gap-2 md:col-span-2">
-            <Textarea
-              className="min-h-28 rounded-none border-slate-200 dark:border-white/10"
-              onChange={(event) => updateField("summary", event.target.value)}
-              placeholder="Summary"
-              value={formValues.summary}
-            />
-            <FieldError error={errors.summary} />
-          </div>
-          <div className="flex flex-col gap-2 md:col-span-2">
-            <Textarea
-              className="min-h-24 rounded-none border-slate-200 dark:border-white/10"
-              onChange={(event) => updateField("notes", event.target.value)}
-              placeholder="Notes, one per line"
-              value={formValues.notes}
-            />
-          </div>
-          {submitError ? (
-            <p className="text-sm font-semibold text-rose-600 md:col-span-2">{submitError}</p>
-          ) : null}
-        </div>
-        <div className="flex justify-end gap-3 border-t border-slate-200 px-6 py-4 dark:border-white/10">
-          <button className={leadButtonClass} onClick={() => onOpenChange(false)} type="button">
-            {"Close"}
+          <button aria-label="Close lead form" className="flex size-9 items-center justify-center rounded-full text-[var(--ether-on-surface-variant)] hover:bg-[var(--ether-surface-container-high)]" onClick={() => onOpenChange(false)} type="button">
+            <AppIcon name="close" />
           </button>
-          <button
-            className="border border-primary bg-primary px-4 py-2 text-xs font-bold uppercase tracking-wide text-white disabled:cursor-not-allowed disabled:opacity-70"
-            disabled={isSubmitting}
-            onClick={async () => {
-              const nextErrors = validateLeadForm(formValues)
+        </header>
 
-              if (Object.keys(nextErrors).length > 0) {
-                setErrors(nextErrors)
-                return
-              }
+        <div className="custom-scrollbar flex-1 overflow-y-auto bg-[color-mix(in_srgb,var(--ether-surface)_55%,white)] px-6 py-6 sm:px-8">
+          <div className="space-y-8">
+            <section>
+              <div className="mb-4 flex items-center gap-2"><span className="h-5 w-1 rounded-full bg-[var(--ether-primary)]" /><h3 className="ether-label-caps text-[var(--ether-on-surface-variant)]">Client Information</h3></div>
+              <div className="grid gap-5 md:grid-cols-2">
+                <label className="space-y-2"><span className={fieldLabelClassName}>Full Name</span><Input className={inputClassName} onChange={(e) => updateField("name", e.target.value)} placeholder="Enter name" value={formValues.name} /><FieldError error={errors.name} /></label>
+                <label className="space-y-2"><span className={fieldLabelClassName}>Email Address</span><Input className={inputClassName} onChange={(e) => updateField("email", e.target.value)} placeholder="email@example.com" type="email" value={formValues.email} /><FieldError error={errors.email} /></label>
+                <label className="space-y-2"><span className={fieldLabelClassName}>Phone Number</span><Input className={inputClassName} onChange={(e) => updateField("phone", e.target.value)} placeholder="+1 (555) 000-0000" value={formValues.phone} /><FieldError error={errors.phone} /></label>
+                <label className="space-y-2"><span className={fieldLabelClassName}>Property Interest</span>
+                  <Select modal={false} onValueChange={(value) => updateField("property", !value || value === emptySelectValue ? "" : value)} value={formValues.property || emptySelectValue}>
+                    <SelectTrigger className={formSelectClassName}><span>{selectedPropertyLabel}</span></SelectTrigger>
+                    <SelectContent><SelectItem value={emptySelectValue}>Select property</SelectItem>{propertyTitles.map((title) => <SelectItem key={title} value={title}>{title}</SelectItem>)}</SelectContent>
+                  </Select><FieldError error={errors.property} />
+                </label>
+              </div>
+            </section>
 
-              const responseError = await onSubmit(formValues)
+            <section>
+              <div className="mb-4 flex items-center gap-2"><span className="h-5 w-1 rounded-full bg-[var(--ether-primary)]" /><h3 className="ether-label-caps text-[var(--ether-on-surface-variant)]">Financials & Profile</h3></div>
+              <div className="grid gap-5 md:grid-cols-3">
+                <label className="space-y-2"><span className={fieldLabelClassName}>Budget / Value</span><Input className={inputClassName} onChange={(e) => updateField("budget", e.target.value)} placeholder="$ 290,000" value={formValues.budget} /><FieldError error={errors.budget} /></label>
+                <label className="space-y-2"><span className={fieldLabelClassName}>Credit Score</span><Input className={inputClassName} onChange={(e) => updateField("creditScore", e.target.value)} placeholder="Individual Score" value={formValues.creditScore} /></label>
+                <label className="space-y-2"><span className={fieldLabelClassName}>Combined Credit</span><Input className={inputClassName} onChange={(e) => updateField("combinedCreditScore", e.target.value)} placeholder="Joint Score" value={formValues.combinedCreditScore} /></label>
+                <label className="space-y-2"><span className={fieldLabelClassName}>Source</span><Select modal={false} onValueChange={(value) => updateField("source", !value || value === emptySelectValue ? "" : value)} value={formValues.source || emptySelectValue}><SelectTrigger className={formSelectClassName}><span>{selectedSourceLabel}</span></SelectTrigger><SelectContent><SelectItem value={emptySelectValue}>Select source</SelectItem>{sourceOptions.map((source) => <SelectItem key={source} value={source}>{source}</SelectItem>)}</SelectContent></Select><FieldError error={errors.source} /></label>
+                <label className="space-y-2"><span className={fieldLabelClassName}>Interest Type</span><Select modal={false} onValueChange={(value) => updateField("interest", !value || value === emptySelectValue ? "" : value)} value={formValues.interest || emptySelectValue}><SelectTrigger className={formSelectClassName}><span>{selectedInterestLabel}</span></SelectTrigger><SelectContent><SelectItem value={emptySelectValue}>Select interest</SelectItem>{interestOptions.map((interest) => <SelectItem key={interest} value={interest}>{interest}</SelectItem>)}</SelectContent></Select><FieldError error={errors.interest} /></label>
+                <label className="space-y-2"><span className={fieldLabelClassName}>Timeline</span><Select modal={false} onValueChange={(value) => updateField("timeline", !value || value === emptySelectValue ? "" : value)} value={formValues.timeline || emptySelectValue}><SelectTrigger className={formSelectClassName}><span>{selectedTimelineLabel}</span></SelectTrigger><SelectContent><SelectItem value={emptySelectValue}>Select timeline</SelectItem>{timelineOptions.map((timeline) => <SelectItem key={timeline} value={timeline}>{timeline}</SelectItem>)}</SelectContent></Select><FieldError error={errors.timeline} /></label>
+              </div>
+            </section>
 
-              if (responseError) {
-                setSubmitError(responseError)
-                return
-              }
+            <section>
+              <div className="mb-4 flex items-center gap-2"><span className="h-5 w-1 rounded-full bg-[var(--ether-primary)]" /><h3 className="ether-label-caps text-[var(--ether-on-surface-variant)]">Lead Logic & Workflow</h3></div>
+              <div className="grid gap-5 md:grid-cols-2">
+                <label className="space-y-2"><span className={fieldLabelClassName}>Assigned Agent</span><Select modal={false} onValueChange={(value) => { if (!value || value === emptySelectValue) { updateField("agentId", null); updateField("agent", ""); return } const selectedAgent = agentOptions.find((agent) => `${agent.id}` === value); updateField("agentId", selectedAgent ? selectedAgent.id : null); updateField("agent", selectedAgent?.fullName ?? value) }} value={formValues.agentId ? `${formValues.agentId}` : formValues.agent || emptySelectValue}><SelectTrigger className={formSelectClassName}><span>{selectedAgentLabel}</span></SelectTrigger><SelectContent><SelectItem value={emptySelectValue}>Auto assign</SelectItem>{agentSelectOptions.map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select><FieldError error={errors.agent} /></label>
+                <label className="space-y-2"><span className={fieldLabelClassName}>Lead Priority</span><Select modal={false} onValueChange={(value) => updateField("priority", (value ?? formValues.priority) as LeadFormValues["priority"])} value={formValues.priority}><SelectTrigger className={formSelectClassName}><span>{selectedPriorityLabel}</span></SelectTrigger><SelectContent>{leadFormSelectOptions.priorities.map((priority) => <SelectItem key={priority} value={priority}>{formatLeadPriority(priority)}</SelectItem>)}</SelectContent></Select></label>
+                <label className="space-y-2"><span className={fieldLabelClassName}>Next Action Date</span><Input className={inputClassName} onChange={(e) => updateField("nextActionDate", e.target.value)} type="datetime-local" value={formValues.nextActionDate} /><FieldError error={errors.nextActionDate} /></label>
+                <label className="space-y-2"><span className={fieldLabelClassName}>Action Type</span><Select modal={false} onValueChange={(value) => updateField("nextActionType", !value || value === emptySelectValue ? "" : value)} value={formValues.nextActionType || emptySelectValue}><SelectTrigger className={formSelectClassName}><span>{formValues.nextActionType || "Select action"}</span></SelectTrigger><SelectContent><SelectItem value={emptySelectValue}>Select action</SelectItem>{leadFormSelectOptions.nextActionTypes.map((type) => <SelectItem key={type} value={type}>{type}</SelectItem>)}</SelectContent></Select><FieldError error={errors.nextActionType} /></label>
+                <label className="space-y-2"><span className={fieldLabelClassName}>Follow-up Status</span><Select modal={false} onValueChange={(value) => updateField("followUpStatus", (value ?? "Open") as LeadFormValues["followUpStatus"])} value={formValues.followUpStatus}><SelectTrigger className={formSelectClassName}><span>{formValues.followUpStatus.replace(/([A-Z])/g, " $1").trim()}</span></SelectTrigger><SelectContent>{leadFormSelectOptions.followUpStatuses.map((status) => <SelectItem key={status} value={status}>{status.replace(/([A-Z])/g, " $1").trim()}</SelectItem>)}</SelectContent></Select></label>
+                <label className="space-y-2"><span className={fieldLabelClassName}>Lifecycle Stage</span><Select modal={false} onValueChange={(value) => updateField("stage", (value ?? formValues.stage) as LeadFormValues["stage"])} value={formValues.stage}><SelectTrigger className={formSelectClassName}><span>{selectedStageLabel}</span></SelectTrigger><SelectContent>{leadFormSelectOptions.stages.map((stage) => <SelectItem key={stage} value={stage}>{leadStageMeta[stage].label}</SelectItem>)}</SelectContent></Select></label>
+              </div>
+            </section>
 
-              setErrors({})
-              setSubmitError(null)
-              onOpenChange(false)
-            }}
-            type="button"
-          >
-            {isSubmitting
-              ? mode === "create"
-                ? "Creating..."
-                : "Saving..."
-              : mode === "create"
-                ? "Create Lead"
-                : "Save Lead"}
-          </button>
+            <section>
+              <div className="mb-4 flex items-center gap-2"><span className="h-5 w-1 rounded-full bg-[var(--ether-primary)]" /><h3 className="ether-label-caps text-[var(--ether-on-surface-variant)]">Notes & Finalize</h3></div>
+              <label className="flex items-center gap-3 rounded-lg border border-[var(--ether-outline-variant)] bg-[var(--ether-surface-container-low)]/50 p-3 text-sm font-medium text-[var(--ether-on-surface)]"><input checked={formValues.inBoard} className="size-4 rounded border-[var(--ether-outline-variant)] text-[var(--ether-primary)] focus:ring-[var(--ether-primary)]" onChange={(e) => updateField("inBoard", e.target.checked)} type="checkbox" />Place on active board immediately</label>
+              <div className="mt-4 grid gap-4"><label className="space-y-2"><span className={fieldLabelClassName}>Summary</span><Textarea className="min-h-24 rounded-lg border-[var(--ether-outline-variant)]" onChange={(e) => updateField("summary", e.target.value)} value={formValues.summary} /><FieldError error={errors.summary} /></label><label className="space-y-2"><span className={fieldLabelClassName}>Internal Notes</span><Textarea className="min-h-24 rounded-lg border-[var(--ether-outline-variant)]" onChange={(e) => updateField("notes", e.target.value)} value={formValues.notes} /></label></div>
+            </section>
+
+            {submitError ? <p className="rounded-lg bg-[var(--ether-error-container)] p-3 text-sm font-semibold text-[var(--ether-error)]">{submitError}</p> : null}
+          </div>
         </div>
+
+        <footer className="flex items-center justify-end gap-3 border-t border-[var(--ether-outline-variant)] bg-white px-6 py-4 sm:px-8">
+          <button className="rounded-lg px-5 py-2.5 text-sm font-semibold text-[var(--ether-on-surface-variant)] hover:bg-[var(--ether-surface-container-high)]" onClick={() => onOpenChange(false)} type="button">Cancel</button>
+          <button className="rounded-lg bg-[var(--ether-primary)] px-7 py-2.5 text-sm font-bold text-white shadow-[0_8px_20px_rgba(67,67,213,0.24)] hover:bg-[var(--ether-primary-container)] disabled:opacity-60" disabled={isSubmitting} onClick={() => void handleSave()} type="button">{isSubmitting ? (mode === "create" ? "Creating..." : "Saving...") : (mode === "create" ? "Create Lead" : "Save Changes")}</button>
+        </footer>
       </DialogContent>
     </Dialog>
   )

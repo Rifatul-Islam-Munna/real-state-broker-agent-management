@@ -1,13 +1,14 @@
 "use client"
 
 import Link from "next/link"
+import { useState } from "react"
 
 import { AppIcon } from "@/components/ui/app-icon"
 import { type LeadItem, useLeadHistory } from "@/hooks/use-real-estate-api"
 import { formatDateTimeLabel, formatLeadPriority, formatRelativeTimeLabel } from "@/lib/admin-portal"
 import { cn } from "@/lib/utils"
 
-import { leadButtonClass, leadStageMeta, type OutreachType } from "./lead-shared"
+import { leadButtonClass, leadStageMeta } from "./lead-shared"
 
 function displayText(value?: string | null, fallback = "Not set") {
   const text = value?.trim() ?? ""
@@ -95,6 +96,7 @@ export function LeadKanbanCard({
   lead: LeadItem
   onOpen: (leadId: number) => void
 }) {
+  const [isExpanded, setIsExpanded] = useState(false)
   const lastActivityLabel = formatRelativeTimeLabel(
     lead.lastActivityAt ?? lead.updatedAt ?? lead.createdAt ?? new Date().toISOString(),
   )
@@ -102,42 +104,82 @@ export function LeadKanbanCard({
   return (
     <article
       className={cn(
-        "border border-slate-200 bg-white dark:border-white/10 dark:bg-slate-900",
-        isActive && "border-primary",
+        "group overflow-hidden rounded-xl bg-white shadow-[var(--shadow-surface-1)] transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-surface-2)]",
+        lead.isFollowUpOverdue && "border-l-4 border-l-[var(--ether-error)]",
+        isActive && "ring-2 ring-[var(--ether-primary)]/25",
       )}
     >
-      <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-4 py-3 dark:border-white/10">
-        <div>
-          <h4 className="text-sm font-bold text-slate-900 dark:text-white">{lead.name}</h4>
-          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-            {displayText(lead.property, "No property selected")}
-          </p>
-        </div>
+      <div className="flex items-start justify-between gap-3 px-5 pb-4 pt-5">
         <button
-          className="drag-handle cursor-grab border border-slate-200 px-2 py-1 text-slate-400 active:cursor-grabbing dark:border-white/10"
+          aria-expanded={isExpanded}
+          className="min-w-0 flex-1 text-left"
+          onClick={() => setIsExpanded((expanded) => !expanded)}
           type="button"
         >
-          <AppIcon className="text-sm" name="drag_indicator" />
+          <h4 className="truncate text-lg font-bold text-[var(--ether-on-surface)]">{lead.name}</h4>
+          <p className="mt-1 flex items-center gap-1 text-xs text-[var(--ether-on-surface-variant)]">
+            <AppIcon className="text-sm" name="location_on" />
+            <span className="truncate">{displayText(lead.property, "No property selected")}</span>
+          </p>
+          <div className="mt-3 flex items-center justify-between gap-3">
+            <span className="rounded-md bg-[var(--ether-surface-container)] px-2 py-1 text-[10px] font-semibold text-[var(--ether-on-surface-variant)]">
+              {lastActivityLabel}
+            </span>
+            <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--ether-primary)]">
+              {isExpanded ? "Show less" : "Show more"}
+              <AppIcon className="text-sm" name={isExpanded ? "expand_less" : "expand_more"} />
+            </span>
+          </div>
+        </button>
+
+        <button
+          aria-label="Drag lead card"
+          className="drag-handle flex size-8 shrink-0 cursor-grab items-center justify-center rounded-lg text-[var(--ether-outline)] transition hover:bg-[var(--ether-surface-container-low)] hover:text-[var(--ether-on-surface)] active:cursor-grabbing"
+          type="button"
+        >
+          <AppIcon className="text-lg" name="drag_indicator" />
         </button>
       </div>
-      <button className="block w-full px-4 py-4 text-left" onClick={() => onOpen(lead.id)} type="button">
-        <p className="text-sm font-semibold text-slate-900 dark:text-white">
-          {displayText(lead.budget, "Budget not set")}
-        </p>
-        <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">
-          {displayText(lead.summary, "No summary yet.")}
-        </p>
-        <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3 text-xs text-slate-500 dark:border-white/10 dark:text-slate-400">
-          <span className="font-semibold">{displayText(lead.agent, "No agent assigned")}</span>
-          <span>{lastActivityLabel}</span>
+
+      {isExpanded ? (
+        <div className="border-t border-[color-mix(in_srgb,var(--ether-outline-variant)_35%,transparent)] px-5 pb-5 pt-4">
+          <button className="block w-full text-left" onClick={() => onOpen(lead.id)} type="button">
+            <p className="text-2xl font-extrabold tracking-[-0.03em] text-[var(--ether-primary)]">
+              {displayText(lead.budget, "Budget not set")}
+            </p>
+            <p className="mt-3 line-clamp-2 text-xs italic leading-5 text-[var(--ether-on-surface-variant)]">
+              {displayText(lead.summary, "No summary yet.")}
+            </p>
+
+            <div className="mt-4 flex items-center justify-between border-t border-[color-mix(in_srgb,var(--ether-outline-variant)_35%,transparent)] pt-3 text-xs text-[var(--ether-on-surface-variant)]">
+              <span className="flex min-w-0 items-center gap-1 font-semibold">
+                <AppIcon className="text-sm" name="person" />
+                <span className="truncate">{displayText(lead.agent, "No agent assigned")}</span>
+              </span>
+              <span className="text-[10px] font-semibold text-[var(--ether-primary)]">Open details</span>
+            </div>
+
+            {lead.nextActionDate ? (
+              <div
+                className={cn(
+                  "mt-4 flex items-center gap-3 rounded-lg p-3",
+                  lead.isFollowUpOverdue
+                    ? "bg-[var(--ether-error)] text-white"
+                    : "bg-[color-mix(in_srgb,var(--ether-secondary-container)_28%,white)] text-[var(--ether-secondary)]",
+                )}
+              >
+                <span className={cn("flex size-8 shrink-0 items-center justify-center rounded-full", lead.isFollowUpOverdue ? "bg-white/20" : "bg-[var(--ether-secondary-container)]")}>
+                  <AppIcon className="text-lg" name={lead.isFollowUpOverdue ? "priority_high" : "calendar_today"} />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.08em]">{lead.isFollowUpOverdue ? "Overdue action" : "Next step"}</p>
+                  <p className="mt-1 truncate text-xs font-semibold">{displayText(lead.nextActionType, "Follow up")} ? {formatDateTimeLabel(lead.nextActionDate)}</p>
+                </div>
+              </div>
+            ) : null}
+          </button>
         </div>
-        {lead.nextActionDate ? (
-          <div className={cn("mt-3 border px-3 py-2 text-xs font-bold uppercase tracking-wide", lead.isFollowUpOverdue ? "border-rose-200 bg-rose-50 text-rose-700" : "border-amber-200 bg-amber-50 text-amber-700")}>
-            {lead.isFollowUpOverdue ? "Overdue: " : "Next: "}
-            {`${displayText(lead.nextActionType, "Follow up")} ${formatDateTimeLabel(lead.nextActionDate)}`}
-          </div>
-        ) : null}
-      </button>
+      ) : null}
     </article>
   )
 }
@@ -162,117 +204,149 @@ export function LeadDetailsPanel({
   const leadNotes = getLeadNotes(lead.notes)
   const sourceLabel = displayText(lead.source)
   const historyQuery = useLeadHistory(lead.id)
+  const agentInitials = displayText(lead.agent, "NA")
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("")
 
   return (
-    <div className="flex h-full flex-col overflow-hidden">
-      <div className="flex items-start justify-between gap-4 border-b border-slate-200 bg-white px-5 py-4 dark:border-white/10 dark:bg-slate-900">
+    <div className="flex h-full flex-col overflow-hidden bg-white">
+      <header className="flex items-center justify-between gap-4 border-b border-[var(--ether-outline-variant)] px-6 py-4">
         <div>
-          <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-400">{"Lead Details"}</p>
-          <h2 className="mt-1 text-lg font-bold text-slate-900 dark:text-white">{lead.name}</h2>
+          <p className="ether-label-caps text-[10px] text-[var(--ether-outline)]">Lead Management</p>
+          <h2 className="mt-1 text-xl font-bold tracking-[-0.02em] text-[var(--ether-on-surface)]">{lead.name}</h2>
         </div>
-        <button className={leadButtonClass} onClick={onClose} type="button">
-          {"Close Details"}
+        <button
+          className="inline-flex items-center gap-2 rounded-lg border border-[var(--ether-outline-variant)] px-3 py-2 text-xs font-semibold text-[var(--ether-on-surface-variant)] transition hover:bg-[var(--ether-surface-container-low)]"
+          onClick={onClose}
+          type="button"
+        >
+          <AppIcon name="close" />
+          Close Details
         </button>
-      </div>
-      <div className="flex-1 overflow-y-auto px-5 py-5">
-        <div className="border border-slate-200 bg-white p-5 dark:border-white/10 dark:bg-slate-900">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <div className="inline-flex items-center gap-2 border border-primary/20 bg-primary/5 px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-primary">
-                <span className={cn("size-2", leadStageMeta[lead.stage].dotClassName)} />
-                {leadStageMeta[lead.stage].label}
-              </div>
-              <p className="mt-4 text-sm leading-6 text-slate-600 dark:text-slate-300">
-                {displayText(lead.summary, "No summary yet.")}
-              </p>
-            </div>
-            <div className="border border-primary/20 bg-primary/5 px-3 py-2 text-xs font-bold text-primary">
-              {formatLeadPriority(lead.priority)}
-            </div>
+      </header>
+
+      <div className="custom-scrollbar flex-1 overflow-y-auto">
+        <section className="space-y-4 border-b border-[var(--ether-outline-variant)] bg-[color-mix(in_srgb,var(--ether-surface-container-low)_40%,white)] px-6 py-5">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center rounded-full border border-[var(--ether-primary)]/20 bg-[var(--ether-primary-fixed)] px-2.5 py-1 text-[10px] font-bold uppercase text-[var(--ether-primary)]">
+              <span className={cn("mr-1.5 size-1.5 rounded-full", leadStageMeta[lead.stage].dotClassName)} />
+              {leadStageMeta[lead.stage].label}
+            </span>
+            <span className="inline-flex rounded-full bg-[var(--ether-surface-container)] px-2.5 py-1 text-[10px] font-bold uppercase text-[var(--ether-on-surface-variant)]">
+              {formatLeadPriority(lead.priority)} interest
+            </span>
           </div>
-          <div className="mt-5">
-            <LeadActions
-              dealHref={dealHref}
-              historyHref={historyHref}
-              lead={lead}
-              onConvertLeadToDeal={onConvertLeadToDeal}
-              onDialogOpen={onDialogOpen}
-              onToggleBoard={onToggleBoard}
-            />
-          </div>
-          <div className="mt-5 grid gap-4 sm:grid-cols-2">
-            <div><p className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">{"Property"}</p><p className="mt-1 text-sm font-semibold text-slate-900 dark:text-white">{displayText(lead.property)}</p></div>
-            <div><p className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">{"Budget"}</p><p className="mt-1 text-sm font-semibold text-slate-900 dark:text-white">{displayText(lead.budget)}</p></div>
-            <div><p className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">{"Assigned Agent"}</p><p className="mt-1 text-sm font-semibold text-slate-900 dark:text-white">{displayText(lead.agent, "No agent assigned")}</p></div>
-            <div><p className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">{"Timeline"}</p><p className="mt-1 text-sm font-semibold text-slate-900 dark:text-white">{displayText(lead.timeline)}</p></div>
-            <div><p className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">{"Next Action"}</p><p className={cn("mt-1 text-sm font-semibold", lead.isFollowUpOverdue ? "text-rose-600" : "text-slate-900 dark:text-white")}>{lead.nextActionDate ? `${displayText(lead.nextActionType, "Follow up")} - ${formatDateTimeLabel(lead.nextActionDate)}` : "Not set"}</p></div>
-            <div><p className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">{"Follow-Up"}</p><p className="mt-1 text-sm font-semibold text-slate-900 dark:text-white">{lead.followUpStatus.replace(/([A-Z])/g, " $1").trim()}</p></div>
-            <div><p className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">{"Email"}</p><p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{displayText(lead.email)}</p></div>
-            <div><p className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">{"Phone"}</p><p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{displayText(lead.phone)}</p></div>
-            <div><p className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">{"Source"}</p><p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{sourceLabel}</p></div>
-            <div><p className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">{"Interest"}</p><p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{displayText(lead.interest)}</p></div>
-          </div>
-        </div>
-        <div className="mt-5 border border-slate-200 bg-white p-5 dark:border-white/10 dark:bg-slate-900">
-          <h3 className="text-sm font-bold uppercase tracking-[0.2em] text-slate-500">{"Notes & Activity"}</h3>
-          <div className="mt-5 space-y-5 border-l-2 border-slate-100 pl-5 dark:border-white/10">
-            <div className="relative">
-              <div className="absolute -left-[29px] top-1 size-3 bg-primary ring-4 ring-white dark:ring-slate-900" />
-              <p className="text-sm font-semibold text-slate-900 dark:text-white">{"Lead Created"}</p>
-              <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{`${sourceLabel} intake created this lead.`}</p>
-              <p className="mt-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">{formatDateTimeLabel(lead.createdAt)}</p>
-            </div>
-            <div className="relative">
-              <div className="absolute -left-[29px] top-1 size-3 bg-primary ring-4 ring-white dark:ring-slate-900" />
-              <p className="text-sm font-semibold text-slate-900 dark:text-white">{"Last Update"}</p>
-              <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{`Stage is ${leadStageMeta[lead.stage].label}.`}</p>
-              <p className="mt-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">{formatDateTimeLabel(lead.updatedAt)}</p>
-            </div>
-            {historyQuery.isLoading ? (
-              <p className="text-sm text-slate-500 dark:text-slate-400">{"Loading history..."}</p>
-            ) : historyQuery.error ? (
-              <p className="text-sm font-semibold text-rose-600">{historyQuery.error.message}</p>
-            ) : historyQuery.data && historyQuery.data.length > 0 ? (
-              historyQuery.data.map((entry) => (
-                <div key={`${lead.id}-history-${entry.id}-${entry.createdAt}`} className="relative">
-                  <div className="absolute -left-[29px] top-1 size-3 bg-primary ring-4 ring-white dark:ring-slate-900" />
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="text-sm font-semibold text-slate-900 dark:text-white">{entry.title}</p>
-                    <span className="border border-slate-200 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-600 dark:border-white/10 dark:text-slate-300">
-                      {entry.kind}
-                    </span>
-                    <span className="border border-primary/20 bg-primary/5 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-primary">
-                      {entry.status}
-                    </span>
-                  </div>
-                  <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{entry.summary}</p>
-                  {entry.provider ? (
-                    <p className="mt-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">
-                      {`Provider: ${entry.provider}`}
-                    </p>
-                  ) : null}
-                  <p className="mt-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">
-                    {formatDateTimeLabel(entry.scheduledAt ?? entry.occurredAt ?? entry.createdAt)}
-                  </p>
-                </div>
-              ))
-            ) : null}
-            {leadNotes.length > 0 ? (
-              leadNotes.map((note, index) => (
-                <div key={`${lead.id}-note-${index}`} className="relative">
-                  <div className="absolute -left-[29px] top-1 size-3 bg-primary ring-4 ring-white dark:ring-slate-900" />
-                  <p className="text-sm font-semibold text-slate-900 dark:text-white">{`Note ${index + 1}`}</p>
-                  <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{note}</p>
-                </div>
-              ))
+
+          <p className="text-xs leading-6 text-[var(--ether-on-surface-variant)]">
+            {displayText(lead.summary, "No lead summary is available yet.")}
+          </p>
+
+          <div className="grid grid-cols-12 gap-2">
+            {lead.linkedDealId ? (
+              <Link className="col-span-8 inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--ether-primary)] px-4 py-3 text-xs font-bold text-white" href={`${dealHref}?dealId=${lead.linkedDealId}`}>
+                <AppIcon name="rocket_launch" /> Open Deal
+              </Link>
             ) : (
-              <p className="text-sm text-slate-500 dark:text-slate-400">{"No notes yet for this lead."}</p>
+              <button className="col-span-8 inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--ether-primary)] px-4 py-3 text-xs font-bold text-white" onClick={() => void onConvertLeadToDeal(lead.id)} type="button">
+                <AppIcon name="rocket_launch" /> Create Deal
+              </button>
             )}
+            <Link className="col-span-4 inline-flex items-center justify-center gap-2 rounded-lg border border-[var(--ether-outline-variant)] px-4 py-3 text-xs font-bold text-[var(--ether-on-surface)]" href={historyHref}>
+              <AppIcon name="history" /> Logs
+            </Link>
+
+            <button className="col-span-3 inline-flex items-center justify-center rounded-lg border border-[var(--ether-outline-variant)] py-3 text-[var(--ether-primary)] hover:bg-[var(--ether-surface-container-low)]" onClick={() => onDialogOpen("email", lead.id)} type="button" title="Email">
+              <AppIcon name="mail" />
+            </button>
+            <button className="col-span-3 inline-flex items-center justify-center rounded-lg border border-[var(--ether-outline-variant)] py-3 text-[var(--ether-primary)] hover:bg-[var(--ether-surface-container-low)]" onClick={() => onDialogOpen("message", lead.id)} type="button" title="Message">
+              <AppIcon name="chat_bubble" />
+            </button>
+            <button className="col-span-3 inline-flex items-center justify-center rounded-lg border border-[var(--ether-outline-variant)] py-3 text-[var(--ether-primary)] hover:bg-[var(--ether-surface-container-low)]" onClick={() => onDialogOpen("call", lead.id)} type="button" title="Call">
+              <AppIcon name="call" />
+            </button>
+            <button className="col-span-3 inline-flex items-center justify-center gap-2 rounded-lg border border-[var(--ether-outline-variant)] py-3 text-xs font-bold text-[var(--ether-on-surface-variant)] hover:bg-[var(--ether-surface-container-low)]" onClick={() => onDialogOpen("edit", lead.id)} type="button">
+              <AppIcon name="edit" /> Edit
+            </button>
           </div>
+        </section>
+
+        <div className="space-y-8 px-6 py-7">
+          <section>
+            <h3 className="ether-label-caps flex items-center gap-2 text-[10px] text-[var(--ether-outline)]"><AppIcon name="person" /> Client Information</h3>
+            <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-5">
+              <div><p className="ether-label-caps text-[9px] text-[var(--ether-outline)]">Email Address</p><p className="mt-1 text-xs font-semibold text-[var(--ether-on-surface)]">{displayText(lead.email)}</p></div>
+              <div><p className="ether-label-caps text-[9px] text-[var(--ether-outline)]">Phone</p><p className="mt-1 text-xs font-semibold text-[var(--ether-on-surface)]">{displayText(lead.phone)}</p></div>
+              <div><p className="ether-label-caps text-[9px] text-[var(--ether-outline)]">Source</p><p className="mt-1 text-xs font-semibold text-[var(--ether-on-surface)]">{sourceLabel}</p></div>
+              <div>
+                <p className="ether-label-caps text-[9px] text-[var(--ether-outline)]">Assigned Agent</p>
+                <div className="mt-1 flex items-center gap-2"><span className="flex size-5 items-center justify-center rounded-full bg-[var(--ether-secondary-container)] text-[9px] font-bold text-[var(--ether-on-secondary-container)]">{agentInitials || "NA"}</span><p className="text-xs font-semibold text-[var(--ether-primary)]">{displayText(lead.agent, "No agent assigned")}</p></div>
+              </div>
+            </div>
+          </section>
+
+          <section>
+            <h3 className="ether-label-caps flex items-center gap-2 text-[10px] text-[var(--ether-outline)]"><AppIcon name="real_estate_agent" /> Property Interest</h3>
+            <div className="mt-4 grid grid-cols-2 gap-4 rounded-lg border border-[var(--ether-outline-variant)]/40 bg-[var(--ether-surface-container-low)]/60 p-4">
+              <div className="col-span-2"><p className="ether-label-caps text-[9px] text-[var(--ether-outline)]">Primary Property</p><p className="mt-1 text-xs font-bold text-[var(--ether-on-surface)]">{displayText(lead.property)}</p></div>
+              <div><p className="ether-label-caps text-[9px] text-[var(--ether-outline)]">Interest Type</p><p className="mt-1 text-xs font-semibold text-[var(--ether-on-surface)]">{displayText(lead.interest)}</p></div>
+              <div><p className="ether-label-caps text-[9px] text-[var(--ether-outline)]">Budget</p><p className="mt-1 text-xs font-bold text-[var(--ether-secondary)]">{displayText(lead.budget)}</p></div>
+            </div>
+          </section>
+
+          <section>
+            <h3 className="ether-label-caps flex items-center gap-2 text-[10px] text-[var(--ether-outline)]"><AppIcon name="event_available" /> Deal Logistics</h3>
+            <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-5">
+              <div><p className="ether-label-caps text-[9px] text-[var(--ether-outline)]">Timeline</p><p className="mt-1 text-xs font-semibold text-[var(--ether-on-surface)]">{displayText(lead.timeline)}</p></div>
+              <div><p className="ether-label-caps text-[9px] text-[var(--ether-outline)]">Follow-up Status</p><span className="mt-1 inline-block rounded bg-[color-mix(in_srgb,var(--ether-secondary-container)_30%,white)] px-2 py-1 text-[9px] font-bold uppercase text-[var(--ether-secondary)]">{lead.followUpStatus.replace(/([A-Z])/g, " $1").trim()}</span></div>
+              <div className={cn("col-span-2 rounded-r-lg border-l-4 p-3", lead.isFollowUpOverdue ? "border-[var(--ether-error)] bg-[var(--ether-error-container)]" : "border-[var(--ether-primary)] bg-[var(--ether-surface-container-low)]")}>
+                <p className={cn("ether-label-caps text-[9px]", lead.isFollowUpOverdue ? "text-[var(--ether-error)]" : "text-[var(--ether-primary)]")}>Immediate Next Action</p>
+                <p className="mt-1 text-xs font-bold text-[var(--ether-on-surface)]">{displayText(lead.nextActionType, "No next action")}</p>
+                <p className="mt-1 text-[10px] font-semibold text-[var(--ether-on-surface-variant)]">{lead.nextActionDate ? `Due ${formatDateTimeLabel(lead.nextActionDate)}` : "No due date"}</p>
+              </div>
+            </div>
+          </section>
+
+          <section>
+            <h3 className="ether-label-caps flex items-center gap-2 text-[10px] text-[var(--ether-outline)]"><AppIcon name="analytics" /> Notes & Activity Feed</h3>
+            <div className="relative ml-3 mt-5 space-y-6 border-l border-[var(--ether-outline-variant)] pl-6">
+              <ActivityItem title="Stage Updated" description={`Lead stage is ${leadStageMeta[lead.stage].label}.`} date={lead.updatedAt} />
+              <ActivityItem title="Lead Created" description={`${sourceLabel} intake created this lead.`} date={lead.createdAt} />
+
+              {historyQuery.isLoading ? <p className="text-xs text-[var(--ether-outline)]">Loading history...</p> : null}
+              {historyQuery.error ? <p className="text-xs font-semibold text-[var(--ether-error)]">{historyQuery.error.message}</p> : null}
+              {historyQuery.data?.map((entry) => (
+                <ActivityItem key={`${lead.id}-${entry.id}-${entry.createdAt}`} title={entry.title} description={entry.summary} date={entry.scheduledAt ?? entry.occurredAt ?? entry.createdAt} />
+              ))}
+              {leadNotes.map((note, index) => <ActivityItem key={`${lead.id}-note-${index}`} title={`Note ${index + 1}`} description={note} />)}
+            </div>
+          </section>
         </div>
       </div>
+
+      <footer className="flex items-center justify-between border-t border-[var(--ether-outline-variant)] bg-[var(--ether-surface-container-low)] px-5 py-4">
+        <div className="flex items-center gap-3">
+          <button className="inline-flex items-center gap-1 text-xs font-bold text-[var(--ether-error)] hover:underline" onClick={() => onDialogOpen("cancel", lead.id)} type="button">
+            <AppIcon name="delete" /> Archive Lead
+          </button>
+          <button className="text-xs font-semibold text-[var(--ether-on-surface-variant)]" onClick={() => void onToggleBoard(lead.id, !lead.inBoard)} type="button">
+            {lead.inBoard ? "Remove from board" : "Add to board"}
+          </button>
+        </div>
+        <div className="text-right"><p className="ether-label-caps text-[9px] text-[var(--ether-outline)]">Managed By</p><p className="text-xs font-bold text-[var(--ether-on-surface)]">Estate Operations</p></div>
+      </footer>
     </div>
   )
 }
 
-
+function ActivityItem({ title, description, date }: { title: string; description: string; date?: string | null }) {
+  return (
+    <div className="relative">
+      <span className="absolute -left-[29px] top-1 size-2 rounded-full bg-[var(--ether-primary)] ring-2 ring-white" />
+      <div className="flex items-start justify-between gap-4"><h4 className="text-xs font-bold text-[var(--ether-on-surface)]">{title}</h4>{date ? <span className="whitespace-nowrap text-[9px] font-bold uppercase text-[var(--ether-outline)]">{formatDateTimeLabel(date)}</span> : null}</div>
+      <p className="mt-1 text-xs leading-5 text-[var(--ether-on-surface-variant)]">{description}</p>
+    </div>
+  )
+}

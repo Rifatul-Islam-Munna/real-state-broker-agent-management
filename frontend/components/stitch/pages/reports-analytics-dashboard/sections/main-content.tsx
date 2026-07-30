@@ -64,10 +64,13 @@ function formatPercentageLabel(value: number) {
 }
 
 function formatRangeLabel(rangeStart: Date, rangeEnd: Date) {
-  return new Intl.DateTimeFormat("en-US", {
+  const formatter = new Intl.DateTimeFormat("en-US", {
     day: "numeric",
     month: "short",
-  }).formatRange(rangeStart, rangeEnd)
+    timeZone: "UTC",
+  })
+
+  return `${formatter.format(rangeStart)} – ${formatter.format(rangeEnd)}`
 }
 
 function buildCsvContent(rows: string[][]) {
@@ -321,25 +324,25 @@ export function MainContentSection() {
   }
 
   return (
-    <main className="flex min-w-0 flex-1 flex-col">
-      <header className="border-b border-border-color bg-surface-light px-8 py-6 dark:border-slate-800 dark:bg-slate-900">
-        <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <h2 className="text-2xl font-bold tracking-tight">{"Reports & Analytics"}</h2>
-            <div className="hidden h-6 w-px bg-border-color sm:block" />
-            <div className="inline-flex items-center gap-2 border border-border-color px-3 py-2 text-sm font-medium">
+    <main className="min-w-0 flex-1 bg-[var(--ether-surface)] p-4 sm:p-6 lg:p-8">
+      <header className="mb-7 bg-transparent">
+        <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+          <div>
+            <h2 className="ether-display-lg text-[var(--ether-on-surface)]">Operational Reports</h2><p className="mt-2 text-base text-[var(--ether-on-surface-variant)]">Real-time performance metrics across your enterprise.</p>
+            
+            <div className="mt-4 inline-flex items-center gap-2 rounded-xl bg-white px-4 py-3 text-sm font-medium text-[var(--ether-on-surface)] shadow-[var(--shadow-surface-1)] sm:mt-0">
               <AppIcon className="text-sm" name="calendar_today" />
               <span>{reportData.rangeLabel}</span>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            <button className="bg-accent px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-70" disabled={isLoading} onClick={handlePrintReport} type="button">
+            <button className="rounded-lg bg-[var(--ether-secondary)] px-4 py-3 text-sm font-semibold text-white shadow-[var(--shadow-surface-1)] transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60" disabled={isLoading} onClick={handlePrintReport} type="button">
               <span className="flex items-center gap-2">
                 <AppIcon className="text-sm" name="picture_as_pdf" />
                 {"Export PDF Report"}
               </span>
             </button>
-            <button className="bg-accent px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-70" disabled={isLoading} onClick={handleExportCsv} type="button">
+            <button className="rounded-lg bg-[var(--ether-secondary)] px-4 py-3 text-sm font-semibold text-white shadow-[var(--shadow-surface-1)] transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60" disabled={isLoading} onClick={handleExportCsv} type="button">
               <span className="flex items-center gap-2">
                 <AppIcon className="text-sm" name="download" />
                 {"Export CSV Data"}
@@ -349,28 +352,28 @@ export function MainContentSection() {
         </div>
       </header>
 
-      <div className="space-y-8 overflow-y-auto p-8">
+      <div className="mx-auto max-w-[1600px] space-y-7">
         {errorMessage ? (
-          <div className="border border-rose-200 bg-rose-50 p-6 text-sm font-semibold text-rose-700">
+          <div className="rounded-2xl bg-[var(--ether-error-container)] p-5 text-sm font-semibold text-[var(--ether-on-error-container)]">
             {errorMessage}
           </div>
         ) : null}
 
-        <section className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
+        <section className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-4">
           {reportData.stats.map((stat) => {
             const isPositive = stat.change >= 0
 
             return (
-              <article key={stat.label} className="border border-border-color bg-surface-light p-6 dark:border-slate-800 dark:bg-slate-900">
-                <p className="text-sm font-medium uppercase tracking-wider text-slate-500">
+              <article key={stat.label} className="rounded-[24px] bg-white p-6 shadow-[var(--shadow-surface-1)] transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-surface-2)]">
+                <p className="ether-label-caps text-[var(--ether-on-surface-variant)]">
                   {stat.label}
                 </p>
                 <div className="mt-2 flex items-end justify-between gap-4">
-                  <h3 className="text-3xl font-bold text-primary">{stat.value}</h3>
+                  <h3 className="ether-numeric-lg text-[var(--ether-on-surface)]">{stat.value}</h3>
                   <span
                     className={cn(
-                      "flex items-center text-sm font-bold",
-                      isPositive ? "text-green-600" : "text-rose-500",
+                      "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold",
+                      isPositive ? "bg-[color-mix(in_srgb,var(--ether-secondary-container)_35%,white)] text-[var(--ether-secondary)]" : "bg-[var(--ether-error-container)] text-[var(--ether-error)]",
                     )}
                   >
                     <AppIcon className="text-sm" name={isPositive ? "arrow_upward" : "arrow_downward"} />
@@ -382,51 +385,80 @@ export function MainContentSection() {
           })}
         </section>
 
-        <section className="border border-border-color bg-surface-light p-6 dark:border-slate-800 dark:bg-slate-900">
+        <section className="rounded-[24px] bg-white p-6 shadow-[var(--shadow-surface-1)] transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-surface-2)]">
           <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <h3 className="text-lg font-bold">{"Sales Performance (Revenue Trends)"}</h3>
-              <p className="mt-2 text-sm text-slate-500">
+              <h3 className="ether-headline-sm text-[var(--ether-on-surface)]">Sales Performance</h3>
+              <p className="mt-2 text-sm text-[var(--ether-on-surface-variant)]">
                 {"Completed deal revenue grouped into rolling weekly buckets from the selected report window."}
               </p>
             </div>
             <div className="flex gap-4">
               <div className="flex items-center gap-2">
-                <div className="size-3 bg-primary" />
+                <div className="size-3 rounded-full bg-[var(--ether-primary)]" />
                 <span className="text-xs font-medium">{"Residential"}</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="size-3 bg-secondary" />
+                <div className="size-3 rounded-full bg-[var(--ether-secondary-fixed-dim)]" />
                 <span className="text-xs font-medium">{"Commercial / Other"}</span>
               </div>
             </div>
           </div>
-          <div className="grid h-72 grid-cols-2 items-end gap-x-4 gap-y-6 border-b border-slate-200 pb-6 sm:grid-cols-4">
-            {reportData.revenueTrend.map((bucket) => {
-              const residentialHeight = Math.max((bucket.residentialRevenue / reportData.maxTrendValue) * 100, bucket.totalRevenue > 0 ? 10 : 0)
-              const commercialHeight = Math.max((bucket.commercialRevenue / reportData.maxTrendValue) * 100, bucket.commercialRevenue > 0 ? 8 : 0)
+          <div className="relative mt-8 rounded-2xl bg-[var(--ether-surface-container-low)] p-4 sm:p-6">
+            <div className="pointer-events-none absolute inset-x-4 top-6 bottom-[76px] flex flex-col justify-between sm:inset-x-6">
+              {[100, 75, 50, 25, 0].map((tick) => (
+                <div className="flex items-center gap-3" key={tick}>
+                  <span className="w-8 text-right text-[10px] font-semibold text-[var(--ether-outline)]">
+                    {tick}%
+                  </span>
+                  <div className="h-px flex-1 bg-[color-mix(in_srgb,var(--ether-outline-variant)_55%,transparent)]" />
+                </div>
+              ))}
+            </div>
 
-              return (
-                <div key={bucket.label} className="flex h-full flex-col justify-end gap-3">
-                  <div className="flex h-full items-end gap-2">
-                    <div className="flex-1 bg-secondary/35" style={{ height: `${commercialHeight}%` }} />
-                    <div className="flex-1 bg-primary" style={{ height: `${residentialHeight}%` }} />
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold uppercase text-slate-500">{bucket.label}</p>
-                    <p className="mt-1 text-sm font-semibold text-slate-700 dark:text-slate-200">
+            <div className="relative grid min-h-[300px] grid-cols-2 items-end gap-5 pl-11 sm:grid-cols-4 sm:gap-7">
+              {reportData.revenueTrend.map((bucket) => {
+                const residentialHeight = Math.max(
+                  (bucket.residentialRevenue / reportData.maxTrendValue) * 100,
+                  bucket.residentialRevenue > 0 ? 8 : 2,
+                )
+                const commercialHeight = Math.max(
+                  (bucket.commercialRevenue / reportData.maxTrendValue) * 100,
+                  bucket.commercialRevenue > 0 ? 8 : 2,
+                )
+
+                return (
+                  <div key={bucket.label} className="flex min-w-0 flex-col items-center">
+                    <div className="flex h-[220px] w-full items-end justify-center gap-2 sm:gap-3">
+                      <div
+                        aria-label={`${bucket.label} commercial revenue ${formatCurrency(bucket.commercialRevenue)}`}
+                        className="w-full max-w-10 rounded-t-xl bg-[var(--ether-secondary-fixed-dim)] shadow-[0_8px_18px_rgba(79,219,200,0.16)] transition-all duration-500"
+                        style={{ height: `${commercialHeight}%` }}
+                        title={`Commercial / Other: ${formatCurrency(bucket.commercialRevenue)}`}
+                      />
+                      <div
+                        aria-label={`${bucket.label} residential revenue ${formatCurrency(bucket.residentialRevenue)}`}
+                        className="w-full max-w-10 rounded-t-xl bg-[var(--ether-primary)] shadow-[0_8px_18px_rgba(67,67,213,0.16)] transition-all duration-500"
+                        style={{ height: `${residentialHeight}%` }}
+                        title={`Residential: ${formatCurrency(bucket.residentialRevenue)}`}
+                      />
+                    </div>
+                    <p className="mt-4 max-w-full text-center text-[10px] font-bold uppercase leading-4 tracking-[0.04em] text-[var(--ether-outline)]">
+                      {bucket.label}
+                    </p>
+                    <p className="mt-1 text-sm font-bold text-[var(--ether-on-surface)]">
                       {formatCompactCurrency(bucket.totalRevenue)}
                     </p>
                   </div>
-                </div>
-              )
-            })}
+                )
+              })}
+            </div>
           </div>
         </section>
 
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-          <section className="xl:col-span-2 border border-border-color bg-surface-light dark:border-slate-800 dark:bg-slate-900">
-            <div className="border-b border-border-color p-6 dark:border-slate-800">
+          <section className="xl:col-span-2 overflow-hidden rounded-[24px] bg-white shadow-[var(--shadow-surface-1)]">
+            <div className="p-6">
               <h3 className="text-lg font-bold">{"Agent Performance"}</h3>
             </div>
             {reportData.agentPerformance.length === 0 ? (
@@ -436,7 +468,7 @@ export function MainContentSection() {
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-left">
-                  <thead className="bg-slate-50 text-xs font-bold uppercase text-slate-500 dark:bg-slate-800">
+                  <thead className="bg-[color-mix(in_srgb,var(--ether-surface-container-low)_70%,white)] text-xs font-bold uppercase text-[var(--ether-outline)]">
                     <tr>
                       <th className="px-6 py-4">{"Agent Name"}</th>
                       <th className="px-6 py-4 text-center">{"Listings"}</th>
@@ -445,9 +477,9 @@ export function MainContentSection() {
                       <th className="px-6 py-4 text-right">{"Contribution"}</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-border-color text-sm dark:divide-slate-800">
+                  <tbody className="text-sm">
                     {reportData.agentPerformance.slice(0, 8).map((agent) => (
-                      <tr key={agent.fullName} className="transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/60">
+                      <tr key={agent.fullName} className="transition-colors hover:bg-[var(--ether-surface-container-low)]">
                         <td className="px-6 py-4 font-medium">{agent.fullName}</td>
                         <td className="px-6 py-4 text-center">{agent.listings}</td>
                         <td className="px-6 py-4 text-center">{agent.closedDeals}</td>
@@ -463,7 +495,7 @@ export function MainContentSection() {
             )}
           </section>
 
-          <section className="border border-border-color bg-surface-light p-6 dark:border-slate-800 dark:bg-slate-900">
+          <section className="rounded-[24px] bg-white p-6 shadow-[var(--shadow-surface-1)] transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-surface-2)]">
             <h3 className="mb-6 text-lg font-bold">{"Lead Source Distribution"}</h3>
             {reportData.leadSources.length === 0 ? (
               <p className="text-sm font-semibold text-slate-500">
@@ -499,11 +531,11 @@ export function MainContentSection() {
           </section>
         </div>
 
-        <section className="border border-border-color bg-surface-light dark:border-slate-800 dark:bg-slate-900">
-          <div className="flex flex-col gap-4 border-b border-border-color p-6 dark:border-slate-800 md:flex-row md:items-center md:justify-between">
+        <section className="rounded-[24px] bg-white shadow-[var(--shadow-surface-1)]">
+          <div className="flex flex-col gap-4 p-6 md:flex-row md:items-center md:justify-between">
             <div>
               <h3 className="text-lg font-bold">{"Top Performing Properties"}</h3>
-              <p className="mt-2 text-sm text-slate-500">
+              <p className="mt-2 text-sm text-[var(--ether-on-surface-variant)]">
                 {"Driven by live property records and lead activity from the current reporting window."}
               </p>
             </div>
@@ -511,10 +543,10 @@ export function MainContentSection() {
               <button
                 aria-pressed={performanceMode === "inquiries"}
                 className={cn(
-                  "px-3 py-1 text-xs font-bold uppercase transition-colors",
+                  "rounded-md px-3 py-2 text-xs font-bold uppercase transition-colors",
                   performanceMode === "inquiries"
-                    ? "bg-primary text-white"
-                    : "bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300",
+                    ? "bg-[var(--ether-primary)] text-white"
+                    : "bg-[var(--ether-surface-container-high)] text-[var(--ether-on-surface-variant)] hover:bg-[var(--ether-surface-container-highest)]",
                 )}
                 onClick={() => setPerformanceMode("inquiries")}
                 type="button"
@@ -524,10 +556,10 @@ export function MainContentSection() {
               <button
                 aria-pressed={performanceMode === "price"}
                 className={cn(
-                  "px-3 py-1 text-xs font-bold uppercase transition-colors",
+                  "rounded-md px-3 py-2 text-xs font-bold uppercase transition-colors",
                   performanceMode === "price"
-                    ? "bg-primary text-white"
-                    : "bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300",
+                    ? "bg-[var(--ether-primary)] text-white"
+                    : "bg-[var(--ether-surface-container-high)] text-[var(--ether-on-surface-variant)] hover:bg-[var(--ether-surface-container-highest)]",
                 )}
                 onClick={() => setPerformanceMode("price")}
                 type="button"
@@ -541,11 +573,11 @@ export function MainContentSection() {
               {"No property data is available yet."}
             </div>
           ) : (
-            <div className="grid grid-cols-1 divide-border-color md:grid-cols-3 md:divide-x dark:divide-slate-800">
+            <div className="grid grid-cols-1 gap-4 p-6 md:grid-cols-3">
               {reportData.topProperties.map((property) => (
-                <div key={property.id} className="flex gap-4 p-6">
+                <div key={property.id} className="flex gap-4 rounded-2xl bg-[var(--ether-surface-container-low)] p-4">
                   <div
-                    className="size-20 shrink-0 bg-cover bg-center"
+                    className="size-20 shrink-0 rounded-xl bg-cover bg-center"
                     style={{ backgroundImage: `url('${property.imageSrc}')` }}
                   />
                   <div className="min-w-0">
@@ -575,3 +607,5 @@ export function MainContentSection() {
     </main>
   )
 }
+
+

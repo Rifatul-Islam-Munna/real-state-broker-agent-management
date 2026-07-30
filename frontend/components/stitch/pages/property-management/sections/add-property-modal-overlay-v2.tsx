@@ -455,20 +455,20 @@ export function AddPropertyModalOverlaySection({
 
   return (
     <Dialog open onOpenChange={(open) => (!open ? onClose() : undefined)}>
-      <DialogContent className="!flex h-[92dvh] max-h-[92dvh] max-w-none flex-col gap-0 overflow-hidden p-0 sm:w-[94vw] lg:w-[78vw] xl:w-[70vw]">
-        <DialogHeader className="border-b px-6 py-5 sm:px-8">
-          <DialogTitle className="text-2xl">
-            {mode === "create" ? "Add new property" : "Update property"}
+      <DialogContent className="!flex h-[94dvh] max-h-[94dvh] max-w-none flex-col gap-0 overflow-hidden rounded-[24px] border-0 bg-white p-0 shadow-[0_30px_90px_rgba(11,28,48,0.22)] sm:w-[94vw] lg:w-[82vw] xl:w-[76vw] 2xl:w-[68vw]">
+        <DialogHeader className="px-6 pb-5 pt-7 sm:px-10 sm:pt-8">
+          <DialogTitle className="text-2xl font-bold tracking-[-0.02em] text-[var(--ether-on-surface)] sm:text-3xl">
+            {mode === "create" ? "Add New Property" : "Update Property"}
           </DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="mt-1 text-sm text-[var(--ether-on-surface-variant)] sm:text-base">
             {mode === "create"
-              ? "Fill in the details to list a new property on the market."
-              : "Adjust the listing details without leaving the property manager."}
+              ? "Create a premium listing for your high-value asset."
+              : "Update the listing details while preserving all existing property data."}
           </DialogDescription>
         </DialogHeader>
 
         <form className="flex min-h-0 flex-1 flex-col overflow-hidden" onSubmit={handleSubmit}>
-          <div className="flex-1 space-y-10 overflow-y-auto p-5 sm:p-8">
+          <div className="custom-scrollbar flex-1 space-y-10 overflow-y-auto px-6 pb-10 pt-2 sm:px-10">
             <PropertyMediaSection
               galleryError={errors.imageUrls}
               galleryInputRef={galleryInputRef}
@@ -517,7 +517,7 @@ export function AddPropertyModalOverlaySection({
             />
           </div>
 
-          <div className="flex flex-col gap-3 border-t bg-muted/35 p-5 sm:flex-row sm:items-center sm:justify-end sm:px-8">
+          <div className="flex flex-col gap-3 bg-white px-6 py-5 shadow-[0_-12px_30px_rgba(11,28,48,0.06)] sm:flex-row sm:items-center sm:justify-end sm:px-10">
             <div className="sm:mr-auto sm:max-w-xl">
               {errors.form || submitError ? (
                 <Alert variant="destructive">
@@ -525,10 +525,10 @@ export function AddPropertyModalOverlaySection({
                 </Alert>
               ) : null}
             </div>
-            <Button onClick={onClose} type="button" variant="outline">
+            <Button className="h-11 rounded-lg border-0 bg-transparent px-5 font-semibold text-[var(--ether-on-surface-variant)] shadow-none hover:bg-[var(--ether-surface-container-low)]" onClick={onClose} type="button" variant="outline">
               {"Cancel"}
             </Button>
-            <Button disabled={isBusy} type="submit">
+            <Button className="h-11 rounded-lg bg-[var(--ether-primary)] px-6 font-semibold text-white shadow-[0_10px_24px_rgba(67,67,213,0.24)] hover:bg-[var(--ether-primary-container)]" disabled={isBusy} type="submit">
               {isBusy
                 ? mode === "create"
                   ? isUploading

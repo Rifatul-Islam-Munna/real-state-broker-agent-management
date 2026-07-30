@@ -385,6 +385,11 @@ export function PropertyManagementPage() {
       ) : null}
       {detailsProperty ? (
         <PropertyDetailsSheet
+          onEdit={(property) => {
+            setDetailsProperty(null)
+            setSubmitError(null)
+            setModalState({ mode: "edit", property })
+          }}
           onOpenChange={(open) => {
             if (!open) setDetailsProperty(null)
           }}
@@ -395,3 +400,4 @@ export function PropertyManagementPage() {
     </>
   )
 }
+

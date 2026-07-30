@@ -1,11 +1,19 @@
 "use client"
 
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
+import { Building2, ChevronsUpDown, LayoutDashboard } from "lucide-react"
 
 import { PropertyOperationsSidebar } from "@/components/stitch/pages/property-operations/property-operations-sidebar"
-import { PortalBrandLink } from "@/components/stitch/shared/portal-brand-link"
 import { NavUser } from "@/components/nav-user"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { AppIcon } from "@/components/ui/app-icon"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -21,20 +29,13 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
-  SidebarSeparator,
 } from "@/components/ui/sidebar"
 import { getDashboardRoutesForUser, type DashboardRoute } from "@/lib/dashboard-routes"
 import { useLogoutMutation } from "@/hooks/use-auth"
 
 const routeGroups = [
-  {
-    label: "Overview",
-    hrefs: ["/dashboard", "/dashboard/reports"],
-  },
-  {
-    label: "Listings",
-    hrefs: ["/dashboard/properties", "/dashboard/property-chat-inbox"],
-  },
+  { label: "General", hrefs: ["/dashboard", "/dashboard/reports"] },
+  { label: "Listings", hrefs: ["/dashboard/properties", "/dashboard/property-chat-inbox"] },
   {
     label: "Leads",
     hrefs: [
@@ -67,17 +68,17 @@ const routeGroups = [
     ],
   },
   {
-    label: "Content",
-    hrefs: ["/dashboard/homepage", "/dashboard/blog", "/dashboard/marketing", "/dashboard/documents", "/dashboard/pdfs"],
-  },
-  {
     label: "Tools",
-    hrefs: ["/dashboard/tools"],
+    hrefs: [
+      "/dashboard/homepage",
+      "/dashboard/blog",
+      "/dashboard/marketing",
+      "/dashboard/documents",
+      "/dashboard/pdfs",
+      "/dashboard/tools",
+    ],
   },
-  {
-    label: "Business",
-    hrefs: ["/dashboard/deals", "/dashboard/team", "/dashboard/settings"],
-  },
+  { label: "Support", hrefs: ["/dashboard/deals", "/dashboard/team", "/dashboard/settings"] },
 ] as const
 
 type DashboardSidebarProps = {
@@ -100,6 +101,7 @@ export function DashboardSidebar({
   agentRoutePermissions,
 }: DashboardSidebarProps) {
   const pathname = usePathname()
+  const router = useRouter()
   const { mutate: logout, isPending } = useLogoutMutation()
   const navigation = getDashboardRoutesForUser(role, agentRoutePermissions)
   const homeHref = navigation[0]?.href ?? "/dashboard"
@@ -124,32 +126,59 @@ export function DashboardSidebar({
   }
 
   return (
-    <Sidebar
-      className="dashboard-sidebar bg-slate-950 text-slate-100"
-      collapsible="offcanvas"
-      variant="sidebar"
-    >
-      <SidebarHeader className="border-b border-white/10 bg-slate-950 p-4 text-slate-100">
-        <PortalBrandLink
-          agencyName={agencyName}
-          className="min-w-0 text-white"
-          href={homeHref}
-          iconWrapperClassName="bg-blue-500 p-2 text-white shadow-sm"
-          logoUrl={logoUrl}
-          nameClassName="font-bold tracking-tight text-white group-data-[collapsible=icon]:hidden"
-        />
+    <Sidebar className="dashboard-sidebar bg-white text-[var(--ether-on-surface)]" collapsible="offcanvas" variant="sidebar">
+      <SidebarHeader className="bg-white p-2.5">
+        <DropdownMenu>
+          <DropdownMenuTrigger className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left outline-none transition hover:bg-[var(--ether-surface-container-low)] data-popup-open:bg-[var(--ether-surface-container)]">
+            <span className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[var(--ether-primary-container)] text-white">
+              {logoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img alt={agencyName} className="h-full w-full object-contain" src={logoUrl} />
+              ) : (
+                <Building2 className="size-5" />
+              )}
+            </span>
+            <span className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
+              <span className="block truncate text-sm font-semibold text-[var(--ether-on-surface)]">{agencyName}</span>
+              <span className="block text-[11px] text-[var(--ether-outline)]">Workspace</span>
+            </span>
+            <ChevronsUpDown className="size-4 shrink-0 text-[var(--ether-outline)] group-data-[collapsible=icon]:hidden" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-[228px] rounded-xl border border-[var(--ether-outline-variant)] bg-white p-1.5 text-[var(--ether-on-surface)] shadow-xl" side="right" sideOffset={8}>
+            <DropdownMenuLabel className="px-2 py-1.5 text-[11px] font-medium uppercase tracking-[0.08em] text-[var(--ether-outline)]">
+              Dashboards
+            </DropdownMenuLabel>
+            <DropdownMenuItem className="gap-3 rounded-lg px-2.5 py-2.5 focus:bg-[var(--ether-surface-container-low)]" onClick={() => router.push(homeHref)}>
+              <span className="flex size-8 items-center justify-center rounded-lg border border-[var(--ether-outline-variant)] bg-white">
+                <LayoutDashboard className="size-4 text-[var(--ether-on-surface-variant)]" />
+              </span>
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold">Main dashboard</span>
+                <span className="block text-xs text-[var(--ether-outline)]">Sales and agency CRM</span>
+              </span>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator className="my-1.5 bg-[var(--ether-sidebar-border)]" />
+            <DropdownMenuItem className="gap-3 rounded-lg px-2.5 py-2.5 focus:bg-[var(--ether-surface-container-low)]" onClick={() => router.push("/dashboard/property-operations")}>
+              <span className="flex size-8 items-center justify-center rounded-lg border border-[var(--ether-outline-variant)] bg-white">
+                <Building2 className="size-4 text-[var(--ether-on-surface-variant)]" />
+              </span>
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold">Property management</span>
+                <span className="block text-xs text-[var(--ether-outline)]">Operations dashboard</span>
+              </span>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </SidebarHeader>
 
-      <SidebarContent className="bg-slate-950 py-2 text-slate-100">
+      <SidebarContent className="bg-white py-2 text-[var(--ether-on-surface-variant)]">
         <ScrollArea className="min-h-0 flex-1">
-          <nav aria-label="Dashboard">
+          <nav aria-label="Dashboard" className="pb-3">
             {navigation.length === 0 ? (
               <SidebarGroup>
                 <SidebarGroupContent>
                   <Alert>
-                    <AlertDescription>
-                      {"No dashboard routes are assigned yet. Ask an admin to grant access."}
-                    </AlertDescription>
+                    <AlertDescription>No dashboard routes are assigned yet. Ask an admin to grant access.</AlertDescription>
                   </Alert>
                 </SidebarGroupContent>
               </SidebarGroup>
@@ -162,11 +191,13 @@ export function DashboardSidebar({
                 if (items.length === 0) return null
 
                 return (
-                  <SidebarGroup className="px-3 py-2 text-slate-100" key={group.label}>
-                    <SidebarGroupLabel className="px-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-300">
+                  <SidebarGroup
+                    className="px-3 py-3"
+                    key={group.label}
+                  >
+                    <SidebarGroupLabel className="mb-1 h-auto px-2 text-[10px] font-medium uppercase tracking-[0.08em] text-[var(--ether-outline)]">
                       {group.label}
                     </SidebarGroupLabel>
-                    <SidebarSeparator className="mx-2 bg-white/10 opacity-100" />
                     <SidebarGroupContent>
                       <SidebarMenu className="gap-1">
                         {items.map((item) => {
@@ -176,13 +207,13 @@ export function DashboardSidebar({
                           return (
                             <SidebarMenuItem key={item.href}>
                               <SidebarMenuButton
-                                className="h-10 rounded-xl px-3 font-medium text-slate-200 hover:bg-white/10 hover:text-white data-active:bg-blue-500/20 data-active:text-white [&>svg]:text-slate-400 hover:[&>svg]:text-white data-active:[&>svg]:text-blue-200"
+                                className="h-9 rounded-lg px-2.5 text-[13px] font-medium text-[var(--ether-on-surface-variant)] transition-colors hover:bg-[var(--ether-surface-container-low)] hover:text-[var(--ether-on-surface)] data-active:bg-[var(--ether-surface-container)] data-active:text-[var(--ether-on-surface)] [&>svg]:size-4 [&>svg]:text-[var(--ether-on-surface-variant)]"
                                 isActive={isActive}
                                 render={<Link href={item.href} />}
                                 tooltip={item.label}
                               >
                                 <AppIcon name={item.icon} />
-                                <span className="!text-slate-200">{item.label}</span>
+                                <span>{item.label}</span>
                               </SidebarMenuButton>
                             </SidebarMenuItem>
                           )
@@ -196,14 +227,19 @@ export function DashboardSidebar({
           </nav>
         </ScrollArea>
       </SidebarContent>
-      <SidebarFooter className="border-t border-white/10 bg-slate-950 p-3 text-slate-100">
-        <NavUser
-          user={{ name: userName, email, avatar: avatarUrl ?? "", role }}
-          onLogout={() => logout()}
-          isLoggingOut={isPending}
-        />
+
+      <SidebarFooter className="bg-white p-3">
+        <div className="rounded-xl bg-[var(--ether-surface-container-low)] p-1">
+          <NavUser
+            user={{ name: userName, email, avatar: avatarUrl ?? "", role }}
+            onLogout={() => logout()}
+            isLoggingOut={isPending}
+          />
+        </div>
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>
   )
 }
+
+

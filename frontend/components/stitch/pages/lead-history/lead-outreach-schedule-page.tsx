@@ -8,7 +8,6 @@ import type { DealStage, LeadHistoryStatus, LeadOutreachScheduleItem, LeadStage 
 import { AppIcon } from "@/components/ui/app-icon"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import {
@@ -17,7 +16,6 @@ import {
   SelectGroup,
   SelectItem,
   SelectTrigger,
-  SelectValue,
 } from "@/components/ui/select"
 import {
   Sheet,
@@ -37,6 +35,7 @@ import {
   useLeadOutreachTemplates,
   useUpdateLeadOutreachScheduleStatus,
 } from "@/hooks/use-lead-outreach-api"
+import { cn } from "@/lib/utils"
 import {
   dealStageOrder,
   formatDateTimeLabel,
@@ -200,6 +199,8 @@ export function LeadOutreachSchedulePage() {
       truncated: (dealStagePreviewQuery.data?.totalCount ?? 0) > items.length,
     }
   }, [dealStagePreviewQuery.data?.items, dealStagePreviewQuery.data?.totalCount])
+  void leadStagePreviewItems
+  void dealStagePreview
   const isSaving = dispatchMutation.isPending || bulkDispatchMutation.isPending
   const filteredSchedule = useMemo(() => {
     const term = searchTerm.trim().toLowerCase()
@@ -235,16 +236,6 @@ export function LeadOutreachSchedulePage() {
     }),
     [filteredSchedule],
   )
-  const stageActivity = useMemo(() => {
-    const counts = new Map<string, number>()
-    for (const entry of scheduleQuery.data ?? []) {
-      const key = entry.leadStage || "No stage"
-      counts.set(key, (counts.get(key) ?? 0) + 1)
-    }
-    return Array.from(counts.entries())
-      .sort((left, right) => right[1] - left[1])
-      .slice(0, 6)
-  }, [scheduleQuery.data])
 
   function updateComposer(patch: Partial<ComposerState>) {
     setSubmitError(null)
@@ -387,627 +378,92 @@ export function LeadOutreachSchedulePage() {
   }
 
   return (
-    <main className="mx-auto max-w-7xl px-4 py-8 md:px-8">
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-slate-400">{"Lead Activity"}</p>
-          <h1 className="mt-2 text-3xl font-black text-slate-900">{"Lead Email, SMS & Call Table"}</h1>
-          <p className="mt-2 text-sm text-slate-500">
-            {"Track every sent, scheduled, failed, and received lead outreach item from one searchable table."}
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-3">
-          <Button render={<Link href="/dashboard/mail" />} variant="outline">
-            {"Open Mail"}
-          </Button>
-          <Button render={<Link href="/dashboard/leads" />}>
-            {"Back To Lead CRM"}
-          </Button>
-        </div>
-      </div>
-
-      <div className="flex flex-col gap-4">
-        <Card>
-          <CardHeader className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-center">
-            <div>
-              <CardTitle>{"Outreach Composer"}</CardTitle>
-              <CardDescription>{"Open a flexible sheet to send or schedule email, SMS, or MMS for one lead, a lead stage, or a deal stage."}</CardDescription>
-            </div>
-            <Button onClick={() => setComposerOpen(true)} type="button">
-              <AppIcon data-icon="inline-start" name="add" />
-              {"New Outreach"}
-            </Button>
-          </CardHeader>
-        </Card>
-        <section className="grid gap-3 md:grid-cols-3">
-          <ActionMetric icon="calendar_today" label="Scheduled now" value={actionCounts.scheduled} />
-          <ActionMetric icon="done" label="Sent / completed" value={actionCounts.completed} />
-          <ActionMetric icon="event_busy" label="Paused / canceled / failed" value={actionCounts.cancelled} />
+    <main className="min-h-full bg-[var(--ether-surface)] p-4 sm:p-6 lg:p-8">
+      <div className="mx-auto max-w-[1600px] space-y-7">
+        <section className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <h1 className="ether-display-lg text-[var(--ether-on-surface)]">Lead Outreach Management</h1>
+            <p className="mt-2 text-base text-[var(--ether-on-surface-variant)]">Track and coordinate high-velocity lead outreach from a unified command center.</p>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <Button className="h-11 rounded-lg border-[var(--ether-primary)] bg-[var(--ether-primary-fixed)] px-5 font-semibold text-[var(--ether-primary)]" render={<Link href="/dashboard/mail" />} variant="outline">Open Mail</Button>
+            <Button className="h-11 rounded-lg bg-[var(--ether-primary)] px-5 font-semibold text-white shadow-[0_10px_24px_rgba(67,67,213,0.22)] hover:bg-[var(--ether-primary-container)]" onClick={() => setComposerOpen(true)} type="button"><AppIcon name="add" /> New Outreach</Button>
+          </div>
         </section>
-        <Card className="shadow-none">
-          <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
-            <div>
-              <p className="text-sm font-semibold text-foreground">{"Stage activity"}</p>
-              <p className="mt-1 text-xs text-muted-foreground">{"Send batch outreach from New Outreach -> Lead Stage. Replies appear here and stop pending automation."}</p>
+
+        <section className="grid gap-6 md:grid-cols-3">
+          <ActionMetric icon="schedule" label="Scheduled now" value={actionCounts.scheduled} tone="primary" />
+          <ActionMetric icon="check_circle" label="Sent / completed" value={actionCounts.completed} tone="secondary" />
+          <ActionMetric icon="error" label="Paused / failed" value={actionCounts.cancelled} tone="tertiary" />
+        </section>
+
+        <section className="overflow-hidden rounded-[24px] bg-white shadow-[var(--shadow-surface-1)]">
+          <div className="flex flex-col gap-3 p-5 xl:flex-row xl:items-center">
+            <div className="relative flex-1">
+              <AppIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--ether-outline)]" name="search" />
+              <Input className="h-12 rounded-xl border-[var(--ether-outline-variant)] bg-white pl-11 shadow-none" onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search people, email, phone, message..." value={searchTerm} />
             </div>
-            <div className="flex flex-wrap gap-2">
-              {stageActivity.length ? stageActivity.map(([stage, count]) => (
-                <Badge key={stage} variant="outline">
-                  {stage === "No stage" ? stage : formatLeadStage(stage as LeadStage)}: {count}
-                </Badge>
-              )) : <Badge variant="outline">{"No activity yet"}</Badge>}
-            </div>
-          </CardContent>
-        </Card>
-        <Sheet open={composerOpen} onOpenChange={setComposerOpen}>
-          <SheetContent className="!w-[100vw] overflow-hidden p-0 sm:!max-w-none md:!w-[60vw] xl:!w-[50vw]" side="right">
-            <SheetHeader className="border-b pr-12">
-              <SheetTitle>{"New Outreach"}</SheetTitle>
-              <SheetDescription>{"Send now or schedule email plus SMS/MMS from one place."}</SheetDescription>
-            </SheetHeader>
+            <Select modal={false} onValueChange={(value) => setStageFilter(value === "all" ? "" : (value as LeadStage))} value={stageFilter || "all"}><SelectTrigger className="h-12 w-full rounded-xl border-[var(--ether-outline-variant)] bg-white px-4 xl:w-44"><span>{stageFilter ? formatLeadStage(stageFilter) : "Lead Stage"}</span></SelectTrigger><SelectContent><SelectGroup><SelectItem value="all">All stages</SelectItem>{leadStageOrder.map((stage) => <SelectItem key={stage} value={stage}>{formatLeadStage(stage)}</SelectItem>)}</SelectGroup></SelectContent></Select>
+            <Select modal={false} onValueChange={(value) => setKindFilter(value === "all" ? "" : (value as OutreachKind))} value={kindFilter || "all"}><SelectTrigger className="h-12 w-full rounded-xl border-[var(--ether-outline-variant)] bg-white px-4 xl:w-40"><span>{kindFilter ? formatKindLabel(kindFilter) : "Channel"}</span></SelectTrigger><SelectContent><SelectGroup><SelectItem value="all">All channels</SelectItem><SelectItem value="Email">Email</SelectItem><SelectItem value="Sms">SMS</SelectItem><SelectItem value="Call">Call</SelectItem></SelectGroup></SelectContent></Select>
+            <Select modal={false} onValueChange={(value) => setStatusFilter(value === "all" ? "" : (value as LeadHistoryStatus))} value={statusFilter || "all"}><SelectTrigger className="h-12 w-full rounded-xl border-[var(--ether-outline-variant)] bg-white px-4 xl:w-40"><span>{statusFilter || "Status"}</span></SelectTrigger><SelectContent><SelectGroup><SelectItem value="all">All states</SelectItem>{["Scheduled","Sent","Completed","Received","Failed"].map((status) => <SelectItem key={status} value={status}>{status}</SelectItem>)}</SelectGroup></SelectContent></Select>
+            <Select modal={false} onValueChange={(value) => setFollowUpFilter(value === "all" ? "" : (value as FollowUpFilter))} value={followUpFilter || "all"}><SelectTrigger className="h-12 w-full rounded-xl border-[var(--ether-outline-variant)] bg-white px-4 xl:w-40"><span>{followUpFilter || "Follow-up"}</span></SelectTrigger><SelectContent><SelectGroup><SelectItem value="all">All follow-up</SelectItem><SelectItem value="Direct">Direct only</SelectItem><SelectItem value="FollowUp">Follow-up only</SelectItem></SelectGroup></SelectContent></Select>
+          </div>
 
-            <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-4">
-            <div className="flex flex-col gap-2">
-              <span className="text-sm font-bold text-slate-700">{"Audience"}</span>
-              <div className="grid gap-2 sm:grid-cols-3">
-                {[
-                  { icon: "person", label: "Single Lead", value: "SingleLead" as const },
-                  { icon: "group", label: "Lead Stage", value: "LeadStage" as const },
-                  { icon: "contract", label: "Deal Stage", value: "DealStage" as const },
-                ].map((option) => {
-                  const isActive = composer.audienceType === option.value
-
-                  return (
-                    <Button
-                      key={option.value}
-                      onClick={() => updateComposer({ audienceType: option.value })}
-                      size="sm"
-                      type="button"
-                      variant={isActive ? "default" : "outline"}
-                    >
-                      <AppIcon data-icon="inline-start" name={option.icon} />
-                      <span>{option.label}</span>
-                    </Button>
-                  )
-                })}
-              </div>
-            </div>
-
-            {composer.audienceType === "SingleLead" ? (
-              <>
-                <label className="flex flex-col gap-2">
-                  <span className="text-sm font-bold text-slate-700">{"Lead"}</span>
-                  <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-                    <Input
-                      onChange={(event) => setLeadSearch(event.target.value)}
-                      placeholder="Search name, email, phone, property"
-                      value={leadSearch}
-                    />
-                    <Select
-                      modal={false}
-                      onValueChange={(value) => updateComposer({ leadId: value === "none" ? "" : value })}
-                      value={composer.leadId || "none"}
-                    >
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Choose a lead" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectGroup>
-                          <SelectItem value="none">{"Choose a lead"}</SelectItem>
-                          {filteredLeadOptions.map((item) => (
-                            <SelectItem key={item.id} value={String(item.id)}>
-                              {`${displayText(item.name, `Lead #${item.id}`)} - ${displayText(item.phone || item.email, "No contact")}`}
-                            </SelectItem>
-                          ))}
-                        </SelectGroup>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </label>
-
-                {selectedLead ? (
-                  <Card className="bg-slate-50">
-                    <CardContent className="p-4">
-                      <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">{"Selected Lead"}</p>
-                      <p className="mt-1 text-sm font-bold text-slate-900">{displayText(selectedLead.name, `Lead #${selectedLead.id}`)}</p>
-                      <p className="mt-2 text-sm text-slate-500">
-                        {`Phone: ${displayText(selectedLead.phone)} | Email: ${displayText(selectedLead.email)}`}
-                      </p>
-                    </CardContent>
-                  </Card>
-                ) : null}
-              </>
-            ) : null}
-
-            {composer.audienceType === "LeadStage" ? (
-              <>
-                <label className="flex flex-col gap-2">
-                  <span className="text-sm font-bold text-slate-700">{"Lead Stage"}</span>
-                  <Select
-                    modal={false}
-                    onValueChange={(value) => updateComposer({ leadStage: value === "none" ? "" : (value as LeadStage) })}
-                    value={composer.leadStage || "none"}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Choose a lead stage" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectGroup>
-                        <SelectItem value="none">{"Choose a lead stage"}</SelectItem>
-                        {leadStageOrder.map((stage) => (
-                          <SelectItem key={stage} value={stage}>{formatLeadStage(stage)}</SelectItem>
-                        ))}
-                      </SelectGroup>
-                    </SelectContent>
-                  </Select>
-                </label>
-
-                {composer.leadStage ? (
-                  <Card className="border-sky-200 bg-sky-50">
-                    <CardContent className="p-4">
-                      <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-sky-700">{"Stage Preview"}</p>
-                      <p className="mt-1 text-sm font-bold text-slate-900">
-                        {`${leadStagePreviewQuery.data?.totalCount ?? 0} leads in ${formatLeadStage(composer.leadStage)}`}
-                      </p>
-                      <p className="mt-2 text-sm text-slate-600">
-                        {leadStagePreviewQuery.isLoading
-                          ? "Loading matching leads..."
-                          : leadStagePreviewItems.length > 0
-                            ? `Examples: ${leadStagePreviewItems
-                                .slice(0, 4)
-                                .map((item) => displayText(item.name, `Lead #${item.id}`))
-                                .join(", ")}`
-                            : "No leads are currently in this stage."}
-                      </p>
-                    </CardContent>
-                  </Card>
-                ) : null}
-              </>
-            ) : null}
-
-            {composer.audienceType === "DealStage" ? (
-              <>
-                <label className="flex flex-col gap-2">
-                  <span className="text-sm font-bold text-slate-700">{"Deal Stage"}</span>
-                  <Select
-                    modal={false}
-                    onValueChange={(value) => updateComposer({ dealStage: value === "none" ? "" : (value as DealStage) })}
-                    value={composer.dealStage || "none"}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Choose a deal stage" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectGroup>
-                        <SelectItem value="none">{"Choose a deal stage"}</SelectItem>
-                        {dealStageOrder.map((stage) => (
-                          <SelectItem key={stage} value={stage}>{formatDealStage(stage)}</SelectItem>
-                        ))}
-                      </SelectGroup>
-                    </SelectContent>
-                  </Select>
-                </label>
-
-                {composer.dealStage ? (
-                  <Card className="border-amber-200 bg-amber-50">
-                    <CardContent className="p-4">
-                      <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-amber-700">{"Stage Preview"}</p>
-                      <p className="mt-1 text-sm font-bold text-slate-900">
-                        {`${dealStagePreview.totalDeals} deals in ${formatDealStage(composer.dealStage)}`}
-                      </p>
-                      <p className="mt-2 text-sm text-slate-600">
-                        {dealStagePreviewQuery.isLoading
-                          ? "Loading matching deals..."
-                          : dealStagePreview.linkedLeadCount > 0
-                            ? dealStagePreview.truncated
-                              ? `Showing ${dealStagePreview.linkedLeadCount} linked leads from the first 200 deals.`
-                              : `${dealStagePreview.linkedLeadCount} linked leads can receive outreach.`
-                            : "No linked leads were found in this deal stage yet."}
-                      </p>
-                      <p className="mt-2 text-sm text-slate-500">
-                        {dealStagePreview.previewLeadNames.length > 0
-                          ? `Examples: ${dealStagePreview.previewLeadNames.join(", ")}`
-                          : "Deals without a linked lead will be skipped automatically."}
-                      </p>
-                    </CardContent>
-                  </Card>
-                ) : null}
-              </>
-            ) : null}
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="flex flex-col gap-2">
-                <span className="text-sm font-bold text-slate-700">{"Channels"}</span>
-                <label className="flex items-center gap-2 rounded-lg border p-2.5 text-sm font-semibold">
-                  <Checkbox
-                    checked={composer.sendEmail}
-                    onCheckedChange={(checked) => updateComposer({ sendEmail: checked === true })}
-                  />
-                  {"Email"}
-                </label>
-                <label className="flex items-center gap-2 rounded-lg border p-2.5 text-sm font-semibold">
-                  <Checkbox
-                    checked={composer.sendSms}
-                    onCheckedChange={(checked) => updateComposer({ sendSms: checked === true })}
-                  />
-                  {"SMS / MMS"}
-                </label>
-              </div>
-              <label className="flex flex-col gap-2">
-                <span className="text-sm font-bold text-slate-700">{"Scheduled Time"}</span>
-                <Input
-                  onChange={(event) => updateComposer({ scheduledAt: event.target.value })}
-                  type="datetime-local"
-                  value={composer.scheduledAt}
-                />
-              </label>
-            </div>
-
-            <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
-              <div className="flex flex-col gap-2">
-                <div className="flex items-center justify-between gap-2 text-sm font-bold text-slate-700">
-                  {"Template"}
-                </div>
-                <Select
-                  modal={false}
-                  onValueChange={(value) => {
-                    const nextTemplateId = value === "none" ? "" : value
-                    const template = availableTemplates.find((item) => item.id === nextTemplateId)
-                    updateComposer({
-                      sendEmail: template ? template.channels.includes("Email") : composer.sendEmail,
-                      sendSms: template ? template.channels.includes("SMS") : composer.sendSms,
-                      templateId: nextTemplateId,
-                      title: template ? resolveTemplateTokens(template.subject, selectedLead) : composer.title,
-                      message: template ? resolveTemplateTokens(template.body, selectedLead) : composer.message,
-                    })
-                  }}
-                  value={composer.templateId || "none"}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Choose template" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectGroup>
-                      <SelectItem value="none">{"No template"}</SelectItem>
-                      {availableTemplates.map((template) => (
-                        <SelectItem key={template.id} value={template.id}>{`${template.name} - ${template.sequenceType ?? "Direct"}`}</SelectItem>
-                      ))}
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button render={<Link href="/dashboard/settings" />} size="sm" variant="outline">
-                {"Manage Templates"}
-              </Button>
-            </div>
-
-            {composer.sendEmail ? (
-              <label className="flex flex-col gap-2">
-                <span className="text-sm font-bold text-slate-700">{"Email Subject"}</span>
-                <Input
-                  onChange={(event) => updateComposer({ title: event.target.value })}
-                  placeholder="Viewing follow-up"
-                  value={composer.title}
-                />
-              </label>
-            ) : null}
-
-            {composer.sendSms ? (
-              <label className="flex flex-col gap-2">
-                <span className="text-sm font-bold text-slate-700">{"MMS Attachment URLs"}</span>
-                <Textarea
-                  className="min-h-16 rounded-xl border-slate-200"
-                  onChange={(event) => updateComposer({ mediaUrls: event.target.value })}
-                  placeholder="One URL per line, or comma separated"
-                  value={composer.mediaUrls}
-                />
-              </label>
-            ) : null}
-
-            <label className="flex flex-col gap-2">
-              <span className="text-sm font-bold text-slate-700">{"Message"}</span>
-              <Textarea
-                className="min-h-28 rounded-xl border-slate-200"
-                onChange={(event) => updateComposer({ message: event.target.value })}
-                placeholder="Write the email/SMS message"
-                value={composer.message}
-              />
-            </label>
-
-            {submitError ? (
-              <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">
-                {submitError}
-              </div>
-            ) : null}
-
-            {submitFeedback ? (
-              <div
-                className={`rounded-xl border px-4 py-3 text-sm ${
-                  submitFeedback.tone === "warning"
-                    ? "border-amber-200 bg-amber-50 text-amber-800"
-                    : "border-emerald-200 bg-emerald-50 text-emerald-800"
-                }`}
-              >
-                <p className="font-semibold">{submitFeedback.message}</p>
-                {submitFeedback.details.map((detail) => (
-                  <p key={detail} className="mt-1 text-xs font-medium">
-                    {detail}
-                  </p>
-                ))}
-              </div>
-            ) : null}
-
-            </div>
-            <SheetFooter className="border-t bg-background">
-              <Button
-                className="w-full"
-                disabled={isSaving}
-                onClick={() => void handleSaveSchedule()}
-                type="button"
-              >
-                <AppIcon data-icon="inline-start" name="calendar_today" />
-                {isSaving
-                  ? "Saving..."
-                  : composer.scheduledAt
-                    ? "Schedule Outreach"
-                    : "Send Outreach"}
-              </Button>
-            </SheetFooter>
-          </SheetContent>
-        </Sheet>
-        <Sheet open={selectedDetail !== null} onOpenChange={(open) => !open && setSelectedDetail(null)}>
-          <SheetContent className="sm:w-[34rem] sm:max-w-[34rem]">
-            <SheetHeader className="border-b">
-              <SheetTitle>{"Activity details"}</SheetTitle>
-              <SheetDescription>
-                {selectedDetail ? `${displayText(selectedDetail.leadName, `Lead #${selectedDetail.leadId}`)} - ${formatKindLabel(selectedDetail.kind)}` : ""}
-              </SheetDescription>
-            </SheetHeader>
-            {selectedDetail ? (
-              <div className="flex-1 space-y-4 overflow-y-auto px-5 pb-5">
-                <div className="grid grid-cols-2 gap-2">
-                  <DetailPill label="State" value={selectedDetail.status} />
-                  <DetailPill label="Stage" value={selectedDetail.leadStage ? formatLeadStage(selectedDetail.leadStage as LeadStage) : "No stage"} />
-                  <DetailPill label="Channel" value={formatKindLabel(selectedDetail.kind)} />
-                  <DetailPill label="Type" value={isFollowUpScheduleEntry(selectedDetail) ? "Follow-up" : "Direct / reply"} />
-                </div>
-                <div className="rounded-xl border bg-background p-4">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Contact"}</p>
-                  <p className="mt-2 font-semibold">{displayText(selectedDetail.leadName, `Lead #${selectedDetail.leadId}`)}</p>
-                  <p className="mt-1 text-sm text-muted-foreground">{displayText(selectedDetail.leadEmail)}</p>
-                  <p className="text-sm text-muted-foreground">{displayText(selectedDetail.leadPhone)}</p>
-                  <p className="mt-2 text-sm font-medium">{displayText(selectedDetail.leadProperty, "No property linked")}</p>
-                </div>
-                <div className="rounded-xl border bg-background p-4">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Message / reply"}</p>
-                  <p className="mt-2 font-semibold">{displayText(selectedDetail.title, "Untitled")}</p>
-                  <p className="mt-2 text-sm text-muted-foreground">{displayText(selectedDetail.summary, "No summary")}</p>
-                  <div className="mt-3 whitespace-pre-wrap rounded-lg bg-muted/40 p-3 text-sm leading-6">
-                    {displayText(selectedDetail.body, "No message body saved.")}
-                  </div>
-                </div>
-                <div className="rounded-xl border bg-background p-4 text-sm">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Timing"}</p>
-                  {selectedDetail.scheduledAt ? <p className="mt-2">{`Scheduled: ${formatDateTimeLabel(selectedDetail.scheduledAt)}`}</p> : null}
-                  {selectedDetail.occurredAt ? <p className="mt-2">{`Occurred: ${formatDateTimeLabel(selectedDetail.occurredAt)}`}</p> : null}
-                  <p className="mt-2">{`Saved: ${formatDateTimeLabel(selectedDetail.createdAt)}`}</p>
-                  <p className="mt-2 text-muted-foreground">{`Provider: ${displayText(selectedDetail.provider)}`}</p>
-                  <p className="mt-1 text-muted-foreground">{`Created by: ${displayText(selectedDetail.createdBy)}`}</p>
-                </div>
-              </div>
-            ) : null}
-            <SheetFooter className="border-t">
-              {selectedDetail ? (
-                <Button className="w-full" render={<Link href={buildHistoryHref(pathname, selectedDetail.leadId)} />} variant="outline">
-                  {"Open full lead history"}
-                </Button>
-              ) : null}
-            </SheetFooter>
-          </SheetContent>
-        </Sheet>
-
-        <Card>
-          <CardHeader className="flex flex-wrap items-end justify-between gap-4 border-b border-slate-200">
-            <div>
-              <CardTitle>{"Schedule Timeline"}</CardTitle>
-              <CardDescription>
-                {"This shows pending outreach first, then sent, completed, and failed items so you can see exactly what happened."}
-              </CardDescription>
-            </div>
-            <div className="grid w-full gap-3 md:grid-cols-[minmax(220px,1fr)_150px_150px_170px_170px]">
-              <Input
-                onChange={(event) => setSearchTerm(event.target.value)}
-                placeholder="Search people, email, phone, message..."
-                value={searchTerm}
-              />
-              <Select modal={false} onValueChange={(value) => setKindFilter(value === "all" ? "" : (value as OutreachKind))} value={kindFilter || "all"}>
-                <SelectTrigger><SelectValue placeholder="All channels" /></SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    <SelectItem value="all">{"All channels"}</SelectItem>
-                    <SelectItem value="Email">{"Email"}</SelectItem>
-                    <SelectItem value="Sms">{"SMS"}</SelectItem>
-                    <SelectItem value="Call">{"Call"}</SelectItem>
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-              <Select modal={false} onValueChange={(value) => setStatusFilter(value === "all" ? "" : (value as LeadHistoryStatus))} value={statusFilter || "all"}>
-                <SelectTrigger><SelectValue placeholder="All states" /></SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    <SelectItem value="all">{"All states"}</SelectItem>
-                    <SelectItem value="Scheduled">{"Scheduled"}</SelectItem>
-                    <SelectItem value="Sent">{"Sent"}</SelectItem>
-                    <SelectItem value="Completed">{"Completed"}</SelectItem>
-                    <SelectItem value="Received">{"Received"}</SelectItem>
-                    <SelectItem value="Failed">{"Failed"}</SelectItem>
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-              <Select modal={false} onValueChange={(value) => setStageFilter(value === "all" ? "" : (value as LeadStage))} value={stageFilter || "all"}>
-                <SelectTrigger><SelectValue placeholder="All stages" /></SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    <SelectItem value="all">{"All stages"}</SelectItem>
-                    {leadStageOrder.map((stage) => (
-                      <SelectItem key={stage} value={stage}>{formatLeadStage(stage)}</SelectItem>
-                    ))}
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-              <Select modal={false} onValueChange={(value) => setFollowUpFilter(value === "all" ? "" : (value as FollowUpFilter))} value={followUpFilter || "all"}>
-                <SelectTrigger><SelectValue placeholder="All follow-up" /></SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    <SelectItem value="all">{"All follow-up"}</SelectItem>
-                    <SelectItem value="Direct">{"Direct only"}</SelectItem>
-                    <SelectItem value="FollowUp">{"Follow-up only"}</SelectItem>
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-            </div>
-          </CardHeader>
-          <CardContent className="p-6">
-
-          {scheduleQuery.isLoading ? (
-            <div className="py-10 text-center text-sm font-semibold text-slate-500">{"Loading schedule..."}</div>
-          ) : scheduleQuery.error ? (
-            <div className="mt-6 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">
-              {scheduleQuery.error.message}
-            </div>
-          ) : filteredSchedule.length === 0 ? (
-            <div className="py-10 text-center text-sm font-semibold text-slate-500">{"No lead activity matches the current filters."}</div>
-          ) : (
-            <div className="mt-4 overflow-x-auto">
-              <Table className="min-w-[980px]">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>{"Lead / property"}</TableHead>
-                    <TableHead>{"Channel"}</TableHead>
-                    <TableHead>{"State"}</TableHead>
-                    <TableHead>{"Follow-Up"}</TableHead>
-                    <TableHead>{"When"}</TableHead>
-                    <TableHead className="text-right">{"Actions"}</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {paginatedSchedule.map((entry) => {
-                    const isFollowUp = isFollowUpScheduleEntry(entry)
-
-                    return (
-                      <TableRow key={`${entry.id}-${entry.updatedAt}`}>
-                        <TableCell className="max-w-[220px]">
-                          <p className="font-medium">{displayText(entry.leadName, `Lead #${entry.leadId}`)}</p>
-                          <p className="truncate text-xs font-semibold text-foreground">{displayText(entry.leadProperty, "No property linked")}</p>
-                          <p className="truncate text-muted-foreground">{displayText(entry.leadEmail)}</p>
-                          <p className="text-muted-foreground">{displayText(entry.leadPhone)}</p>
-                          <div className="mt-2 flex flex-wrap gap-1">
-                            {entry.leadStage ? <Badge variant="outline">{formatLeadStage(entry.leadStage as LeadStage)}</Badge> : null}
-                            {entry.leadPriority ? <Badge variant="secondary">{entry.leadPriority}</Badge> : null}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline">{formatKindLabel(entry.kind)}</Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={entry.status === "Failed" ? "destructive" : entry.status === "Scheduled" ? "outline" : "secondary"}>{entry.status}</Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={isFollowUp ? "secondary" : "outline"}>{isFollowUp ? "Follow-up" : "Direct"}</Badge>
-                        </TableCell>
-                        <TableCell className="min-w-[190px] text-muted-foreground">
-                          <p className="max-w-[260px] truncate font-medium text-foreground">{entry.title}</p>
-                          {entry.scheduledAt ? <p>{`Scheduled: ${formatDateTimeLabel(entry.scheduledAt)}`}</p> : null}
-                          {entry.occurredAt ? <p>{`Occurred: ${formatDateTimeLabel(entry.occurredAt)}`}</p> : null}
-                          <p>{`Saved: ${formatDateTimeLabel(entry.createdAt)}`}</p>
-                        </TableCell>
-                        <TableCell className="min-w-[320px] text-right">
-                          <div className="flex flex-col items-end gap-2">
-                            <div className="grid w-full grid-cols-2 gap-2">
-                              <Button render={<Link href={buildHistoryHref(pathname, entry.leadId)} />} size="sm" variant="outline">
-                                <AppIcon data-icon="inline-start" name="visibility" />
-                                {"History"}
-                              </Button>
-                              <Button onClick={() => setSelectedDetail(entry)} size="sm" type="button" variant="outline">
-                                <AppIcon data-icon="inline-start" name="description" />
-                                {"Details"}
-                              </Button>
-                              <Button
-                                disabled={entry.status === "Scheduled" || !entry.scheduledAt || scheduleStatusMutation.isPending}
-                                onClick={() => void scheduleStatusMutation.mutateAsync({ id: entry.id, status: "active" })}
-                                size="sm"
-                                variant="outline"
-                              >
-                                <AppIcon data-icon="inline-start" name="rocket_launch" />
-                                {"Resume"}
-                              </Button>
-                              <Button
-                                disabled={entry.status !== "Scheduled" || scheduleStatusMutation.isPending}
-                                onClick={() => void scheduleStatusMutation.mutateAsync({ id: entry.id, status: "paused" })}
-                                size="sm"
-                                variant="outline"
-                              >
-                                <AppIcon data-icon="inline-start" name="event_busy" />
-                                {"Pause"}
-                              </Button>
-                              <Button
-                                disabled={entry.status !== "Scheduled" || scheduleStatusMutation.isPending}
-                                onClick={() => void scheduleStatusMutation.mutateAsync({ id: entry.id, status: "cancelled" })}
-                                size="sm"
-                                variant="destructive"
-                              >
-                                <AppIcon data-icon="inline-start" name="close" />
-                                {"Cancel"}
-                              </Button>
-                            </div>
-                            <p className="text-xs text-muted-foreground">
-                              {entry.status === "Scheduled"
-                                ? "Pause or cancel before it sends."
-                                : entry.scheduledAt
-                                  ? "Resume only if this item still has a scheduled time."
-                                  : "Sent items stay in history."}
-                            </p>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    )
-                  })}
-                </TableBody>
+          <div className="overflow-x-auto">
+            {scheduleQuery.isLoading ? <div className="p-10 text-center text-sm font-semibold text-[var(--ether-outline)]">Loading schedule...</div> : scheduleQuery.error ? <div className="m-6 rounded-xl bg-[var(--ether-error-container)] p-4 text-sm font-semibold text-[var(--ether-error)]">{scheduleQuery.error.message}</div> : filteredSchedule.length === 0 ? <div className="p-10 text-center text-sm font-semibold text-[var(--ether-outline)]">No lead activity matches the current filters.</div> : (
+              <Table className="min-w-[1180px]">
+                <TableHeader><TableRow className="border-0 bg-[color-mix(in_srgb,var(--ether-surface-container-low)_70%,white)] hover:bg-[color-mix(in_srgb,var(--ether-surface-container-low)_70%,white)]"><TableHead className="px-6 py-4 ether-label-caps text-[var(--ether-on-surface-variant)]">Lead / Property</TableHead><TableHead className="ether-label-caps text-[var(--ether-on-surface-variant)]">Channel</TableHead><TableHead className="ether-label-caps text-[var(--ether-on-surface-variant)]">State</TableHead><TableHead className="ether-label-caps text-[var(--ether-on-surface-variant)]">Follow-up</TableHead><TableHead className="ether-label-caps text-[var(--ether-on-surface-variant)]">When</TableHead><TableHead className="pr-6 text-right ether-label-caps text-[var(--ether-on-surface-variant)]">Actions</TableHead></TableRow></TableHeader>
+                <TableBody>{paginatedSchedule.map((entry, index) => { const isFollowUp = isFollowUpScheduleEntry(entry); const initials = displayText(entry.leadName, `Lead #${entry.leadId}`).split(" ").filter(Boolean).slice(0,2).map((part) => part[0]).join("").toUpperCase(); return <TableRow className="border-0 transition hover:bg-[var(--ether-surface-container-low)]" key={`${entry.id}-${entry.updatedAt}`}><TableCell className="px-6 py-5"><div className="flex items-center gap-3"><span className={cn("flex size-10 shrink-0 items-center justify-center rounded-full text-xs font-bold", index % 3 === 0 ? "bg-[var(--ether-primary-fixed)] text-[var(--ether-primary)]" : index % 3 === 1 ? "bg-[var(--ether-secondary-container)] text-[var(--ether-on-secondary-container)]" : "bg-[var(--ether-tertiary-fixed)] text-[var(--ether-tertiary)]")}>{initials || "LD"}</span><div className="min-w-0"><p className="font-bold text-[var(--ether-on-surface)]">{displayText(entry.leadName, `Lead #${entry.leadId}`)}</p><p className="mt-1 max-w-64 truncate text-xs text-[var(--ether-on-surface-variant)]">{displayText(entry.leadProperty, "No property linked")} ? {displayText(entry.leadEmail || entry.leadPhone, "No contact")}</p><div className="mt-2 flex flex-wrap gap-1">{entry.leadStage ? <Badge className="rounded-md border-0 bg-[var(--ether-surface-container-high)] px-2 py-1 text-[9px] font-bold uppercase text-[var(--ether-on-surface-variant)]">{formatLeadStage(entry.leadStage as LeadStage)}</Badge> : null}{entry.leadPriority ? <Badge className="rounded-md border-0 bg-[var(--ether-primary-fixed)] px-2 py-1 text-[9px] font-bold uppercase text-[var(--ether-primary)]">{entry.leadPriority}</Badge> : null}</div></div></div></TableCell><TableCell><Badge className="rounded-full border-0 bg-[var(--ether-surface-container-high)] px-3 py-1.5 text-xs font-semibold text-[var(--ether-on-surface-variant)]">{formatKindLabel(entry.kind)}</Badge></TableCell><TableCell><Badge className={cn("rounded-full border-0 px-3 py-1.5 text-xs font-semibold", entry.status === "Failed" ? "bg-[var(--ether-error-container)] text-[var(--ether-error)]" : entry.status === "Scheduled" ? "bg-[var(--ether-primary-fixed)] text-[var(--ether-primary)]" : "bg-[color-mix(in_srgb,var(--ether-secondary-container)_35%,white)] text-[var(--ether-secondary)]")}>{entry.status}</Badge></TableCell><TableCell className="text-sm italic text-[var(--ether-on-surface-variant)]">{isFollowUp ? "Automated Follow-up" : "Direct Outreach"}</TableCell><TableCell className="min-w-48"><p className="font-semibold text-[var(--ether-on-surface)]">{entry.scheduledAt ? formatDateTimeLabel(entry.scheduledAt) : entry.occurredAt ? formatDateTimeLabel(entry.occurredAt) : "Pending review"}</p><p className="mt-1 text-xs text-[var(--ether-outline)]">Saved: {formatDateTimeLabel(entry.createdAt)}</p></TableCell><TableCell className="pr-6"><div className="flex flex-wrap justify-end gap-2"><Button className="h-9 rounded-lg px-3 text-xs font-semibold text-[var(--ether-on-surface-variant)] hover:bg-[var(--ether-primary-fixed)] hover:text-[var(--ether-primary)]" render={<Link href={buildHistoryHref(pathname, entry.leadId)} />} variant="ghost"><AppIcon name="timeline" /> History</Button><Button className="h-9 rounded-lg px-3 text-xs font-semibold text-[var(--ether-on-surface-variant)] hover:bg-[var(--ether-primary-fixed)] hover:text-[var(--ether-primary)]" onClick={() => setSelectedDetail(entry)} type="button" variant="ghost"><AppIcon name="visibility" /> Details</Button><Button className="h-9 rounded-lg px-3 text-xs font-semibold text-[var(--ether-on-surface-variant)] hover:bg-amber-100 hover:text-amber-700" disabled={entry.status !== "Scheduled" || scheduleStatusMutation.isPending} onClick={() => void scheduleStatusMutation.mutateAsync({ id: entry.id, status: "paused" })} type="button" variant="ghost"><AppIcon name="pause_circle" /> Pause</Button><Button className="h-9 rounded-lg px-3 text-xs font-semibold text-[var(--ether-on-surface-variant)] hover:bg-[color-mix(in_srgb,var(--ether-secondary-container)_30%,white)] hover:text-[var(--ether-secondary)]" disabled={entry.status === "Scheduled" || !entry.scheduledAt || scheduleStatusMutation.isPending} onClick={() => void scheduleStatusMutation.mutateAsync({ id: entry.id, status: "active" })} type="button" variant="ghost"><AppIcon name="play_circle" /> Resume</Button></div></TableCell></TableRow>})}</TableBody>
               </Table>
+            )}
+          </div>
+          {filteredSchedule.length > 0 ? <div className="flex flex-col gap-3 px-6 py-5 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-[var(--ether-on-surface-variant)]">Showing {(page - 1) * pageSize + 1}-{Math.min(page * pageSize, filteredSchedule.length)} of {filteredSchedule.length}</p><div className="flex items-center gap-2"><Button disabled={page <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))} size="sm" variant="outline">Previous</Button><span className="text-sm font-semibold">Page {page} of {totalPages}</span><Button disabled={page >= totalPages} onClick={() => setPage((value) => Math.min(totalPages, value + 1))} size="sm" variant="outline">Next</Button></div></div> : null}
+        </section>
+
+        <Sheet open={composerOpen} onOpenChange={setComposerOpen}>
+          <SheetContent className="!w-full overflow-hidden border-0 bg-[var(--ether-surface)] p-0 shadow-[-20px_0_60px_rgba(11,28,48,0.16)] sm:!max-w-none lg:!w-[44vw] lg:!max-w-[44vw]" side="right">
+            <SheetHeader className="bg-white px-6 pb-5 pt-6 text-left"><SheetTitle className="text-2xl font-bold tracking-[-0.02em]">New Outreach</SheetTitle><SheetDescription>Send now or schedule email plus SMS/MMS from one place.</SheetDescription></SheetHeader>
+            <div className="custom-scrollbar flex-1 space-y-6 overflow-y-auto p-6">
+              <section className="rounded-[24px] bg-white p-5 shadow-[var(--shadow-surface-1)]"><h3 className="ether-headline-sm">Audience</h3><div className="mt-4 grid gap-2 sm:grid-cols-3">{[{icon:"person",label:"Single Lead",value:"SingleLead" as const},{icon:"group",label:"Lead Stage",value:"LeadStage" as const},{icon:"contract",label:"Deal Stage",value:"DealStage" as const}].map((option) => <Button className={cn("rounded-lg", composer.audienceType === option.value ? "bg-[var(--ether-primary)] text-white" : "bg-[var(--ether-surface-container-low)] text-[var(--ether-on-surface-variant)]")} key={option.value} onClick={() => updateComposer({ audienceType: option.value })} type="button" variant="ghost"><AppIcon name={option.icon} />{option.label}</Button>)}</div></section>
+              <section className="rounded-[24px] bg-white p-5 shadow-[var(--shadow-surface-1)]">
+                {composer.audienceType === "SingleLead" ? <div className="space-y-3"><label className="ether-label-caps text-[var(--ether-on-surface-variant)]">Lead</label><Input className="h-11 rounded-lg border-[var(--ether-outline-variant)]" onChange={(event) => setLeadSearch(event.target.value)} placeholder="Search name, email, phone, property" value={leadSearch} /><Select modal={false} onValueChange={(value) => updateComposer({ leadId: value === "none" ? "" : value })} value={composer.leadId || "none"}><SelectTrigger className="h-11 rounded-lg border-[var(--ether-outline-variant)]"><span>{selectedLead ? displayText(selectedLead.name, `Lead #${selectedLead.id}`) : "Choose a lead"}</span></SelectTrigger><SelectContent><SelectItem value="none">Choose a lead</SelectItem>{filteredLeadOptions.map((item) => <SelectItem key={item.id} value={String(item.id)}>{`${displayText(item.name, `Lead #${item.id}`)} - ${displayText(item.phone || item.email, "No contact")}`}</SelectItem>)}</SelectContent></Select></div> : null}
+                {composer.audienceType === "LeadStage" ? <Select modal={false} onValueChange={(value) => updateComposer({ leadStage: value === "none" ? "" : (value as LeadStage) })} value={composer.leadStage || "none"}><SelectTrigger className="h-11 rounded-lg border-[var(--ether-outline-variant)]"><span>{composer.leadStage ? formatLeadStage(composer.leadStage) : "Choose a lead stage"}</span></SelectTrigger><SelectContent><SelectItem value="none">Choose a lead stage</SelectItem>{leadStageOrder.map((stage) => <SelectItem key={stage} value={stage}>{formatLeadStage(stage)}</SelectItem>)}</SelectContent></Select> : null}
+                {composer.audienceType === "DealStage" ? <Select modal={false} onValueChange={(value) => updateComposer({ dealStage: value === "none" ? "" : (value as DealStage) })} value={composer.dealStage || "none"}><SelectTrigger className="h-11 rounded-lg border-[var(--ether-outline-variant)]"><span>{composer.dealStage ? formatDealStage(composer.dealStage) : "Choose a deal stage"}</span></SelectTrigger><SelectContent><SelectItem value="none">Choose a deal stage</SelectItem>{dealStageOrder.map((stage) => <SelectItem key={stage} value={stage}>{formatDealStage(stage)}</SelectItem>)}</SelectContent></Select> : null}
+              </section>
+              <section className="rounded-[24px] bg-white p-5 shadow-[var(--shadow-surface-1)]"><div className="grid gap-4 sm:grid-cols-2"><label className="flex items-center gap-3 rounded-lg bg-[var(--ether-surface-container-low)] p-3 text-sm font-semibold"><Checkbox checked={composer.sendEmail} onCheckedChange={(checked) => updateComposer({ sendEmail: checked === true })} />Email</label><label className="flex items-center gap-3 rounded-lg bg-[var(--ether-surface-container-low)] p-3 text-sm font-semibold"><Checkbox checked={composer.sendSms} onCheckedChange={(checked) => updateComposer({ sendSms: checked === true })} />SMS / MMS</label></div><div className="mt-4 grid gap-4"><Input className="h-11 rounded-lg border-[var(--ether-outline-variant)]" onChange={(event) => updateComposer({ scheduledAt: event.target.value })} type="datetime-local" value={composer.scheduledAt} /><Select modal={false} onValueChange={(value) => { const nextTemplateId = value === "none" ? "" : value; const template = availableTemplates.find((item) => item.id === nextTemplateId); updateComposer({ sendEmail: template ? template.channels.includes("Email") : composer.sendEmail, sendSms: template ? template.channels.includes("SMS") : composer.sendSms, templateId: nextTemplateId, title: template ? resolveTemplateTokens(template.subject, selectedLead) : composer.title, message: template ? resolveTemplateTokens(template.body, selectedLead) : composer.message }) }} value={composer.templateId || "none"}><SelectTrigger className="h-11 rounded-lg border-[var(--ether-outline-variant)]"><span>{composer.templateId ? availableTemplates.find((item) => item.id === composer.templateId)?.name ?? "Template" : "No template"}</span></SelectTrigger><SelectContent><SelectItem value="none">No template</SelectItem>{availableTemplates.map((template) => <SelectItem key={template.id} value={template.id}>{template.name}</SelectItem>)}</SelectContent></Select>{composer.sendEmail ? <Input className="h-11 rounded-lg border-[var(--ether-outline-variant)]" onChange={(event) => updateComposer({ title: event.target.value })} placeholder="Email subject" value={composer.title} /> : null}{composer.sendSms ? <Textarea className="min-h-20 rounded-lg border-[var(--ether-outline-variant)]" onChange={(event) => updateComposer({ mediaUrls: event.target.value })} placeholder="MMS attachment URLs" value={composer.mediaUrls} /> : null}<Textarea className="min-h-40 rounded-lg border-[var(--ether-outline-variant)]" onChange={(event) => updateComposer({ message: event.target.value })} placeholder="Write the email/SMS message" value={composer.message} /></div></section>
+              {submitError ? <div className="rounded-xl bg-[var(--ether-error-container)] p-4 text-sm font-semibold text-[var(--ether-error)]">{submitError}</div> : null}{submitFeedback ? <div className={cn("rounded-xl p-4 text-sm", submitFeedback.tone === "warning" ? "bg-amber-100 text-amber-800" : "bg-[color-mix(in_srgb,var(--ether-secondary-container)_30%,white)] text-[var(--ether-secondary)]")}>{submitFeedback.message}</div> : null}
             </div>
-          )}
-          {filteredSchedule.length > 0 ? <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t pt-4">
-            <p className="text-sm text-muted-foreground">Showing {(page - 1) * pageSize + 1}-{Math.min(page * pageSize, filteredSchedule.length)} of {filteredSchedule.length}</p>
-            <div className="flex items-center gap-2"><Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>Previous</Button><span className="text-sm font-medium">Page {page} of {totalPages}</span><Button size="sm" variant="outline" disabled={page >= totalPages} onClick={() => setPage((value) => Math.min(totalPages, value + 1))}>Next</Button></div>
-          </div> : null}
-          </CardContent>
-        </Card>
+            <SheetFooter className="bg-white px-6 py-4 shadow-[0_-10px_30px_rgba(11,28,48,0.06)]"><Button className="h-11 w-full rounded-lg bg-[var(--ether-primary)] font-semibold text-white" disabled={isSaving} onClick={() => void handleSaveSchedule()} type="button"><AppIcon name="calendar_today" />{isSaving ? "Saving..." : composer.scheduledAt ? "Schedule Outreach" : "Send Outreach"}</Button></SheetFooter>
+          </SheetContent>
+        </Sheet>
+
+        <Sheet open={selectedDetail !== null} onOpenChange={(open) => !open && setSelectedDetail(null)}>
+          <SheetContent className="w-full border-0 bg-[var(--ether-surface)] p-0 sm:max-w-[40rem]"><SheetHeader className="bg-white px-6 py-6 text-left"><SheetTitle className="text-2xl font-bold">Activity Details</SheetTitle><SheetDescription>{selectedDetail ? `${displayText(selectedDetail.leadName, `Lead #${selectedDetail.leadId}`)} ? ${formatKindLabel(selectedDetail.kind)}` : ""}</SheetDescription></SheetHeader>{selectedDetail ? <div className="custom-scrollbar flex-1 space-y-5 overflow-y-auto p-6"><div className="grid grid-cols-2 gap-3"><DetailPill label="State" value={selectedDetail.status} /><DetailPill label="Stage" value={selectedDetail.leadStage ? formatLeadStage(selectedDetail.leadStage as LeadStage) : "No stage"} /><DetailPill label="Channel" value={formatKindLabel(selectedDetail.kind)} /><DetailPill label="Type" value={isFollowUpScheduleEntry(selectedDetail) ? "Follow-up" : "Direct / reply"} /></div><div className="rounded-[24px] bg-white p-5 shadow-[var(--shadow-surface-1)]"><p className="ether-label-caps text-[var(--ether-outline)]">Contact</p><p className="mt-3 font-bold">{displayText(selectedDetail.leadName, `Lead #${selectedDetail.leadId}`)}</p><p className="mt-1 text-sm text-[var(--ether-on-surface-variant)]">{displayText(selectedDetail.leadEmail)}</p><p className="text-sm text-[var(--ether-on-surface-variant)]">{displayText(selectedDetail.leadPhone)}</p><p className="mt-3 text-sm font-semibold">{displayText(selectedDetail.leadProperty, "No property linked")}</p></div><div className="rounded-[24px] bg-white p-5 shadow-[var(--shadow-surface-1)]"><p className="ether-label-caps text-[var(--ether-outline)]">Message / Reply</p><p className="mt-3 font-bold">{displayText(selectedDetail.title, "Untitled")}</p><p className="mt-2 text-sm text-[var(--ether-on-surface-variant)]">{displayText(selectedDetail.summary, "No summary")}</p><div className="mt-3 whitespace-pre-wrap rounded-xl bg-[var(--ether-surface-container-low)] p-4 text-sm leading-6">{displayText(selectedDetail.body, "No message body saved.")}</div></div><div className="rounded-[24px] bg-white p-5 text-sm shadow-[var(--shadow-surface-1)]"><p className="ether-label-caps text-[var(--ether-outline)]">Timing</p>{selectedDetail.scheduledAt ? <p className="mt-3">Scheduled: {formatDateTimeLabel(selectedDetail.scheduledAt)}</p> : null}{selectedDetail.occurredAt ? <p className="mt-2">Occurred: {formatDateTimeLabel(selectedDetail.occurredAt)}</p> : null}<p className="mt-2">Saved: {formatDateTimeLabel(selectedDetail.createdAt)}</p></div></div> : null}<SheetFooter className="bg-white px-6 py-4"><Button className="w-full" render={selectedDetail ? <Link href={buildHistoryHref(pathname, selectedDetail.leadId)} /> : <span />} variant="outline">Open full lead history</Button></SheetFooter></SheetContent>
+        </Sheet>
       </div>
     </main>
   )
 }
 
-function ActionMetric({ icon, label, value }: { icon: string; label: string; value: number }) {
+function ActionMetric({ icon, label, value, tone }: { icon: string; label: string; value: number; tone: "primary" | "secondary" | "tertiary" }) {
+  const toneClass = tone === "secondary" ? "bg-[color-mix(in_srgb,var(--ether-secondary-container)_30%,white)] text-[var(--ether-secondary)]" : tone === "tertiary" ? "bg-[var(--ether-error-container)] text-[var(--ether-error)]" : "bg-[var(--ether-primary-fixed)] text-[var(--ether-primary)]"
+  const bars = [28, 48, 36, 60, 42, 72, 50]
   return (
-    <Card className="shadow-none">
-      <CardContent className="flex items-center justify-between gap-3 p-4">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
-          <p className="mt-1 text-2xl font-semibold text-foreground">{value}</p>
-        </div>
-        <span className="flex size-10 items-center justify-center rounded-xl border bg-muted/30 text-foreground">
-          <AppIcon name={icon} />
-        </span>
-      </CardContent>
-    </Card>
+    <article className="rounded-[24px] bg-white p-6 shadow-[var(--shadow-surface-1)]">
+      <div className="flex items-start justify-between gap-4">
+        <span className={`flex size-12 items-center justify-center rounded-2xl ${toneClass}`}><AppIcon name={icon} /></span>
+        <div className="text-right"><p className="ether-label-caps text-[var(--ether-on-surface-variant)]">{label}</p><p className={cn("ether-numeric-lg mt-2", tone === "secondary" ? "text-[var(--ether-secondary)]" : tone === "tertiary" ? "text-[var(--ether-error)]" : "text-[var(--ether-primary)]")}>{value.toLocaleString("en-US")}</p></div>
+      </div>
+      <div className="mt-6 flex h-8 items-end gap-1.5">{bars.map((height, index) => <span className={cn("flex-1 rounded-t", tone === "secondary" ? "bg-[var(--ether-secondary)]/25" : tone === "tertiary" ? "bg-[var(--ether-error)]/18" : "bg-[var(--ether-primary)]/18", index === 5 && (tone === "secondary" ? "bg-[var(--ether-secondary)]" : tone === "tertiary" ? "bg-[var(--ether-error)]" : "bg-[var(--ether-primary)]"))} key={index} style={{ height: `${height}%` }} />)}</div>
+    </article>
   )
 }
 
 function DetailPill({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border bg-muted/30 p-3">
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="mt-1 text-sm font-semibold text-foreground">{value}</p>
+    <div className="rounded-xl bg-white p-4 shadow-[var(--shadow-surface-1)]">
+      <p className="ether-label-caps text-[10px] text-[var(--ether-outline)]">{label}</p>
+      <p className="mt-2 text-sm font-semibold text-[var(--ether-on-surface)]">{value}</p>
     </div>
   )
 }

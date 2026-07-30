@@ -178,17 +178,17 @@ export function PropertyFormFieldsSection({
   return (
     <>
       <section>
-        <h4 className="mb-6 flex items-center gap-2 text-lg font-bold text-slate-900 dark:text-white">
-          <AppIcon className="text-primary" name="info" />
-          {" Basic Information "}
+        <h4 className="mb-6 flex items-center gap-2 text-xl font-semibold text-[var(--ether-on-surface)] sm:text-2xl">
+          <AppIcon className="text-[var(--ether-secondary)]" name="description" />
+          {" Core Details "}
         </h4>
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
           <div className="flex flex-col gap-2 md:col-span-2">
-            <label className="text-sm font-bold text-slate-700 dark:text-slate-300">
+            <label className="ether-label-caps text-[var(--ether-on-surface-variant)]">
               {"Listing Title"}
             </label>
             <Input
-              className="form-input rounded-xl border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800 focus:ring-primary"
+              className="h-12 rounded-lg border-0 bg-[var(--ether-surface-container-low)] px-4 text-[var(--ether-on-surface)] shadow-none focus-visible:ring-2 focus-visible:ring-[var(--ether-primary)]/20"
               onChange={(event) => updateField("title", event.target.value)}
               placeholder="e.g. Grand Penthouse Downtown"
               type="text"
@@ -197,7 +197,7 @@ export function PropertyFormFieldsSection({
             <FieldError error={errors.title} />
           </div>
           <div className="flex flex-col gap-2">
-            <label className="text-sm font-bold text-slate-700 dark:text-slate-300">
+            <label className="ether-label-caps text-[var(--ether-on-surface-variant)]">
               {"Assigned Agent"}
             </label>
             <Select
@@ -224,7 +224,7 @@ export function PropertyFormFieldsSection({
             <FieldError error={errors.agentId} />
           </div>
           <div className="flex flex-col gap-2">
-            <label className="text-sm font-bold text-slate-700 dark:text-slate-300">
+            <label className="ether-label-caps text-[var(--ether-on-surface-variant)]">
               {"Property Type"}
             </label>
             <Select
@@ -244,7 +244,7 @@ export function PropertyFormFieldsSection({
             </Select>
           </div>
           <div className="flex flex-col gap-2">
-            <label className="text-sm font-bold text-slate-700 dark:text-slate-300">
+            <label className="ether-label-caps text-[var(--ether-on-surface-variant)]">
               {"Listing Type"}
             </label>
             <Select
@@ -264,11 +264,11 @@ export function PropertyFormFieldsSection({
             </Select>
           </div>
           <div className="flex flex-col gap-2">
-            <label className="text-sm font-bold text-slate-700 dark:text-slate-300">
+            <label className="ether-label-caps text-[var(--ether-on-surface-variant)]">
               {"Listing Price"}
             </label>
             <Input
-              className="form-input rounded-xl border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800 focus:ring-primary"
+              className="h-12 rounded-lg border-0 bg-[var(--ether-surface-container-low)] px-4 text-[var(--ether-on-surface)] shadow-none focus-visible:ring-2 focus-visible:ring-[var(--ether-primary)]/20"
               onChange={(event) => updateField("price", event.target.value)}
               placeholder="e.g. $850,000 or $4,200/mo"
               type="text"
@@ -277,7 +277,7 @@ export function PropertyFormFieldsSection({
             <FieldError error={errors.price} />
           </div>
           <div className="flex flex-col gap-2">
-            <label className="text-sm font-bold text-slate-700 dark:text-slate-300">
+            <label className="ether-label-caps text-[var(--ether-on-surface-variant)]">
               {"Listing Status"}
             </label>
             <Select
@@ -304,11 +304,11 @@ export function PropertyFormFieldsSection({
             </Select>
           </div>
           <div className="flex flex-col gap-2">
-            <label className="text-sm font-bold text-slate-700 dark:text-slate-300">
+            <label className="ether-label-caps text-[var(--ether-on-surface-variant)]">
               {"Market / City"}
             </label>
             <Input
-              className="form-input rounded-xl border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800 focus:ring-primary"
+              className="h-12 rounded-lg border-0 bg-[var(--ether-surface-container-low)] px-4 text-[var(--ether-on-surface)] shadow-none focus-visible:ring-2 focus-visible:ring-[var(--ether-primary)]/20"
               onChange={(event) => updateField("location", event.target.value)}
               placeholder="e.g. Miami, FL"
               type="text"
@@ -317,13 +317,13 @@ export function PropertyFormFieldsSection({
             <FieldError error={errors.location} />
           </div>
           <div className="flex flex-col gap-2 md:col-span-2">
-            <label className="text-sm font-bold text-slate-700 dark:text-slate-300">
+            <label className="ether-label-caps text-[var(--ether-on-surface-variant)]">
               {"Street Address"}
             </label>
             <div className="relative">
               <AppIcon className="absolute left-4 top-2.5 text-slate-400" name="location_on" />
               <Input
-                className="form-input w-full rounded-xl border-slate-200 bg-slate-50 pl-12 dark:border-slate-700 dark:bg-slate-800 focus:ring-primary"
+                className="h-12 w-full rounded-lg border-0 bg-[var(--ether-surface-container-low)] pl-12 text-[var(--ether-on-surface)] shadow-none focus-visible:ring-2 focus-visible:ring-[var(--ether-primary)]/20"
                 onChange={(event) => updateField("exactLocation", event.target.value)}
                 placeholder="Street, area, and city details"
                 type="text"
@@ -335,62 +335,54 @@ export function PropertyFormFieldsSection({
         </div>
       </section>
 
-      <section>
-        <h4 className="mb-6 flex items-center gap-2 text-lg font-bold text-slate-900 dark:text-white">
-          <AppIcon className="text-primary" name="person" />
-          {" Property Owner "}
-        </h4>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <section className="rounded-[24px] bg-[var(--ether-surface-container-low)] p-5 sm:p-6">
+        <div className="mb-6 flex items-center gap-3 border-b border-[color-mix(in_srgb,var(--ether-outline-variant)_35%,transparent)] pb-4">
+          <span className="flex size-10 items-center justify-center rounded-xl bg-white text-[var(--ether-primary)] shadow-sm">
+            <AppIcon name="person_pin" />
+          </span>
+          <div>
+            <h4 className="text-xl font-semibold text-[var(--ether-on-surface)] sm:text-2xl">Property Owner</h4>
+            <p className="mt-1 text-sm text-[var(--ether-on-surface-variant)]">Primary owner contact and internal handling notes.</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
           <div className="flex flex-col gap-2">
-            <label className="text-sm font-bold text-slate-700 dark:text-slate-300">{"Owner Name"}</label>
-            <Input
-              onChange={(event) => updateField("ownerName", event.target.value)}
-              placeholder="Property owner full name"
-              value={formValues.ownerName}
-            />
+            <label className="ether-label-caps text-[var(--ether-on-surface-variant)]">Owner Name</label>
+            <Input className="h-12 rounded-lg border-0 bg-white px-4 shadow-sm focus-visible:ring-2 focus-visible:ring-[var(--ether-primary)]/20" onChange={(event) => updateField("ownerName", event.target.value)} placeholder="Property owner full name" value={formValues.ownerName} />
           </div>
           <div className="flex flex-col gap-2">
-            <label className="text-sm font-bold text-slate-700 dark:text-slate-300">{"Owner Phone"}</label>
-            <Input
-              onChange={(event) => updateField("ownerPhone", event.target.value)}
-              placeholder="+1 555 000 0000"
-              type="tel"
-              value={formValues.ownerPhone}
-            />
+            <label className="ether-label-caps text-[var(--ether-on-surface-variant)]">Owner Phone</label>
+            <div className="relative">
+              <AppIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--ether-outline)]" name="call" />
+              <Input className="h-12 rounded-lg border-0 bg-white pl-11 shadow-sm focus-visible:ring-2 focus-visible:ring-[var(--ether-primary)]/20" onChange={(event) => updateField("ownerPhone", event.target.value)} placeholder="+1 555 000 0000" type="tel" value={formValues.ownerPhone} />
+            </div>
           </div>
-          <div className="flex flex-col gap-2">
-            <label className="text-sm font-bold text-slate-700 dark:text-slate-300">{"Owner Email"}</label>
-            <Input
-              onChange={(event) => updateField("ownerEmail", event.target.value)}
-              placeholder="owner@example.com"
-              type="email"
-              value={formValues.ownerEmail}
-            />
+          <div className="flex flex-col gap-2 md:col-span-2">
+            <label className="ether-label-caps text-[var(--ether-on-surface-variant)]">Owner Email</label>
+            <div className="relative">
+              <AppIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--ether-outline)]" name="mail" />
+              <Input className="h-12 rounded-lg border-0 bg-white pl-11 shadow-sm focus-visible:ring-2 focus-visible:ring-[var(--ether-primary)]/20" onChange={(event) => updateField("ownerEmail", event.target.value)} placeholder="owner@example.com" type="email" value={formValues.ownerEmail} />
+            </div>
           </div>
-          <div className="flex flex-col gap-2">
-            <label className="text-sm font-bold text-slate-700 dark:text-slate-300">{"Owner Extra Information"}</label>
-            <Textarea
-              className="min-h-24"
-              onChange={(event) => updateField("ownerExtraInfo", event.target.value)}
-              placeholder="Preferred contact time, ownership notes, access instructions..."
-              value={formValues.ownerExtraInfo}
-            />
+          <div className="flex flex-col gap-2 md:col-span-2">
+            <label className="ether-label-caps text-[var(--ether-on-surface-variant)]">Internal Operations Note</label>
+            <Textarea className="min-h-28 rounded-lg border-0 bg-white p-4 shadow-sm focus-visible:ring-2 focus-visible:ring-[var(--ether-primary)]/20" onChange={(event) => updateField("ownerExtraInfo", event.target.value)} placeholder="Preferred contact time, ownership notes, access instructions..." value={formValues.ownerExtraInfo} />
           </div>
         </div>
       </section>
 
       <section>
-        <h4 className="mb-6 flex items-center gap-2 text-lg font-bold text-slate-900 dark:text-white">
-          <AppIcon className="text-primary" name="straighten" />
+        <h4 className="mb-6 flex items-center gap-2 text-xl font-semibold text-[var(--ether-on-surface)] sm:text-2xl">
+          <AppIcon className="text-[var(--ether-secondary)]" name="straighten" />
           {" Specifications & Layout "}
         </h4>
         <div className="grid grid-cols-2 gap-6 md:grid-cols-3">
           <div className="flex flex-col gap-2">
-            <label className="text-sm font-bold text-slate-700 dark:text-slate-300">
+            <label className="ether-label-caps text-[var(--ether-on-surface-variant)]">
               {"Bedrooms"}
             </label>
             <Input
-              className="form-input rounded-xl border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800 focus:ring-primary"
+              className="h-12 rounded-lg border-0 bg-[var(--ether-surface-container-low)] px-4 text-[var(--ether-on-surface)] shadow-none focus-visible:ring-2 focus-visible:ring-[var(--ether-primary)]/20"
               onChange={(event) => updateField("bedRoom", event.target.value)}
               placeholder="e.g. 4"
               type="text"
@@ -399,11 +391,11 @@ export function PropertyFormFieldsSection({
             <FieldError error={errors.bedRoom} />
           </div>
           <div className="flex flex-col gap-2">
-            <label className="text-sm font-bold text-slate-700 dark:text-slate-300">
+            <label className="ether-label-caps text-[var(--ether-on-surface-variant)]">
               {"Bathrooms"}
             </label>
             <Input
-              className="form-input rounded-xl border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800 focus:ring-primary"
+              className="h-12 rounded-lg border-0 bg-[var(--ether-surface-container-low)] px-4 text-[var(--ether-on-surface)] shadow-none focus-visible:ring-2 focus-visible:ring-[var(--ether-primary)]/20"
               onChange={(event) => updateField("bathRoom", event.target.value)}
               placeholder="e.g. 3.5"
               type="text"
@@ -412,11 +404,11 @@ export function PropertyFormFieldsSection({
             <FieldError error={errors.bathRoom} />
           </div>
           <div className="flex flex-col gap-2">
-            <label className="text-sm font-bold text-slate-700 dark:text-slate-300">
+            <label className="ether-label-caps text-[var(--ether-on-surface-variant)]">
               {"Sq Ft / Size"}
             </label>
             <Input
-              className="form-input rounded-xl border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800 focus:ring-primary"
+              className="h-12 rounded-lg border-0 bg-[var(--ether-surface-container-low)] px-4 text-[var(--ether-on-surface)] shadow-none focus-visible:ring-2 focus-visible:ring-[var(--ether-primary)]/20"
               onChange={(event) => updateField("width", event.target.value)}
               placeholder="e.g. 3,200 sq ft"
               type="text"
@@ -428,8 +420,8 @@ export function PropertyFormFieldsSection({
       </section>
 
       <section>
-        <h4 className="mb-6 flex items-center gap-2 text-lg font-bold text-slate-900 dark:text-white">
-          <AppIcon className="text-primary" name="description" />
+        <h4 className="mb-6 flex items-center gap-2 text-xl font-semibold text-[var(--ether-on-surface)] sm:text-2xl">
+          <AppIcon className="text-[var(--ether-secondary)]" name="description" />
           {" Property Description "}
         </h4>
         <Textarea
@@ -440,7 +432,7 @@ export function PropertyFormFieldsSection({
         />
         <FieldError error={errors.description} />
         <div className="mt-4 flex flex-col gap-2">
-          <label className="text-sm font-bold text-slate-700 dark:text-slate-300">
+          <label className="ether-label-caps text-[var(--ether-on-surface-variant)]">
             {"Extra Property Description"}
           </label>
           <Textarea
@@ -452,76 +444,41 @@ export function PropertyFormFieldsSection({
         </div>
       </section>
 
-      <section>
-        <h4 className="mb-6 flex items-center gap-2 text-lg font-bold text-slate-900 dark:text-white">
-          <AppIcon className="text-primary" name="checklist" />
-          {" Amenities "}
-        </h4>
-        <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4 md:flex-row md:items-center dark:border-slate-700 dark:bg-slate-800/50">
-          <Input
-            className="form-input rounded-xl border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900 focus:ring-primary"
-            onChange={(event) => setNewAmenity(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault()
-                addAmenity()
-              }
-            }}
-            placeholder="Add a custom amenity"
-            type="text"
-            value={newAmenity}
-          />
-          <button
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-primary/90"
-            onClick={addAmenity}
-            type="button"
-          >
-            <AppIcon className="text-base" name="add" />
-            {"Add Amenity"}
-          </button>
-        </div>
-        {(formValues.keyAmenities ?? []).length > 0 ? (
-          <div className="mb-6 flex flex-wrap gap-3">
-            {(formValues.keyAmenities ?? []).map((amenity) => (
-              <button
-                key={`selected-${amenity}`}
-                className="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/5 px-4 py-2 text-sm font-semibold text-primary transition-colors hover:border-primary hover:bg-primary/10"
-                onClick={() => toggleAmenity(amenity, false)}
-                type="button"
-              >
-                <span>{amenity}</span>
-                <AppIcon className="text-sm" name="close" />
-              </button>
-            ))}
+      <section className="rounded-[24px] bg-white p-5 shadow-[var(--shadow-surface-1)] sm:p-6">
+        <div className="mb-6 flex items-center justify-between gap-4 border-b border-[color-mix(in_srgb,var(--ether-outline-variant)_35%,transparent)] pb-4">
+          <div className="flex items-center gap-3">
+            <span className="flex size-10 items-center justify-center rounded-xl bg-[var(--ether-primary-fixed)] text-[var(--ether-primary)]"><AppIcon name="checklist" /></span>
+            <div><h4 className="text-xl font-semibold text-[var(--ether-on-surface)] sm:text-2xl">Amenities</h4><p className="mt-1 text-sm text-[var(--ether-on-surface-variant)]">Select features that should appear on the listing.</p></div>
           </div>
-        ) : null}
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-          {amenityOptions.map((amenity) => (
-            <label key={amenity} className="group flex cursor-pointer items-center gap-3">
-              <input
-                checked={selectedAmenities.has(amenity)}
-                className="form-checkbox rounded border-slate-300 text-primary focus:ring-primary"
-                onChange={(event) => toggleAmenity(amenity, event.target.checked)}
-                type="checkbox"
-              />
-              <span className="text-sm text-slate-600 transition-colors group-hover:text-primary dark:text-slate-400">
-                {amenity}
-              </span>
-            </label>
-          ))}
+          <span className="rounded-full bg-[var(--ether-surface-container-low)] px-3 py-1 text-xs font-semibold text-[var(--ether-on-surface-variant)]">{selectedAmenities.size} selected</span>
+        </div>
+        <div className="mb-6 flex flex-col gap-3 rounded-2xl bg-[var(--ether-surface-container-low)] p-4 md:flex-row md:items-center">
+          <Input className="h-11 rounded-lg border-0 bg-white px-4 shadow-sm focus-visible:ring-2 focus-visible:ring-[var(--ether-primary)]/20" onChange={(event) => setNewAmenity(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addAmenity() } }} placeholder="Add a custom amenity" type="text" value={newAmenity} />
+          <button className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-[var(--ether-primary)] px-5 text-sm font-bold text-white transition hover:bg-[var(--ether-primary-container)]" onClick={addAmenity} type="button"><AppIcon className="text-base" name="add" />Add Amenity</button>
+        </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {amenityOptions.map((amenity) => {
+            const checked = selectedAmenities.has(amenity)
+            return (
+              <label key={amenity} className={`flex cursor-pointer items-center gap-3 rounded-xl px-4 py-3 transition ${checked ? "bg-[var(--ether-primary-fixed)] text-[var(--ether-primary)] shadow-sm" : "bg-[var(--ether-surface-container-low)] text-[var(--ether-on-surface-variant)] hover:bg-[var(--ether-surface-container-high)]"}`}>
+                <input checked={checked} className="size-4 rounded border-[var(--ether-outline-variant)] text-[var(--ether-primary)] focus:ring-[var(--ether-primary)]" onChange={(event) => toggleAmenity(amenity, event.target.checked)} type="checkbox" />
+                <span className="text-sm font-semibold">{amenity}</span>
+              </label>
+            )
+          })}
         </div>
       </section>
 
       <section>
-        <h4 className="mb-6 flex items-center gap-2 text-lg font-bold text-slate-900 dark:text-white">
-          <AppIcon className="text-primary" name="location_city" />
+        <h4 className="mb-6 flex items-center gap-2 text-xl font-semibold text-[var(--ether-on-surface)] sm:text-2xl">
+          <AppIcon className="text-[var(--ether-secondary)]" name="location_city" />
           {" Neighborhood Insights "}
         </h4>
         <div className="space-y-4">
           {neighborhoodInsights.map((insight, index) => (
             <div key={`neighborhood-insight-${index}`} className="rounded-2xl border border-slate-200 bg-slate-50 p-5 dark:border-slate-700 dark:bg-slate-800/60">
               <div className="mb-4 flex items-center justify-between gap-4">
-                <p className="text-sm font-bold text-slate-700 dark:text-slate-300">{`Insight ${index + 1}`}</p>
+                <p className="ether-label-caps text-[var(--ether-on-surface-variant)]">{`Insight ${index + 1}`}</p>
                 <button
                   className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-rose-600"
                   onClick={() => removeNeighborhoodInsight(index)}
@@ -533,7 +490,7 @@ export function PropertyFormFieldsSection({
               </div>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div className="flex flex-col gap-2">
-                  <label className="text-sm font-bold text-slate-700 dark:text-slate-300">
+                  <label className="ether-label-caps text-[var(--ether-on-surface-variant)]">
                     {"Insight Type"}
                   </label>
                   <Input
@@ -556,7 +513,7 @@ export function PropertyFormFieldsSection({
                   </datalist>
                 </div>
                 <div className="flex flex-col gap-2 md:col-span-2">
-                  <label className="text-sm font-bold text-slate-700 dark:text-slate-300">
+                  <label className="ether-label-caps text-[var(--ether-on-surface-variant)]">
                     {"Insight Description"}
                   </label>
                   <Textarea
@@ -584,8 +541,8 @@ export function PropertyFormFieldsSection({
       </section>
 
       <section>
-        <h4 className="mb-6 flex items-center gap-2 text-lg font-bold text-slate-900 dark:text-white">
-          <AppIcon className="text-primary" name="forum" />
+        <h4 className="mb-6 flex items-center gap-2 text-xl font-semibold text-[var(--ether-on-surface)] sm:text-2xl">
+          <AppIcon className="text-[var(--ether-secondary)]" name="forum" />
           {" Pre-Questions For Chat "}
         </h4>
         <div className="space-y-4">
@@ -597,7 +554,7 @@ export function PropertyFormFieldsSection({
             preQuestions.map((question, index) => (
               <div key={`pre-question-${question.id ?? index}`} className="rounded-2xl border border-slate-200 bg-slate-50 p-5 dark:border-slate-700 dark:bg-slate-800/60">
                 <div className="mb-4 flex items-center justify-between gap-4">
-                  <p className="text-sm font-bold text-slate-700 dark:text-slate-300">{`Pre-question ${index + 1}`}</p>
+                  <p className="ether-label-caps text-[var(--ether-on-surface-variant)]">{`Pre-question ${index + 1}`}</p>
                   <button
                     className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-rose-600"
                     onClick={() => removePreQuestion(index)}
@@ -609,7 +566,7 @@ export function PropertyFormFieldsSection({
                 </div>
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="flex flex-col gap-2 md:col-span-2">
-                    <label className="text-sm font-bold text-slate-700 dark:text-slate-300">
+                    <label className="ether-label-caps text-[var(--ether-on-surface-variant)]">
                       {"Question Prompt"}
                     </label>
                     <Input
@@ -621,7 +578,7 @@ export function PropertyFormFieldsSection({
                     />
                   </div>
                   <div className="flex flex-col gap-2 md:col-span-2">
-                    <label className="text-sm font-bold text-slate-700 dark:text-slate-300">
+                    <label className="ether-label-caps text-[var(--ether-on-surface-variant)]">
                       {"Helper Text"}
                     </label>
                     <Textarea
@@ -709,3 +666,5 @@ export function PropertyFormFieldsSection({
     </>
   )
 }
+
+
