@@ -25,6 +25,12 @@ export class RealtorShowingsController {
     return this.realtorShowingsService.findAll(search, Number(page), Number(pageSize));
   }
 
+  @Get('sequences/summary')
+  @ApiOperation({ summary: 'Get live realtor showing sequence metrics and optimization insights' })
+  getSequenceSummary(@Query('search') search?: string) {
+    return this.realtorShowingsService.getSequenceSummary(search);
+  }
+
   @Post('import')
   @ApiOperation({ summary: 'Import realtor showings from mapped CSV rows' })
   importRows(@Body() payload: any) {

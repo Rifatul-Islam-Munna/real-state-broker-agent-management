@@ -92,15 +92,15 @@ export function DealKanbanCard({
   return (
     <Card
       className={cn(
-        "gap-0 overflow-hidden py-0 shadow-xs",
-        isActive && "border-primary ring-2 ring-primary/10",
+        "group overflow-hidden rounded-xl border-0 bg-white py-0 shadow-[var(--shadow-surface-1)] transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-surface-2)]",
+        isActive && "ring-2 ring-[var(--ether-primary)]/25",
       )}
       size="sm"
     >
-      <CardHeader className="flex flex-row items-start justify-between border-b py-3">
+      <CardHeader className="flex flex-row items-start justify-between border-0 px-5 pb-3 pt-5">
         <div className="min-w-0">
-          <Badge variant="secondary">{deal.type}</Badge>
-          <CardTitle className="mt-3 line-clamp-2 text-sm">{deal.title}</CardTitle>
+          <Badge className="rounded-md bg-[var(--ether-surface-container)] px-2 py-1 text-[10px] font-semibold text-[var(--ether-on-surface-variant)]" variant="secondary">{deal.type}</Badge>
+          <CardTitle className="mt-3 line-clamp-2 text-lg font-bold text-[var(--ether-on-surface)]">{deal.title}</CardTitle>
         </div>
         <Button
           aria-label="Drag deal"
@@ -113,20 +113,20 @@ export function DealKanbanCard({
         </Button>
       </CardHeader>
       <Button
-        className="h-auto w-full justify-start rounded-none p-0 text-left hover:bg-muted/35"
+        className="h-auto w-full justify-start rounded-none p-0 text-left hover:bg-[var(--ether-surface-container-low)]"
         onClick={() => onOpen(deal.id)}
         type="button"
         variant="ghost"
       >
         <CardContent className="w-full p-4">
-          <p className="text-sm font-semibold">
+          <p className="text-sm font-bold text-[var(--ether-on-surface)]">
             {displayText(deal.client, "Client not set")}
           </p>
-          <p className="mt-2 line-clamp-3 text-sm leading-6 text-muted-foreground">
+          <p className="mt-2 line-clamp-3 text-xs leading-5 text-[var(--ether-on-surface-variant)]">
             {displayText(deal.note, "No deal note yet.")}
           </p>
           <Separator className="my-3" />
-          <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+          <div className="flex items-center justify-between gap-3 text-xs text-[var(--ether-on-surface-variant)]">
             <span className="font-semibold text-foreground">
               {formatDealValue(deal.value)}
             </span>

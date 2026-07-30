@@ -50,7 +50,7 @@ export function MainContentAreaSection() {
   const isInitialLoading =
     !agentUsersQuery.data &&
     (agentUsersQuery.isLoading || agentUsersQuery.isFetching)
-  const agents = agentUsersQuery.data ?? []
+  const agents = useMemo(() => agentUsersQuery.data ?? [], [agentUsersQuery.data])
 
   const filteredAgents = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase()
@@ -189,8 +189,8 @@ export function MainContentAreaSection() {
   }
 
   return (
-    <main className="min-h-full bg-muted/20 p-4 sm:p-6 lg:p-8">
-      <div className="mx-auto max-w-[1600px] space-y-6">
+    <main className="min-h-full bg-[#f8f9ff] p-4 text-[#0b1c30] sm:p-6 lg:p-8">
+      <div className="mx-auto max-w-[1480px] space-y-6">
         <AgentTeamOverview
           agents={agents}
           onAddAgent={() => setDialogState({ mode: "create" })}
@@ -234,8 +234,8 @@ export function MainContentAreaSection() {
         open={Boolean(pendingDeleteAgent)}
         onOpenChange={(open) => (!open ? closeDeleteDialog() : undefined)}
       >
-        <DialogContent className="max-w-md">
-          <DialogHeader>
+        <DialogContent className="max-w-md rounded-[20px] border-0 bg-white p-0 shadow-[0_30px_90px_rgba(11,28,48,0.24)]">
+          <DialogHeader className="border-b border-[#c7c4d7] px-6 py-5">
             <DialogTitle>{"Remove agent"}</DialogTitle>
             <DialogDescription>
               {pendingDeleteAgent
@@ -250,7 +250,7 @@ export function MainContentAreaSection() {
             </Alert>
           ) : null}
 
-          <DialogFooter>
+          <DialogFooter className="border-t border-[#c7c4d7] px-6 py-4">
             <Button
               disabled={deleteAgentMutation.isPending}
               onClick={closeDeleteDialog}

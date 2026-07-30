@@ -21,27 +21,43 @@ async function forward(request: NextRequest, context: ProxyRouteContext) {
       ? undefined
       : await request.arrayBuffer()
 
-  const response = await fetch(targetUrl, {
-    method: request.method,
-    headers: {
-      ...(contentType ? { "Content-Type": contentType } : {}),
-      ...(accessToken ? { access_token: accessToken } : {}),
-    },
-    body,
-    cache: "no-store",
-  })
+  try {
+    const response = await fetch(targetUrl, {
+      method: request.method,
+      headers: {
+        ...(contentType ? { "Content-Type": contentType } : {}),
+        ...(accessToken ? { access_token: accessToken } : {}),
+      },
+      body,
+      cache: "no-store",
+    })
 
-  const responseBody = await response.arrayBuffer()
-  const responseContentType = response.headers.get("content-type")
-  const contentDisposition = response.headers.get("content-disposition")
+    const responseBody = await response.arrayBuffer()
+    const responseContentType = response.headers.get("content-type")
+    const contentDisposition = response.headers.get("content-disposition")
 
-  return new NextResponse(responseBody, {
-    status: response.status,
-    headers: {
-      ...(responseContentType ? { "Content-Type": responseContentType } : {}),
-      ...(contentDisposition ? { "Content-Disposition": contentDisposition } : {}),
-    },
-  })
+    return new NextResponse(responseBody, {
+      status: response.status,
+      headers: {
+        ...(responseContentType ? { "Content-Type": responseContentType } : {}),
+        ...(contentDisposition ? { "Content-Disposition": contentDisposition } : {}),
+      },
+    })
+  } catch (error) {
+    console.error("API proxy connection failed", {
+      method: request.method,
+      path: path.join("/"),
+      error: error instanceof Error ? error.message : "Unknown proxy error",
+    })
+
+    return NextResponse.json(
+      {
+        message: "The backend API is unavailable. Start the NestJS server and try again.",
+        code: "BACKEND_UNAVAILABLE",
+      },
+      { status: 503 },
+    )
+  }
 }
 
 export async function GET(request: NextRequest, context: ProxyRouteContext) {

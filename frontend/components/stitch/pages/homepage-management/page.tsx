@@ -59,12 +59,12 @@ function SectionCard({
   children: React.ReactNode
 }>) {
   return (
-    <section className="border border-slate-200 bg-white p-6 shadow-[0_20px_50px_rgba(15,23,42,0.05)] lg:p-8">
-      <div className="border-b border-slate-100 pb-5">
-        <p className="text-xs font-black uppercase tracking-[0.26em] text-secondary">
+    <section className="overflow-hidden rounded-[24px] border border-[#c7c4d7] bg-white p-6 shadow-[0_4px_20px_rgba(0,0,0,0.03)] lg:p-8">
+      <div className="border-b border-[#c7c4d7] pb-5">
+        <p className="text-xs font-black uppercase tracking-[0.26em] text-[#4343d5]">
           {title}
         </p>
-        <p className="mt-2 max-w-3xl text-sm leading-7 text-slate-500">
+        <p className="mt-2 max-w-3xl text-sm leading-7 text-[#464555]">
           {description}
         </p>
       </div>
@@ -88,11 +88,11 @@ function Field({
 }>) {
   return (
     <label className="flex flex-col gap-2">
-      <span className="text-sm font-bold text-slate-700">
+      <span className="text-sm font-bold text-[#464555]">
         {label}
       </span>
       <Input
-        className="rounded-none border-slate-200 bg-slate-50"
+        className="rounded-xl border-[#c7c4d7] bg-[#f8f9ff] shadow-none"
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
         value={value}
@@ -116,11 +116,11 @@ function TextAreaField({
 }>) {
   return (
     <label className="flex flex-col gap-2">
-      <span className="text-sm font-bold text-slate-700">
+      <span className="text-sm font-bold text-[#464555]">
         {label}
       </span>
       <Textarea
-        className="rounded-none border-slate-200 bg-slate-50 p-4"
+        className="rounded-xl border-[#c7c4d7] bg-[#f8f9ff] shadow-none p-4"
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
         rows={rows}
@@ -161,22 +161,22 @@ function ImageUploadField({
   }
 
   return (
-    <div className="border border-dashed border-slate-300 bg-slate-50 p-5">
+    <div className="rounded-2xl border border-dashed border-[#c7c4d7] bg-[#f8f9ff] p-5">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <p className="text-sm font-bold text-slate-900">
+          <p className="text-sm font-bold text-[#0b1c30]">
             {label}
           </p>
-          <p className="mt-1 max-w-xl text-sm leading-6 text-slate-500">
+          <p className="mt-1 max-w-xl text-sm leading-6 text-[#464555]">
             {description}
           </p>
-          <p className="mt-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+          <p className="mt-2 text-xs font-semibold uppercase tracking-[0.14em] text-[#464555]">
             {`Recommended ratio: ${aspectRatio}${ratioNote ? ` | ${ratioNote}` : ""}`}
           </p>
         </div>
         <div className="flex gap-3">
           <button
-            className="rounded-none border border-slate-200 bg-white px-4 py-2 text-xs font-black uppercase tracking-[0.18em] text-slate-600 transition-colors hover:border-primary hover:text-primary"
+            className="rounded-lg border border-[#c7c4d7] bg-white px-4 py-2 text-xs font-black uppercase tracking-[0.18em] text-slate-600 transition-colors hover:border-primary hover:text-primary"
             onClick={() => fileInputRef.current?.click()}
             type="button"
           >
@@ -215,11 +215,11 @@ function ImageUploadField({
         type="file"
       />
 
-      <div className="mt-5 overflow-hidden border border-slate-200 bg-white">
+      <div className="mt-5 overflow-hidden rounded-xl border border-[#c7c4d7] bg-white">
         {value.url ? (
           <img alt={label} className="h-56 w-full object-cover" src={value.url} />
         ) : (
-          <div className="flex h-56 w-full flex-col items-center justify-center bg-slate-100 text-slate-400">
+          <div className="flex h-56 w-full flex-col items-center justify-center bg-[#eff4ff] text-[#767586]">
             <AppIcon className="text-5xl" name="imagesmode" />
             <span className="mt-3 text-xs font-black uppercase tracking-[0.18em]">
               {"No image selected"}
@@ -293,24 +293,24 @@ export function HomePageManagementPage() {
   const isLoading = !homepageSettingsQuery.data && (homepageSettingsQuery.isLoading || homepageSettingsQuery.isFetching)
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <header className="border-b border-slate-200 bg-white px-4 py-5 lg:px-8">
+    <div className="min-h-screen bg-[#f8f9ff] text-[#0b1c30]">
+      <header className="border-b border-[#c7c4d7] bg-[#f8f9ff] px-4 py-6 lg:px-8">
         <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.26em] text-secondary">
+            <p className="text-xs font-black uppercase tracking-[0.26em] text-[#4343d5]">
               {"Admin Workspace"}
             </p>
-            <h1 className="mt-2 text-3xl font-black tracking-tight text-slate-900">
+            <h1 className="mt-2 text-[36px] font-bold tracking-[-0.03em] text-[#0b1c30]">
               {"Homepage Content"}
             </h1>
-            <p className="mt-2 max-w-3xl text-sm leading-7 text-slate-500">
+            <p className="mt-2 max-w-3xl text-sm leading-7 text-[#464555]">
               {"Change homepage text and images without changing the layout. Featured properties, agents, and blog cards still come from their own live APIs."}
             </p>
           </div>
 
           <div className="flex flex-col gap-3 sm:flex-row">
             <Link
-              className="inline-flex items-center justify-center gap-2 rounded-none border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 transition-colors hover:border-primary hover:text-primary"
+              className="inline-flex items-center justify-center gap-2 rounded-none rounded-xl border border-[#c7c4d7] bg-white px-5 py-3 text-sm font-bold text-[#464555] transition-colors hover:border-primary hover:text-primary"
               href="/"
               target="_blank"
             >
@@ -318,7 +318,7 @@ export function HomePageManagementPage() {
               {"Preview Homepage"}
             </Link>
             <button
-              className="rounded-none border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-70"
+              className="rounded-none rounded-xl border border-[#c7c4d7] bg-white px-5 py-3 text-sm font-bold text-[#464555] transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-70"
               disabled={!hasPendingChanges || updateMutation.isPending}
               onClick={() => setFormValues(cloneHomePageSettings(savedValues))}
               type="button"
@@ -326,7 +326,7 @@ export function HomePageManagementPage() {
               {"Reset Changes"}
             </button>
             <button
-              className="inline-flex items-center justify-center gap-2 rounded-none bg-primary px-6 py-3 text-sm font-bold text-white transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-70"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#4343d5] px-6 py-3 shadow-lg shadow-[#4343d5]/20 text-sm font-bold text-white transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-70"
               disabled={updateMutation.isPending || isLoading}
               onClick={() => void handleSave()}
               type="button"
@@ -338,36 +338,36 @@ export function HomePageManagementPage() {
         </div>
       </header>
 
-      <main className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 py-8 lg:px-8">
+      <main className="mx-auto flex w-full max-w-[1480px] flex-col gap-8 px-4 py-8 lg:px-8">
         <section className="grid gap-4 md:grid-cols-3">
-          <article className="border border-slate-200 bg-white p-6">
-            <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-500">
+          <article className="rounded-xl border border-[#c7c4d7] bg-white p-6">
+            <p className="text-xs font-black uppercase tracking-[0.22em] text-[#464555]">
               {"Status"}
             </p>
-            <p className="mt-3 text-2xl font-black text-slate-900">
+            <p className="mt-3 text-2xl font-black text-[#0b1c30]">
               {isLoading ? "Loading..." : hasPendingChanges ? "Unsaved Changes" : "Synced"}
             </p>
           </article>
-          <article className="border border-slate-200 bg-white p-6">
-            <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-500">
+          <article className="rounded-xl border border-[#c7c4d7] bg-white p-6">
+            <p className="text-xs font-black uppercase tracking-[0.22em] text-[#464555]">
               {"Last Saved"}
             </p>
-            <p className="mt-3 text-lg font-black text-slate-900">
+            <p className="mt-3 text-lg font-black text-[#0b1c30]">
               {formatUpdatedAt(savedValues.updatedAt)}
             </p>
           </article>
-          <article className="border border-slate-200 bg-white p-6">
-            <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-500">
+          <article className="rounded-xl border border-[#c7c4d7] bg-white p-6">
+            <p className="text-xs font-black uppercase tracking-[0.22em] text-[#464555]">
               {"Live Sections"}
             </p>
-            <p className="mt-3 text-2xl font-black text-slate-900">
+            <p className="mt-3 text-2xl font-black text-[#0b1c30]">
               {"8 Editable Blocks"}
             </p>
           </article>
         </section>
 
         {homepageSettingsQuery.error ? (
-          <section className="border border-rose-200 bg-rose-50 px-6 py-5">
+          <section className="rounded-xl border border-rose-200 bg-rose-50 px-6 py-5">
             <p className="text-sm font-bold text-rose-700">
               {homepageSettingsQuery.error.message}
             </p>
@@ -436,8 +436,8 @@ export function HomePageManagementPage() {
               const mode = formValues.hero[modeKey]
 
               return (
-                <div key={modeKey} className="border border-slate-200 bg-slate-50 p-5">
-                  <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-500">
+                <div key={modeKey} className="rounded-2xl border border-[#c7c4d7] bg-[#f8f9ff] p-5">
+                  <p className="text-xs font-black uppercase tracking-[0.22em] text-[#464555]">
                     {modeLabel}
                   </p>
                   <div className="mt-4 space-y-4">
@@ -569,8 +569,8 @@ export function HomePageManagementPage() {
 
           <div className="grid gap-6 xl:grid-cols-2">
             {formValues.whyChooseUs.features.map((feature, index) => (
-              <div key={`feature-${index}`} className="border border-slate-200 bg-slate-50 p-5">
-                <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-500">
+              <div key={`feature-${index}`} className="rounded-2xl border border-[#c7c4d7] bg-[#f8f9ff] p-5">
+                <p className="text-xs font-black uppercase tracking-[0.22em] text-[#464555]">
                   {`Feature ${index + 1}`}
                 </p>
                 <div className="mt-4 space-y-4">
@@ -612,8 +612,8 @@ export function HomePageManagementPage() {
 
           <div className="grid gap-6 xl:grid-cols-2">
             {formValues.whyChooseUs.stats.map((stat, index) => (
-              <div key={`stat-${index}`} className="border border-slate-200 bg-slate-50 p-5">
-                <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-500">
+              <div key={`stat-${index}`} className="rounded-2xl border border-[#c7c4d7] bg-[#f8f9ff] p-5">
+                <p className="text-xs font-black uppercase tracking-[0.22em] text-[#464555]">
                   {`Stat Block ${index + 1}`}
                 </p>
                 <div className="mt-4 grid gap-4 md:grid-cols-2">
@@ -709,8 +709,8 @@ export function HomePageManagementPage() {
 
           <div className="grid gap-6 xl:grid-cols-2">
             {formValues.neighborhoods.cards.map((card, index) => (
-              <div key={`neighborhood-${index}`} className="border border-slate-200 bg-slate-50 p-5">
-                <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-500">
+              <div key={`neighborhood-${index}`} className="rounded-2xl border border-[#c7c4d7] bg-[#f8f9ff] p-5">
+                <p className="text-xs font-black uppercase tracking-[0.22em] text-[#464555]">
                   {`Card ${index + 1}`}
                 </p>
                 <div className="mt-4 space-y-4">
@@ -773,8 +773,8 @@ export function HomePageManagementPage() {
         >
           <div className="grid gap-6 xl:grid-cols-3">
             {formValues.services.map((service, index) => (
-              <div key={`service-${index}`} className="border border-slate-200 bg-slate-50 p-5">
-                <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-500">
+              <div key={`service-${index}`} className="rounded-2xl border border-[#c7c4d7] bg-[#f8f9ff] p-5">
+                <p className="text-xs font-black uppercase tracking-[0.22em] text-[#464555]">
                   {`Service ${index + 1}`}
                 </p>
                 <div className="mt-4 space-y-4">
@@ -952,3 +952,4 @@ export function HomePageManagementPage() {
     </div>
   )
 }
+

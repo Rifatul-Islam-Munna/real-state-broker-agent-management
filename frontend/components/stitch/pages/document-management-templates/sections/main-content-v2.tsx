@@ -209,12 +209,12 @@ export function MainContentSection() {
   }
 
   return (
-    <main className="min-h-full bg-muted/20 p-4 sm:p-6 lg:p-8">
-      <div className="mx-auto max-w-[1600px] space-y-6">
-        <Card>
-          <CardHeader className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+    <main className="min-h-full bg-[#f8f9ff] p-4 text-[#0b1c30] sm:p-6 lg:p-8">
+      <div className="mx-auto max-w-[1480px] space-y-6">
+        <Card className="overflow-hidden rounded-[24px] border-[#c7c4d7] bg-white shadow-[0_4px_20px_rgba(0,0,0,0.03)]">
+          <CardHeader className="flex flex-col gap-5 border-b border-[#c7c4d7] bg-[#eff4ff] p-6 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <CardTitle className="text-2xl">{"Document repository"}</CardTitle>
+              <CardTitle className="text-[32px] font-bold tracking-[-0.03em]">{"Document repository"}</CardTitle>
               <CardDescription className="max-w-3xl">
                 {"Upload and manage contracts, disclosures, reusable templates, property files, and signature workflows."}
               </CardDescription>
@@ -230,7 +230,7 @@ export function MainContentSection() {
               {"Upload document"}
             </Button>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-6">
             <div className="grid gap-3 lg:grid-cols-[minmax(0,1.5fr)_repeat(3,minmax(0,0.7fr))]">
               <div className="relative">
                 <AppIcon
@@ -238,7 +238,7 @@ export function MainContentSection() {
                   name="search"
                 />
                 <Input
-                  className="pl-9"
+                  className="h-11 rounded-xl border-[#c7c4d7] bg-[#f8f9ff] pl-9 shadow-none"
                   onChange={(event) => {
                     setSearchTerm(event.target.value)
                     setPage(1)
@@ -260,7 +260,7 @@ export function MainContentSection() {
                 }}
                 value={accessFilter || "all"}
               >
-                <SelectTrigger className="w-full">
+                <SelectTrigger className="h-11 w-full rounded-xl border-[#c7c4d7] bg-[#f8f9ff] shadow-none">
                   <SelectValue placeholder="All access" />
                 </SelectTrigger>
                 <SelectContent>
@@ -281,7 +281,7 @@ export function MainContentSection() {
                 }}
                 value={categoryFilter || "all"}
               >
-                <SelectTrigger className="w-full">
+                <SelectTrigger className="h-11 w-full rounded-xl border-[#c7c4d7] bg-[#f8f9ff] shadow-none">
                   <SelectValue placeholder="All categories" />
                 </SelectTrigger>
                 <SelectContent>
@@ -302,7 +302,7 @@ export function MainContentSection() {
                 }}
                 value={templateFilter}
               >
-                <SelectTrigger className="w-full">
+                <SelectTrigger className="h-11 w-full rounded-xl border-[#c7c4d7] bg-[#f8f9ff] shadow-none">
                   <SelectValue placeholder="All documents" />
                 </SelectTrigger>
                 <SelectContent>
@@ -317,13 +317,13 @@ export function MainContentSection() {
 
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
           {stats.map(([label, value, icon]) => (
-            <Card key={label} size="sm">
+            <Card className="rounded-2xl border-[#c7c4d7] bg-white shadow-[0_4px_20px_rgba(0,0,0,0.03)]" key={label} size="sm">
               <CardHeader className="flex flex-row items-start justify-between space-y-0">
                 <div>
                   <CardDescription>{label}</CardDescription>
                   <CardTitle className="mt-2 text-2xl">{value}</CardTitle>
                 </div>
-                <span className="flex size-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                <span className="flex size-9 items-center justify-center rounded-xl bg-[#e1e0ff] text-[#4343d5]">
                   <AppIcon name={icon} />
                 </span>
               </CardHeader>
@@ -331,14 +331,14 @@ export function MainContentSection() {
           ))}
         </section>
 
-        <Card>
-          <CardHeader>
+        <Card className="overflow-hidden rounded-[24px] border-[#c7c4d7] bg-white shadow-[0_4px_20px_rgba(0,0,0,0.03)]">
+          <CardHeader className="border-b border-[#c7c4d7] bg-[#eff4ff] px-6 py-5">
             <CardTitle>{"Repository files"}</CardTitle>
             <CardDescription>
               {"Edit metadata, download source files, or remove outdated documents."}
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-4 p-6">
             {isInitialLoading ? (
               <Alert>
                 <AlertDescription>{"Loading repository documents..."}</AlertDescription>
@@ -348,7 +348,7 @@ export function MainContentSection() {
                 <AlertDescription>{documentsQuery.error.message}</AlertDescription>
               </Alert>
             ) : documents.length === 0 ? (
-              <div className="rounded-xl border border-dashed bg-muted/25 p-10 text-center text-sm text-muted-foreground">
+              <div className="rounded-2xl border border-dashed border-[#c7c4d7] bg-[#f8f9ff] p-12 text-center text-sm text-[#464555]">
                 {"No repository files match the current filters."}
               </div>
             ) : (
@@ -369,7 +369,7 @@ export function MainContentSection() {
                     <TableRow key={document.id}>
                       <TableCell>
                         <div className="flex items-start gap-3">
-                          <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                          <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[#e1e0ff] text-[#4343d5]">
                             <AppIcon
                               className="text-xl"
                               name={documentFileIcon(document.mimeType)}
@@ -514,3 +514,7 @@ export function MainContentSection() {
     </main>
   )
 }
+
+
+
+

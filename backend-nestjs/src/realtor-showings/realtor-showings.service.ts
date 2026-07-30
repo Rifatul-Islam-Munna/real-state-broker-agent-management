@@ -1,4 +1,4 @@
-﻿import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { bestPropertyAddressMatch } from '../common/property-address-match';
@@ -68,6 +68,95 @@ export class RealtorShowingsService {
       totalPages: Math.max(1, Math.ceil(totalCount / pageSize)),
       hasNextPage: page * pageSize < totalCount,
       hasPreviousPage: page > 1,
+    };
+  }
+
+  async getSequenceSummary(search?: string) {
+    const qb = this.showingRepo.createQueryBuilder('showing')
+      .leftJoin('showing.property', 'property');
+
+    if (search?.trim()) {
+      qb.where(
+        '(showing.realtorName ILIKE :search OR showing.realtorEmail ILIKE :search OR showing.realtorPhone ILIKE :search OR showing.propertyText ILIKE :search OR property.title ILIKE :search)',
+        { search: `%${search.trim()}%` },
+      );
+    }
+
+    const items = await qb.getMany();
+    const total = items.length;
+    const active = items.filter((item) => !item.replyReceived && item.sequenceStatus === 'active').length;
+    const paused = items.filter((item) => item.sequenceStatus === 'paused').length;
+    const cancelled = items.filter((item) => item.sequenceStatus === 'cancelled').length;
+    const completed = items.filter((item) => item.replyReceived || item.sequenceStatus === 'completed').length;
+    const replied = items.filter((item) => item.replyReceived).length;
+    const emailOnly = items.filter((item) => item.emailEnabled && !item.smsEnabled).length;
+    const smsOnly = items.filter((item) => item.smsEnabled && !item.emailEnabled).length;
+    const multiChannel = items.filter((item) => item.emailEnabled && item.smsEnabled).length;
+    const followUpEnabled = items.filter((item) => item.followUpEnabled).length;
+    const averageGapDays = followUpEnabled > 0
+      ? Number((items.filter((item) => item.followUpEnabled).reduce((sum, item) => sum + Math.max(0, item.followUpGapDays || 0), 0) / followUpEnabled).toFixed(1))
+      : 0;
+    const replyRate = total > 0 ? Number(((replied / total) * 100).toFixed(1)) : 0;
+    const stopRate = total > 0 ? Number((((cancelled + paused) / total) * 100).toFixed(1)) : 0;
+    const multiChannelReplyRate = multiChannel > 0
+      ? Number((items.filter((item) => item.emailEnabled && item.smsEnabled && item.replyReceived).length / multiChannel * 100).toFixed(1))
+      : 0;
+    const singleChannelCount = emailOnly + smsOnly;
+    const singleChannelReplies = items.filter((item) => (item.emailEnabled !== item.smsEnabled) && item.replyReceived).length;
+    const singleChannelReplyRate = singleChannelCount > 0
+      ? Number((singleChannelReplies / singleChannelCount * 100).toFixed(1))
+      : 0;
+
+    const tips: Array<{ id: string; title: string; detail: string; tone: 'primary' | 'secondary' | 'tertiary' }> = [];
+    if (multiChannel > 0 && singleChannelCount > 0) {
+      tips.push({
+        id: 'channel-performance',
+        title: 'Channel mix',
+        detail: `Email + SMS sequences are replying at ${multiChannelReplyRate}% versus ${singleChannelReplyRate}% for single-channel sequences.`,
+        tone: multiChannelReplyRate >= singleChannelReplyRate ? 'secondary' : 'tertiary',
+      });
+    }
+    if (followUpEnabled > 0) {
+      tips.push({
+        id: 'follow-up-gap',
+        title: 'Follow-up timing',
+        detail: `The current average follow-up gap is ${averageGapDays} day${averageGapDays === 1 ? '' : 's'} across ${followUpEnabled} active follow-up sequences.`,
+        tone: 'primary',
+      });
+    }
+    if (paused + cancelled > 0) {
+      tips.push({
+        id: 'stopped-sequences',
+        title: 'Stopped sequences',
+        detail: `${paused + cancelled} sequence${paused + cancelled === 1 ? '' : 's'} are paused or cancelled and may need review.`,
+        tone: 'tertiary',
+      });
+    }
+    if (tips.length === 0) {
+      tips.push({
+        id: 'insufficient-data',
+        title: 'More data needed',
+        detail: 'Sequence optimization tips will appear after more outreach and reply activity is recorded.',
+        tone: 'primary',
+      });
+    }
+
+    return {
+      total,
+      active,
+      paused,
+      cancelled,
+      completed,
+      replied,
+      replyRate,
+      stopRate,
+      emailOnly,
+      smsOnly,
+      multiChannel,
+      followUpEnabled,
+      averageGapDays,
+      tips,
+      generatedAt: new Date().toISOString(),
     };
   }
 

@@ -32,11 +32,11 @@ function DetailItem({
   valueClassName?: string
 }) {
   return (
-    <div className="rounded-xl border bg-muted/25 p-3">
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+    <div className="rounded-lg border border-[var(--ether-outline-variant)]/50 bg-[var(--ether-surface-container-low)]/60 p-3">
+      <p className="ether-label-caps text-[9px] text-[var(--ether-outline)]">
         {label}
       </p>
-      <p className={cn("mt-1 text-sm font-semibold", valueClassName)}>{value}</p>
+      <p className={cn("mt-1 text-sm font-bold text-[var(--ether-on-surface)]", valueClassName)}>{value}</p>
     </div>
   )
 }
@@ -58,13 +58,13 @@ export function DealDetailsPanel({
   const linkedLeadLabel = displayText(deal.sourceLeadName, "No linked lead")
 
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-muted/20">
-      <div className="flex items-start justify-between gap-4 border-b bg-background px-5 py-4 sm:px-6">
+    <div className="flex h-full flex-col overflow-hidden bg-white">
+      <div className="flex items-start justify-between gap-4 border-b border-[var(--ether-outline-variant)] px-6 py-4">
         <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+          <p className="ether-label-caps text-[10px] text-[var(--ether-outline)]">
             {"Deal details"}
           </p>
-          <h2 className="mt-1 truncate text-xl font-semibold tracking-tight">
+          <h2 className="mt-1 truncate text-xl font-bold tracking-[-0.02em] text-[var(--ether-on-surface)]">
             {deal.title}
           </h2>
         </div>
@@ -74,7 +74,7 @@ export function DealDetailsPanel({
         </Button>
       </div>
 
-      <div className="flex-1 space-y-5 overflow-y-auto p-5 sm:p-6">
+      <div className="custom-scrollbar flex-1 space-y-6 overflow-y-auto bg-[color-mix(in_srgb,var(--ether-surface)_55%,white)] p-6">
         <Card>
           <CardHeader>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -167,7 +167,7 @@ export function DealDetailsPanel({
           <CardContent className="space-y-4">
             <div className="rounded-xl border bg-muted/20 p-4">
               <p className="font-semibold">{"Deal created"}</p>
-              <p className="mt-1 text-sm leading-6 text-muted-foreground">
+              <p className="mt-1 text-xs leading-5 text-[var(--ether-on-surface-variant)]">
                 {displayText(deal.note, "No deal note yet.")}
               </p>
               <p className="mt-2 text-xs font-medium text-muted-foreground">
@@ -176,7 +176,7 @@ export function DealDetailsPanel({
             </div>
             <div className="rounded-xl border bg-muted/20 p-4">
               <p className="font-semibold">{"Last update"}</p>
-              <p className="mt-1 text-sm leading-6 text-muted-foreground">
+              <p className="mt-1 text-xs leading-5 text-[var(--ether-on-surface-variant)]">
                 {`Stage is ${dealStageMeta[deal.stage].label}.`}
               </p>
               <p className="mt-2 text-xs font-medium text-muted-foreground">

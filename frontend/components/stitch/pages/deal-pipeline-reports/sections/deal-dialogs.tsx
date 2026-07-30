@@ -41,7 +41,7 @@ function FieldError({ error }: { error?: string }) {
 }
 
 const formSelectClassName =
-  "h-10 w-full rounded-none border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 dark:border-white/10 dark:bg-slate-900 dark:text-slate-200"
+  "h-11 w-full rounded-lg border-[var(--ether-outline-variant)] bg-white px-3 text-sm font-medium text-[var(--ether-on-surface)] shadow-none"
 
 const emptySelectValue = "__empty__"
 
@@ -71,20 +71,20 @@ export function DealCommunicationDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="rounded-none border border-slate-200 bg-white p-0 shadow-none dark:border-white/10 dark:bg-slate-900">
-        <div className="border-b border-slate-200 px-6 py-5 dark:border-white/10">
-          <DialogTitle className="text-lg font-bold text-slate-900 dark:text-white">{title}</DialogTitle>
-          <DialogDescription className="mt-2 text-sm text-slate-500 dark:text-slate-400">{`Send a ${mode} update for ${deal.title}.`}</DialogDescription>
+      <DialogContent className="rounded-[20px] border-0 bg-white p-0 shadow-[0_30px_90px_rgba(11,28,48,0.24)]">
+        <div className="border-b border-[var(--ether-outline-variant)] px-6 py-5 sm:px-8">
+          <DialogTitle className="text-xl font-bold tracking-[-0.02em] text-[var(--ether-on-surface)]">{title}</DialogTitle>
+          <DialogDescription className="mt-1 text-sm text-[var(--ether-on-surface-variant)]">{`Send a ${mode} update for ${deal.title}.`}</DialogDescription>
         </div>
         <div className="space-y-4 px-6 py-5">
-          <div className="border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-300">{deal.client}</div>
-          <Textarea className="min-h-40 rounded-none border-slate-200 dark:border-white/10" onChange={(event) => { setMessage(event.target.value); setError(null) }} placeholder={`Write the ${mode} message here...`} value={message} />
-          {error ? <p className="text-sm font-semibold text-rose-600">{error}</p> : null}
+          <div className="rounded-lg border border-[var(--ether-outline-variant)] bg-[var(--ether-surface-container-low)] px-4 py-3 text-sm text-[var(--ether-on-surface-variant)]">{deal.client}</div>
+          <Textarea className="min-h-40 rounded-lg border-[var(--ether-outline-variant)]" onChange={(event) => { setMessage(event.target.value); setError(null) }} placeholder={`Write the ${mode} message here...`} value={message} />
+          {error ? <p className="text-sm font-bold text-[var(--ether-on-surface)] text-rose-600">{error}</p> : null}
         </div>
-        <div className="flex justify-end gap-3 border-t border-slate-200 px-6 py-4 dark:border-white/10">
+        <footer className="flex justify-end gap-3 border-t border-[var(--ether-outline-variant)] bg-white px-6 py-4 sm:px-8">
           <button className={dealButtonClass} onClick={() => onOpenChange(false)} type="button">{"Close"}</button>
           <button
-            className="border border-primary bg-primary px-4 py-2 text-xs font-bold uppercase tracking-wide text-white disabled:cursor-not-allowed disabled:opacity-70"
+            className="rounded-lg bg-[var(--ether-primary)] px-6 py-2.5 text-sm font-bold text-white shadow-[0_8px_20px_rgba(67,67,213,0.24)] hover:bg-[var(--ether-primary-container)] disabled:cursor-not-allowed disabled:opacity-70"
             disabled={isSubmitting}
             onClick={async () => {
               if (message.trim().length < 5) {
@@ -107,7 +107,7 @@ export function DealCommunicationDialog({
           >
             {isSubmitting ? "Sending..." : title}
           </button>
-        </div>
+        </footer>
       </DialogContent>
     </Dialog>
   )
@@ -135,20 +135,20 @@ export function DealCancelDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="rounded-none border border-slate-200 bg-white p-0 shadow-none dark:border-white/10 dark:bg-slate-900">
-        <div className="border-b border-slate-200 px-6 py-5 dark:border-white/10">
-          <DialogTitle className="text-lg font-bold text-slate-900 dark:text-white">{"Cancel Deal"}</DialogTitle>
-          <DialogDescription className="mt-2 text-sm text-slate-500 dark:text-slate-400">{"Canceling here removes the deal from the active pipeline board and updates the status in place."}</DialogDescription>
+      <DialogContent className="rounded-[20px] border-0 bg-white p-0 shadow-[0_30px_90px_rgba(11,28,48,0.24)]">
+        <div className="border-b border-[var(--ether-outline-variant)] px-6 py-5 sm:px-8">
+          <DialogTitle className="text-xl font-bold tracking-[-0.02em] text-[var(--ether-on-surface)]">{"Cancel Deal"}</DialogTitle>
+          <DialogDescription className="mt-1 text-sm text-[var(--ether-on-surface-variant)]">{"Canceling here removes the deal from the active pipeline board and updates the status in place."}</DialogDescription>
         </div>
         <div className="space-y-4 px-6 py-5">
-          <div className="border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-300">{deal.title}</div>
-          <Textarea className="min-h-32 rounded-none border-slate-200 dark:border-white/10" onChange={(event) => { setReason(event.target.value); setError(null) }} placeholder="Add a cancel reason" value={reason} />
-          {error ? <p className="text-sm font-semibold text-rose-600">{error}</p> : null}
+          <div className="rounded-lg border border-[var(--ether-outline-variant)] bg-[var(--ether-surface-container-low)] px-4 py-3 text-sm text-[var(--ether-on-surface-variant)]">{deal.title}</div>
+          <Textarea className="min-h-32 rounded-lg border-[var(--ether-outline-variant)]" onChange={(event) => { setReason(event.target.value); setError(null) }} placeholder="Add a cancel reason" value={reason} />
+          {error ? <p className="text-sm font-bold text-[var(--ether-on-surface)] text-rose-600">{error}</p> : null}
         </div>
-        <div className="flex justify-end gap-3 border-t border-slate-200 px-6 py-4 dark:border-white/10">
+        <footer className="flex justify-end gap-3 border-t border-[var(--ether-outline-variant)] bg-white px-6 py-4 sm:px-8">
           <button className={dealButtonClass} onClick={() => onOpenChange(false)} type="button">{"Close"}</button>
           <button
-            className="border border-rose-200 bg-rose-50 px-4 py-2 text-xs font-bold uppercase tracking-wide text-rose-700 disabled:cursor-not-allowed disabled:opacity-70"
+            className="rounded-lg border border-rose-200 bg-rose-50 px-5 py-2.5 text-sm font-bold text-rose-700 disabled:cursor-not-allowed disabled:opacity-70"
             disabled={isSubmitting}
             onClick={async () => {
               if (reason.trim().length < 5) {
@@ -171,7 +171,7 @@ export function DealCancelDialog({
           >
             {isSubmitting ? "Canceling..." : "Confirm Cancel"}
           </button>
-        </div>
+        </footer>
       </DialogContent>
     </Dialog>
   )
@@ -255,35 +255,35 @@ export function DealFormDialog({
         onOpenChange(nextOpen)
       }}
     >
-      <DialogContent className="rounded-none border border-slate-200 bg-white p-0 shadow-none dark:border-white/10 dark:bg-slate-900">
-        <div className="border-b border-slate-200 px-6 py-5 dark:border-white/10">
-          <DialogTitle className="text-lg font-bold text-slate-900 dark:text-white">
+      <DialogContent className="!flex h-[90dvh] max-h-[90dvh] w-[96vw] max-w-3xl flex-col gap-0 overflow-hidden rounded-[20px] border-0 bg-white p-0 shadow-[0_30px_90px_rgba(11,28,48,0.24)]">
+        <div className="border-b border-[var(--ether-outline-variant)] px-6 py-5 sm:px-8">
+          <DialogTitle className="text-xl font-bold tracking-[-0.02em] text-[var(--ether-on-surface)]">
             {mode === "create" ? "Create Deal" : "Edit Deal"}
           </DialogTitle>
-          <DialogDescription className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+          <DialogDescription className="mt-1 text-sm text-[var(--ether-on-surface-variant)]">
             {mode === "create"
               ? "Create new deals from the pipeline modal instead of leaving the board."
               : "Update the deal details directly from the pipeline list."}
           </DialogDescription>
         </div>
-        <div className="grid gap-4 px-6 py-5 md:grid-cols-2">
+        <div className="custom-scrollbar grid flex-1 gap-5 overflow-y-auto bg-[color-mix(in_srgb,var(--ether-surface)_55%,white)] px-6 py-6 md:grid-cols-2 sm:px-8">
           <div className="flex flex-col gap-2">
-            <Input className="rounded-none border-slate-200 dark:border-white/10" onChange={(event) => updateField("title", event.target.value)} placeholder="Deal title" value={formValues.title} />
+            <Input className="h-11 rounded-lg border-[var(--ether-outline-variant)] bg-white px-3 text-sm shadow-none focus-visible:ring-2 focus-visible:ring-[var(--ether-primary)]/20" onChange={(event) => updateField("title", event.target.value)} placeholder="Deal title" value={formValues.title} />
             <FieldError error={errors.title} />
           </div>
           <div className="flex flex-col gap-2">
-            <Input className="rounded-none border-slate-200 dark:border-white/10" onChange={(event) => updateField("client", event.target.value)} placeholder="Client" value={formValues.client} />
+            <Input className="h-11 rounded-lg border-[var(--ether-outline-variant)] bg-white px-3 text-sm shadow-none focus-visible:ring-2 focus-visible:ring-[var(--ether-primary)]/20" onChange={(event) => updateField("client", event.target.value)} placeholder="Client" value={formValues.client} />
             <FieldError error={errors.client} />
           </div>
           <div className="flex flex-col gap-2">
-            <Input className="rounded-none border-slate-200 dark:border-white/10" onChange={(event) => updateField("value", event.target.value)} placeholder="Value" value={formValues.value} />
+            <Input className="h-11 rounded-lg border-[var(--ether-outline-variant)] bg-white px-3 text-sm shadow-none focus-visible:ring-2 focus-visible:ring-[var(--ether-primary)]/20" onChange={(event) => updateField("value", event.target.value)} placeholder="Value" value={formValues.value} />
             <FieldError error={errors.value} />
           </div>
           <div className="flex flex-col gap-2">
-            <Input className="rounded-none border-slate-200 dark:border-white/10" onChange={(event) => updateField("commissionRate", event.target.value)} placeholder="Commission rate" value={formValues.commissionRate} />
+            <Input className="h-11 rounded-lg border-[var(--ether-outline-variant)] bg-white px-3 text-sm shadow-none focus-visible:ring-2 focus-visible:ring-[var(--ether-primary)]/20" onChange={(event) => updateField("commissionRate", event.target.value)} placeholder="Commission rate" value={formValues.commissionRate} />
             <FieldError error={errors.commissionRate} />
           </div>
-          <label className="flex flex-col gap-2 text-xs font-bold uppercase tracking-wide text-slate-500">
+          <label className="flex flex-col gap-2 text-xs font-semibold text-[var(--ether-on-surface-variant)]">
             {"Assigned Agent"}
             <Select
               modal={false}
@@ -317,14 +317,14 @@ export function DealFormDialog({
             <FieldError error={errors.agent} />
           </label>
           <div className="flex flex-col gap-2">
-            <Input className="rounded-none border-slate-200 dark:border-white/10" onChange={(event) => updateField("deadline", event.target.value)} placeholder="Deadline" value={formValues.deadline} />
+            <Input className="h-11 rounded-lg border-[var(--ether-outline-variant)] bg-white px-3 text-sm shadow-none focus-visible:ring-2 focus-visible:ring-[var(--ether-primary)]/20" onChange={(event) => updateField("deadline", event.target.value)} placeholder="Deadline" value={formValues.deadline} />
             <FieldError error={errors.deadline} />
           </div>
           <div className="flex flex-col gap-2">
-            <Input className="rounded-none border-slate-200 dark:border-white/10" onChange={(event) => updateField("expectedClosingDate", event.target.value)} placeholder="Expected closing date" type="date" value={formValues.expectedClosingDate} />
+            <Input className="h-11 rounded-lg border-[var(--ether-outline-variant)] bg-white px-3 text-sm shadow-none focus-visible:ring-2 focus-visible:ring-[var(--ether-primary)]/20" onChange={(event) => updateField("expectedClosingDate", event.target.value)} placeholder="Expected closing date" type="date" value={formValues.expectedClosingDate} />
             <FieldError error={errors.expectedClosingDate} />
           </div>
-          <label className="flex flex-col gap-2 text-xs font-bold uppercase tracking-wide text-slate-500">
+          <label className="flex flex-col gap-2 text-xs font-semibold text-[var(--ether-on-surface-variant)]">
             {"Commission Status"}
             <Select
               modal={false}
@@ -344,10 +344,10 @@ export function DealFormDialog({
             </Select>
           </label>
           <div className="flex flex-col gap-2">
-            <Input className="rounded-none border-slate-200 dark:border-white/10" onChange={(event) => updateField("commissionAmount", event.target.value)} placeholder="Commission amount" value={formValues.commissionAmount} />
+            <Input className="h-11 rounded-lg border-[var(--ether-outline-variant)] bg-white px-3 text-sm shadow-none focus-visible:ring-2 focus-visible:ring-[var(--ether-primary)]/20" onChange={(event) => updateField("commissionAmount", event.target.value)} placeholder="Commission amount" value={formValues.commissionAmount} />
             <FieldError error={errors.commissionAmount} />
           </div>
-          <label className="flex flex-col gap-2 text-xs font-bold uppercase tracking-wide text-slate-500">
+          <label className="flex flex-col gap-2 text-xs font-semibold text-[var(--ether-on-surface-variant)]">
             {"Deal Type"}
             <Select
               modal={false}
@@ -368,7 +368,7 @@ export function DealFormDialog({
               </SelectContent>
             </Select>
           </label>
-          <label className="flex flex-col gap-2 text-xs font-bold uppercase tracking-wide text-slate-500">
+          <label className="flex flex-col gap-2 text-xs font-semibold text-[var(--ether-on-surface-variant)]">
             {"Stage"}
             <Select
               modal={false}
@@ -389,7 +389,7 @@ export function DealFormDialog({
               </SelectContent>
             </Select>
           </label>
-          <label className="flex flex-col gap-2 text-xs font-bold uppercase tracking-wide text-slate-500 md:col-span-2">
+          <label className="flex flex-col gap-2 text-xs font-semibold text-[var(--ether-on-surface-variant)] md:col-span-2">
             {"Linked Lead"}
             <Select
               modal={false}
@@ -412,25 +412,25 @@ export function DealFormDialog({
             </Select>
           </label>
           <div className="flex flex-col gap-2 md:col-span-2">
-            <Textarea className="min-h-32 rounded-none border-slate-200 dark:border-white/10" onChange={(event) => updateField("note", event.target.value)} placeholder="Deal note" value={formValues.note} />
+            <Textarea className="min-h-32 rounded-lg border-[var(--ether-outline-variant)]" onChange={(event) => updateField("note", event.target.value)} placeholder="Deal note" value={formValues.note} />
             <FieldError error={errors.note} />
           </div>
           <div className="flex flex-col gap-2 md:col-span-2">
-            <Textarea className="min-h-24 rounded-none border-slate-200 dark:border-white/10" onChange={(event) => updateField("checklistItems", event.target.value)} placeholder="[ ] Document request sent&#10;[x] Viewing completed" value={formValues.checklistItems} />
+            <Textarea className="min-h-24 h-11 rounded-lg border-[var(--ether-outline-variant)] bg-white px-3 text-sm shadow-none focus-visible:ring-2 focus-visible:ring-[var(--ether-primary)]/20" onChange={(event) => updateField("checklistItems", event.target.value)} placeholder="[ ] Document request sent&#10;[x] Viewing completed" value={formValues.checklistItems} />
             <FieldError error={errors.checklistItems} />
           </div>
           <div className="flex flex-col gap-2 md:col-span-2">
-            <Textarea className="min-h-20 rounded-none border-slate-200 dark:border-white/10" onChange={(event) => updateField("commissionPayoutNote", event.target.value)} placeholder="Commission payout note" value={formValues.commissionPayoutNote} />
+            <Textarea className="min-h-20 h-11 rounded-lg border-[var(--ether-outline-variant)] bg-white px-3 text-sm shadow-none focus-visible:ring-2 focus-visible:ring-[var(--ether-primary)]/20" onChange={(event) => updateField("commissionPayoutNote", event.target.value)} placeholder="Commission payout note" value={formValues.commissionPayoutNote} />
             <FieldError error={errors.commissionPayoutNote} />
           </div>
           {submitError ? (
-            <p className="text-sm font-semibold text-rose-600 md:col-span-2">{submitError}</p>
+            <p className="rounded-lg bg-[var(--ether-error-container)] p-3 text-sm font-bold text-[var(--ether-on-surface)] text-[var(--ether-error)] md:col-span-2">{submitError}</p>
           ) : null}
         </div>
-        <div className="flex justify-end gap-3 border-t border-slate-200 px-6 py-4 dark:border-white/10">
+        <footer className="flex justify-end gap-3 border-t border-[var(--ether-outline-variant)] bg-white px-6 py-4 sm:px-8">
           <button className={dealButtonClass} onClick={() => onOpenChange(false)} type="button">{"Close"}</button>
           <button
-            className="border border-primary bg-primary px-4 py-2 text-xs font-bold uppercase tracking-wide text-white disabled:cursor-not-allowed disabled:opacity-70"
+            className="rounded-lg bg-[var(--ether-primary)] px-6 py-2.5 text-sm font-bold text-white shadow-[0_8px_20px_rgba(67,67,213,0.24)] hover:bg-[var(--ether-primary-container)] disabled:cursor-not-allowed disabled:opacity-70"
             disabled={isSubmitting}
             onClick={async () => {
               const nextErrors = validateDealForm(formValues)
@@ -461,7 +461,7 @@ export function DealFormDialog({
                 ? "Create Deal"
                 : "Save Deal"}
           </button>
-        </div>
+        </footer>
       </DialogContent>
     </Dialog>
   )
