@@ -1,3 +1,5 @@
+import { Suspense } from "react"
+
 import { PublicSiteFooter } from "@/components/stitch/shared/public-site-footer"
 import { PublicPrimaryNavbar } from "@/components/stitch/shared/public-site-navbar"
 import { getPublicAgencySettings } from "@/lib/public-real-estate-data"
@@ -24,7 +26,9 @@ export async function PublicContactApiPage() {
           </p>
         </section>
 
-        <PublicContactMainApiSection profile={agencySettings.profile} />
+        <Suspense fallback={null}>
+          <PublicContactMainApiSection profile={agencySettings.profile} />
+        </Suspense>
       </main>
       <PublicSiteFooter />
 </div>
