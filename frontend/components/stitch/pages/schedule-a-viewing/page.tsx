@@ -1,3 +1,4 @@
+import { PublicSiteFooter } from "@/components/stitch/shared/public-site-footer"
 import { PublicPrimaryNavbar } from "@/components/stitch/shared/public-site-navbar"
 import { Section1Section } from "./sections/section-1"
 import { SimpleSuccessToastSimulatedSection } from "./sections/simple-success-toast-simulated"
@@ -8,6 +9,7 @@ export function ScheduleAViewingPage() {
       <PublicPrimaryNavbar />
       <Section1Section />
       <SimpleSuccessToastSimulatedSection />
+      <PublicSiteFooter />
     </div>
   )
 }

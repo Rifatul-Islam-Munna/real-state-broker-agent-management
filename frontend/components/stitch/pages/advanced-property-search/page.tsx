@@ -1,5 +1,6 @@
 import { Suspense } from "react"
 
+import { PublicSiteFooter } from "@/components/stitch/shared/public-site-footer"
 import { getPublicPropertyFilters } from "@/lib/public-real-estate-data"
 
 import { MainContentAreaSplitViewSection } from "./sections/main-content-area-v2"
@@ -20,6 +21,7 @@ export async function AdvancedPropertySearchPage() {
       >
         <MainContentAreaSplitViewSection filterOptions={filterOptions} />
       </Suspense>
+      <PublicSiteFooter />
     </div>
   )
 }

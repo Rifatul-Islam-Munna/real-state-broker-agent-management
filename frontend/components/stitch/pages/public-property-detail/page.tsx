@@ -2,7 +2,7 @@ import type { PropertyItem } from "@/@types/real-estate-api"
 
 import { TopNavigationSection } from "./sections/top-navigation"
 import { Section2Section } from "./sections/section-2"
-import { FooterSection } from "./sections/footer"
+import { PublicSiteFooter } from "@/components/stitch/shared/public-site-footer"
 
 type PublicPropertyDetailPageProps = {
   property: PropertyItem
@@ -14,7 +14,7 @@ export function PublicPropertyDetailPage({ property, relatedProperties }: Public
     <div className="bg-background-light text-[#1A2332] font-sans">
       <TopNavigationSection />
       <Section2Section property={property} relatedProperties={relatedProperties} />
-      <FooterSection />
+      <PublicSiteFooter />
     </div>
   )
 }

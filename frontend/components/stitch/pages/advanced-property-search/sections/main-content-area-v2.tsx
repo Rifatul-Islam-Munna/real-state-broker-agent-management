@@ -1,34 +1,22 @@
 "use client"
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
-import { useMemo, useState } from "react"
+import { FormEvent, useMemo, useState } from "react"
 
 import type { PublicPropertyFilters } from "@/@types/real-estate-api"
 import { PagePagination } from "@/components/stitch/shared/page-pagination"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { AppIcon } from "@/components/ui/app-icon"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useProperties } from "@/hooks/use-real-estate-api"
-import { cn } from "@/lib/utils"
 import { PropertySearchCard } from "./property-search-card"
-import { PropertySearchFilterPanel } from "./property-search-filter-panel"
 import {
   parsePositiveInteger,
   parsePriceValue,
   parseSizeValue,
   PROPERTY_PAGE_SIZE,
   type PropertySortMode,
-  type PropertyViewMode,
 } from "./property-search-helpers"
 
 type MainContentAreaProps = {
@@ -39,24 +27,16 @@ export function MainContentAreaSplitViewSection({ filterOptions }: MainContentAr
   const pathname = usePathname()
   const router = useRouter()
   const searchParams = useSearchParams()
-  const [viewMode, setViewMode] = useState<PropertyViewMode>("grid")
-  const [isFilterSheetOpen, setIsFilterSheetOpen] = useState(false)
 
   const currentSearch = searchParams.get("search") ?? ""
-  const currentListingType =
-    searchParams.get("listingType") === "ForRent"
-      ? "ForRent"
-      : searchParams.get("listingType") === "ForSale"
-        ? "ForSale"
-        : ""
-  const currentPropertyType =
-    searchParams.get("propertyType") === "Commercial"
-      ? "Commercial"
-      : searchParams.get("propertyType") === "Residential"
-        ? "Residential"
-        : ""
+  const currentListingType = searchParams.get("listingType") === "ForRent" ? "ForRent" : searchParams.get("listingType") === "ForSale" ? "ForSale" : ""
+  const currentPropertyType = searchParams.get("propertyType") === "Commercial" ? "Commercial" : searchParams.get("propertyType") === "Residential" ? "Residential" : ""
   const currentSort = (searchParams.get("sort") ?? "featured") as PropertySortMode
   const currentPage = parsePositiveInteger(searchParams.get("page"), 1)
+
+  const [searchValue, setSearchValue] = useState(currentSearch)
+  const [propertyTypeValue, setPropertyTypeValue] = useState(currentPropertyType)
+  const [listingTypeValue, setListingTypeValue] = useState(currentListingType)
 
   const propertiesQuery = useProperties({
     listingType: currentListingType || undefined,
@@ -67,254 +47,125 @@ export function MainContentAreaSplitViewSection({ filterOptions }: MainContentAr
     status: "Open",
   })
 
-  const listingTypes = useMemo(
-    () =>
-      filterOptions.listingTypes.length > 0
-        ? filterOptions.listingTypes
-        : (["ForSale", "ForRent"] as const),
-    [filterOptions.listingTypes],
-  )
-  const propertyTypes = useMemo(
-    () =>
-      filterOptions.propertyTypes.length > 0
-        ? filterOptions.propertyTypes
-        : (["Residential", "Commercial"] as const),
-    [filterOptions.propertyTypes],
-  )
-
   const displayedProperties = useMemo(() => {
     const items = [...(propertiesQuery.data?.items ?? [])]
-
     switch (currentSort) {
-      case "price-asc":
-        return items.sort((left, right) => parsePriceValue(left.price) - parsePriceValue(right.price))
-      case "price-desc":
-        return items.sort((left, right) => parsePriceValue(right.price) - parsePriceValue(left.price))
-      case "latest":
-        return items.sort(
-          (left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime(),
-        )
-      case "size-desc":
-        return items.sort((left, right) => parseSizeValue(right.width) - parseSizeValue(left.width))
-      default:
-        return items.sort(
-          (left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime(),
-        )
+      case "price-asc": return items.sort((a, b) => parsePriceValue(a.price) - parsePriceValue(b.price))
+      case "price-desc": return items.sort((a, b) => parsePriceValue(b.price) - parsePriceValue(a.price))
+      case "latest": return items.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+      case "size-desc": return items.sort((a, b) => parseSizeValue(b.width) - parseSizeValue(a.width))
+      default: return items
     }
   }, [currentSort, propertiesQuery.data?.items])
 
-  function updateUrl(nextValues: {
-    listingType?: "" | "ForSale" | "ForRent"
-    page?: number
-    propertyType?: "" | "Residential" | "Commercial"
-    search?: string
-    sort?: PropertySortMode
-  }) {
+  function updateUrl(next: { search?: string; listingType?: "" | "ForSale" | "ForRent"; propertyType?: "" | "Residential" | "Commercial"; sort?: PropertySortMode; page?: number }) {
     const params = new URLSearchParams(searchParams.toString())
-    const search = nextValues.search ?? currentSearch
-    const listingType = nextValues.listingType ?? currentListingType
-    const propertyType = nextValues.propertyType ?? currentPropertyType
-    const page = nextValues.page ?? currentPage
-    const sort = nextValues.sort ?? currentSort
+    const values = {
+      search: next.search ?? currentSearch,
+      listingType: next.listingType ?? currentListingType,
+      propertyType: next.propertyType ?? currentPropertyType,
+      sort: next.sort ?? currentSort,
+      page: next.page ?? currentPage,
+    }
 
-    if (search) params.set("search", search)
-    else params.delete("search")
+    if (values.search) params.set("search", values.search); else params.delete("search")
+    if (values.listingType) params.set("listingType", values.listingType); else params.delete("listingType")
+    if (values.propertyType) params.set("propertyType", values.propertyType); else params.delete("propertyType")
+    if (values.sort !== "featured") params.set("sort", values.sort); else params.delete("sort")
+    if (values.page > 1) params.set("page", String(values.page)); else params.delete("page")
 
-    if (listingType) params.set("listingType", listingType)
-    else params.delete("listingType")
-
-    if (propertyType) params.set("propertyType", propertyType)
-    else params.delete("propertyType")
-
-    if (sort && sort !== "featured") params.set("sort", sort)
-    else params.delete("sort")
-
-    if (page > 1) params.set("page", String(page))
-    else params.delete("page")
-
-    router.push(`${pathname}${params.toString() ? `?${params.toString()}` : ""}`, {
-      scroll: false,
-    })
+    router.push(`${pathname}${params.toString() ? `?${params.toString()}` : ""}`, { scroll: false })
   }
 
-  function applyFilters(values: {
-    listingType: "" | "ForSale" | "ForRent"
-    propertyType: "" | "Residential" | "Commercial"
-    search: string
-  }) {
-    updateUrl({
-      listingType: values.listingType,
-      page: 1,
-      propertyType: values.propertyType,
-      search: values.search.trim(),
-    })
-    setIsFilterSheetOpen(false)
+  function submitSearch(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    updateUrl({ search: searchValue.trim(), propertyType: propertyTypeValue, listingType: listingTypeValue, page: 1 })
   }
 
-  function resetFilters() {
-    router.push(pathname, { scroll: false })
-    setIsFilterSheetOpen(false)
-  }
-
-  const isInitialLoading =
-    !propertiesQuery.data && (propertiesQuery.isLoading || propertiesQuery.isFetching)
-  const filterPanelKey = searchParams.toString()
-  const filterPanel = (
-    <PropertySearchFilterPanel
-      key={filterPanelKey}
-      initialListingType={currentListingType}
-      initialPropertyType={currentPropertyType}
-      initialSearch={currentSearch}
-      listingTypeOptions={[...listingTypes]}
-      locations={filterOptions.locations}
-      onApply={applyFilters}
-      onReset={resetFilters}
-      propertyTypeOptions={[...propertyTypes]}
-    />
-  )
+  const isInitialLoading = !propertiesQuery.data && (propertiesQuery.isLoading || propertiesQuery.isFetching)
+  const totalCount = propertiesQuery.data?.totalCount ?? 0
+  const startItem = totalCount === 0 ? 0 : (currentPage - 1) * PROPERTY_PAGE_SIZE + 1
+  const endItem = Math.min(currentPage * PROPERTY_PAGE_SIZE, totalCount)
 
   return (
-    <main className="min-h-[calc(100vh-4rem)] bg-muted/20 p-4 sm:p-6 lg:p-8">
-      <div className="mx-auto max-w-[1600px] space-y-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-3xl">{"Property search"}</CardTitle>
-            <CardDescription>
-              {`${propertiesQuery.data?.totalCount ?? 0} open properties matching your criteria`}
-            </CardDescription>
-          </CardHeader>
-        </Card>
+    <main className="min-h-[calc(100vh-4rem)] bg-[#f7f8ff] px-4 py-10 sm:px-6 lg:px-8 lg:py-12">
+      <div className="mx-auto max-w-[1180px]">
+        <section className="max-w-3xl">
+          <h1 className="text-4xl font-bold tracking-[-0.035em] text-[#0b1c30] sm:text-5xl">Explore Premium Listings</h1>
+          <p className="mt-4 max-w-2xl text-base leading-7 text-[#5b6070]">Curated real estate opportunities for high-performance portfolios. Precision data meets architectural excellence.</p>
+        </section>
 
-        <div className="grid gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
-          <Card className="hidden h-fit lg:block">
-            <CardHeader>
-              <CardTitle>{"Filters"}</CardTitle>
-              <CardDescription>{"Refine the public listing results."}</CardDescription>
-            </CardHeader>
-            <CardContent>{filterPanel}</CardContent>
-          </Card>
+        <form onSubmit={submitSearch} className="mt-8 flex flex-col gap-3 rounded-[24px] bg-white p-4 shadow-[0_12px_35px_rgba(67,67,213,.06)] lg:flex-row lg:items-center">
+          <div className="flex min-w-0 flex-1 items-center gap-3 rounded-xl bg-[#eff2ff] px-4 py-3.5">
+            <AppIcon className="text-xl text-[#4343d5]" name="location_on" />
+            <input value={searchValue} onChange={(event) => setSearchValue(event.target.value)} placeholder="Enter city, neighborhood, or ZIP" className="w-full border-0 bg-transparent text-sm outline-none placeholder:text-slate-400" />
+          </div>
+          <div className="hidden h-10 w-px bg-slate-200 lg:block" />
+          <Select value={propertyTypeValue || "all"} onValueChange={(value) => setPropertyTypeValue(value === "all" ? "" : value as "Residential" | "Commercial")}>
+            <SelectTrigger className="h-12 border-0 bg-transparent lg:w-44"><SelectValue placeholder="Property Type" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All property types</SelectItem>
+              {filterOptions.propertyTypes.map((type) => <SelectItem key={type} value={type}>{type}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={listingTypeValue || "all"} onValueChange={(value) => setListingTypeValue(value === "all" ? "" : value as "ForSale" | "ForRent")}>
+            <SelectTrigger className="h-12 border-0 bg-transparent lg:w-40"><SelectValue placeholder="Listing Type" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Sale or rent</SelectItem>
+              <SelectItem value="ForSale">For sale</SelectItem>
+              <SelectItem value="ForRent">For rent</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button type="submit" className="h-12 rounded-xl bg-[#4343d5] px-8 text-sm font-bold hover:bg-[#3434b8]">Search Now</Button>
+        </form>
 
-          <div className="min-w-0 space-y-4">
-            <Card size="sm">
-              <CardContent className="flex flex-col gap-3 pt-1 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Sheet open={isFilterSheetOpen} onOpenChange={setIsFilterSheetOpen}>
-                    <SheetTrigger
-                      className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border bg-background px-3 text-sm font-semibold shadow-xs lg:hidden"
-                    >
-                      <AppIcon name="tune" />
-                      {"Filters"}
-                    </SheetTrigger>
-                    <SheetContent side="left">
-                      <SheetHeader>
-                        <SheetTitle>{"Search filters"}</SheetTitle>
-                      </SheetHeader>
-                      <div className="overflow-y-auto px-5 pb-5">{filterPanel}</div>
-                    </SheetContent>
-                  </Sheet>
+        <div className="mt-10 flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex gap-3 overflow-x-auto pb-1">
+            {[
+              ["", "All Properties"],
+              ["Commercial", "Commercial"],
+              ["Residential", "Residential"],
+            ].map(([value, label]) => {
+              const active = currentPropertyType === value
+              return <button key={label} onClick={() => updateUrl({ propertyType: value as "" | "Residential" | "Commercial", page: 1 })} className={`whitespace-nowrap rounded-full border px-5 py-2 text-sm font-semibold transition ${active ? "border-[#4343d5] bg-[#d8d8ff] text-[#3434c7]" : "border-[#c7c4d7] bg-white text-[#464555] hover:border-[#4343d5]"}`}>{label}</button>
+            })}
+          </div>
 
-                  <div className="flex rounded-xl border bg-background p-1 shadow-xs">
-                    <Button
-                      aria-label="Grid view"
-                      aria-pressed={viewMode === "grid"}
-                      onClick={() => setViewMode("grid")}
-                      size="icon-sm"
-                      type="button"
-                      variant={viewMode === "grid" ? "secondary" : "ghost"}
-                    >
-                      <AppIcon name="grid_view" />
-                    </Button>
-                    <Button
-                      aria-label="List view"
-                      aria-pressed={viewMode === "list"}
-                      onClick={() => setViewMode("list")}
-                      size="icon-sm"
-                      type="button"
-                      variant={viewMode === "list" ? "secondary" : "ghost"}
-                    >
-                      <AppIcon name="view_list" />
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <span className="hidden text-sm text-muted-foreground sm:inline">{"Sort by"}</span>
-                  <Select
-                    modal={false}
-                    onValueChange={(value) =>
-                      updateUrl({ page: 1, sort: (value ?? "featured") as PropertySortMode })
-                    }
-                    value={currentSort}
-                  >
-                    <SelectTrigger className="w-48">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="featured">{"Featured"}</SelectItem>
-                      <SelectItem value="price-asc">{"Price: low to high"}</SelectItem>
-                      <SelectItem value="price-desc">{"Price: high to low"}</SelectItem>
-                      <SelectItem value="latest">{"Date added"}</SelectItem>
-                      <SelectItem value="size-desc">{"Size"}</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </CardContent>
-            </Card>
-
-            {currentSearch || currentListingType || currentPropertyType ? (
-              <div className="flex flex-wrap gap-2">
-                {currentSearch ? <Badge variant="outline">{`Search: ${currentSearch}`}</Badge> : null}
-                {currentListingType ? (
-                  <Badge variant="secondary">
-                    {currentListingType === "ForRent" ? "For rent" : "For sale"}
-                  </Badge>
-                ) : null}
-                {currentPropertyType ? <Badge variant="outline">{currentPropertyType}</Badge> : null}
-                <Button onClick={resetFilters} size="xs" type="button" variant="ghost">
-                  {"Clear all"}
-                </Button>
-              </div>
-            ) : null}
-
-            {isInitialLoading ? (
-              <Alert>
-                <AlertDescription>{"Loading properties..."}</AlertDescription>
-              </Alert>
-            ) : propertiesQuery.error ? (
-              <Alert variant="destructive">
-                <AlertDescription>{propertiesQuery.error.message}</AlertDescription>
-              </Alert>
-            ) : displayedProperties.length === 0 ? (
-              <div className="rounded-2xl border border-dashed bg-card p-12 text-center">
-                <p className="font-semibold">{"No matching listings"}</p>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  {"Try changing the location, category, or listing type filters."}
-                </p>
-              </div>
-            ) : (
-              <>
-                <div
-                  className={cn(
-                    viewMode === "grid"
-                      ? "grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3"
-                      : "flex flex-col gap-4",
-                  )}
-                >
-                  {displayedProperties.map((property) => (
-                    <PropertySearchCard key={property.id} property={property} viewMode={viewMode} />
-                  ))}
-                </div>
-                <div className="rounded-2xl border bg-card p-3 shadow-sm">
-                  <PagePagination
-                    currentPage={currentPage}
-                    onPageChange={(page) => updateUrl({ page })}
-                    totalPages={propertiesQuery.data?.totalPages ?? 1}
-                  />
-                </div>
-              </>
-            )}
+          <div className="flex items-center gap-2 text-sm text-slate-500">
+            <span>Sort by:</span>
+            <Select value={currentSort} onValueChange={(value) => updateUrl({ sort: value as PropertySortMode, page: 1 })}>
+              <SelectTrigger className="w-48 border-0 bg-transparent font-semibold text-[#4343d5]"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="featured">Featured First</SelectItem>
+                <SelectItem value="price-asc">Price: Low to High</SelectItem>
+                <SelectItem value="price-desc">Price: High to Low</SelectItem>
+                <SelectItem value="latest">Newest Listings</SelectItem>
+                <SelectItem value="size-desc">Largest First</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
+
+        <div className="mt-6">
+          {isInitialLoading ? (
+            <Alert><AlertDescription>Loading properties...</AlertDescription></Alert>
+          ) : propertiesQuery.error ? (
+            <Alert variant="destructive"><AlertDescription>{propertiesQuery.error.message}</AlertDescription></Alert>
+          ) : displayedProperties.length === 0 ? (
+            <div className="rounded-3xl border border-dashed bg-white p-14 text-center"><p className="font-semibold">No matching listings</p><p className="mt-2 text-sm text-slate-500">Try another location or property category.</p></div>
+          ) : (
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+              {displayedProperties.map((property) => <PropertySearchCard key={property.id} property={property} viewMode="grid" />)}
+            </div>
+          )}
+        </div>
+
+        {totalCount > 0 ? (
+          <div className="mt-12 flex flex-col items-center justify-between gap-5 sm:flex-row">
+            <p className="text-sm text-slate-500">Showing {startItem}-{endItem} of {totalCount} properties</p>
+            <PagePagination currentPage={currentPage} onPageChange={(page) => updateUrl({ page })} totalPages={propertiesQuery.data?.totalPages ?? 1} />
+          </div>
+        ) : null}
       </div>
     </main>
   )

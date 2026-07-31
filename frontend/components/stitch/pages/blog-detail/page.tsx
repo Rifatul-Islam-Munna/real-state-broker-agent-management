@@ -1,5 +1,5 @@
 import { PublicPrimaryNavbar } from "@/components/stitch/shared/public-site-navbar"
-import { FooterSection } from "@/components/stitch/pages/market-insights-blog/sections/footer"
+import { PublicSiteFooter } from "@/components/stitch/shared/public-site-footer"
 import { BlogPostDetailContent } from "@/components/stitch/pages/blog-detail/blog-detail-content"
 
 type BlogPostDetailPageProps = {
@@ -11,7 +11,7 @@ export function BlogPostDetailPage({ slug }: BlogPostDetailPageProps) {
     <div className="bg-background-light text-[#1A2332]">
       <PublicPrimaryNavbar />
       <BlogPostDetailContent slug={slug} />
-      <FooterSection />
+      <PublicSiteFooter />
     </div>
   )
 }

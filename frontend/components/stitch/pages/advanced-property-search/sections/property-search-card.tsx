@@ -3,11 +3,8 @@
 import Link from "next/link"
 
 import { AppIcon } from "@/components/ui/app-icon"
-import { Badge } from "@/components/ui/badge"
-import { Card, CardContent } from "@/components/ui/card"
 import type { PropertyItem } from "@/hooks/use-real-estate-api"
 import { formatPriceLabel } from "@/lib/currency"
-import { cn } from "@/lib/utils"
 import {
   listingTypeLabel,
   PROPERTY_FALLBACK_IMAGE,
@@ -15,85 +12,47 @@ import {
   type PropertyViewMode,
 } from "./property-search-helpers"
 
-const propertyCardIcons = ["bed", "bathtub", "square_foot"] as const
-
 function listingImage(property: PropertyItem) {
   return property.thumbnailUrl ?? property.imageUrls[0] ?? PROPERTY_FALLBACK_IMAGE
 }
 
-function listingSpecs(property: PropertyItem) {
-  return [
-    property.bedRoom ? `${property.bedRoom} Beds` : "Beds N/A",
-    property.bathRoom ? `${property.bathRoom} Baths` : "Baths N/A",
-    property.width || "Size N/A",
-  ] as const
-}
-
-export function PropertySearchCard({
-  property,
-  viewMode,
-}: {
-  property: PropertyItem
-  viewMode: PropertyViewMode
-}) {
-  const isListView = viewMode === "list"
+export function PropertySearchCard({ property }: { property: PropertyItem; viewMode: PropertyViewMode }) {
+  const location = property.location || property.exactLocation || "Location available on request"
 
   return (
-    <Card className="group p-0" key={property.id}>
-      <Link
-        className={cn("block h-full", isListView && "sm:flex")}
-        href={`/properties/${property.slug}`}
-      >
-        <div
-          className={cn(
-            "relative overflow-hidden bg-muted",
-            isListView ? "h-56 sm:h-auto sm:min-h-56 sm:w-72 sm:shrink-0" : "h-52 w-full",
-          )}
-        >
-          <img
-            alt={property.title}
-            className="size-full object-cover transition-transform duration-300 group-hover:scale-105"
-            src={listingImage(property)}
-          />
-          <Badge className="absolute left-3 top-3 shadow-sm">
-            {listingTypeLabel(property.listingType)}
-          </Badge>
+    <article className="group overflow-hidden rounded-[24px] bg-white shadow-[0_5px_22px_rgba(15,23,42,.045)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_14px_35px_rgba(67,67,213,.10)]">
+      <Link href={`/properties/${property.slug}`} className="block">
+        <div className="relative h-64 overflow-hidden bg-slate-200 sm:h-72">
+          <img src={listingImage(property)} alt={property.title} className="h-full w-full object-cover transition duration-700 group-hover:scale-105" />
+          <div className="absolute left-4 top-4 flex gap-2">
+            <span className="rounded-lg bg-[#71f8e4] px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-[#005048]">{listingTypeLabel(property.listingType)}</span>
+            {property.isFeatured ? <span className="rounded-lg bg-[#213145]/90 px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-white">Featured</span> : null}
+          </div>
+          <span className="absolute right-4 top-4 inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/25 text-white backdrop-blur-md">
+            <AppIcon name="favorite" />
+          </span>
         </div>
-        <CardContent
-          className={cn(
-            "p-5",
-            isListView && "flex flex-1 flex-col justify-between gap-5 sm:p-6",
-          )}
-        >
-          <div>
-            <p className="text-2xl font-semibold tracking-tight text-primary">
-              {formatPriceLabel(property.price)}
-            </p>
-            <div className="mt-2 flex items-start gap-1.5 text-sm text-muted-foreground">
-              <AppIcon className="mt-0.5 shrink-0" name="location_on" />
-              <span className={cn(!isListView && "line-clamp-1")}>
-                {property.location || property.exactLocation}
-              </span>
+
+        <div className="p-5 sm:p-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <h2 className="truncate text-xl font-semibold tracking-tight text-[#0b1c30]">{property.title}</h2>
+              <p className="mt-1 flex items-center gap-1 text-sm text-[#626777]"><AppIcon className="text-base" name="location_on" />{location}</p>
             </div>
-            <Badge className="mt-3" variant="secondary">
-              {propertyTypeLabel(property.propertyType)}
-            </Badge>
+            <p className="shrink-0 text-3xl font-bold tracking-[-0.04em] text-[#4343d5]">{formatPriceLabel(property.price)}</p>
           </div>
-          <div
-            className={cn(
-              "mt-5 border-t pt-4 text-sm text-muted-foreground",
-              isListView ? "grid gap-2 sm:grid-cols-3" : "flex items-center justify-between gap-3",
-            )}
-          >
-            {listingSpecs(property).map((spec, index) => (
-              <div className="flex min-w-0 items-center gap-1.5" key={`${property.id}-${spec}`}>
-                <AppIcon className="shrink-0 text-muted-foreground" name={propertyCardIcons[index] ?? "square_foot"} />
-                <span className="truncate">{spec}</span>
-              </div>
-            ))}
+
+          <div className="mt-5 flex flex-col gap-4 border-t border-[#d9d9e5] pt-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-wrap items-center gap-4 text-sm text-[#5e6372]">
+              <span className="flex items-center gap-1"><AppIcon className="text-lg" name="bed" />{property.bedRoom || "—"}</span>
+              <span className="flex items-center gap-1"><AppIcon className="text-lg" name="bathtub" />{property.bathRoom || "—"}</span>
+              <span className="flex items-center gap-1"><AppIcon className="text-lg" name="square_foot" />{property.width || "Size N/A"}</span>
+              <span className="rounded-full bg-[#eff2ff] px-3 py-1 text-xs font-semibold text-[#4343d5]">{propertyTypeLabel(property.propertyType)}</span>
+            </div>
+            <span className="inline-flex items-center gap-1 text-sm font-bold text-[#4343d5]">View Details <AppIcon className="text-base" name="arrow_forward" /></span>
           </div>
-        </CardContent>
+        </div>
       </Link>
-    </Card>
+    </article>
   )
 }
