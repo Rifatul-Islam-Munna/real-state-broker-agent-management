@@ -1,5 +1,4 @@
 {
-  "dotnet.defaultSolution": "backend.slnx",
   "files.watcherExclude": {
     "**/.next/**": true,
     "**/dist/**": true,
