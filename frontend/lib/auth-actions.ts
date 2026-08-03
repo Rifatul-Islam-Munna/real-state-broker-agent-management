@@ -115,6 +115,15 @@ export async function getSessionUser() {
   return fetchCurrentUser(accessToken)
 }
 
+export async function requireSuperAdminSession() {
+  const user = await getSessionUser()
+
+  if (!user) redirect("/super-admin/login")
+  if (user.role !== "Admin") redirect(getPortalHomePath(user))
+
+  return user
+}
+
 export async function requireSession(
   allowedRoles?: string[],
   requiredAgentPermission?: AgentRoutePermission,
@@ -170,6 +179,64 @@ export async function loginAction(
   )
 }
 
+export async function superAdminLoginAction(
+  _prevState: AuthActionState = initialState,
+  formData: FormData,
+): Promise<AuthActionState> {
+  void _prevState
+  const email = String(formData.get("email") ?? "").trim()
+  const password = String(formData.get("password") ?? "")
+
+  const response = await fetch(`${baseUrl}/auth/super-admin/login`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ email, password }),
+    cache: "no-store",
+  })
+
+  if (!response.ok) return { error: await readErrorMessage(response) }
+
+  const auth = (await response.json()) as AuthResponse
+  if (auth.role !== "Admin") {
+    return { error: "This account cannot access the Super Admin portal" }
+  }
+
+  await persistSession(auth)
+  redirect("/super-admin")
+}
+
+export async function purchaseTenantAction(
+  _prevState: AuthActionState = initialState,
+  formData: FormData,
+): Promise<AuthActionState> {
+  void _prevState
+  const purchaseReference = String(formData.get("purchaseReference") ?? "").trim()
+  const response = await fetch(`${baseUrl}/public-saas/purchase`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Idempotency-Key": purchaseReference,
+    },
+    body: JSON.stringify({
+      businessName: formData.get("businessName"),
+      requestedSubdomain: formData.get("requestedSubdomain"),
+      planId: Number(formData.get("planId")),
+      firstName: formData.get("firstName"),
+      lastName: formData.get("lastName"),
+      email: formData.get("email"),
+      phone: formData.get("phone"),
+      password: formData.get("password"),
+      purchaseReference,
+    }),
+    cache: "no-store",
+  })
+
+  if (!response.ok) return { error: await readErrorMessage(response) }
+  redirect("/login?registered=tenant")
+}
+
 export async function registerAction(
   _prevState: AuthActionState = initialState,
   formData: FormData,
@@ -202,4 +269,9 @@ export async function registerAction(
 export async function logoutAction() {
   await clearSessionCookies()
   redirect("/login")
+}
+
+export async function superAdminLogoutAction() {
+  await clearSessionCookies()
+  redirect("/super-admin/login")
 }

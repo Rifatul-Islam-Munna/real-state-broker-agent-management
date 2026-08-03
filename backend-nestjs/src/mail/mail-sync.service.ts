@@ -33,6 +33,8 @@ interface MailProviderConfig {
   autoCreateLeads: boolean;
   syncIntervalMinutes: number;
   maxMessagesPerSync: number;
+  markAsReadAfterSync: boolean;
+  lastSuccessfulScanAt: string | null;
   gmailEmail: string;
   gmailAccessToken: string;
   gmailRefreshToken: string;
@@ -182,6 +184,7 @@ export class MailInboxSyncBackgroundService {
 
     try {
       const aiConfig = this.readAiConfig(settings?.aiProviderPayload);
+      const scanStartedAt = new Date();
       const result = await this.syncInbox(config, aiConfig);
       this.lastImportedCount = result.importedCount;
       this.lastMatchedLeadCount = result.matchedLeadCount;
@@ -189,6 +192,7 @@ export class MailInboxSyncBackgroundService {
       this.lastSkippedCount = result.skippedCount;
       this.lastCompletedAt = new Date();
       this.lastSucceededAt = this.lastCompletedAt;
+      await this.persistScanCursor(scanStartedAt);
     } catch (error) {
       this.lastCompletedAt = new Date();
       this.lastError = this.errorMessage(error);
@@ -226,13 +230,18 @@ export class MailInboxSyncBackgroundService {
       await client.connect();
       const lock = await client.getMailboxLock(config.imapFolder, { description: 'mail-inbox-sync' });
       try {
-        const unseen = await client.search({ seen: false }, { uid: true });
-        const uids = (unseen || []).slice(-config.maxMessagesPerSync);
+        const candidates = await client.search(
+          config.lastSuccessfulScanAt ? { since: new Date(config.lastSuccessfulScanAt) } : { seen: false },
+          { uid: true },
+        );
+        const uids = (candidates || []).slice(-config.maxMessagesPerSync);
         const messages = uids.length
           ? await client.fetchAll(uids, { uid: true, source: true, internalDate: true }, { uid: true })
           : [];
 
+        const cursorTime = config.lastSuccessfulScanAt ? new Date(config.lastSuccessfulScanAt).getTime() : null;
         for (const message of messages) {
+          if (cursorTime && message.internalDate && new Date(message.internalDate).getTime() <= cursorTime) continue;
           if (!message.source || !message.uid) {
             result.skippedCount++;
             continue;
@@ -255,7 +264,9 @@ export class MailInboxSyncBackgroundService {
 
           if (!inbound.senderEmail || (!inbound.subject && !inbound.body)) {
             result.skippedCount++;
-            await client.messageFlagsAdd(message.uid, ['\\Seen'], { uid: true });
+            if (config.markAsReadAfterSync) {
+              await client.messageFlagsAdd(message.uid, ['\\Seen'], { uid: true });
+            }
             continue;
           }
 
@@ -265,7 +276,9 @@ export class MailInboxSyncBackgroundService {
           if (saved.matchedLead) result.matchedLeadCount++;
           if (saved.createdLead) result.createdLeadCount++;
 
-          await client.messageFlagsAdd(message.uid, ['\\Seen'], { uid: true });
+          if (config.markAsReadAfterSync) {
+            await client.messageFlagsAdd(message.uid, ['\\Seen'], { uid: true });
+          }
         }
       } finally {
         lock.release();
@@ -292,7 +305,12 @@ export class MailInboxSyncBackgroundService {
     const labels = config.gmailLabelIds.length ? config.gmailLabelIds : ['INBOX'];
     const listUrl = new URL('https://gmail.googleapis.com/gmail/v1/users/me/messages');
     listUrl.searchParams.set('maxResults', String(config.maxMessagesPerSync));
-    listUrl.searchParams.set('q', 'is:unread');
+    listUrl.searchParams.set(
+      'q',
+      config.lastSuccessfulScanAt
+        ? `after:${Math.floor(new Date(config.lastSuccessfulScanAt).getTime() / 1000)}`
+        : 'is:unread',
+    );
     for (const label of labels) listUrl.searchParams.append('labelIds', label);
     const listResponse = await fetch(listUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
     if (!listResponse.ok) throw new Error(`Gmail list failed: ${listResponse.status} ${await this.safeErrorBody(listResponse)}`);
@@ -325,7 +343,7 @@ export class MailInboxSyncBackgroundService {
       };
       if (!inbound.senderEmail || (!inbound.subject && !inbound.body)) {
         result.skippedCount++;
-        await this.markGmailRead(id, accessToken);
+        if (config.markAsReadAfterSync) await this.markGmailRead(id, accessToken);
         continue;
       }
       const saved = await this.saveInbound(inbound, properties, config, aiConfig);
@@ -333,7 +351,7 @@ export class MailInboxSyncBackgroundService {
       else result.importedCount++;
       if (saved.matchedLead) result.matchedLeadCount++;
       if (saved.createdLead) result.createdLeadCount++;
-      await this.markGmailRead(id, accessToken);
+      if (config.markAsReadAfterSync) await this.markGmailRead(id, accessToken);
     }
     return result;
   }
@@ -556,6 +574,8 @@ export class MailInboxSyncBackgroundService {
       autoCreateLeads: raw.autoCreateLeads !== false,
       syncIntervalMinutes: this.clampInt(raw.syncIntervalMinutes, 10, 1, 120),
       maxMessagesPerSync: this.clampInt(raw.maxMessagesPerSync, 25, 5, 100),
+      markAsReadAfterSync: raw.markAsReadAfterSync === true,
+      lastSuccessfulScanAt: this.validDateString(raw.lastSuccessfulScanAt),
       gmailEmail: `${raw.gmailEmail ?? ''}`.trim(),
       gmailAccessToken: `${raw.gmailAccessToken ?? ''}`.trim(),
       gmailRefreshToken: `${raw.gmailRefreshToken ?? ''}`.trim(),
@@ -606,6 +626,20 @@ export class MailInboxSyncBackgroundService {
       .sort((a, b) => b.score - a.score || b.property.title.length - a.property.title.length)
       .map((item) => item.property)
       .find(Boolean);
+  }
+
+  private async persistScanCursor(scannedAt: Date) {
+    const current = await this.settingsService.getSmtpConfig();
+    await this.settingsService.saveSmtpConfig({
+      ...(current ?? {}),
+      lastSuccessfulScanAt: scannedAt.toISOString(),
+    });
+  }
+
+  private validDateString(value: unknown): string | null {
+    if (!value) return null;
+    const date = new Date(`${value}`);
+    return Number.isNaN(date.getTime()) ? null : date.toISOString();
   }
 
   private async getGmailAccessToken(config: MailProviderConfig) {

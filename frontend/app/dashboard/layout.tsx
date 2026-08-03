@@ -1,4 +1,4 @@
-import { redirect } from "next/navigation"
+﻿import { redirect } from "next/navigation"
 
 import { DashboardSidebar } from "@/components/stitch/shared/dashboard-sidebar"
 import { DashboardTopbar } from "@/components/stitch/shared/dashboard-topbar"
@@ -6,23 +6,23 @@ import { PortalBrandLink } from "@/components/stitch/shared/portal-brand-link"
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import { requireSession } from "@/lib/auth-actions"
 import { canOpenDashboardRoute, getDashboardHomePath } from "@/lib/dashboard-routes"
-import { resolvePortalBranding } from "@/lib/portal-branding"
-import { getPublicAgencySettings } from "@/lib/public-real-estate-data"
+import { getTenantDashboardContext } from "@/lib/tenant-dashboard-actions"
 
 type DashboardLayoutProps = Readonly<{
   children: React.ReactNode
 }>
 
 export default async function DashboardLayout({ children }: DashboardLayoutProps) {
-  const user = await requireSession(["Admin", "Agent"])
+  const user = await requireSession(["Agent"])
   const homeHref = getDashboardHomePath(user.role, user.agentRoutePermissions)
 
   if (!canOpenDashboardRoute(homeHref, user.role, user.agentRoutePermissions)) {
     redirect("/login")
   }
 
-  const publicAgencySettings = await getPublicAgencySettings()
-  const { agencyName, logoUrl } = resolvePortalBranding(publicAgencySettings.profile)
+  const tenantContext = await getTenantDashboardContext()
+  const agencyName = tenantContext.tenant.businessName
+  const logoUrl = null
 
   return (
     <SidebarProvider className="min-h-screen bg-[var(--ether-surface)] text-[var(--ether-on-surface)]" style={{ "--sidebar-width": "280px" } as React.CSSProperties}>
@@ -61,3 +61,4 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
     </SidebarProvider>
   )
 }
+

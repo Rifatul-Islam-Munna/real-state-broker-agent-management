@@ -13,14 +13,14 @@ describe('AppController (e2e)', () => {
     }).compile();
 
     app = moduleFixture.createNestApplication();
+    app.setGlobalPrefix('api');
     await app.init();
   });
 
-  it('/ (GET)', () => {
+  it('does not expose the removed legacy root controller', () => {
     return request(app.getHttpServer())
-      .get('/')
-      .expect(200)
-      .expect('Hello World!');
+      .get('/api/')
+      .expect(404);
   });
 
   afterEach(async () => {

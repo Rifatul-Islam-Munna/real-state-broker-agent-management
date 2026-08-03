@@ -10,6 +10,7 @@ import {
 import { UserRole } from '../enums/user-role.enum';
 import { Property } from '../../properties/entities/property.entity';
 import { numericEnumTransformer } from '../../common/numeric-enum';
+import { TenantUserRole } from '../../security/tenant-user-role.enum';
 
 const userRoles = Object.values(UserRole);
 
@@ -40,6 +41,12 @@ export class User {
 
   @Column({ type: 'int', transformer: numericEnumTransformer(userRoles, UserRole.Client) })
   role: UserRole = UserRole.Client;
+
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  tenantRole: TenantUserRole | null;
+
+  @Column({ type: 'int', nullable: true })
+  tenantId: number | null;
 
   @Column({ default: true })
   isActive: boolean;

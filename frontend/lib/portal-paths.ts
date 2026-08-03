@@ -1,4 +1,4 @@
-import { canOpenDashboardRoute, getDashboardHomePath } from "@/lib/dashboard-routes"
+﻿import { canOpenDashboardRoute, getDashboardHomePath } from "@/lib/dashboard-routes"
 
 type PortalUserLike = {
   role: string
@@ -30,7 +30,11 @@ export async function resolvePostAuthRedirect(
     return getPortalPathByRole(role, agentRoutePermissions)
   }
 
-  if (normalized.startsWith("/admin") || normalized.startsWith("/agent")) {
+  if (
+    normalized.startsWith("/admin") ||
+    normalized.startsWith("/agent") ||
+    normalized.startsWith("/super-admin")
+  ) {
     return getPortalPathByRole(role, agentRoutePermissions)
   }
 
@@ -40,3 +44,4 @@ export async function resolvePostAuthRedirect(
 
   return normalized
 }
+

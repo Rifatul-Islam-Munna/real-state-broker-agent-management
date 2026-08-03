@@ -205,6 +205,8 @@ export class UsersService implements OnModuleInit {
       phone: user.phone,
       avatarUrl: user.avatarUrl,
       role: user.role,
+      tenantId: user.tenantId,
+      tenantRole: user.tenantRole,
       isActive: user.isActive,
       isEmailVerified: user.isEmailVerified,
       createdAt: user.createdAt,

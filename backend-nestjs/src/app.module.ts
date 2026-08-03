@@ -29,6 +29,10 @@ import { DevSeedService } from './dev-seed.service';
 import { PropertyOperationsModule } from './property-operations/property-operations.module';
 import { ToolsModule } from './tools/tools.module';
 import { RealtorsModule } from './realtors/realtors.module';
+import { SaasAdminModule } from './saas-admin/saas-admin.module';
+import { TenantDatabaseModule } from './tenant-database/tenant-database.module';
+import { SecurityModule } from './security/security.module';
+import { TenantDashboardModule } from './tenant-dashboard/tenant-dashboard.module';
 
 @Module({
   imports: [
@@ -60,6 +64,10 @@ import { RealtorsModule } from './realtors/realtors.module';
     PropertyOperationsModule,
     ToolsModule,
     RealtorsModule,
+    SaasAdminModule,
+    TenantDatabaseModule,
+    SecurityModule,
+    TenantDashboardModule,
   ],
   controllers: [],
   providers: [AppService, DevSeedService],

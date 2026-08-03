@@ -23,6 +23,17 @@ export class AuthController {
     return this.authService.login(user);
   }
 
+  @Post('super-admin/login')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Login to the separate Super Admin portal' })
+  async superAdminLogin(@Body() loginDto: any) {
+    const user = await this.authService.validateSuperAdmin(loginDto.email, loginDto.password);
+    if (!user) {
+      throw new BadRequestException('Invalid Super Admin email or password');
+    }
+    return this.authService.login(user);
+  }
+
   @Post('register')
   @HttpCode(201)
   @ApiOperation({ summary: 'Register a new agent account' })

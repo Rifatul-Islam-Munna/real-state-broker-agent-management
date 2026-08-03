@@ -48,6 +48,8 @@ type Values = {
   autoCreateLeads: boolean
   syncIntervalMinutes: string
   maxMessagesPerSync: string
+  markAsReadAfterSync: boolean
+  lastSuccessfulScanAt: string
   hasPassword: boolean
   hasImapPassword: boolean
 }
@@ -76,6 +78,8 @@ const emptyValues = (): Values => ({
   autoCreateLeads: true,
   syncIntervalMinutes: "10",
   maxMessagesPerSync: "25",
+  markAsReadAfterSync: false,
+  lastSuccessfulScanAt: "",
   hasPassword: false,
   hasImapPassword: false,
 })
@@ -118,6 +122,8 @@ export function IntegrationMailSheet({
         : String(config?.leadTemplateTags ?? defaults.leadTemplateTags),
       syncIntervalMinutes: String(config?.syncIntervalMinutes ?? defaults.syncIntervalMinutes),
       maxMessagesPerSync: String(config?.maxMessagesPerSync ?? defaults.maxMessagesPerSync),
+      markAsReadAfterSync: config?.markAsReadAfterSync === true,
+      lastSuccessfulScanAt: String(config?.lastSuccessfulScanAt ?? defaults.lastSuccessfulScanAt),
     })
     setError(null)
   }, [config, open])
@@ -190,6 +196,8 @@ export function IntegrationMailSheet({
         autoCreateLeads: values.autoCreateLeads,
         syncIntervalMinutes: Math.max(1, Number(values.syncIntervalMinutes) || 10),
         maxMessagesPerSync: Math.max(5, Number(values.maxMessagesPerSync) || 25),
+        markAsReadAfterSync: values.markAsReadAfterSync,
+        lastSuccessfulScanAt: values.lastSuccessfulScanAt || null,
       },
     })
     if (response.error) {
@@ -275,7 +283,7 @@ export function IntegrationMailSheet({
             <div className="space-y-4 rounded-xl border p-4">
               {values.authType === "gmail-oauth" ? (
                 <p className="text-xs leading-5 text-muted-foreground">
-                  {"Gmail OAuth uses the Gmail API. Set how often unread inbox messages should be imported."}
+                  {"Gmail OAuth uses the Gmail API. New messages are imported from the last successful scan time."}
                 </p>
               ) : null}
               {values.authType !== "gmail-oauth" ? (
@@ -294,6 +302,22 @@ export function IntegrationMailSheet({
               {values.authType !== "gmail-oauth" ? (
                 <Toggle checked={values.imapUseSsl} label="Secure IMAP" onChange={(checked) => patch({ imapUseSsl: checked })} />
               ) : null}
+              <div className="space-y-2 rounded-xl border bg-muted/30 p-3">
+                <Toggle
+                  checked={values.markAsReadAfterSync}
+                  label="Mark imported emails as read"
+                  onChange={(checked) => patch({ markAsReadAfterSync: checked })}
+                />
+                <p className="px-1 text-xs leading-5 text-muted-foreground">
+                  {values.markAsReadAfterSync
+                    ? "After import, the connected mailbox message becomes read."
+                    : `Messages remain unread. Sync continues from the last successful scan${
+                        values.lastSuccessfulScanAt
+                          ? ` (${new Date(values.lastSuccessfulScanAt).toLocaleString()})`
+                          : ""
+                      }, while message IDs prevent duplicate imports.`}
+                </p>
+              </div>
               <Toggle checked={values.autoCreateLeads} label="Auto-create leads" onChange={(checked) => patch({ autoCreateLeads: checked })} />
             </div>
           ) : null}

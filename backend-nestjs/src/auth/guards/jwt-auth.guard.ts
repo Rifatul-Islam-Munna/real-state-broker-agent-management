@@ -61,6 +61,7 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
   }
 
   private isAdminOnly(path: string, method: string) {
+    if (path.startsWith('/super-admin-management')) return true;
     if (path.startsWith('/property-operations')) return true;
     if (
       path.startsWith('/agency-settings') ||

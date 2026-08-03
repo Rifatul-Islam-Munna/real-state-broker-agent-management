@@ -3,6 +3,7 @@ import { JwtService } from '@nestjs/jwt';
 import { UsersService } from '../users/users.service';
 import * as bcrypt from 'bcrypt';
 import { User } from '../users/entities/user.entity';
+import { UserRole } from '../users/enums/user-role.enum';
 import * as crypto from 'crypto';
 
 @Injectable()
@@ -24,6 +25,14 @@ export class AuthService {
     return null;
   }
 
+  async validateSuperAdmin(email: string, pass: string): Promise<any> {
+    const user = await this.validateUser(email, pass);
+    if (!user || user.role !== UserRole.Admin) {
+      return null;
+    }
+    return user;
+  }
+
   async login(user: User) {
     if (!user.isActive) {
       throw new UnauthorizedException('Account is deactivated');
@@ -36,12 +45,13 @@ export class AuthService {
       fullName: `${user.firstName} ${user.lastName}`,
     };
     const accessToken = this.jwtService.sign(payload);
-    const refreshToken = crypto.randomBytes(64).toString('base64');
+    const refreshToken = crypto.randomBytes(64).toString('base64url');
+    const refreshTokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
     const refreshTokenExpiry = new Date();
     refreshTokenExpiry.setDate(refreshTokenExpiry.getDate() + 10);
 
     await this.usersService.update(user.id, {
-      refreshToken,
+      refreshToken: refreshTokenHash,
       refreshTokenExpiry,
       lastLoginAt: new Date(),
     });
@@ -51,9 +61,11 @@ export class AuthService {
       fullName: `${user.firstName} ${user.lastName}`,
       email: user.email,
       role: user.role,
+      tenantId: user.tenantId,
+      tenantRole: user.tenantRole,
       accessToken,
       refreshToken,
-      accessTokenExpiry: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000),
+      accessTokenExpiry: new Date(Date.now() + 15 * 60 * 1000),
     };
   }
 
@@ -83,7 +95,8 @@ export class AuthService {
   }
 
   async refresh(refreshToken: string) {
-    const user = await this.usersService.findOneByRefreshToken(`${refreshToken ?? ''}`);
+    const refreshTokenHash = crypto.createHash('sha256').update(`${refreshToken ?? ''}`).digest('hex');
+    const user = await this.usersService.findOneByRefreshToken(refreshTokenHash);
     if (
       !user ||
       !user.isActive ||

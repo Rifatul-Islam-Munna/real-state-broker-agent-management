@@ -1,11 +1,12 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
+import { StructuredExceptionFilter } from './security/structured-exception.filter';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { apiReference } from '@scalar/nestjs-api-reference';
 import { json, urlencoded } from 'express';
 
-const DEFAULT_BODY_LIMIT = '25mb';
+const DEFAULT_BODY_LIMIT = '1mb';
 
 function validateProductionConfiguration() {
   if (process.env.NODE_ENV !== 'production') return;
@@ -25,8 +26,21 @@ async function bootstrap() {
   app.use(json({ limit: bodyLimit }));
   app.use(urlencoded({ extended: true, limit: bodyLimit }));
   app.setGlobalPrefix('api');
-  app.useGlobalPipes(new ValidationPipe({ transform: true }));
-  app.enableCors();
+  app.useGlobalFilters(new StructuredExceptionFilter());
+  app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true }));
+  const allowedOrigins = `${process.env.CORS_ORIGINS ?? 'http://localhost:3000'}`
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+  app.enableCors({
+    origin(origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+      return callback(new Error('Origin is not allowed by CORS'), false);
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'access_token', 'Idempotency-Key', 'X-Request-Id', 'X-Tenant-Host'],
+  });
 
   const config = new DocumentBuilder()
     .setTitle('Real Estate API')
