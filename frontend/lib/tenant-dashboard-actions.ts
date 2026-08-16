@@ -1,17 +1,20 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { cookies } from "next/headers"
+import { cookies, headers } from "next/headers"
 
 const baseUrl = process.env.BASE_URL ?? "http://localhost:4000/api"
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const token = (await cookies()).get("access_token")?.value
+  const incomingHeaders = await headers()
+  const tenantHost = incomingHeaders.get("x-tenant-host") ?? incomingHeaders.get("x-forwarded-host") ?? incomingHeaders.get("host")
   const response = await fetch(`${baseUrl}${path}`, {
     ...init,
     headers: {
       "Content-Type": "application/json",
       ...(token ? { access_token: token } : {}),
+      ...(tenantHost ? { "x-tenant-host": tenantHost } : {}),
       ...init.headers,
     },
     cache: "no-store",
@@ -107,9 +110,11 @@ export type TenantOwnerReport = {
 export type TenantShowingFormField = {
   key: string
   label: string
-  type: "text" | "email" | "phone" | "number" | "textarea" | "select" | "radio" | "checkbox" | "date" | "datetime"
+  type: "text" | "email" | "phone" | "number" | "textarea" | "select" | "radio" | "checkbox" | "checkbox-group" | "date" | "datetime" | "divider" | "heading" | "paragraph" | "image"
   required: boolean
   options: string[]
+  description?: string
+  imageUrl?: string
 }
 
 export type TenantShowingTemplate = {

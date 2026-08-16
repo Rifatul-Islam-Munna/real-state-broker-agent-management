@@ -1,4 +1,4 @@
-import {
+﻿import {
   Body,
   Controller,
   Get,
@@ -11,13 +11,14 @@ import {
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AuthenticatedTenantGuard } from './authenticated-tenant.guard';
+import { TenantStaffPermissionGuard } from './tenant-staff-permission.guard';
 import { TenantInboxSyncService } from './tenant-inbox-sync.service';
 import { TenantMailInboxService } from './tenant-mail-inbox.service';
 import { TenantPlanPermissionGuard } from './tenant-plan-permission.guard';
 import { TenantPlanPermissions } from './tenant-plan-permissions.decorator';
 
 @Controller('tenant-inbox')
-@UseGuards(JwtAuthGuard, AuthenticatedTenantGuard, TenantPlanPermissionGuard)
+@UseGuards(JwtAuthGuard, AuthenticatedTenantGuard, TenantStaffPermissionGuard, TenantPlanPermissionGuard)
 @TenantPlanPermissions('normal-dashboard', 'property-management-dashboard')
 export class TenantInboxController {
   constructor(
@@ -92,3 +93,4 @@ export class TenantInboxController {
     return `${user?.fullName || user?.email || 'Tenant workspace'}`.trim();
   }
 }
+

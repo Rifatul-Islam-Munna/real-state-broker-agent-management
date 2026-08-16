@@ -98,6 +98,65 @@ export class TenantInboxSyncService {
     });
   }
 
+  async setProviderReadState(
+    tenant: SaasTenant,
+    message: { provider?: string; providerMessageId?: string; payload?: any },
+    isRead: boolean,
+  ) {
+    const provider = this.text(message.provider).toLowerCase();
+    if (!provider.startsWith('gmail:') && !provider.startsWith('imap:')) return false;
+
+    const config: any = await this.settings.getRawSmtp(tenant);
+    if (provider.startsWith('gmail:')) {
+      const messageId = this.text(message.providerMessageId);
+      if (!messageId) return false;
+      const accessToken = await this.gmailAccessToken(this.databaseName(tenant), config, tenant);
+      await this.jsonRequest(
+        `https://gmail.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(messageId)}/modify`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(isRead ? { removeLabelIds: ['UNREAD'] } : { addLabelIds: ['UNREAD'] }),
+        },
+      );
+      return true;
+    }
+
+    const host = this.text(config.imapHost);
+    const user = this.text(config.imapUsername, config.username);
+    const pass = this.text(config.imapPassword, config.password);
+    const uid = Number(message.payload?.uid ?? `${message.providerMessageId ?? ''}`.split(':').pop());
+    if (!host || !user || !pass || !Number.isInteger(uid) || uid <= 0) return false;
+    const { ImapFlow } = require('imapflow');
+    const connection = new ImapFlow({
+      host,
+      port: this.clamp(config.imapPort, 993, 1, 65_535),
+      secure: config.imapUseSsl !== false,
+      auth: { user, pass },
+      logger: false,
+      connectionTimeout: 15_000,
+      socketTimeout: 60_000,
+    });
+    await connection.connect();
+    const lock = await connection.getMailboxLock(this.text(config.imapFolder, 'INBOX'));
+    try {
+      const expectedUidValidity = this.text(message.payload?.uidValidity);
+      const actualUidValidity = `${connection.mailbox?.uidValidity ?? ''}`;
+      if (expectedUidValidity && actualUidValidity && expectedUidValidity !== actualUidValidity) {
+        throw new Error('IMAP mailbox changed; sync the inbox again before changing read state.');
+      }
+      if (isRead) await connection.messageFlagsAdd(uid, ['\\Seen'], { uid: true });
+      else await connection.messageFlagsRemove(uid, ['\\Seen'], { uid: true });
+      return true;
+    } finally {
+      lock.release();
+      await connection.logout().catch(() => undefined);
+    }
+  }
+
   private async syncGmail(
     databaseName: string,
     config: any,
@@ -137,6 +196,7 @@ export class TenantInboxSyncService {
         );
         const sender = this.extractAddress(headers.from);
         const recipient = this.extractAddress(headers.to);
+        const bodies = this.gmailBodies(message.payload);
         await this.storeInbound(databaseName, {
           channel: 'email',
           providerKey,
@@ -144,14 +204,16 @@ export class TenantInboxSyncService {
           sender,
           recipient,
           subject: headers.subject ?? '',
-          body: this.gmailBody(message.payload),
+          body: bodies.text,
           receivedAt: message.internalDate
             ? new Date(Number(message.internalDate))
             : new Date(),
+          isRead: !((message.labelIds ?? []) as string[]).includes('UNREAD'),
           payload: {
             gmailThreadId: message.threadId,
             gmailHistoryId: message.historyId,
             headers,
+            htmlBody: bodies.html,
           },
         });
       }
@@ -192,6 +254,7 @@ export class TenantInboxSyncService {
           for await (const item of connection.fetch(selected.join(','), {
             uid: true,
             envelope: true,
+            flags: true,
             internalDate: true,
             source: true,
           }, { uid: true })) {
@@ -208,6 +271,7 @@ export class TenantInboxSyncService {
               subject: this.text(parsed.subject),
               body: this.text(parsed.text, this.stripHtml(parsed.html)),
               receivedAt: item.internalDate ?? parsed.date ?? new Date(),
+              isRead: Boolean(item.flags?.has?.('\\Seen')),
               payload: {
                 messageId: parsed.messageId,
                 uid: item.uid,
@@ -292,6 +356,7 @@ export class TenantInboxSyncService {
       subject: string;
       body: string;
       receivedAt: Date;
+      isRead?: boolean;
       payload: any;
     },
   ) {
@@ -317,10 +382,16 @@ export class TenantInboxSyncService {
              'Incoming', 'received', $6, $7,
              $8, $9, $10, $11, $12,
              $13, $14, $14, 1,
-             false, $15::jsonb, $14, $14
+             $15, $16::jsonb, $14, $14
            )
-           ON CONFLICT (idempotency_key) DO NOTHING
-           RETURNING id`,
+           ON CONFLICT (idempotency_key) DO UPDATE
+           SET body = EXCLUDED.body,
+               title = EXCLUDED.title,
+               payload = tenant_outreach_job.payload || EXCLUDED.payload,
+               is_read = EXCLUDED.is_read,
+               occurred_at = EXCLUDED.occurred_at,
+               updated_at = now()
+           RETURNING id, (xmax = 0) AS was_inserted`, 
           [
             key,
             lead?.id ?? null,
@@ -336,10 +407,27 @@ export class TenantInboxSyncService {
             input.providerMessageId.slice(0, 240),
             input.providerKey.slice(0, 200),
             input.receivedAt,
+            input.isRead === true,
             JSON.stringify(payload),
           ],
         );
-        if (inserted.rows[0] && lead?.id) {
+        if (inserted.rows[0]?.was_inserted && lead?.id) {
+          await client.query(
+            `UPDATE tenant_lead
+             SET payload = COALESCE(payload, '{}'::jsonb) || $2::jsonb,
+                 updated_at = now()
+             WHERE id = $1`,
+            [
+              lead.id,
+              JSON.stringify({
+                latestEmailSubject: input.channel === 'email' ? input.subject : undefined,
+                latestEmailBody: input.channel === 'email' ? input.body : undefined,
+                latestEmailAt: input.channel === 'email' ? input.receivedAt.toISOString() : undefined,
+                latestMailInboxId: input.channel === 'email' ? Number(inserted.rows[0].id) : undefined,
+                lastActivityAt: input.receivedAt.toISOString(),
+              }),
+            ],
+          );
           await client.query(
             `UPDATE tenant_outreach_job
              SET status = 'cancelled',
@@ -523,24 +611,29 @@ export class TenantInboxSyncService {
     );
   }
 
-  private gmailBody(payload: any): string {
-    if (!payload) return '';
-    const mimeType = this.text(payload.mimeType).toLowerCase();
-    const data = payload.body?.data;
-    if (data && (mimeType === 'text/plain' || mimeType === 'text/html')) {
-      const decoded = Buffer.from(`${data}`.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8');
-      return mimeType === 'text/html' ? this.stripHtml(decoded) : decoded;
-    }
-    const parts = Array.isArray(payload.parts) ? payload.parts : [];
-    const plain = parts.find((part: any) => this.text(part.mimeType).toLowerCase() === 'text/plain');
-    if (plain) return this.gmailBody(plain);
-    const html = parts.find((part: any) => this.text(part.mimeType).toLowerCase() === 'text/html');
-    if (html) return this.gmailBody(html);
-    for (const part of parts) {
-      const nested = this.gmailBody(part);
-      if (nested) return nested;
-    }
-    return '';
+  private gmailBodies(payload: any): { text: string; html: string } {
+    const collected = { text: [] as string[], html: [] as string[] };
+    const visit = (part: any) => {
+      if (!part) return;
+      const mimeType = this.text(part.mimeType).toLowerCase();
+      const data = part.body?.data;
+      if (data && (mimeType === 'text/plain' || mimeType === 'text/html')) {
+        const decoded = Buffer.from(
+          `${data}`.replace(/-/g, '+').replace(/_/g, '/'),
+          'base64',
+        ).toString('utf8');
+        if (mimeType === 'text/plain') collected.text.push(decoded);
+        else collected.html.push(decoded);
+      }
+      for (const child of Array.isArray(part.parts) ? part.parts : []) visit(child);
+    };
+    visit(payload);
+    const html = collected.html.join('\n').trim();
+    const plain = collected.text.join('\n').trim();
+    return {
+      html,
+      text: plain || this.stripHtml(html),
+    };
   }
 
   private extractAddress(value: any) {

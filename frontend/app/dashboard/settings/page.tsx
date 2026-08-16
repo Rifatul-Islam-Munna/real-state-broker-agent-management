@@ -9,6 +9,6 @@ export const metadata = buildPageMetadata({
 })
 
 export default async function Page() {
-  await requireDashboardAccess(undefined, true)
+  await requireDashboardAccess("settings")
   return <AgencySettingsPage />
 }

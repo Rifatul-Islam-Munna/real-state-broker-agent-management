@@ -145,7 +145,7 @@ export function MailInboxApiPage() {
                     <p className="mt-2 text-sm font-semibold">{item.name}</p>
                     <p className="break-all text-sm text-muted-foreground">{item.email}</p>
                     <p className="mt-2 text-xs text-muted-foreground">
-                      {formatDateTimeLabel(item.createdAt)}
+                      {formatDateTimeLabel(item.occurredAt ?? item.createdAt)}
                     </p>
                   </div>
 

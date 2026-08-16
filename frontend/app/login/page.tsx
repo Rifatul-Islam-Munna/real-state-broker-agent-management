@@ -1,6 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { Building2 } from "lucide-react"
+import { headers } from "next/headers"
 import { redirect } from "next/navigation"
 
 import { LoginForm } from "@/components/auth/login-form"
@@ -46,7 +47,11 @@ async function getFeaturedPropertyFeed(): Promise<PropertyFeed> {
 
 export default async function LoginPage() {
   const user = await getSessionUser()
-  if (user) redirect(getPortalHomePath(user))
+  if (user) {
+    const requestHeaders = await headers()
+    if (user.tenantId && requestHeaders.get("x-tenant-host")) redirect("/dashboard")
+    redirect(getPortalHomePath(user))
+  }
 
   const featuredPropertyFeed = await getFeaturedPropertyFeed()
   const featured = featuredPropertyFeed.items[0]

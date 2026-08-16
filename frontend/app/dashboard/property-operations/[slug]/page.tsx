@@ -12,7 +12,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 export default async function Page({ params }: Props) {
-  await requireDashboardAccess(undefined, true)
+  await requireDashboardAccess("properties")
   const { slug } = await params
   return <PropertyOperationsPlatformPage slug={slug} />
 }

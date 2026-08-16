@@ -11,6 +11,8 @@ import {
   Sparkles,
 } from "lucide-react"
 
+import { MainDomainStorySections } from "@/components/main-domain/main-domain-story-sections"
+
 export const metadata: Metadata = {
   title: "EstateBlue SaaS | Real Estate Business Platform",
   description:
@@ -27,48 +29,22 @@ type PublicPlan = {
   isActive: boolean
 }
 
-const fallbackPlans: PublicPlan[] = [
-  {
-    id: -1,
-    name: "Essential",
-    description: "A focused workspace for agents and growing real estate teams.",
-    price: "29.00",
-    billingDays: 30,
-    dashboardPermissions: ["normal-dashboard"],
-    isActive: true,
-  },
-  {
-    id: -2,
-    name: "Property Pro",
-    description: "Operational tools for teams managing properties, leads, and daily workflows.",
-    price: "59.00",
-    billingDays: 30,
-    dashboardPermissions: ["property-management-dashboard"],
-    isActive: true,
-  },
-  {
-    id: -3,
-    name: "Complete",
-    description: "The full platform for agencies that need both business and property-management dashboards.",
-    price: "99.00",
-    billingDays: 30,
-    dashboardPermissions: ["normal-dashboard", "property-management-dashboard"],
-    isActive: true,
-  },
-]
-
 async function getPublicPlans(): Promise<PublicPlan[]> {
-  const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3000/api").replace(/\/$/, "")
+  const apiBase = (
+    process.env.BASE_URL ??
+    process.env.NEXT_PUBLIC_API_BASE_URL ??
+    "http://localhost:4000/api"
+  ).replace(/\/$/, "")
 
   try {
     const response = await fetch(`${apiBase}/public-saas/plans`, {
       cache: "no-store",
     })
-    if (!response.ok) return fallbackPlans
+    if (!response.ok) return []
     const plans = (await response.json()) as PublicPlan[]
-    return plans.length > 0 ? plans : fallbackPlans
+    return plans.filter((plan) => plan.isActive)
   } catch {
-    return fallbackPlans
+    return []
   }
 }
 
@@ -216,6 +192,8 @@ export default async function SaaSLandingPage() {
           </div>
         </section>
 
+        <MainDomainStorySections />
+
         <section className="bg-[#f7f8fc] py-20 sm:py-24" id="plans">
           <div className="mx-auto max-w-7xl px-5 sm:px-8 lg:px-10">
             <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
@@ -228,7 +206,12 @@ export default async function SaaSLandingPage() {
             </div>
 
             <div className="mt-10 grid gap-6 lg:grid-cols-3">
-              {plans.map((plan, index) => {
+              {plans.length === 0 ? (
+                <div className="rounded-3xl border border-amber-200 bg-amber-50 p-7 text-amber-900 lg:col-span-3">
+                  <p className="font-semibold">Plans are temporarily unavailable.</p>
+                  <p className="mt-2 text-sm leading-6">The pricing section could not reach the SaaS backend. No placeholder pricing is being shown.</p>
+                </div>
+              ) : plans.map((plan, index) => {
                 const highlighted = plans.length > 1 && index === Math.floor(plans.length / 2)
                 const price = Number(plan.price)
                 return (

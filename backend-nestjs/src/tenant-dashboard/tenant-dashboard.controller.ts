@@ -1,4 +1,4 @@
-import {
+﻿import {
   Body,
   Controller,
   Get,
@@ -9,14 +9,18 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { TenantRoleGuard } from '../security/tenant-role.guard';
+import { TenantRoles } from '../security/tenant-roles.decorator';
+import { TenantUserRole } from '../security/tenant-user-role.enum';
 import { TenantDashboardService } from './tenant-dashboard.service';
 import { AuthenticatedTenantGuard } from './authenticated-tenant.guard';
+import { TenantStaffPermissionGuard } from './tenant-staff-permission.guard';
 import { TenantPlanPermissionGuard } from './tenant-plan-permission.guard';
 import { TenantPlanPermissions } from './tenant-plan-permissions.decorator';
 import { TenantRealtorWorkflowService } from './tenant-realtor-workflow.service';
 
 @Controller('tenant-dashboard')
-@UseGuards(JwtAuthGuard, AuthenticatedTenantGuard, TenantPlanPermissionGuard)
+@UseGuards(JwtAuthGuard, AuthenticatedTenantGuard, TenantStaffPermissionGuard, TenantPlanPermissionGuard, TenantRoleGuard)
 export class TenantDashboardController {
   constructor(
     private readonly dashboard: TenantDashboardService,
@@ -101,12 +105,14 @@ export class TenantDashboardController {
   }
 
   @Patch('settings/tracking')
+  @TenantRoles(TenantUserRole.Owner)
   @TenantPlanPermissions('normal-dashboard', 'property-management-dashboard')
   updateTracking(@Req() req: any, @Body() body: any) {
     return this.dashboard.updateTracking(req.tenant, body);
   }
 
   @Patch('settings/subdomain')
+  @TenantRoles(TenantUserRole.Owner)
   @TenantPlanPermissions('normal-dashboard', 'property-management-dashboard')
   updateSubdomain(@Req() req: any, @Body() body: any) {
     return this.dashboard.updateSubdomain(req.tenant, body?.subdomain);
@@ -196,3 +202,4 @@ export class TenantDashboardController {
     return this.workflows.listShowings(req.tenant);
   }
 }
+

@@ -10,7 +10,10 @@ import { AppIcon } from "@/components/ui/app-icon"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { useCreateContactRequest } from "@/hooks/use-real-estate-api"
+import {
+  useCreateContactRequest,
+  useCreateTenantPropertyInquiry,
+} from "@/hooks/use-real-estate-api"
 import { deleteUploadedAsset, uploadPropertyAsset } from "@/lib/upload-client"
 
 type PropertyChatDialogProps = {
@@ -167,6 +170,10 @@ function formatVisitorAnswer(step: ChatStep, contactState: ContactFormState, pre
 
 export function PropertyChatDialog({ open, onOpenChange, property }: PropertyChatDialogProps) {
   const createContactRequest = useCreateContactRequest()
+  const createTenantPropertyInquiry = useCreateTenantPropertyInquiry()
+  const inquiryMutation = property.tenantScoped
+    ? createTenantPropertyInquiry
+    : createContactRequest
   const steps = useMemo(() => buildSteps(property), [property])
   const [currentStepIndex, setCurrentStepIndex] = useState(0)
   const [draftAnswer, setDraftAnswer] = useState("")
@@ -287,7 +294,7 @@ export function PropertyChatDialog({ open, onOpenChange, property }: PropertyCha
         }),
       ].filter(Boolean).join("\n\n")
 
-      const response = await createContactRequest.mutateAsync({
+      const response = await inquiryMutation.mutateAsync({
         agentId: property.agentId ?? property.agent?.id ?? null,
         agentName: property.agent?.fullName ?? "",
         email: contactState.contactEmail,
@@ -516,7 +523,7 @@ export function PropertyChatDialog({ open, onOpenChange, property }: PropertyCha
 
                 <button
                   className="w-full rounded-2xl bg-primary px-5 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-70"
-                  disabled={createContactRequest.isPending}
+                  disabled={inquiryMutation.isPending}
                   onClick={handleCurrentStepSubmit}
                   type="button"
                 >
@@ -543,11 +550,11 @@ export function PropertyChatDialog({ open, onOpenChange, property }: PropertyCha
 
                 <button
                   className="w-full rounded-2xl bg-primary px-5 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-70"
-                  disabled={createContactRequest.isPending}
+                  disabled={inquiryMutation.isPending}
                   onClick={() => void handleSendConversation()}
                   type="button"
                 >
-                  {createContactRequest.isPending ? "Sending Inquiry..." : "Send To Contact Us"}
+                  {inquiryMutation.isPending ? "Sending Inquiry..." : "Send To Contact Us"}
                 </button>
               </div>
             )}

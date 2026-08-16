@@ -732,6 +732,7 @@ export type PropertyItem = {
   sellPrediction: PropertySellPrediction
   agent?: AgentSummary | null
   agentId?: number | null
+  tenantScoped?: boolean
 }
 
 export type PropertyStatus =
@@ -740,6 +741,7 @@ export type PropertyStatus =
   | "Draft"
   | "PendingApproval"
   | "Active"
+  | "Inactive"
   | "UnderOffer"
   | "Sold"
   | "Rented"
@@ -1339,6 +1341,7 @@ export type MailInboxItem = {
   isRead?: boolean
   isStarred?: boolean
   extractionDetails?: Record<string, unknown>
+  occurredAt?: string
   createdAt: string
   updatedAt: string
 }

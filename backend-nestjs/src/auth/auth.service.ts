@@ -44,11 +44,16 @@ export class AuthService {
       role: user.role,
       fullName: `${user.firstName} ${user.lastName}`,
     };
-    const accessToken = this.jwtService.sign(payload);
+    const sessionDays = user.role === UserRole.Admin
+      ? this.adminSessionDays()
+      : this.tenantSessionDays();
+    const accessTokenLifetimeMs = sessionDays * 24 * 60 * 60 * 1000;
+    const accessToken = this.jwtService.sign(payload, {
+      expiresIn: Math.floor(accessTokenLifetimeMs / 1000),
+    });
     const refreshToken = crypto.randomBytes(64).toString('base64url');
     const refreshTokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
-    const refreshTokenExpiry = new Date();
-    refreshTokenExpiry.setDate(refreshTokenExpiry.getDate() + 10);
+    const refreshTokenExpiry = new Date(Date.now() + sessionDays * 24 * 60 * 60 * 1000);
 
     await this.usersService.update(user.id, {
       refreshToken: refreshTokenHash,
@@ -65,7 +70,8 @@ export class AuthService {
       tenantRole: user.tenantRole,
       accessToken,
       refreshToken,
-      accessTokenExpiry: new Date(Date.now() + 15 * 60 * 1000),
+      accessTokenExpiry: new Date(Date.now() + accessTokenLifetimeMs),
+      refreshTokenExpiry,
     };
   }
 
@@ -92,6 +98,20 @@ export class AuthService {
     });
 
     return this.login(user);
+  }
+
+  private tenantSessionDays() {
+    return this.configuredSessionDays('TENANT_SESSION_DAYS');
+  }
+
+  private adminSessionDays() {
+    return this.configuredSessionDays('ADMIN_SESSION_DAYS');
+  }
+
+  private configuredSessionDays(key: 'TENANT_SESSION_DAYS' | 'ADMIN_SESSION_DAYS') {
+    const parsed = Number.parseInt(`${process.env[key] ?? ''}`, 10);
+    if (!Number.isFinite(parsed)) return 30;
+    return Math.min(365, Math.max(30, parsed));
   }
 
   async refresh(refreshToken: string) {

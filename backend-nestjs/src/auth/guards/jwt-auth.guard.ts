@@ -49,7 +49,10 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
   private isTenantSafePath(path: string) {
     return (
       path === '/auth/me' ||
+      path.startsWith('/tenant-account') ||
       path.startsWith('/tenant-dashboard') ||
+      path.startsWith('/tenant-staff') ||
+      path.startsWith('/tenant-property-operations') ||
       path.startsWith('/tenant-subscription') ||
       path.startsWith('/tenant-domain') ||
       path.startsWith('/tenant-tracking') ||

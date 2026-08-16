@@ -76,7 +76,7 @@ function getStatusClasses(listing: PropertyManagementListing) {
     return "bg-[var(--ether-error-container)] text-[var(--ether-tertiary)]"
   }
 
-  if (["Draft", "Unpublished"].includes(listing.status)) {
+  if (["Draft", "Inactive", "Unpublished"].includes(listing.status)) {
     return "bg-[var(--ether-surface-container-high)] text-[var(--ether-on-surface-variant)]"
   }
 
@@ -328,7 +328,7 @@ export function Section1Section({
                       </TableCell>
 
                       <TableCell className="text-sm text-[var(--ether-on-surface-variant)]">
-                        {["Closed", "Sold", "Rented"].includes(listing.status) ? "—" : `${listing.daysOnMarket} days`}
+                        {["Closed", "Inactive", "Sold", "Rented", "Unpublished"].includes(listing.status) ? "—" : `${listing.daysOnMarket} days`}
                       </TableCell>
 
                       <TableCell>

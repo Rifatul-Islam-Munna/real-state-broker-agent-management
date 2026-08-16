@@ -17,10 +17,12 @@ import { TenantTrackingController } from './tenant-tracking.controller';
 import { TenantTrackingService } from './tenant-tracking.service';
 import { StripeCheckoutRecord } from './entities/stripe-checkout-record.entity';
 import { StripeCheckoutService } from './stripe-checkout.service';
+import { TenantAccountController } from './tenant-account.controller';
+import { TenantAccountService } from './tenant-account.service';
 
 @Module({
   imports: [TypeOrmModule.forFeature([SubscriptionPlan, SaasTenant, SaasAdminAuditLog, SaasTenantDomain, StripeCheckoutRecord, User])],
-  controllers: [SaasAdminController, PublicSaasController, TenantDomainController, TenantSubscriptionController, TenantTrackingController],
+  controllers: [SaasAdminController, PublicSaasController, TenantDomainController, TenantSubscriptionController, TenantTrackingController, TenantAccountController],
   providers: [
     SaasAdminService,
     TenantProvisioningService,
@@ -28,6 +30,7 @@ import { StripeCheckoutService } from './stripe-checkout.service';
     TenantSubscriptionService,
     TenantTrackingService,
     StripeCheckoutService,
+    TenantAccountService,
   ],
   exports: [SaasAdminService],
 })

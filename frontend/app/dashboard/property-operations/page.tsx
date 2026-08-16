@@ -44,7 +44,7 @@ function resolveSlug(tab?: string, module?: string) {
 }
 
 export default async function Page({ searchParams }: Props) {
-  await requireDashboardAccess(undefined, true)
+  await requireDashboardAccess("properties")
   const params = await searchParams
   const slug = resolveSlug(first(params.tab), first(params.module))
   return <PropertyOperationsPlatformPage slug={slug} />

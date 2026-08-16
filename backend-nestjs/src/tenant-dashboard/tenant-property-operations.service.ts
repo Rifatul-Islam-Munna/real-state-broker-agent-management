@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { SaasTenant } from '../saas-admin/entities/saas-tenant.entity';
 import { TenantDatabaseService } from '../tenant-database/tenant-database.service';
+import { TenantWorkspaceSettingsService } from './tenant-workspace-settings.service';
 
 const MODULES = [
   'portfolio', 'units', 'tenants', 'leases', 'staff', 'technicians', 'vendors',
@@ -10,7 +11,10 @@ const MODULES = [
 
 @Injectable()
 export class TenantPropertyOperationsService {
-  constructor(private readonly databases: TenantDatabaseService) {}
+  constructor(
+    private readonly databases: TenantDatabaseService,
+    private readonly workspaceSettings: TenantWorkspaceSettingsService,
+  ) {}
 
   listModules() {
     return MODULES.map((key) => ({ key, label: key.replaceAll('-', ' ') }));
@@ -158,6 +162,49 @@ export class TenantPropertyOperationsService {
     });
   }
 
+  async getAiSummary(tenant: SaasTenant, propertyId?: number) {
+    const config: any = await this.workspaceSettings.getRawAiProvider(tenant);
+    const providerName = this.clean(config?.providerName, 80);
+    const provider = providerName.toLowerCase();
+    const model = this.clean(config?.model, 160);
+    const baseUrl = this.clean(config?.baseUrl, 1000).replace(/\/+$/, '');
+    const apiKey = this.clean(config?.apiKey, 4000);
+    if (!providerName || !model || !baseUrl || (!apiKey && provider !== 'ollama')) {
+      throw new BadRequestException('Configure this tenant AI provider in Workspace Integrations first.');
+    }
+
+    const endpoint = this.aiEndpoint(baseUrl, provider);
+    const analytics = await this.getAnalytics(tenant, propertyId);
+    const records = await this.withTenant(tenant, async (client) => {
+      const result = await client.query(
+        `SELECT property_id AS "propertyId", module_key AS "moduleKey", record_type AS "recordType",
+                title, description, status, priority, amount, due_at AS "dueAt"
+         FROM tenant_property_operations_record
+         WHERE ($1::bigint IS NULL OR property_id = $1)
+         ORDER BY due_at NULLS LAST, updated_at DESC
+         LIMIT 60`,
+        [propertyId ?? null],
+      );
+      return result.rows;
+    });
+    const messages = [
+      {
+        role: 'system',
+        content: 'You are a property operations assistant. Use only the supplied tenant data. Return one JSON object with keys summary, risks, priorities, and actions. risks/priorities/actions must be arrays. Never invent records or data from another tenant.',
+      },
+      { role: 'user', content: JSON.stringify({ analytics, records }) },
+    ];
+    const value = await this.callTenantAi(endpoint, provider, model, apiKey, messages);
+    return {
+      configured: true,
+      provider: providerName,
+      model,
+      generatedAt: new Date().toISOString(),
+      propertyId: propertyId ?? null,
+      ...this.object(value),
+    };
+  }
+
   async getActivity(tenant: SaasTenant, propertyId?: number) {
     return this.withTenant(tenant, async (client) => {
       const result = await client.query(
@@ -169,6 +216,74 @@ export class TenantPropertyOperationsService {
       );
       return result.rows;
     });
+  }
+
+  private aiEndpoint(baseUrl: string, provider: string) {
+    let url: URL;
+    try {
+      url = new URL(baseUrl);
+    } catch {
+      throw new BadRequestException('Tenant AI base URL is invalid.');
+    }
+    if (!['http:', 'https:'].includes(url.protocol)) {
+      throw new BadRequestException('Tenant AI base URL must use HTTP or HTTPS.');
+    }
+    return provider === 'ollama' ? `${baseUrl}/api/chat` : `${baseUrl}/chat/completions`;
+  }
+
+  private async callTenantAi(
+    endpoint: string,
+    provider: string,
+    model: string,
+    apiKey: string,
+    messages: Array<{ role: string; content: string }>,
+  ) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), this.envInt('TENANT_AI_TIMEOUT_MS', 30_000, 5_000, 120_000));
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(provider === 'ollama' ? {} : { Authorization: `Bearer ${apiKey}` }),
+        },
+        body: JSON.stringify(provider === 'ollama'
+          ? { model, messages, format: 'json', stream: false }
+          : { model, messages, response_format: { type: 'json_object' }, temperature: 0 }),
+        signal: controller.signal,
+      });
+      if (!response.ok) {
+        const detail = (await response.text()).slice(0, 500);
+        throw new BadRequestException(`Tenant AI provider returned HTTP ${response.status}${detail ? `: ${detail}` : ''}`);
+      }
+      const data: any = await response.json();
+      const content = provider === 'ollama'
+        ? data?.message?.content
+        : data?.choices?.[0]?.message?.content;
+      if (!content) throw new BadRequestException('Tenant AI provider returned an empty response.');
+      return this.parseAiJson(content);
+    } catch (error) {
+      if ((error as any)?.name === 'AbortError') {
+        throw new BadRequestException('Tenant AI provider timed out.');
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  private parseAiJson(value: unknown) {
+    const text = `${value ?? ''}`.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+    try {
+      return JSON.parse(text);
+    } catch {
+      throw new BadRequestException('Tenant AI provider did not return valid JSON.');
+    }
+  }
+
+  private envInt(key: string, fallback: number, min: number, max: number) {
+    const parsed = Number.parseInt(`${process.env[key] ?? ''}`, 10);
+    return Number.isFinite(parsed) ? Math.min(max, Math.max(min, parsed)) : fallback;
   }
 
   private async requireProperty(client: any, propertyId: number) {
@@ -208,6 +323,12 @@ export class TenantPropertyOperationsService {
       createdAt: row.created_at ?? row.createdAt,
       updatedAt: row.updated_at ?? row.updatedAt,
     };
+  }
+
+  private object(value: unknown): Record<string, unknown> {
+    return value && typeof value === 'object' && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : {};
   }
 
   private clean(value: unknown, max: number) {

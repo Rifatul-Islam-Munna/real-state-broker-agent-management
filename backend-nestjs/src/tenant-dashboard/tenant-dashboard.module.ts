@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { SaasTenant } from '../saas-admin/entities/saas-tenant.entity';
+import { UsersModule } from '../users/users.module';
 import { AuthenticatedTenantGuard } from './authenticated-tenant.guard';
 import { TenantDashboardController } from './tenant-dashboard.controller';
 import { TenantDashboardService } from './tenant-dashboard.service';
@@ -23,9 +24,11 @@ import { TenantInboxSyncService } from './tenant-inbox-sync.service';
 import { TenantMailInboxService } from './tenant-mail-inbox.service';
 import { TenantSmsInboxController } from './tenant-sms-inbox.controller';
 import { TenantSmsInboxService } from './tenant-sms-inbox.service';
+import { TenantStaffPermissionGuard } from './tenant-staff-permission.guard';
+import { TenantStaffController } from './tenant-staff.controller';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([SaasTenant])],
+  imports: [TypeOrmModule.forFeature([SaasTenant]), UsersModule],
   controllers: [
     TenantDashboardController,
     TenantShowingRequestPublicController,
@@ -36,6 +39,7 @@ import { TenantSmsInboxService } from './tenant-sms-inbox.service';
     TenantOutreachController,
     TenantInboxController,
     TenantSmsInboxController,
+    TenantStaffController,
   ],
   providers: [
     TenantDashboardService,
@@ -50,6 +54,7 @@ import { TenantSmsInboxService } from './tenant-sms-inbox.service';
     TenantMailInboxService,
     TenantSmsInboxService,
     AuthenticatedTenantGuard,
+    TenantStaffPermissionGuard,
     TenantPlanPermissionGuard,
   ],
   exports: [TenantDashboardService, TenantRealtorWorkflowService],

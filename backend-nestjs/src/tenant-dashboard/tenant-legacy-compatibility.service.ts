@@ -370,7 +370,7 @@ export class TenantLegacyCompatibilityService {
   private storagePropertyStatus(value: unknown) {
     const status = `${value ?? ''}`.trim().toLowerCase();
     if (['open', 'active', 'published', 'forsale', 'forrent'].includes(status)) return 'published';
-    if (['closed', 'sold', 'rented', 'unpublished', 'archived'].includes(status)) return 'archived';
+    if (['closed', 'sold', 'rented', 'unpublished', 'inactive', 'archived'].includes(status)) return 'archived';
     return 'draft';
   }
 

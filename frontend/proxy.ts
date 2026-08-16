@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 
 import { getDefaultAgentRoute, hasAgentRoutePermission } from "@/lib/agent-route-access"
+import { canOpenDashboardRoute, getDashboardHomePath } from "@/lib/dashboard-routes"
 
 const baseUrl = process.env.BASE_URL ?? "http://localhost:4000/api"
 const fallbackPrimaryDomain = (process.env.PRIMARY_DOMAIN ?? "localhost").toLowerCase().replace(/^https?:\/\//, "").replace(/:\d+$/, "")
@@ -48,7 +49,7 @@ async function fetchCurrentUser(accessToken: string) {
       headers: { access_token: accessToken },
     })
     if (!response.ok) return null
-    return (await response.json()) as { role: string; agentRoutePermissions: string[] }
+    return (await response.json()) as { role: string; tenantId?: number | null; tenantRole?: string | null; agentRoutePermissions: string[] }
   } catch {
     return null
   }
@@ -87,6 +88,9 @@ export async function proxy(request: NextRequest) {
       mainUrl.pathname = "/super-admin/login"
       return NextResponse.redirect(mainUrl)
     }
+    if (pathname.startsWith("/account")) {
+      return NextResponse.redirect(new URL("/dashboard", request.url))
+    }
     const requestHeaders = new Headers(request.headers)
     requestHeaders.set("x-tenant-host", host)
 
@@ -102,11 +106,35 @@ export async function proxy(request: NextRequest) {
       return NextResponse.rewrite(rewrite, { request: { headers: requestHeaders } })
     }
 
+    if (pathname === "/dashboard" || pathname.startsWith("/dashboard/")) {
+      const tenantAccessToken = request.cookies.get("access_token")?.value
+      if (!tenantAccessToken) return redirectToLogin(request)
+      const currentUser = await fetchCurrentUser(tenantAccessToken)
+      if (!currentUser || currentUser.role !== "Agent") return redirectToLogin(request)
+      if (!canOpenDashboardRoute(pathname, currentUser.role, currentUser.agentRoutePermissions)) {
+        return NextResponse.redirect(new URL(getDashboardHomePath(currentUser.role, currentUser.agentRoutePermissions), request.url))
+      }
+    }
+
     return NextResponse.next({ request: { headers: requestHeaders } })
   }
 
   const accessToken = request.cookies.get("access_token")?.value
   const userRole = request.cookies.get("user_role")?.value
+
+  if (pathname.startsWith("/account")) {
+    if (!accessToken) return redirectToLogin(request)
+    const currentUser = await fetchCurrentUser(accessToken)
+    if (!currentUser || currentUser.role !== "Agent" || !currentUser.tenantId) return redirectToLogin(request)
+  }
+
+  if (pathname === "/dashboard" || pathname.startsWith("/dashboard/")) {
+    if (!accessToken) return redirectToLogin(request)
+    const currentUser = await fetchCurrentUser(accessToken)
+    if (currentUser?.role === "Agent" && currentUser.tenantId) {
+      return NextResponse.redirect(new URL("/account", request.url))
+    }
+  }
 
   if (pathname.startsWith("/admin")) {
     if (!accessToken) return redirectToLogin(request)

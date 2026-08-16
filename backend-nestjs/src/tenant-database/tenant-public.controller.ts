@@ -1,9 +1,19 @@
-import { Controller, Get, NotFoundException, Request } from '@nestjs/common';
+import { Body, Controller, Get, NotFoundException, Post, Request } from '@nestjs/common';
 import { TenantDatabaseService } from './tenant-database.service';
+import { TenantPublicInquiryService } from './tenant-public-inquiry.service';
 
 @Controller('tenant-public')
 export class TenantPublicController {
-  constructor(private readonly databases: TenantDatabaseService) {}
+  constructor(
+    private readonly databases: TenantDatabaseService,
+    private readonly inquiries: TenantPublicInquiryService,
+  ) {}
+
+  @Post('property-inquiries')
+  propertyInquiry(@Request() req: any, @Body() body: any) {
+    if (!req.tenant?.databaseName) throw new NotFoundException('Tenant hostname is required');
+    return this.inquiries.createPropertyInquiry(req.tenant, body);
+  }
 
   @Get('site')
   async site(@Request() req: any) {

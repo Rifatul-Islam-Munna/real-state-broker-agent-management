@@ -33,14 +33,17 @@ export async function saveTenantDomainAction(formData: FormData) {
     body: JSON.stringify({ hostname: formData.get("hostname") }),
   })
   revalidatePath("/dashboard/settings/custom-domain")
+  revalidatePath("/account/domain")
 }
 
 export async function verifyTenantDomainAction() {
   await request("/tenant-domain/verify", { method: "POST" })
   revalidatePath("/dashboard/settings/custom-domain")
+  revalidatePath("/account/domain")
 }
 
 export async function removeTenantDomainAction() {
   await request("/tenant-domain", { method: "DELETE" })
   revalidatePath("/dashboard/settings/custom-domain")
+  revalidatePath("/account/domain")
 }

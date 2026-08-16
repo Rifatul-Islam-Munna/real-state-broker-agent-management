@@ -15,10 +15,11 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { SaasTenant } from '../saas-admin/entities/saas-tenant.entity';
 import { TenantOutreachService } from './tenant-outreach.service';
 import { TenantRequestIsolationGuard } from './tenant-request-isolation.guard';
+import { TenantStaffPermissionGuard } from './tenant-staff-permission.guard';
 
 @ApiTags('Tenant Workspace')
 @Controller('tenant-workspace')
-@UseGuards(JwtAuthGuard, TenantRequestIsolationGuard)
+@UseGuards(JwtAuthGuard, TenantRequestIsolationGuard, TenantStaffPermissionGuard)
 export class TenantOutreachController {
   constructor(private readonly outreach: TenantOutreachService) {}
 

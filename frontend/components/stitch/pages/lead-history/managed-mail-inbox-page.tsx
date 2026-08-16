@@ -16,6 +16,7 @@ import {
   useDocumentRepository,
   useRunMailInboxSync,
   useSendMailMessage,
+  useUpdateMailInboxItem,
 } from "@/hooks/use-real-estate-api"
 import type { MailInboxItem } from "@/@types/real-estate-api"
 import { usePdfTemplates } from "@/hooks/use-pdfs-api"
@@ -181,6 +182,7 @@ export function ManagedMailInboxPage() {
   const convertMailInboxToLead = useConvertMailInboxToLead()
   const createMailInboxItem = useCreateMailInboxItem()
   const sendMail = useSendMailMessage()
+  const updateMailInbox = useUpdateMailInboxItem()
   const syncStatus = syncStatusQuery.data
   const isInitialLoading =
     !mailInboxQuery.data && (mailInboxQuery.isLoading || mailInboxQuery.isFetching)
@@ -243,6 +245,13 @@ export function ManagedMailInboxPage() {
       setMailPdfTemplateId("")
       setMailPdfSearch("")
     }
+  }
+
+  function openMail(mail: MailInboxItem) {
+    if (!mail.isRead) {
+      void updateMailInbox.mutateAsync({ id: mail.id, isRead: true })
+    }
+    router.push(`/dashboard/mail/${mail.id}`)
   }
 
   function openReply(mail: MailInboxItem) {
@@ -412,7 +421,7 @@ export function ManagedMailInboxPage() {
               <article
                 key={item.id}
                 className="cursor-pointer border border-slate-200 bg-white p-5 transition-colors hover:border-primary/40 hover:bg-primary/[0.02] dark:border-white/10 dark:bg-slate-900"
-                onClick={() => router.push(`/dashboard/mail/${item.id}`)}
+                onClick={() => openMail(item)}
               >
                 <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr_auto] xl:items-center">
                   <div>
@@ -448,7 +457,7 @@ export function ManagedMailInboxPage() {
                     <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">{"Sender"}</p>
                     <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-white">{item.name}</p>
                     <p className="text-sm text-slate-500 dark:text-slate-400">{item.email}</p>
-                    <p className="mt-2 text-xs font-bold uppercase tracking-wide text-slate-400">{formatDateTimeLabel(item.createdAt)}</p>
+                    <p className="mt-2 text-xs font-bold uppercase tracking-wide text-slate-400">{formatDateTimeLabel(item.occurredAt ?? item.createdAt)}</p>
                   </div>
                   <div className="flex flex-wrap gap-2 xl:justify-end">
                     <DropdownMenu>
@@ -460,7 +469,7 @@ export function ManagedMailInboxPage() {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-56">
                         <DropdownMenuLabel>{"Mail actions"}</DropdownMenuLabel>
-                        <DropdownMenuItem onClick={() => router.push(`/dashboard/mail/${item.id}`)}>
+                        <DropdownMenuItem onClick={() => openMail(item)}>
                           {"Open conversation"}
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => openReply(item)}>
@@ -578,6 +587,7 @@ export function MailInboxDetailPage({ mailId }: { mailId: number }) {
   const pdfTemplatesQuery = usePdfTemplates({ page: 1, pageSize: 200, isActive: true })
   const createMailInboxItem = useCreateMailInboxItem()
   const sendMail = useSendMailMessage()
+  const updateMailInbox = useUpdateMailInboxItem()
   const [message, setMessage] = useState("")
   const [files, setFiles] = useState<File[]>([])
   const [documentSearch, setDocumentSearch] = useState("")
@@ -587,6 +597,11 @@ export function MailInboxDetailPage({ mailId }: { mailId: number }) {
   const [sentReplies, setSentReplies] = useState<Array<{ body: string; htmlBody?: string; createdAt: string }>>([])
 
   const mail = mailQuery.data
+
+  useEffect(() => {
+    if (!mail || mail.isRead) return
+    void updateMailInbox.mutateAsync({ id: mail.id, isRead: true })
+  }, [mail, updateMailInbox])
   const allDocuments = documentsQuery.data?.items ?? []
   const documents = useMemo(() => {
     const search = documentSearch.trim().toLowerCase()
@@ -692,7 +707,7 @@ export function MailInboxDetailPage({ mailId }: { mailId: number }) {
                         <p className="font-bold text-slate-900">{mail.name || mail.email}</p>
                         <p className="text-sm text-slate-500">{`to me - ${mail.status}`}</p>
                       </div>
-                      <p className="text-xs text-slate-500">{formatDateTimeLabel(mail.createdAt)}</p>
+                      <p className="text-xs text-slate-500">{formatDateTimeLabel(mail.occurredAt ?? mail.createdAt)}</p>
                     </div>
                   </div>
                 </div>

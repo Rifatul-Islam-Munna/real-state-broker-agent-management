@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DeepPartial, Repository, IsNull } from 'typeorm';
 import { User } from './entities/user.entity';
 import { AllAgentRoutePermissions, UserRole } from './enums/user-role.enum';
+import { TenantUserRole } from '../security/tenant-user-role.enum';
 import * as bcrypt from 'bcrypt';
 
 @Injectable()
@@ -195,6 +196,59 @@ export class UsersService implements OnModuleInit {
     return this.mapAgent(await this.usersRepository.save(agent));
   }
 
+  async getTenantStaff(tenantId: number, includeInactive = false) {
+    const where: any = { tenantId, tenantRole: TenantUserRole.Staff, role: UserRole.Agent, deletedAt: IsNull() };
+    if (!includeInactive) where.isActive = true;
+    const users = await this.usersRepository.find({ where, order: { firstName: 'ASC', lastName: 'ASC' } });
+    return users.map((user) => this.mapAgent(user));
+  }
+
+  async createTenantStaff(tenantId: number, dto: any) {
+    if (!dto.firstName?.trim() || !dto.lastName?.trim()) throw new BadRequestException('First and last name are required');
+    if (!dto.email?.trim()) throw new BadRequestException('Email is required');
+    if (!dto.password || `${dto.password}`.length < 6) throw new BadRequestException('Password must be at least 6 characters');
+    const email = `${dto.email}`.toLowerCase().trim();
+    const phone = `${dto.phone ?? ''}`.trim() || null;
+    if (await this.usersRepository.exists({ where: { email } })) throw new BadRequestException('Email already exists');
+    if (phone && await this.usersRepository.exists({ where: { phone } })) throw new BadRequestException('Phone already exists');
+    const user = this.usersRepository.create({
+      firstName: `${dto.firstName}`.trim(), lastName: `${dto.lastName}`.trim(), email, phone,
+      passwordHash: await bcrypt.hash(`${dto.password}`, 10), role: UserRole.Agent,
+      tenantRole: TenantUserRole.Staff, tenantId, isActive: dto.isActive !== false,
+      agencyName: `${dto.agencyName ?? ''}`.trim() || null,
+      hasCustomAgentRoutePermissions: true,
+      agentRoutePermissions: this.normalizeAgentPermissions(dto.agentRoutePermissions),
+    } as DeepPartial<User>);
+    return this.mapAgent(await this.usersRepository.save(user));
+  }
+
+  async updateTenantStaff(tenantId: number, dto: any) {
+    const staff = await this.usersRepository.findOne({ where: { id: Number(dto.id), tenantId, tenantRole: TenantUserRole.Staff, role: UserRole.Agent, deletedAt: IsNull() } });
+    if (!staff) throw new NotFoundException('Staff member not found');
+    if (dto.firstName != null) staff.firstName = `${dto.firstName}`.trim() || staff.firstName;
+    if (dto.lastName != null) staff.lastName = `${dto.lastName}`.trim() || staff.lastName;
+    if (dto.isActive != null) staff.isActive = dto.isActive !== false;
+    if (`${dto.password ?? ''}`.trim()) {
+      if (`${dto.password}`.length < 6) throw new BadRequestException('Password must be at least 6 characters');
+      staff.passwordHash = await bcrypt.hash(`${dto.password}`, 10);
+    }
+    staff.hasCustomAgentRoutePermissions = true;
+    if (Array.isArray(dto.agentRoutePermissions)) staff.agentRoutePermissions = this.normalizeAgentPermissions(dto.agentRoutePermissions);
+    return this.mapAgent(await this.usersRepository.save(staff));
+  }
+
+  async deleteTenantStaff(tenantId: number, id: number) {
+    const staff = await this.usersRepository.findOne({ where: { id, tenantId, tenantRole: TenantUserRole.Staff, role: UserRole.Agent, deletedAt: IsNull() } });
+    if (!staff) throw new NotFoundException('Staff member not found');
+    staff.deletedAt = new Date();
+    staff.isActive = false;
+    await this.usersRepository.save(staff);
+  }
+
+  async updateTenantStaffPermissions(tenantId: number, dto: any) {
+    return this.updateTenantStaff(tenantId, { id: dto.agentId ?? dto.id, agentRoutePermissions: dto.agentRoutePermissions });
+  }
+
   mapUser(user: User) {
     return {
       id: user.id,
@@ -225,6 +279,8 @@ export class UsersService implements OnModuleInit {
       licenseNumber: user.licenseNumber,
       commissionRate: user.commissionRate,
       role: user.role,
+      tenantId: user.tenantId,
+      tenantRole: user.tenantRole,
       isActive: user.isActive,
       isVerifiedAgent: user.isVerifiedAgent,
       bio: user.bio,
@@ -237,6 +293,9 @@ export class UsersService implements OnModuleInit {
 
   effectivePermissionsForAuth(user: User) {
     if (user.role !== UserRole.Agent) return [];
+    if (user.tenantRole === TenantUserRole.Staff) {
+      return user.hasCustomAgentRoutePermissions ? this.normalizeAgentPermissions(user.agentRoutePermissions) : [];
+    }
     if (!user.hasCustomAgentRoutePermissions) return ['dashboard', 'properties', 'deal-pipeline', 'lead', 'mail', 'settings'];
     return user.agentRoutePermissions ?? [];
   }

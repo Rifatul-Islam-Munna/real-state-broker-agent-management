@@ -5,6 +5,7 @@ import { SaasTenantDomain } from '../saas-admin/entities/saas-tenant-domain.enti
 import { TenantContextService } from './tenant-context.service';
 import { TenantDatabaseService } from './tenant-database.service';
 import { TenantPublicController } from './tenant-public.controller';
+import { TenantPublicInquiryService } from './tenant-public-inquiry.service';
 import { TenantResolutionMiddleware } from './tenant-resolution.middleware';
 import { TenantResolutionService } from './tenant-resolution.service';
 
@@ -12,7 +13,13 @@ import { TenantResolutionService } from './tenant-resolution.service';
 @Module({
   imports: [TypeOrmModule.forFeature([SaasTenant, SaasTenantDomain])],
   controllers: [TenantPublicController],
-  providers: [TenantContextService, TenantDatabaseService, TenantResolutionService, TenantResolutionMiddleware],
+  providers: [
+    TenantContextService,
+    TenantDatabaseService,
+    TenantPublicInquiryService,
+    TenantResolutionService,
+    TenantResolutionMiddleware,
+  ],
   exports: [TenantContextService, TenantDatabaseService, TenantResolutionService],
 })
 export class TenantDatabaseModule implements NestModule {

@@ -25,10 +25,17 @@ type ShowingFormField = {
     | 'select'
     | 'radio'
     | 'checkbox'
+    | 'checkbox-group'
     | 'date'
-    | 'datetime';
+    | 'datetime'
+    | 'divider'
+    | 'heading'
+    | 'paragraph'
+    | 'image';
   required: boolean;
   options: string[];
+  description?: string;
+  imageUrl?: string;
 };
 
 @Injectable()
@@ -1057,12 +1064,20 @@ export class TenantRealtorWorkflowService {
       'select',
       'radio',
       'checkbox',
+      'checkbox-group',
       'date',
       'datetime',
+      'divider',
+      'heading',
+      'paragraph',
+      'image',
     ]);
     for (const [index, raw] of value.slice(0, 30).entries()) {
       const input = this.object(raw);
-      const label = this.clean(input.label, 160);
+      const type = validTypes.has(input.type as ShowingFormField['type'])
+        ? (input.type as ShowingFormField['type'])
+        : 'text';
+      const label = this.clean(input.label, 160) || (type === 'divider' ? 'Divider' : '');
       if (!label) continue;
       const baseKey =
         this.clean(input.key, 120)
@@ -1080,9 +1095,6 @@ export class TenantRealtorWorkflowService {
         key = `${baseKey}_${suffix++}`;
       }
       keys.add(key);
-      const type = validTypes.has(input.type as ShowingFormField['type'])
-        ? (input.type as ShowingFormField['type'])
-        : 'text';
       const options = Array.isArray(input.options)
         ? [
             ...new Set(
@@ -1092,12 +1104,17 @@ export class TenantRealtorWorkflowService {
             ),
           ].slice(0, 30)
         : [];
+      const staticField = ['divider', 'heading', 'paragraph', 'image'].includes(type);
+      const imageUrl = type === 'image' ? this.safeImageUrl(input.imageUrl) : '';
+      if (type === 'image' && !imageUrl) continue;
       fields.push({
         key,
         label,
         type,
-        required: input.required === true,
-        options,
+        required: staticField ? false : input.required === true,
+        options: ['select', 'radio', 'checkbox-group'].includes(type) ? options : [],
+        description: this.clean(input.description, 1000),
+        ...(imageUrl ? { imageUrl } : {}),
       });
     }
     return fields;
@@ -1129,7 +1146,7 @@ export class TenantRealtorWorkflowService {
     answers: Record<string, unknown>,
   ) {
     for (const field of fields) {
-      if (!field.required) continue;
+      if (['divider', 'heading', 'paragraph', 'image'].includes(field.type) || !field.required) continue;
       const value = answers[field.key];
       const missing =
         field.type === 'checkbox'
@@ -1155,6 +1172,18 @@ export class TenantRealtorWorkflowService {
       })
       .filter((item): item is DeliveryChannel => Boolean(item));
     return [...new Set(channels)];
+  }
+
+  private safeImageUrl(value: unknown) {
+    const raw = this.clean(value, 1000);
+    if (!raw) return '';
+    if (raw.startsWith('/')) return raw;
+    try {
+      const url = new URL(raw);
+      return ['http:', 'https:'].includes(url.protocol) ? url.toString() : '';
+    } catch {
+      return '';
+    }
   }
 
   private propertyMode(value: unknown): 'fixed' | 'respondent' {

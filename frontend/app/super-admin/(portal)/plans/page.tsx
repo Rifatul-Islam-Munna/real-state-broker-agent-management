@@ -1,40 +1,29 @@
-﻿import { createPlanAction, deletePlanAction, getPlans, setPlanStatusAction, updatePlanAction } from "@/lib/super-admin-actions"
+import { CreditCard, Gauge, Layers3 } from "lucide-react"
+
+import { CreatePlanDialog, DeletePlanDialog, EditPlanDialog, PlanStatusDialog } from "@/components/super-admin/super-admin-dialogs"
+import { getPlans } from "@/lib/super-admin-actions"
 
 type Plan = { id:number; name:string; description:string; price:string; billingDays:number; dashboardPermissions:string[]; isActive:boolean }
-const input = "h-11 w-full rounded-lg border border-[#d7dbe5] px-3 text-sm outline-none focus:border-[#4343d5]"
 
 export default async function PlansPage() {
   const plans = await getPlans() as Plan[]
-  return <div className="mx-auto max-w-7xl space-y-8">
-    <header><h1 className="text-3xl font-bold">Subscription plans</h1><p className="mt-2 text-sm text-[#646273]">Create unlimited plans and choose one or both dashboard permissions.</p></header>
-    <form action={createPlanAction} className="grid gap-4 rounded-2xl border bg-white p-6 shadow-sm md:grid-cols-2 xl:grid-cols-4">
-      <input className={input} name="name" placeholder="Plan name" required />
-      <input className={input} name="price" min="0" step="0.01" type="number" placeholder="Price" required />
-      <input className={input} name="billingDays" min="1" type="number" defaultValue="30" required />
-      <input className={input} name="description" placeholder="Description" />
-      <label className="flex items-center gap-2 text-sm"><input name="dashboardPermissions" type="checkbox" value="normal-dashboard" /> Normal dashboard</label>
-      <label className="flex items-center gap-2 text-sm"><input name="dashboardPermissions" type="checkbox" value="property-management-dashboard" /> Property-management dashboard</label>
-      <button className="h-11 rounded-lg bg-[#4343d5] px-5 font-semibold text-white xl:col-span-2">Create plan</button>
-    </form>
-    <div className="space-y-5">
-      {plans.length === 0 ? <div className="rounded-2xl border bg-white p-8 text-center text-sm text-[#646273]">No plans yet. Create the first plan above.</div> : plans.map(plan =>
-        <article className="rounded-2xl border bg-white p-6 shadow-sm" key={plan.id}>
-          <div className="mb-5 flex items-center justify-between"><div><h2 className="text-xl font-bold">{plan.name}</h2><p className="text-sm text-[#646273]">{plan.isActive ? "Active" : "Inactive"}</p></div><span className="rounded-full bg-[#eff0ff] px-3 py-1 text-xs font-semibold text-[#4343d5]">#{plan.id}</span></div>
-          <form action={updatePlanAction} className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <input name="id" type="hidden" value={plan.id} />
-            <input className={input} name="name" defaultValue={plan.name} required />
-            <input className={input} name="price" min="0" step="0.01" type="number" defaultValue={plan.price} required />
-            <input className={input} name="billingDays" min="1" type="number" defaultValue={plan.billingDays} required />
-            <input className={input} name="description" defaultValue={plan.description} />
-            <label className="flex items-center gap-2 text-sm"><input defaultChecked={plan.dashboardPermissions.includes("normal-dashboard")} name="dashboardPermissions" type="checkbox" value="normal-dashboard" /> Normal dashboard</label>
-            <label className="flex items-center gap-2 text-sm"><input defaultChecked={plan.dashboardPermissions.includes("property-management-dashboard")} name="dashboardPermissions" type="checkbox" value="property-management-dashboard" /> Property management</label>
-            <button className="h-11 rounded-lg border px-5 font-semibold xl:col-span-2">Save changes</button>
-          </form>
-          <div className="mt-4 flex flex-wrap gap-3">
-            <form action={setPlanStatusAction}><input name="id" type="hidden" value={plan.id}/><input name="isActive" type="hidden" value={String(!plan.isActive)}/><button className="rounded-lg border px-4 py-2 text-sm font-semibold">{plan.isActive ? "Deactivate" : "Activate"}</button></form>
-            <form action={deletePlanAction}><input name="id" type="hidden" value={plan.id}/><button className="rounded-lg border border-red-200 px-4 py-2 text-sm font-semibold text-red-700">Delete</button></form>
-          </div>
-        </article>)}
-    </div>
+  const active = plans.filter((plan) => plan.isActive).length
+  const avgPrice = plans.length ? plans.reduce((sum, plan) => sum + Number(plan.price || 0), 0) / plans.length : 0
+
+  return <div className="mx-auto max-w-[1400px] space-y-6">
+    <header className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Commercial setup</p><h1 className="mt-2 text-3xl font-semibold tracking-[-0.035em] text-[#101828]">Subscription plans</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">Keep pricing and dashboard entitlements easy to understand. Creation and edits stay focused inside dialogs.</p></div><CreatePlanDialog /></header>
+
+    <section className="grid gap-4 sm:grid-cols-3">
+      <Summary icon={Layers3} label="Total plans" value={String(plans.length)} />
+      <Summary icon={Gauge} label="Active plans" value={String(active)} />
+      <Summary icon={CreditCard} label="Average price" value={`$${avgPrice.toFixed(2)}`} />
+    </section>
+    <section className="grid gap-4 lg:grid-cols-2">
+      {plans.length === 0 ? <div className="rounded-2xl border border-dashed bg-white p-12 text-center text-sm text-slate-500 lg:col-span-2">No plans yet. Create the first subscription plan.</div> : plans.map((plan) => <article className="rounded-2xl border border-[#e1e6ef] bg-white p-5 shadow-sm sm:p-6" key={plan.id}><div className="flex items-start justify-between gap-4"><div><div className="flex flex-wrap items-center gap-2"><h2 className="text-xl font-semibold tracking-[-0.025em] text-[#101828]">{plan.name}</h2><span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${plan.isActive ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>{plan.isActive ? "Active" : "Inactive"}</span></div><p className="mt-2 text-sm leading-6 text-slate-500">{plan.description || "No description provided."}</p></div><span className="rounded-lg bg-[#f4f6fa] px-2.5 py-1 text-xs font-semibold text-slate-500">#{plan.id}</span></div><div className="mt-6 grid grid-cols-2 gap-3 rounded-xl bg-[#f8fafc] p-4"><div><p className="text-xs font-medium text-slate-500">Price</p><p className="mt-1 text-xl font-semibold text-[#17243a]">${Number(plan.price || 0).toFixed(2)}</p></div><div><p className="text-xs font-medium text-slate-500">Billing cycle</p><p className="mt-1 text-xl font-semibold text-[#17243a]">{plan.billingDays} days</p></div></div><div className="mt-4 flex flex-wrap gap-2">{plan.dashboardPermissions.map((permission) => <span className="rounded-lg border bg-white px-2.5 py-1.5 text-xs font-medium text-slate-600" key={permission}>{permission === "normal-dashboard" ? "CRM dashboard" : permission === "property-management-dashboard" ? "Property operations" : permission}</span>)}</div><div className="mt-6 flex flex-wrap items-center gap-2 border-t pt-4"><EditPlanDialog plan={plan} /><PlanStatusDialog plan={plan} /><div className="ml-auto"><DeletePlanDialog plan={plan} /></div></div></article>)}
+    </section>
   </div>
+}
+
+function Summary({ icon: Icon, label, value }: { icon: typeof Layers3; label:string; value:string }) {
+  return <article className="flex items-center gap-4 rounded-2xl border border-[#e1e6ef] bg-white p-5 shadow-sm"><span className="flex size-11 items-center justify-center rounded-xl bg-[#eef2f7] text-[#334155]"><Icon className="size-5" /></span><div><p className="text-2xl font-semibold tracking-[-0.03em] text-[#101828]">{value}</p><p className="text-xs font-medium text-slate-500">{label}</p></div></article>
 }

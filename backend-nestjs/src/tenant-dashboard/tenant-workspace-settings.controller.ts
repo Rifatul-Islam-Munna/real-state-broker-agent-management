@@ -10,12 +10,13 @@ import {
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AuthenticatedTenantGuard } from './authenticated-tenant.guard';
+import { TenantStaffPermissionGuard } from './tenant-staff-permission.guard';
 import { TenantPlanPermissionGuard } from './tenant-plan-permission.guard';
 import { TenantPlanPermissions } from './tenant-plan-permissions.decorator';
 import { TenantWorkspaceSettingsService } from './tenant-workspace-settings.service';
 
 @Controller('tenant-workspace')
-@UseGuards(JwtAuthGuard, AuthenticatedTenantGuard, TenantPlanPermissionGuard)
+@UseGuards(JwtAuthGuard, AuthenticatedTenantGuard, TenantStaffPermissionGuard, TenantPlanPermissionGuard)
 @TenantPlanPermissions('normal-dashboard', 'property-management-dashboard')
 export class TenantWorkspaceSettingsController {
   constructor(private readonly settings: TenantWorkspaceSettingsService) {}
@@ -57,7 +58,11 @@ export class TenantWorkspaceSettingsController {
 
   @Post('integrations/gmail/connect-url')
   gmailConnectUrl(@Req() req: any, @Body() body: any) {
-    return this.settings.getGmailConnectUrl(req.tenant, body);
+    return this.settings.getGmailConnectUrl(req.tenant, {
+      ...body,
+      returnOrigin: req.headers?.['x-tenant-origin'],
+      requestTenantHost: req.headers?.['x-tenant-host'],
+    });
   }
 
   @Get('pdf-templates')

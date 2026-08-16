@@ -59,9 +59,8 @@ function tenantPath(path: string[]) {
   if (joined === "realtor-showings/sequences/summary")
     return "tenant-legacy/sequence-summary"
 
-  if (joined === "users/agents") return "tenant-legacy/resource/users-agents"
-  if (joined === "users/agents/permissions")
-    return "tenant-legacy/resource/users-agents"
+  if (joined === "users/agents") return "tenant-staff"
+  if (joined === "users/agents/permissions") return "tenant-staff/permissions"
 
   const genericRoots = new Set([
     "blogs",
@@ -108,12 +107,24 @@ async function forward(request: NextRequest, context: ProxyRouteContext) {
   const { path } = await context.params
   const cookieStore = await cookies()
   const accessToken = cookieStore.get("access_token")?.value
-  const requestHost = (request.headers.get("host") ?? "")
+  const forwardedHost = (request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? "")
+    .split(",")[0]
+    .trim()
     .toLowerCase()
-    .replace(/:\d+$/, "")
+  const requestHost = forwardedHost.replace(/:\d+$/, "")
   const tenantHost =
     request.headers.get("x-tenant-host") ??
     (requestHost.endsWith(".localhost") ? requestHost : null)
+  const forwardedProto = (request.headers.get("x-forwarded-proto") ?? request.nextUrl.protocol.replace(":", ""))
+    .split(",")[0]
+    .trim()
+  const forwardedPort = forwardedHost.match(/:\d+$/)?.[0] ?? (request.nextUrl.port ? `:${request.nextUrl.port}` : "")
+  const originHost = tenantHost
+    ? requestHost === tenantHost.toLowerCase().replace(/:\d+$/, "")
+      ? forwardedHost
+      : `${tenantHost}${forwardedPort}`
+    : null
+  const tenantOrigin = originHost ? `${forwardedProto}://${originHost}` : null
   const backendPath = tenantHost ? tenantPath(path) : path.join("/")
   const targetUrl = `${baseUrl}/${backendPath}${request.nextUrl.search}`
   const contentType = request.headers.get("content-type")
@@ -133,6 +144,7 @@ async function forward(request: NextRequest, context: ProxyRouteContext) {
         ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
         ...(requestId ? { "X-Request-Id": requestId } : {}),
         ...(tenantHost ? { "x-tenant-host": tenantHost } : {}),
+        ...(tenantOrigin ? { "x-tenant-origin": tenantOrigin } : {}),
       },
       body,
       cache: "no-store",

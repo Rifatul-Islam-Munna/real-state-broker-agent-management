@@ -294,6 +294,7 @@ export function PropertyFormFieldsSection({
                 <SelectItem value="Draft">{"Draft"}</SelectItem>
                 <SelectItem value="PendingApproval">{"Pending Approval"}</SelectItem>
                 <SelectItem value="Active">{"Active"}</SelectItem>
+                <SelectItem value="Inactive">{"Inactive — no public leads"}</SelectItem>
                 <SelectItem value="UnderOffer">{"Under Offer"}</SelectItem>
                 <SelectItem value="Sold">{"Sold"}</SelectItem>
                 <SelectItem value="Rented">{"Rented"}</SelectItem>

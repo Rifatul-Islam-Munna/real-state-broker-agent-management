@@ -255,6 +255,10 @@ export class TenantWorkspaceSettingsService {
       tenantId: tenant.id,
       subdomain: tenant.subdomain,
       returnTo: this.safeReturnTo(input?.returnTo),
+      returnOrigin: this.safeTenantReturnOrigin(
+        input?.returnOrigin,
+        input?.requestTenantHost,
+      ),
       mailboxTag: this.text(input?.mailboxTag) || 'gmail',
       leadTemplateTags: this.stringList(input?.leadTemplateTags).slice(0, 25),
       expiresAt: Date.now() + 10 * 60_000,
@@ -384,6 +388,7 @@ export class TenantWorkspaceSettingsService {
     return {
       tenant,
       returnTo: this.safeReturnTo(payload.returnTo),
+      returnOrigin: this.safeSignedReturnOrigin(payload.returnOrigin),
       email,
     };
   }
@@ -598,6 +603,42 @@ export class TenantWorkspaceSettingsService {
       return '/dashboard/settings';
     }
     return path.slice(0, 500);
+  }
+
+  private safeTenantReturnOrigin(value: unknown, requestTenantHost: unknown) {
+    const expectedHost = this.normalizedHost(requestTenantHost);
+    const raw = this.text(value);
+    if (!raw || !expectedHost) return '';
+    try {
+      const url = new URL(raw);
+      if (!['http:', 'https:'].includes(url.protocol)) return '';
+      if (this.normalizedHost(url.hostname) !== expectedHost) return '';
+      return url.origin;
+    } catch {
+      return '';
+    }
+  }
+
+  private safeSignedReturnOrigin(value: unknown) {
+    const raw = this.text(value);
+    if (!raw) return '';
+    try {
+      const url = new URL(raw);
+      return ['http:', 'https:'].includes(url.protocol) ? url.origin : '';
+    } catch {
+      return '';
+    }
+  }
+
+  private normalizedHost(value: unknown) {
+    return this.text(value)
+      .toLowerCase()
+      .split(',')[0]
+      .trim()
+      .replace(/^https?:\/\//, '')
+      .replace(/\/.*$/, '')
+      .replace(/:\d+$/, '')
+      .replace(/\.$/, '');
   }
 
   private stringList(value: unknown) {

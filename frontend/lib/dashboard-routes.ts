@@ -12,7 +12,7 @@ export const dashboardRoutes: readonly DashboardRoute[] = [
   { href: "/dashboard", label: "Dashboard", icon: "dashboard", permission: "dashboard" },
   { href: "/dashboard/homepage", label: "Homepage", icon: "home", adminOnly: true },
   { href: "/dashboard/properties", label: "Properties", icon: "domain", permission: "properties" },
-  { href: "/dashboard/property-operations", label: "Property Operations", icon: "apartment", adminOnly: true },
+  { href: "/dashboard/property-operations", label: "Property Operations", icon: "apartment", permission: "properties" },
   { href: "/dashboard/blog", label: "Blog", icon: "article", adminOnly: true },
   { href: "/dashboard/deals", label: "Deal Pipeline", icon: "partner_exchange", permission: "deal-pipeline" },
   { href: "/dashboard/leads", label: "Lead CRM", icon: "group", permission: "lead" },
@@ -40,10 +40,10 @@ export const dashboardRoutes: readonly DashboardRoute[] = [
   { href: "/dashboard/tools", label: "Tools", icon: "construction", permission: "dashboard" },
   { href: "/dashboard/team", label: "Teams", icon: "badge", adminOnly: true },
   { href: "/dashboard/reports", label: "Reports", icon: "trending_up", permission: "dashboard" },
-  { href: "/dashboard/subscription", label: "Subscription", icon: "payments", permission: "dashboard" },
-  { href: "/dashboard/settings/tracking", label: "Tracking", icon: "monitoring", permission: "dashboard" },
-  { href: "/dashboard/settings/tenant", label: "Business Profile", icon: "business", permission: "dashboard" },
-  { href: "/dashboard/settings", label: "Settings", icon: "settings", adminOnly: true },
+  { href: "/dashboard/subscription", label: "Subscription", icon: "payments", adminOnly: true },
+  { href: "/dashboard/settings/tracking", label: "Tracking", icon: "monitoring", adminOnly: true },
+  { href: "/dashboard/settings/tenant", label: "Business Profile", icon: "business", adminOnly: true },
+  { href: "/dashboard/settings", label: "Settings", icon: "settings", permission: "settings" },
 ] as const
 
 export function getDashboardRoutesForUser(role: string, permissions?: string[] | null) {

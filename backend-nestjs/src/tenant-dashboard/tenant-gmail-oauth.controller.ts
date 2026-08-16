@@ -3,7 +3,11 @@ import type { Response } from 'express';
 import { PlatformDomainService } from '../platform-domain/platform-domain.service';
 import { TenantWorkspaceSettingsService } from './tenant-workspace-settings.service';
 
-@Controller('tenant-workspace-public/integrations/gmail')
+// Keep both callback paths during the OAuth callback migration.
+@Controller([
+  'public-tenant-integrations/gmail',
+  'tenant-workspace-public/integrations/gmail',
+])
 export class TenantGmailOauthController {
   constructor(
     private readonly settings: TenantWorkspaceSettingsService,
@@ -17,12 +21,13 @@ export class TenantGmailOauthController {
     @Res() response: Response,
   ) {
     const result = await this.settings.completeGmailConnect(code, state);
-    const redirect = new URL(
-      this.platformDomain.getTenantFrontendUrl(
-        result.tenant.subdomain,
-        result.returnTo,
-      ),
+    const fallbackUrl = this.platformDomain.getTenantFrontendUrl(
+      result.tenant.subdomain,
+      result.returnTo,
     );
+    const redirect = result.returnOrigin
+      ? new URL(result.returnTo, result.returnOrigin)
+      : new URL(fallbackUrl);
     redirect.searchParams.set('gmail', 'connected');
     redirect.searchParams.set('account', result.email);
     return response.redirect(redirect.toString());

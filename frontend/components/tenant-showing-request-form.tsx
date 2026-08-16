@@ -25,7 +25,7 @@ export type TenantPublicShowingRequest = {
   logoUrl: string
 }
 
-type AnswerValue = string | boolean
+type AnswerValue = string | boolean | string[]
 
 type TenantShowingRequestFormProps = {
   initialRequest: TenantPublicShowingRequest
@@ -43,8 +43,10 @@ function asInputDateTime(value: string) {
 function initialAnswers(request: TenantPublicShowingRequest) {
   const result: Record<string, AnswerValue> = {}
   for (const field of request.fields) {
+    if (["divider", "heading", "paragraph", "image"].includes(field.type)) continue
     const value = request.answers?.[field.key]
     if (field.type === "checkbox") result[field.key] = value === true
+    else if (field.type === "checkbox-group") result[field.key] = Array.isArray(value) ? value.map(String) : []
     else if (field.type === "datetime" && typeof value === "string") result[field.key] = asInputDateTime(value)
     else result[field.key] = typeof value === "string" || typeof value === "number" ? String(value) : ""
   }
@@ -72,6 +74,7 @@ export function TenantShowingRequestForm({ initialRequest, token }: TenantShowin
       const normalizedAnswers: Record<string, AnswerValue> = {}
       let preferredShowingAt: string | null = null
       for (const field of initialRequest.fields) {
+        if (["divider", "heading", "paragraph", "image"].includes(field.type)) continue
         const value = answers[field.key]
         if (field.type === "datetime" && typeof value === "string" && value) {
           const date = new Date(value)
@@ -157,9 +160,14 @@ export function TenantShowingRequestForm({ initialRequest, token }: TenantShowin
             {initialRequest.fields.map((field) => {
               const value = answers[field.key]
               const commonClass = "h-12 rounded-xl border border-slate-300 bg-white px-4 font-normal outline-none transition focus:border-slate-700 focus:ring-4 focus:ring-slate-900/5"
+              if (field.type === "divider") return <hr className="my-2 border-slate-200" key={field.key} />
+              if (field.type === "heading") return <div className="pt-2" key={field.key}><h3 className="text-xl font-bold tracking-[-0.02em] text-slate-950">{field.label}</h3>{field.description ? <p className="mt-1 text-sm text-slate-500">{field.description}</p> : null}</div>
+              if (field.type === "paragraph") return <p className="whitespace-pre-wrap rounded-2xl bg-slate-50 p-4 text-sm leading-7 text-slate-600" key={field.key}>{field.label}{field.description ? `\n${field.description}` : ""}</p>
+              if (field.type === "image") return <figure className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50" key={field.key}><img alt={field.label || "Form image"} className="max-h-[420px] w-full object-cover" src={field.imageUrl} />{field.description ? <figcaption className="p-3 text-xs text-slate-500">{field.description}</figcaption> : null}</figure>
               if (field.type === "textarea") return <label className="grid gap-2 text-sm font-bold" key={field.key}>{field.label}{field.required ? " *" : ""}<textarea className="min-h-32 rounded-xl border border-slate-300 p-4 font-normal leading-7 outline-none focus:border-slate-700" onChange={(event) => updateAnswer(field.key, event.target.value)} required={field.required} value={String(value ?? "")} /></label>
               if (field.type === "select") return <label className="grid gap-2 text-sm font-bold" key={field.key}>{field.label}{field.required ? " *" : ""}<select className={commonClass} onChange={(event) => updateAnswer(field.key, event.target.value)} required={field.required} value={String(value ?? "")}><option value="">Choose an option</option>{field.options.map((option) => <option key={option} value={option}>{option}</option>)}</select></label>
               if (field.type === "radio") return <fieldset className="grid gap-3 rounded-2xl border border-slate-200 p-4" key={field.key}><legend className="px-1 text-sm font-bold">{field.label}{field.required ? " *" : ""}</legend>{field.options.map((option) => <label className="flex items-center gap-3 text-sm" key={option}><input checked={value === option} name={field.key} onChange={() => updateAnswer(field.key, option)} required={field.required} type="radio" value={option} /> {option}</label>)}</fieldset>
+              if (field.type === "checkbox-group") return <fieldset className="grid gap-3 rounded-2xl border border-slate-200 p-4" key={field.key}><legend className="px-1 text-sm font-bold">{field.label}{field.required ? " *" : ""}</legend>{field.options.map((option) => { const selected = Array.isArray(value) ? value : []; return <label className="flex items-center gap-3 text-sm" key={option}><input checked={selected.includes(option)} onChange={(event) => updateAnswer(field.key, event.target.checked ? [...selected, option] : selected.filter((item) => item !== option))} type="checkbox" value={option} /> {option}</label> })}</fieldset>
               if (field.type === "checkbox") return <label className="flex items-start gap-3 rounded-2xl border border-slate-200 p-4 text-sm font-semibold" key={field.key}><input checked={value === true} className="mt-1" onChange={(event) => updateAnswer(field.key, event.target.checked)} required={field.required} type="checkbox" /> <span>{field.label}{field.required ? " *" : ""}</span></label>
               const inputType = field.type === "phone" ? "tel" : field.type === "datetime" ? "datetime-local" : field.type
               return <label className="grid gap-2 text-sm font-bold" key={field.key}>{field.label}{field.required ? " *" : ""}<input className={commonClass} onChange={(event) => updateAnswer(field.key, event.target.value)} required={field.required} type={inputType} value={String(value ?? "")} /></label>

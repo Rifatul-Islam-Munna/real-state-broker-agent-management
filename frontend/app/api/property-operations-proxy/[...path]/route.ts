@@ -10,8 +10,12 @@ async function forward(request: NextRequest, context: Context) {
   const cookieStore = await cookies()
   const accessToken = cookieStore.get("access_token")?.value
   const contentType = request.headers.get("content-type")
+  const tenantHost = request.headers.get("x-tenant-host") ?? request.headers.get("x-forwarded-host")
   const body = request.method === "GET" || request.method === "HEAD" ? undefined : await request.arrayBuffer()
-  const targetUrl = `${baseUrl}/${path.join("/")}${request.nextUrl.search}`
+  const backendPath = tenantHost && path[0] === "property-operations"
+    ? ["tenant-property-operations", ...path.slice(1)].join("/")
+    : path.join("/")
+  const targetUrl = `${baseUrl}/${backendPath}${request.nextUrl.search}`
 
   try {
     const response = await fetch(targetUrl, {
@@ -19,6 +23,7 @@ async function forward(request: NextRequest, context: Context) {
       headers: {
         ...(contentType ? { "Content-Type": contentType } : {}),
         ...(accessToken ? { access_token: accessToken } : {}),
+        ...(tenantHost ? { "x-tenant-host": tenantHost } : {}),
       },
       body,
       cache: "no-store",

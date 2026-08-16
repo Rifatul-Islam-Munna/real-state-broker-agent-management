@@ -52,6 +52,7 @@ function tenantProperty(item: TenantPublicSite["listings"][number]): PropertyIte
     price: String(payload.price ?? "Featured"),
     thumbnailUrl: String(payload.thumbnailUrl ?? payload.imageUrl ?? ""),
     ...payload,
+    tenantScoped: true,
   } as unknown as PropertyItem
 }
 

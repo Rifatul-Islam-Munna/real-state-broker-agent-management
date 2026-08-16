@@ -893,6 +893,17 @@ export function useCreateContactRequest() {
   })
 }
 
+export function useCreateTenantPropertyInquiry() {
+  return useCommonMutationApi<
+    ContactRequestItem,
+    Omit<ContactRequestItem, "id" | "status" | "leadId" | "createdAt" | "updatedAt">
+  >({
+    method: "POST",
+    successMessage: "Inquiry sent",
+    url: "/tenant-public/property-inquiries",
+  })
+}
+
 export function useUpdateContactRequest() {
   const invalidate = useInvalidate(["contact-requests", "dashboard"])
 

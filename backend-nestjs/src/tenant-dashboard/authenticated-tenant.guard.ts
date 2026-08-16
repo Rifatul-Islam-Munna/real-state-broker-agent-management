@@ -18,9 +18,15 @@ export class AuthenticatedTenantGuard implements CanActivate {
     const user = request.user;
     if (!user?.userId) throw new ForbiddenException('Authentication is required');
 
-    let tenant: SaasTenant | null = null;
-    if (user.tenantId) tenant = await this.tenants.findOne({ where: { id: user.tenantId }, relations: ['plan'] });
-    if (!tenant) tenant = await this.tenants.findOne({ where: { ownerUserId: user.userId }, relations: ['plan'] });
+    const tenantId = Number(user.tenantId);
+    if (!Number.isInteger(tenantId) || tenantId <= 0) {
+      throw new ForbiddenException('This account is not linked to a tenant workspace.');
+    }
+    if (!request.tenant) {
+      throw new ForbiddenException('Tenant subdomain is required for this workspace request.');
+    }
+
+    const tenant = await this.tenants.findOne({ where: { id: tenantId }, relations: ['plan'] });
     if (!tenant) throw new NotFoundException('Tenant account was not found');
     if (tenant.isBlocked) throw new ForbiddenException('Your tenant account is blocked. Contact support.');
     if (!tenant.isActive || tenant.provisioningStatus !== 'ready' || tenant.databaseStatus !== 'ready' || !tenant.databaseName) {

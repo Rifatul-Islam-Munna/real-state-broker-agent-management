@@ -11,8 +11,8 @@ const readyTenant = {
   subscriptionExpiresAt: new Date(Date.now() + 86400000),
 };
 
-function execution(user: any) {
-  const request: any = { user };
+function execution(user: any, tenant: any = readyTenant) {
+  const request: any = { user, tenant };
   return { request, context: { switchToHttp: () => ({ getRequest: () => request }) } as any };
 }
 
@@ -29,10 +29,11 @@ describe('AuthenticatedTenantGuard', () => {
     expect(databases.healthCheck).toHaveBeenCalledWith('tenant_7_blue');
   });
 
-  it('falls back to ownerUserId for existing tenants created before tenantId linkage', async () => {
-    const tenants: any = { findOne: jest.fn(async ({ where }: any) => where.ownerUserId === 42 ? readyTenant : null) };
+  it('rejects accounts without an explicit tenantId link', async () => {
+    const tenants: any = { findOne: jest.fn() };
     const guard = new AuthenticatedTenantGuard(tenants, { enter: jest.fn() } as any, { healthCheck: jest.fn(async () => true) } as any);
-    await expect(guard.canActivate(execution({ userId: 42, tenantId: null }).context)).resolves.toBe(true);
+    await expect(guard.canActivate(execution({ userId: 42, tenantId: null }).context)).rejects.toThrow('not linked to a tenant');
+    expect(tenants.findOne).not.toHaveBeenCalled();
   });
 
   it('rejects blocked, expired, inactive, missing, and unavailable tenants with clear messages', async () => {
@@ -46,8 +47,10 @@ describe('AuthenticatedTenantGuard', () => {
       await expect(guard.canActivate(execution({ userId: 42, tenantId: 7 }).context)).rejects.toThrow(message);
     }
     const missing = new AuthenticatedTenantGuard({ findOne: jest.fn(async () => null) } as any, { enter: jest.fn() } as any, { healthCheck: jest.fn() } as any);
-    await expect(missing.canActivate(execution({ userId: 42 }).context)).rejects.toThrow('not found');
+    await expect(missing.canActivate(execution({ userId: 42, tenantId: 7 }).context)).rejects.toThrow('not found');
+    const noHost = new AuthenticatedTenantGuard({ findOne: jest.fn(async () => readyTenant) } as any, { enter: jest.fn() } as any, { healthCheck: jest.fn(async () => true) } as any);
+    await expect(noHost.canActivate(execution({ userId: 42, tenantId: 7 }, null).context)).rejects.toThrow('subdomain is required');
     const unavailable = new AuthenticatedTenantGuard({ findOne: jest.fn(async () => readyTenant) } as any, { enter: jest.fn() } as any, { healthCheck: jest.fn(async () => false) } as any);
-    await expect(unavailable.canActivate(execution({ userId: 42 }).context)).rejects.toThrow('temporarily unavailable');
+    await expect(unavailable.canActivate(execution({ userId: 42, tenantId: 7 }).context)).rejects.toThrow('temporarily unavailable');
   });
 });

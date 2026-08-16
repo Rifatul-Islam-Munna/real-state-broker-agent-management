@@ -1,6 +1,6 @@
 "use server"
 
-import { cookies } from "next/headers"
+import { cookies, headers } from "next/headers"
 import { redirect } from "next/navigation"
 
 import { type AgentRoutePermission } from "@/lib/agent-route-access"
@@ -19,6 +19,7 @@ type AuthResponse = {
   accessToken: string
   refreshToken: string
   accessTokenExpiry: string
+  refreshTokenExpiry: string
 }
 
 export type SessionUser = {
@@ -30,6 +31,8 @@ export type SessionUser = {
   phone?: string | null
   avatarUrl?: string | null
   role: string
+  tenantId?: number | null
+  tenantRole?: "Owner" | "Staff" | null
   isActive: boolean
   isEmailVerified: boolean
   createdAt: string
@@ -42,7 +45,6 @@ export type AuthActionState = {
 
 const initialState: AuthActionState = { error: null }
 const baseUrl = process.env.BASE_URL ?? "http://localhost:4000/api"
-const sessionCookieDays = 10
 
 async function readErrorMessage(response: Response) {
   try {
@@ -59,32 +61,37 @@ async function readErrorMessage(response: Response) {
   return "Request failed"
 }
 
+async function requestBackend(path: string, init: RequestInit = {}) {
+  try {
+    return await fetch(`${baseUrl}${path}`, { ...init, cache: "no-store" })
+  } catch {
+    return null
+  }
+}
+
+function sessionCookieOptions(expires: Date, httpOnly = false) {
+  const secure = process.env.NODE_ENV === "production"
+  const configuredDomain = String(process.env.AUTH_COOKIE_DOMAIN ?? "").trim()
+  const maxAge = Math.max(1, Math.floor((expires.getTime() - Date.now()) / 1000))
+  return {
+    expires,
+    maxAge,
+    httpOnly,
+    path: "/" as const,
+    sameSite: "lax" as const,
+    secure,
+    ...(configuredDomain ? { domain: configuredDomain } : {}),
+  }
+}
+
 async function persistSession(auth: AuthResponse) {
   const cookieStore = await cookies()
-  const secure = process.env.NODE_ENV === "production"
+  const accessExpiry = new Date(auth.accessTokenExpiry)
+  const refreshExpiry = new Date(auth.refreshTokenExpiry)
 
-  cookieStore.set("access_token", auth.accessToken, {
-    expires: new Date(auth.accessTokenExpiry),
-    httpOnly: true,
-    path: "/",
-    sameSite: "lax",
-    secure,
-  })
-
-  cookieStore.set("refresh_token", auth.refreshToken, {
-    expires: new Date(Date.now() + sessionCookieDays * 24 * 60 * 60 * 1000),
-    httpOnly: true,
-    path: "/",
-    sameSite: "lax",
-    secure,
-  })
-
-  cookieStore.set("user_role", auth.role, {
-    expires: new Date(Date.now() + sessionCookieDays * 24 * 60 * 60 * 1000),
-    path: "/",
-    sameSite: "lax",
-    secure,
-  })
+  cookieStore.set("access_token", auth.accessToken, sessionCookieOptions(accessExpiry, true))
+  cookieStore.set("refresh_token", auth.refreshToken, sessionCookieOptions(refreshExpiry, true))
+  cookieStore.set("user_role", auth.role, sessionCookieOptions(refreshExpiry))
 }
 
 async function clearSessionCookies() {
@@ -96,14 +103,11 @@ async function clearSessionCookies() {
 }
 
 async function fetchCurrentUser(accessToken: string) {
-  const response = await fetch(`${baseUrl}/auth/me`, {
-    cache: "no-store",
-    headers: {
-      access_token: accessToken,
-    },
+  const response = await requestBackend("/auth/me", {
+    headers: { access_token: accessToken },
   })
 
-  if (response.ok) return (await response.json()) as SessionUser
+  if (response?.ok) return (await response.json()) as SessionUser
   return null
 }
 
@@ -160,25 +164,31 @@ export async function loginAction(
   const password = String(formData.get("password") ?? "")
   const nextPath = String(formData.get("next") ?? "")
 
-  const response = await fetch(`${baseUrl}/auth/login`, {
+  const response = await requestBackend("/auth/login", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({ email, password }),
-    cache: "no-store",
   })
 
+  if (!response) return { error: "Authentication service is temporarily unavailable. Please try again." }
   if (!response.ok) return { error: await readErrorMessage(response) }
 
   const auth = (await response.json()) as AuthResponse
   await persistSession(auth)
   const currentUser = await fetchCurrentUser(auth.accessToken)
+  const requestHeaders = await headers()
+  const onTenantHost = Boolean(requestHeaders.get("x-tenant-host"))
+
+  if (onTenantHost && currentUser?.tenantId) redirect("/dashboard")
+
   redirect(
     await resolvePostAuthRedirect(
       auth.role,
       nextPath,
       currentUser?.agentRoutePermissions ?? [],
+      currentUser?.tenantId,
     ),
   )
 }
@@ -191,15 +201,15 @@ export async function superAdminLoginAction(
   const email = String(formData.get("email") ?? "").trim()
   const password = String(formData.get("password") ?? "")
 
-  const response = await fetch(`${baseUrl}/auth/super-admin/login`, {
+  const response = await requestBackend("/auth/super-admin/login", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({ email, password }),
-    cache: "no-store",
   })
 
+  if (!response) return { error: "Super Admin authentication is temporarily unavailable. Please try again." }
   if (!response.ok) return { error: await readErrorMessage(response) }
 
   const auth = (await response.json()) as AuthResponse

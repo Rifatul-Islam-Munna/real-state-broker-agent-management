@@ -1,10 +1,11 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AuthenticatedTenantGuard } from './authenticated-tenant.guard';
+import { TenantStaffPermissionGuard } from './tenant-staff-permission.guard';
 import { TenantLegacyCompatibilityService } from './tenant-legacy-compatibility.service';
 
 @Controller('tenant-legacy')
-@UseGuards(JwtAuthGuard, AuthenticatedTenantGuard)
+@UseGuards(JwtAuthGuard, AuthenticatedTenantGuard, TenantStaffPermissionGuard)
 export class TenantLegacyCompatibilityController {
   constructor(private readonly legacy: TenantLegacyCompatibilityService) {}
 

@@ -6,6 +6,7 @@ import {
 import { randomUUID } from 'node:crypto';
 import { SaasTenant } from '../saas-admin/entities/saas-tenant.entity';
 import { TenantDatabaseService } from '../tenant-database/tenant-database.service';
+import { TenantInboxSyncService } from './tenant-inbox-sync.service';
 import { TenantOutreachService } from './tenant-outreach.service';
 
 @Injectable()
@@ -13,6 +14,7 @@ export class TenantMailInboxService {
   constructor(
     private readonly databases: TenantDatabaseService,
     private readonly outreach: TenantOutreachService,
+    private readonly inboxSync: TenantInboxSyncService,
   ) {}
 
   async list(
@@ -179,8 +181,9 @@ export class TenantMailInboxService {
       this.databaseName(tenant),
       async (client) => {
         const current = await client.query(
-          `SELECT payload FROM tenant_outreach_job
-         WHERE id = $1 AND channel = 'Email'`,
+          `SELECT payload, provider, provider_message_id, direction, is_read
+           FROM tenant_outreach_job
+           WHERE id = $1 AND channel = 'Email'`,
           [id],
         );
         if (!current.rowCount)
@@ -194,6 +197,23 @@ export class TenantMailInboxService {
           payload.isStarred = dto.isStarred === true;
         }
         if (dto?.status) payload.mailStatus = `${dto.status}`;
+        const hasReadChange = Object.prototype.hasOwnProperty.call(dto, 'isRead');
+        const nextRead = hasReadChange ? dto.isRead === true : null;
+        if (
+          hasReadChange &&
+          current.rows[0].direction === 'Incoming' &&
+          current.rows[0].is_read !== nextRead
+        ) {
+          await this.inboxSync.setProviderReadState(
+            tenant,
+            {
+              provider: current.rows[0].provider,
+              providerMessageId: current.rows[0].provider_message_id,
+              payload,
+            },
+            nextRead === true,
+          );
+        }
         const result = await client.query(
           `UPDATE tenant_outreach_job
          SET is_read = COALESCE($2, is_read),
@@ -325,6 +345,7 @@ export class TenantMailInboxService {
         maxAttempts: Number(row.max_attempts) || 0,
         lastError: row.last_error ?? '',
       },
+      occurredAt: row.occurred_at ?? row.occurredAt ?? row.created_at ?? row.createdAt,
       createdAt: row.created_at ?? row.createdAt,
       updatedAt: row.updated_at ?? row.updatedAt,
     };

@@ -1,10 +1,11 @@
 import { Body, Controller, Delete, Get, Patch, Post, Query, Request, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AuthenticatedTenantGuard } from './authenticated-tenant.guard';
+import { TenantStaffPermissionGuard } from './tenant-staff-permission.guard';
 import { TenantPropertyOperationsService } from './tenant-property-operations.service';
 
 @Controller('tenant-property-operations')
-@UseGuards(JwtAuthGuard, AuthenticatedTenantGuard)
+@UseGuards(JwtAuthGuard, AuthenticatedTenantGuard, TenantStaffPermissionGuard)
 export class TenantPropertyOperationsController {
   constructor(private readonly operations: TenantPropertyOperationsService) {}
 
@@ -44,6 +45,11 @@ export class TenantPropertyOperationsController {
   @Get('analytics')
   analytics(@Request() req: any, @Query('propertyId') propertyId?: string) {
     return this.operations.getAnalytics(req.tenant, propertyId ? Number(propertyId) : undefined);
+  }
+
+  @Get('ai/summary')
+  aiSummary(@Request() req: any, @Query('propertyId') propertyId?: string) {
+    return this.operations.getAiSummary(req.tenant, propertyId ? Number(propertyId) : undefined);
   }
 
   @Get('activity')
