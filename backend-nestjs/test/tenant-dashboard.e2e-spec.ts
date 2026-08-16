@@ -11,6 +11,7 @@ import { AuthenticatedTenantGuard } from '../src/tenant-dashboard/authenticated-
 import { TenantDashboardController } from '../src/tenant-dashboard/tenant-dashboard.controller';
 import { TenantDashboardService } from '../src/tenant-dashboard/tenant-dashboard.service';
 import { TenantPlanPermissionGuard } from '../src/tenant-dashboard/tenant-plan-permission.guard';
+import { TenantRealtorWorkflowService } from '../src/tenant-dashboard/tenant-realtor-workflow.service';
 
 describe('Tenant dashboard access control (e2e)', () => {
   let app: INestApplication;
@@ -21,6 +22,12 @@ describe('Tenant dashboard access control (e2e)', () => {
     profile: jest.fn(), updateProfile: jest.fn(), updateSubdomain: jest.fn(),
     listProperties: jest.fn(async () => []), createProperty: jest.fn(),
     listLeads: jest.fn(async () => []), createLead: jest.fn(),
+  };
+  const workflows = {
+    listOwnerReports: jest.fn(async () => []), ownerReport: jest.fn(), sendOwnerReport: jest.fn(),
+    listShowingTemplates: jest.fn(async () => []), createShowingTemplate: jest.fn(),
+    listShowingRequests: jest.fn(async () => []), showingRequest: jest.fn(), createShowingRequest: jest.fn(),
+    approveShowingRequest: jest.fn(), rejectShowingRequest: jest.fn(), listShowings: jest.fn(async () => []),
   };
   const repository = { findOne: jest.fn(async () => tenant) };
   const databases = { healthCheck: jest.fn(async () => true) };
@@ -33,13 +40,14 @@ describe('Tenant dashboard access control (e2e)', () => {
         TenantPlanPermissionGuard,
         Reflector,
         { provide: TenantDashboardService, useValue: dashboard },
+        { provide: TenantRealtorWorkflowService, useValue: workflows },
         { provide: getRepositoryToken(SaasTenant), useValue: repository },
         { provide: TenantDatabaseService, useValue: databases },
-        { provide: TenantContextService, useValue: { run: jest.fn((_value, callback) => callback()) } },
+        { provide: TenantContextService, useValue: { enter: jest.fn() } },
       ],
     })
       .overrideGuard(JwtAuthGuard)
-      .useValue({ canActivate(context: any) { context.switchToHttp().getRequest().user = { userId: 42, tenantId: 7, role: 'Agent' }; return true; } })
+      .useValue({ canActivate(context: any) { context.switchToHttp().getRequest().user = { id: 42, userId: 42, tenantId: 7, role: 'Agent', email: 'owner@example.com', fullName: 'Tenant Owner' }; return true; } })
       .compile();
 
     app = moduleRef.createNestApplication();
@@ -55,7 +63,7 @@ describe('Tenant dashboard access control (e2e)', () => {
       subscriptionExpiresAt: new Date(Date.now() + 86400000), dashboardPermissions: ['normal-dashboard'],
     };
   });
-  afterAll(async () => app.close());
+  afterAll(async () => { if (app) await app.close(); });
 
   it('resolves main-domain authenticated users to their own tenant context', async () => {
     await request(app.getHttpServer()).get('/api/tenant-dashboard/context').expect(200);
@@ -64,8 +72,9 @@ describe('Tenant dashboard access control (e2e)', () => {
   });
 
   it('enforces plan permissions in the backend, not only in the UI', async () => {
+    tenant.dashboardPermissions = [];
     await request(app.getHttpServer()).get('/api/tenant-dashboard/properties').expect(403);
-    tenant.dashboardPermissions = ['property-management-dashboard'];
+    tenant.dashboardPermissions = ['normal-dashboard'];
     await request(app.getHttpServer()).get('/api/tenant-dashboard/properties').expect(200).expect([]);
   });
 

@@ -1,4 +1,4 @@
-import { cookies } from "next/headers"
+import { cookies, headers } from "next/headers"
 import { NextResponse, type NextRequest } from "next/server"
 
 const baseUrl = (process.env.BASE_URL ?? "http://127.0.0.1:4000/api").replace(/\/$/, "")
@@ -17,11 +17,15 @@ const moduleMap: Record<string, string> = {
 
 async function backend(path: string, init?: RequestInit) {
   const token = (await cookies()).get("access_token")?.value
-  const response = await fetch(`${baseUrl}/property-operations${path}`, {
+  const requestHeaders = await headers()
+  const tenantHost = requestHeaders.get("x-tenant-host")
+  const resource = tenantHost ? "tenant-property-operations" : "property-operations"
+  const response = await fetch(`${baseUrl}/${resource}${path}`, {
     ...init,
     headers: {
       ...(init?.body ? { "Content-Type": "application/json" } : {}),
       ...(token ? { access_token: token } : {}),
+      ...(tenantHost ? { "x-tenant-host": tenantHost } : {}),
       ...(init?.headers ?? {}),
     },
     cache: "no-store",

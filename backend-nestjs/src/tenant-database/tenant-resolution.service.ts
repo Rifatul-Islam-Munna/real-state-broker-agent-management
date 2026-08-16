@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { SaasTenantDomain } from '../saas-admin/entities/saas-tenant-domain.entity';
 import { SaasTenant } from '../saas-admin/entities/saas-tenant.entity';
+import { PlatformDomainService } from '../platform-domain/platform-domain.service';
 
 export type ResolvedTenant = {
   id: number;
@@ -19,10 +20,11 @@ export class TenantResolutionService {
   constructor(
     @InjectRepository(SaasTenant) private readonly tenants: Repository<SaasTenant>,
     @InjectRepository(SaasTenantDomain) private readonly domains: Repository<SaasTenantDomain>,
+    private readonly platformDomain: PlatformDomainService,
   ) {}
 
   getPrimaryDomain() {
-    return `${process.env.PRIMARY_DOMAIN ?? 'localhost'}`.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/:\d+$/, '');
+    return this.platformDomain.getPrimaryDomain();
   }
 
   normalizeHostname(value: string | undefined) {

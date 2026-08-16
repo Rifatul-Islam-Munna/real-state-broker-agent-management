@@ -1,14 +1,15 @@
-import { Body, Controller, Get, Headers, HttpCode, Post } from '@nestjs/common';
-import { IdempotencyService } from '../security/idempotency.service';
+import { Body, Controller, Get, Headers, HttpCode, Post, Req } from '@nestjs/common';
+import type { Request } from 'express';
 import { SaasAdminService } from './saas-admin.service';
-import { TenantProvisioningService } from './tenant-provisioning.service';
+import { StripeCheckoutService } from './stripe-checkout.service';
+import { PlatformDomainService } from '../platform-domain/platform-domain.service';
 
 @Controller('public-saas')
 export class PublicSaasController {
   constructor(
     private readonly service: SaasAdminService,
-    private readonly provisioning: TenantProvisioningService,
-    private readonly idempotency: IdempotencyService,
+    private readonly stripeCheckout: StripeCheckoutService,
+    private readonly platformDomain: PlatformDomainService,
   ) {}
 
   @Get('plans')
@@ -16,25 +17,25 @@ export class PublicSaasController {
     return this.service.listActivePublicPlans();
   }
 
-  @Post('purchase')
-  @HttpCode(201)
-  purchase(@Body() dto: any, @Headers('idempotency-key') headerKey?: string) {
-    const key = `${headerKey ?? dto.purchaseReference ?? ''}`.trim();
-    return this.idempotency.execute('tenant-purchase', key, dto, async () => {
-      const result = await this.provisioning.provisionAfterSuccessfulPurchase(dto);
-      return {
-        tenant: {
-          id: result.tenant.id,
-          businessName: result.tenant.businessName,
-          slug: result.tenant.slug,
-          subdomain: result.tenant.subdomain,
-          planId: result.tenant.planId,
-          dashboardPermissions: result.tenant.dashboardPermissions,
-          subscriptionStartsAt: result.tenant.subscriptionStartsAt,
-          subscriptionExpiresAt: result.tenant.subscriptionExpiresAt,
-        },
-        owner: result.owner,
-      };
-    });
+  @Get('platform-domain')
+  getPlatformDomain() {
+    return { primaryDomain: this.platformDomain.getPrimaryDomain() };
+  }
+
+  @Post('checkout-session')
+  createCheckoutSession(@Body() dto: any) {
+    return this.stripeCheckout.createPurchaseSession(dto);
+  }
+
+  @Post('stripe-webhook')
+  @HttpCode(200)
+  stripeWebhook(@Req() request: Request, @Headers('stripe-signature') signature?: string) {
+    return this.stripeCheckout.handleWebhook(request.body as Buffer, signature);
+  }
+
+  @Post('checkout-confirm')
+  @HttpCode(200)
+  confirmCheckout(@Body() dto: any) {
+    return this.stripeCheckout.confirm(dto.sessionId);
   }
 }

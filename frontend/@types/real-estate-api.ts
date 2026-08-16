@@ -62,6 +62,8 @@ export type PortalCurrentUser = {
   fullName: string
   role: string
   agentRoutePermissions: string[]
+  tenantId?: number | null
+  tenantSubdomain?: string | null
 }
 
 export type PublicAgentProfile = {
@@ -257,14 +259,16 @@ export type AgencyIntegrationStatus = {
   smtpProviderName?: string | null
   mailboxSyncEnabled: boolean
   mailboxSyncIntervalMinutes?: number | null
-  smtpConfig?: Partial<SmtpIntegrationWriteInput> & {
-    authType?: "password" | "gmail-oauth"
-    gmailEmail?: string | null
-    hasGmailAccessToken?: boolean
-    hasGmailRefreshToken?: boolean
-    hasPassword?: boolean
-    hasImapPassword?: boolean
-  } | null
+  smtpConfig?:
+    | (Partial<SmtpIntegrationWriteInput> & {
+        authType?: "password" | "gmail-oauth"
+        gmailEmail?: string | null
+        hasGmailAccessToken?: boolean
+        hasGmailRefreshToken?: boolean
+        hasPassword?: boolean
+        hasImapPassword?: boolean
+      })
+    | null
   updatedAt?: string | null
 }
 
@@ -313,6 +317,8 @@ export type SmtpIntegrationWriteInput = {
   autoCreateLeads?: boolean
   syncIntervalMinutes?: number
   maxMessagesPerSync?: number
+  markAsReadAfterSync?: boolean
+  lastSuccessfulScanAt?: string | null
 }
 
 export type UpdateAgencyIntegrationSettingsInput = {
@@ -327,7 +333,7 @@ export type UpdateAgencyIntegrationSettingsInput = {
 export type TwilioIntegrationWriteInput = CommunicationProviderWriteInput
 
 export type SmsMessageDirection = "Incoming" | "Outgoing"
-export type SmsMessageStatus = "Received" | "Sent" | "Failed"
+export type SmsMessageStatus = "Received" | "Scheduled" | "Sent" | "Failed"
 
 export type SmsMessageItem = {
   id: number
@@ -344,6 +350,19 @@ export type SmsMessageItem = {
   occurredAt?: string | null
   createdAt: string
   updatedAt: string
+  queueStatus?:
+    | "scheduled"
+    | "processing"
+    | "sent"
+    | "retrying"
+    | "failed"
+    | "dead_letter"
+    | "received"
+    | "paused"
+    | "cancelled"
+  attemptCount?: number
+  maxAttempts?: number
+  lastError?: string
 }
 
 export type SendSmsMessageInput = {
@@ -438,7 +457,12 @@ export type AgencySettings = {
 
 export type PublicAgencyProfileSettings = Pick<
   AgencyProfileSettings,
-  "agencyName" | "logo" | "officeLocations" | "contactEmail" | "contactPhone" | "socialLinks"
+  | "agencyName"
+  | "logo"
+  | "officeLocations"
+  | "contactEmail"
+  | "contactPhone"
+  | "socialLinks"
 >
 
 export type PublicAgencySettings = {
@@ -503,7 +527,13 @@ export type BlogPostDetail = BlogPostSummary & {
 }
 
 export type DocumentAccessLevel = "AdminOnly" | "AgentAccess" | "Public"
-export type DocumentType = "System" | "Property" | "Other" | "Lead" | "Realtor" | "OwnerFeedback"
+export type DocumentType =
+  | "System"
+  | "Property"
+  | "Other"
+  | "Lead"
+  | "Realtor"
+  | "OwnerFeedback"
 
 export type DocumentRepositoryItem = {
   id: number
@@ -755,7 +785,11 @@ export type LeadStage =
   | "Canceled"
 
 export type LeadPriority = "HighPriority" | "Warm" | "FollowUp"
-export type LeadFollowUpStatus = "Open" | "Scheduled" | "Completed" | "NoActionNeeded"
+export type LeadFollowUpStatus =
+  | "Open"
+  | "Scheduled"
+  | "Completed"
+  | "NoActionNeeded"
 
 export type LeadItem = {
   id: number
@@ -863,7 +897,12 @@ export type LeadHistoryKind =
   | "MailInbox"
   | "System"
 
-export type LeadHistoryDirection = "Incoming" | "Outgoing" | "Internal" | "Scheduled" | "System"
+export type LeadHistoryDirection =
+  | "Incoming"
+  | "Outgoing"
+  | "Internal"
+  | "Scheduled"
+  | "System"
 
 export type LeadHistoryStatus =
   | "Logged"
@@ -973,6 +1012,53 @@ export type LeadOutreachScheduleItem = {
   occurredAt?: string | null
   createdAt: string
   updatedAt: string
+  queueStatus?:
+    | "scheduled"
+    | "processing"
+    | "sent"
+    | "retrying"
+    | "failed"
+    | "dead_letter"
+    | "received"
+    | "paused"
+    | "cancelled"
+  attemptCount?: number
+  maxAttempts?: number
+  lastError?: string
+  providerMessageId?: string
+}
+
+export type TenantOutreachMonitor = {
+  tenantId: number
+  subdomain: string
+  statuses: {
+    scheduled: number
+    processing: number
+    sent: number
+    retrying: number
+    failed: number
+    dead_letter: number
+  }
+  outstanding: number
+  failedAttemptsLast24Hours: number
+  oldestOutstandingAt?: string | null
+  sync: Record<
+    "mail-inbox" | "sms-inbox" | string,
+    {
+      status:
+        | "scheduled"
+        | "processing"
+        | "sent"
+        | "retrying"
+        | "failed"
+        | "dead_letter"
+      lastError?: string | null
+      lastSucceededAt?: string | null
+      nextRunAt?: string | null
+      updatedAt?: string | null
+    }
+  >
+  generatedAt: string
 }
 
 export type DealStage =
@@ -1011,7 +1097,12 @@ export type DealItem = {
   updatedAt: string
 }
 
-export type DealCommissionStatus = "NotReady" | "Estimated" | "ReadyToInvoice" | "Invoiced" | "Paid"
+export type DealCommissionStatus =
+  | "NotReady"
+  | "Estimated"
+  | "ReadyToInvoice"
+  | "Invoiced"
+  | "Paid"
 
 export type DealChecklistItem = {
   id?: number
@@ -1107,7 +1198,10 @@ export type RealtorShowingAutomationInput = {
   followUpGapDays: number
 }
 
-export type RealtorShowingManualInput = Omit<RealtorShowingImportInput, "rows" | "mapping"> & {
+export type RealtorShowingManualInput = Omit<
+  RealtorShowingImportInput,
+  "rows" | "mapping"
+> & {
   realtorName: string
   realtorEmail: string
   realtorPhone: string
@@ -1167,7 +1261,10 @@ export type ShowingFeedbackRenderedReport = {
   sent?: string[]
 }
 
-export type PropertyChatConversationStatus = "New" | "LeadCreated" | "NeedsReview"
+export type PropertyChatConversationStatus =
+  | "New"
+  | "LeadCreated"
+  | "NeedsReview"
 
 export type PropertyChatMessage = {
   id: number
@@ -1280,7 +1377,11 @@ export type WebsiteInquiryItem = {
   createdAt: string
 }
 
-export type ShowingBookingStatus = "Scheduled" | "Completed" | "Canceled" | "NoShow"
+export type ShowingBookingStatus =
+  | "Scheduled"
+  | "Completed"
+  | "Canceled"
+  | "NoShow"
 
 export type ShowingBookingItem = {
   id: number
@@ -1390,4 +1491,3 @@ export type BrokerageReports = {
     openCommission: number
   }
 }
-

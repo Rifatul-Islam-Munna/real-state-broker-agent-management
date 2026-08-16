@@ -41,17 +41,11 @@ export function RegisterForm({ planId }: { planId: string | null }) {
       </div>
 
       <div className="space-y-2"><Label htmlFor="password">Password</Label><Input id="password" name="password" minLength={8} required type="password" /></div>
-      <div className="space-y-2">
-        <Label htmlFor="purchaseReference">Successful purchase reference</Label>
-        <Input id="purchaseReference" name="purchaseReference" placeholder="PAY-2026-000123" required />
-        <p className="text-xs text-muted-foreground">The tenant is created only after a successful payment reference is supplied.</p>
-      </div>
-
       {!planId ? <Alert variant="destructive"><AlertDescription>Select a plan from the pricing page before continuing.</AlertDescription></Alert> : null}
       {state.error ? <Alert variant="destructive"><AlertDescription>{state.error}</AlertDescription></Alert> : null}
 
       <Button className="w-full" disabled={pending || !planId} size="lg" type="submit">
-        {pending ? "Creating tenant..." : "Complete purchase and create tenant"}
+        {pending ? "Opening Stripe checkout..." : "Continue to secure payment"}
       </Button>
 
       <Separator />

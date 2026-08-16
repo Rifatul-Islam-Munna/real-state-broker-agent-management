@@ -194,7 +194,6 @@ export function LeadHistoryPageV2() {
                         const itemInitials = lead.name.split(" ").filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase()
                         return (
                           <CommandItem
-                            checked={selected && lead.id === leadId}
                             className="gap-3 rounded-xl! px-3 py-3"
                             key={lead.id}
                             onSelect={() => {

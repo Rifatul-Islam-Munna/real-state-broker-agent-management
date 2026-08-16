@@ -6,16 +6,19 @@ import {
 
 import { GetRequestNormal } from "./api-hooks"
 
-export function useQueryWrapper<T>(
+export function useQueryWrapper<TQueryFnData, TData = TQueryFnData>(
   key: QueryKey,
   url: string,
-  options?: Omit<UseQueryOptions<T, Error, T>, "queryKey" | "queryFn">,
+  options?: Omit<
+    UseQueryOptions<TQueryFnData, Error, TData>,
+    "queryKey" | "queryFn"
+  >,
   revalidate?: number,
-  tag?: string,
+  tag?: string
 ) {
-  return useQuery<T, Error>({
+  return useQuery<TQueryFnData, Error, TData>({
     queryKey: key,
-    queryFn: () => GetRequestNormal<T>(url, revalidate, tag),
+    queryFn: () => GetRequestNormal<TQueryFnData>(url, revalidate, tag),
     ...options,
   })
 }

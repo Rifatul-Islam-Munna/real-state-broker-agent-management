@@ -1,0 +1,94 @@
+import {
+  Body,
+  Controller,
+  Get,
+  Headers,
+  Patch,
+  Post,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { AuthenticatedTenantGuard } from './authenticated-tenant.guard';
+import { TenantInboxSyncService } from './tenant-inbox-sync.service';
+import { TenantMailInboxService } from './tenant-mail-inbox.service';
+import { TenantPlanPermissionGuard } from './tenant-plan-permission.guard';
+import { TenantPlanPermissions } from './tenant-plan-permissions.decorator';
+
+@Controller('tenant-inbox')
+@UseGuards(JwtAuthGuard, AuthenticatedTenantGuard, TenantPlanPermissionGuard)
+@TenantPlanPermissions('normal-dashboard', 'property-management-dashboard')
+export class TenantInboxController {
+  constructor(
+    private readonly inbox: TenantInboxSyncService,
+    private readonly mail: TenantMailInboxService,
+  ) {}
+
+  @Get()
+  list(
+    @Req() req: any,
+    @Query('id') id?: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+    @Query('search') search?: string,
+    @Query('status') status?: string,
+    @Query('mailboxTag') mailboxTag?: string,
+    @Query('isRead') isRead?: string,
+    @Query('isStarred') isStarred?: string,
+  ) {
+    return this.mail.list(req.tenant, {
+      id: Number(id) || undefined,
+      page: Number(page) || undefined,
+      pageSize: Number(pageSize) || undefined,
+      search,
+      status,
+      mailboxTag,
+      isRead,
+      isStarred,
+    });
+  }
+
+  @Post('send')
+  send(
+    @Req() req: any,
+    @Body() body: any,
+    @Headers('idempotency-key') idempotencyKey?: string,
+  ) {
+    return this.mail.send(
+      req.tenant,
+      body,
+      this.actor(req.user),
+      idempotencyKey,
+    );
+  }
+
+  @Post('convert-to-lead')
+  convertToLead(@Req() req: any, @Body() body: any) {
+    return this.mail.convertToLead(req.tenant, Number(body?.mailInboxId));
+  }
+
+  @Post()
+  create(@Req() req: any, @Body() body: any) {
+    return this.mail.create(req.tenant, body);
+  }
+
+  @Patch()
+  update(@Req() req: any, @Body() body: any) {
+    return this.mail.update(req.tenant, body);
+  }
+
+  @Get('sync-status')
+  status(@Req() req: any) {
+    return this.inbox.getStatus(req.tenant);
+  }
+
+  @Post('sync')
+  sync(@Req() req: any) {
+    return this.inbox.syncTenant(req.tenant, true);
+  }
+
+  private actor(user: any) {
+    return `${user?.fullName || user?.email || 'Tenant workspace'}`.trim();
+  }
+}

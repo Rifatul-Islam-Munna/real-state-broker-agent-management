@@ -11,6 +11,10 @@ export class TenantContextService {
     return this.storage.run(context, callback);
   }
 
+  enter(context: TenantRequestContext) {
+    this.storage.enterWith(context);
+  }
+
   get(): TenantRequestContext | undefined {
     return this.storage.getStore();
   }

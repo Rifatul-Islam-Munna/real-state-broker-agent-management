@@ -1,16 +1,29 @@
-﻿import { NextResponse } from "next/server"
+import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 
 import { getDefaultAgentRoute, hasAgentRoutePermission } from "@/lib/agent-route-access"
 
 const baseUrl = process.env.BASE_URL ?? "http://localhost:4000/api"
-const primaryDomain = (process.env.PRIMARY_DOMAIN ?? "localhost").toLowerCase().replace(/^https?:\/\//, "").replace(/:\d+$/, "")
+const fallbackPrimaryDomain = (process.env.PRIMARY_DOMAIN ?? "localhost").toLowerCase().replace(/^https?:\/\//, "").replace(/:\d+$/, "")
+
+async function getPrimaryDomain() {
+  try {
+    const response = await fetch(`${baseUrl}/public-saas/platform-domain`, {
+      next: { revalidate: 30 },
+    })
+    if (!response.ok) return fallbackPrimaryDomain
+    const payload = (await response.json()) as { primaryDomain?: string }
+    return normalizeHost(payload.primaryDomain ?? fallbackPrimaryDomain) || fallbackPrimaryDomain
+  } catch {
+    return fallbackPrimaryDomain
+  }
+}
 
 function normalizeHost(value: string | null) {
   return (value ?? "").toLowerCase().split(",")[0].trim().replace(/:\d+$/, "").replace(/\.$/, "")
 }
 
-function assignedSubdomain(host: string) {
+function assignedSubdomain(host: string, primaryDomain: string) {
   if (!host || host === primaryDomain || host === `www.${primaryDomain}` || host === "127.0.0.1") return null
   if (primaryDomain === "localhost") {
     if (!host.endsWith(".localhost")) return null
@@ -53,8 +66,9 @@ function getRequiredAgentPermission(pathname: string) {
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
+  const primaryDomain = await getPrimaryDomain()
   const host = normalizeHost(request.headers.get("x-forwarded-host") ?? request.headers.get("host"))
-  const tenantSubdomain = assignedSubdomain(host)
+  const tenantSubdomain = assignedSubdomain(host, primaryDomain)
   const mainHost = !host || host === primaryDomain || host === `www.${primaryDomain}` || host === "127.0.0.1"
   const tenantHost = Boolean(tenantSubdomain) || !mainHost
 
@@ -73,14 +87,22 @@ export async function proxy(request: NextRequest) {
       mainUrl.pathname = "/super-admin/login"
       return NextResponse.redirect(mainUrl)
     }
-    const tenantApplicationRoute = pathname.startsWith("/dashboard") || pathname.startsWith("/login") || pathname.startsWith("/register")
-    if (!tenantApplicationRoute && !pathname.startsWith("/tenant-site")) {
+    const requestHeaders = new Headers(request.headers)
+    requestHeaders.set("x-tenant-host", host)
+
+    if (pathname === "/") {
       const rewrite = request.nextUrl.clone()
-      rewrite.pathname = pathname === "/" ? "/tenant-site" : `/tenant-site${pathname}`
-      const requestHeaders = new Headers(request.headers)
-      requestHeaders.set("x-tenant-host", host)
+      rewrite.pathname = "/tenant-public-home"
       return NextResponse.rewrite(rewrite, { request: { headers: requestHeaders } })
     }
+
+    if (pathname.startsWith("/showing-request/")) {
+      const rewrite = request.nextUrl.clone()
+      rewrite.pathname = `/tenant-site${pathname}`
+      return NextResponse.rewrite(rewrite, { request: { headers: requestHeaders } })
+    }
+
+    return NextResponse.next({ request: { headers: requestHeaders } })
   }
 
   const accessToken = request.cookies.get("access_token")?.value

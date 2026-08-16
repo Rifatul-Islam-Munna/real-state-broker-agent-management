@@ -136,9 +136,13 @@ export async function requireSession(
     redirect(getPortalHomePath(user))
   }
 
+  const tenantOwner =
+    user.role === "Agent" && user.agentRoutePermissions.includes("tenant-isolated")
+
   if (
     user.role === "Agent" &&
     requiredAgentPermission &&
+    !tenantOwner &&
     !hasAgentRoutePermission(user.agentRoutePermissions, requiredAgentPermission)
   ) {
     redirect(getPortalHomePath(user))
@@ -212,13 +216,9 @@ export async function purchaseTenantAction(
   formData: FormData,
 ): Promise<AuthActionState> {
   void _prevState
-  const purchaseReference = String(formData.get("purchaseReference") ?? "").trim()
-  const response = await fetch(`${baseUrl}/public-saas/purchase`, {
+  const response = await fetch(`${baseUrl}/public-saas/checkout-session`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Idempotency-Key": purchaseReference,
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       businessName: formData.get("businessName"),
       requestedSubdomain: formData.get("requestedSubdomain"),
@@ -228,13 +228,14 @@ export async function purchaseTenantAction(
       email: formData.get("email"),
       phone: formData.get("phone"),
       password: formData.get("password"),
-      purchaseReference,
     }),
     cache: "no-store",
   })
 
   if (!response.ok) return { error: await readErrorMessage(response) }
-  redirect("/login?registered=tenant")
+  const checkout = (await response.json()) as { url?: string }
+  if (!checkout.url) return { error: "Stripe did not return a checkout URL" }
+  redirect(checkout.url)
 }
 
 export async function registerAction(

@@ -226,14 +226,18 @@ export function cloneAgencySettings(
   const normalizeDelay = (value: unknown) =>
     Math.min(1440, Math.max(0, Number(value ?? 0) || 0))
   const profile = settings.profile ?? defaultAgencySettings.profile
-  const automation = settings.showingFeedbackAutomation ?? {}
-  const leadAutomation = settings.leadAutomation ?? {}
-  const firstMessageAutomation = settings.firstMessageAutomation ?? {}
-  const leadIntelligence = settings.leadIntelligence ?? {}
+  const automation: Partial<ShowingFeedbackAutomationSettings> =
+    settings.showingFeedbackAutomation ?? {}
+  const leadAutomation: Partial<LeadAutomationSettings> =
+    settings.leadAutomation ?? {}
+  const firstMessageAutomation: Partial<FirstMessageAutomationSettings> =
+    settings.firstMessageAutomation ?? {}
+  const leadIntelligence: Partial<LeadIntelligenceSettings> =
+    settings.leadIntelligence ?? {}
   const leadAutomationChannels = (leadAutomation.channels ?? ["Email"]).filter(
     (item): item is "Email" | "SMS" => item === "Email" || item === "SMS"
   )
-  const communicationTemplates = (
+  const communicationTemplates: AgencyWorkspaceSettings["communicationTemplates"] = (
     settings.communicationTemplates ??
     defaultAgencySettings.communicationTemplates
   ).map((item) => ({

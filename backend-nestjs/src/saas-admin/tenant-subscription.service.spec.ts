@@ -87,7 +87,7 @@ describe('TenantSubscriptionService', () => {
 
     expect(state.tenant.planId).toBe(2);
     expect(state.tenant.dashboardPermissions).toEqual(['normal-dashboard', 'property-management-dashboard']);
-    expect(state.owner.agentRoutePermissions).toEqual(expect.arrayContaining(['dashboard', 'properties', 'deal-pipeline', 'lead', 'mail', 'settings']));
+    expect(state.owner.agentRoutePermissions).toEqual(expect.arrayContaining(['dashboard', 'properties', 'lead', 'settings']));
     expect(state.client.query.mock.calls.some(([sql]: [string]) => sql.includes("'feature_flags'"))).toBe(true);
     expect(state.audits.some((entry) => entry.action === 'tenant.plan.change')).toBe(true);
   });

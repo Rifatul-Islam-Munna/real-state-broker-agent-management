@@ -4,26 +4,36 @@ import request from 'supertest';
 import { JwtAuthGuard } from '../src/auth/guards/jwt-auth.guard';
 import { TenantSubscriptionController } from '../src/saas-admin/tenant-subscription.controller';
 import { TenantSubscriptionService } from '../src/saas-admin/tenant-subscription.service';
+import { StripeCheckoutService } from '../src/saas-admin/stripe-checkout.service';
+import { TenantRoleGuard } from '../src/security/tenant-role.guard';
 
 describe('Tenant subscription renewal (e2e)', () => {
   let app: INestApplication;
-  const service = {
-    getForOwner: jest.fn(),
-    renewOrRepurchase: jest.fn(),
-  };
+  const service = { getForOwner: jest.fn() };
+  const stripe = { createRenewalSession: jest.fn() };
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
       controllers: [TenantSubscriptionController],
-      providers: [{ provide: TenantSubscriptionService, useValue: service }],
+      providers: [
+        { provide: TenantSubscriptionService, useValue: service },
+        { provide: StripeCheckoutService, useValue: stripe },
+      ],
     })
       .overrideGuard(JwtAuthGuard)
       .useValue({
         canActivate(context: any) {
-          context.switchToHttp().getRequest().user = { userId: 42, role: 'Agent', tenantRole: 'Owner' };
+          context.switchToHttp().getRequest().user = {
+            userId: 42,
+            role: 'Agent',
+            tenantId: 7,
+            tenantRole: 'Owner',
+          };
           return true;
         },
       })
+      .overrideGuard(TenantRoleGuard)
+      .useValue({ canActivate: () => true })
       .compile();
 
     app = moduleRef.createNestApplication();
@@ -34,11 +44,10 @@ describe('Tenant subscription renewal (e2e)', () => {
   beforeEach(() => jest.clearAllMocks());
   afterAll(async () => app.close());
 
-  it('returns the existing tenant subscription and renews the same tenant', async () => {
+  it('returns the existing tenant subscription and starts Stripe renewal for the same owner', async () => {
     const subscription = {
       id: 7,
       ownerUserId: 42,
-      databaseName: 'tenant_7_blue_realty',
       planId: 1,
       subscriptionStatus: 'active',
       subscriptionExpiresAt: '2026-08-30T00:00:00.000Z',
@@ -51,24 +60,20 @@ describe('Tenant subscription renewal (e2e)', () => {
       .expect(subscription);
     expect(service.getForOwner).toHaveBeenCalledWith(42);
 
-    const renewed = {
-      tenant: {
-        ...subscription,
-        planId: 2,
-        subscriptionExpiresAt: '2026-09-29T00:00:00.000Z',
-      },
-      renewed: true,
-      reactivated: false,
-    };
-    service.renewOrRepurchase.mockResolvedValue(renewed);
+    stripe.createRenewalSession.mockResolvedValue({
+      sessionId: 'cs_test_renewal',
+      url: 'https://checkout.stripe.com/c/pay/cs_test_renewal',
+    });
 
-    const payload = { planId: 2, purchaseReference: 'PAY-RENEW-2026-1' };
     await request(app.getHttpServer())
-      .post('/api/tenant-subscription/renew')
-      .send(payload)
+      .post('/api/tenant-subscription/checkout-session')
+      .send({ planId: 2 })
       .expect(201)
-      .expect(renewed);
+      .expect({
+        sessionId: 'cs_test_renewal',
+        url: 'https://checkout.stripe.com/c/pay/cs_test_renewal',
+      });
 
-    expect(service.renewOrRepurchase).toHaveBeenCalledWith(42, payload);
+    expect(stripe.createRenewalSession).toHaveBeenCalledWith(42, 2);
   });
 });

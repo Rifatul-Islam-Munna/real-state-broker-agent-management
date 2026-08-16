@@ -7,7 +7,9 @@ import { getDashboardHomePath } from "@/lib/dashboard-routes"
 export async function requireDashboardAccess(permission?: AgentRoutePermission, adminOnly = false) {
   const user = await requireSession(["Admin", "Agent"])
 
-  if (adminOnly && user.role !== "Admin") {
+  const tenantOwner = user.role === "Agent" && user.agentRoutePermissions.includes("tenant-isolated")
+
+  if (adminOnly && user.role !== "Admin" && !tenantOwner) {
     redirect(getDashboardHomePath(user.role, user.agentRoutePermissions))
   }
 

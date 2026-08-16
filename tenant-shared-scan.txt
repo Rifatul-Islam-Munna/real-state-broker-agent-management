@@ -1,0 +1,11 @@
+D:\sass-project\real-state-for-agency-indivisual\backend-nestjs\src\tenant-dashboard\tenant-dashboard.module.ts:13: import { TenantWorkspaceSettingsService } from './tenant-workspace-settings.service';
+D:\sass-project\real-state-for-agency-indivisual\backend-nestjs\src\tenant-dashboard\tenant-dashboard.module.ts:43: TenantWorkspaceSettingsService,
+D:\sass-project\real-state-for-agency-indivisual\backend-nestjs\src\tenant-dashboard\tenant-gmail-oauth.controller.ts:4: import { TenantWorkspaceSettingsService } from './tenant-workspace-settings.service';
+D:\sass-project\real-state-for-agency-indivisual\backend-nestjs\src\tenant-dashboard\tenant-gmail-oauth.controller.ts:9: private readonly settings: TenantWorkspaceSettingsService,
+D:\sass-project\real-state-for-agency-indivisual\backend-nestjs\src\tenant-dashboard\tenant-outreach-delivery.service.ts:167: const transport = nodemailer.createTransport(transportOptions);
+D:\sass-project\real-state-for-agency-indivisual\backend-nestjs\src\tenant-dashboard\tenant-sms-inbox.controller.ts:47: return this.sms.send(
+D:\sass-project\real-state-for-agency-indivisual\backend-nestjs\src\tenant-dashboard\tenant-sms-inbox.service.ts:16: import { TenantWorkspaceSettingsService } from './tenant-workspace-settings.service';
+D:\sass-project\real-state-for-agency-indivisual\backend-nestjs\src\tenant-dashboard\tenant-sms-inbox.service.ts:28: private readonly settings: TenantWorkspaceSettingsService,
+D:\sass-project\real-state-for-agency-indivisual\backend-nestjs\src\tenant-dashboard\tenant-workspace-settings.controller.ts:15: import { TenantWorkspaceSettingsService } from './tenant-workspace-settings.service';
+D:\sass-project\real-state-for-agency-indivisual\backend-nestjs\src\tenant-dashboard\tenant-workspace-settings.controller.ts:21: constructor(private readonly settings: TenantWorkspaceSettingsService) {}
+D:\sass-project\real-state-for-agency-indivisual\backend-nestjs\src\tenant-dashboard\tenant-workspace-settings.service.ts:20: export class TenantWorkspaceSettingsService {

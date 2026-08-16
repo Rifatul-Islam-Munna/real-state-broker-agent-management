@@ -24,6 +24,13 @@ export class TenantSubscriptionService {
     return this.withPlan(tenant);
   }
 
+  async renewByTenantId(tenantId: number, dto: any) {
+    if (!Number.isInteger(tenantId) || tenantId < 1) throw new BadRequestException('A valid tenant is required');
+    const tenant = await this.tenants.findOne({ where: { id: tenantId } });
+    if (!tenant?.ownerUserId) throw new NotFoundException('Tenant account was not found');
+    return this.renewOrRepurchase(tenant.ownerUserId, dto);
+  }
+
   async renewOrRepurchase(userId: number, dto: any) {
     const purchaseReference = validatePurchaseReference(dto.purchaseReference);
 
@@ -140,13 +147,11 @@ export class TenantSubscriptionService {
   }
 
   private mapDashboardPermissions(permissions: string[]) {
-    const routes = new Set<string>();
+    const routes = new Set<string>(['tenant-isolated']);
     if (permissions.includes('normal-dashboard')) routes.add('dashboard');
     if (permissions.includes('property-management-dashboard')) {
       routes.add('properties');
-      routes.add('deal-pipeline');
       routes.add('lead');
-      routes.add('mail');
       routes.add('settings');
     }
     return [...routes];

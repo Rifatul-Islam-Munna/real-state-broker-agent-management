@@ -29,12 +29,15 @@ export class AuthenticatedTenantGuard implements CanActivate {
     if (tenant.subscriptionExpiresAt && tenant.subscriptionExpiresAt.getTime() <= Date.now()) {
       throw new ForbiddenException('Your subscription has expired. Renew it to continue.');
     }
+    if (request.tenant && request.tenant.id !== tenant.id) {
+      throw new ForbiddenException('Authenticated tenant does not match requested tenant domain.');
+    }
     if (!(await this.databases.healthCheck(tenant.databaseName))) {
       throw new ForbiddenException('Your tenant database is temporarily unavailable.');
     }
 
     request.tenant = tenant;
-    this.context.run({ tenantId: tenant.id, databaseName: tenant.databaseName }, () => undefined);
+    this.context.enter({ tenantId: tenant.id, databaseName: tenant.databaseName });
     return true;
   }
 }

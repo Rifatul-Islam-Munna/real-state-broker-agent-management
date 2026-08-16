@@ -1,7 +1,7 @@
 "use server"
 
 import { cookies } from "next/headers"
-import { revalidatePath } from "next/cache"
+import { redirect } from "next/navigation"
 
 const baseUrl = process.env.BASE_URL ?? "http://localhost:4000/api"
 
@@ -32,12 +32,10 @@ export async function getActivePlans() {
 }
 
 export async function renewTenantSubscriptionAction(formData: FormData) {
-  await request("/tenant-subscription/renew", {
+  const checkout = (await request("/tenant-subscription/checkout-session", {
     method: "POST",
-    body: JSON.stringify({
-      planId: Number(formData.get("planId")),
-      purchaseReference: formData.get("purchaseReference"),
-    }),
-  })
-  revalidatePath("/dashboard/subscription")
+    body: JSON.stringify({ planId: Number(formData.get("planId")) }),
+  })) as { url?: string }
+  if (!checkout.url) throw new Error("Stripe did not return a checkout URL")
+  redirect(checkout.url)
 }

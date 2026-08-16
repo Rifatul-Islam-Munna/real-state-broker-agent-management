@@ -35,8 +35,8 @@ export function MainContentAreaSplitViewSection({ filterOptions }: MainContentAr
   const currentPage = parsePositiveInteger(searchParams.get("page"), 1)
 
   const [searchValue, setSearchValue] = useState(currentSearch)
-  const [propertyTypeValue, setPropertyTypeValue] = useState(currentPropertyType)
-  const [listingTypeValue, setListingTypeValue] = useState(currentListingType)
+  const [propertyTypeValue, setPropertyTypeValue] = useState<"" | "Residential" | "Commercial">(currentPropertyType)
+  const [listingTypeValue, setListingTypeValue] = useState<"" | "ForSale" | "ForRent">(currentListingType)
 
   const propertiesQuery = useProperties({
     listingType: currentListingType || undefined,

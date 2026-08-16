@@ -87,7 +87,7 @@ describe('TenantProvisioningService', () => {
     });
     expect(result.tenant.subscriptionStartsAt).toBeInstanceOf(Date);
     expect(result.tenant.subscriptionExpiresAt.getTime() - result.tenant.subscriptionStartsAt.getTime()).toBe(30 * 86400000);
-    expect(setup.users[0].agentRoutePermissions).toEqual(expect.arrayContaining(['dashboard', 'properties', 'deal-pipeline', 'lead', 'mail', 'settings']));
+    expect(setup.users[0].agentRoutePermissions).toEqual(expect.arrayContaining(['dashboard', 'properties', 'lead', 'settings']));
     expect(setup.audits[0].action).toBe('tenant.purchase.provision');
   });
 

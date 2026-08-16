@@ -5,11 +5,18 @@ import { SaasAdminController } from '../src/saas-admin/saas-admin.controller';
 import { SaasAdminService } from '../src/saas-admin/saas-admin.service';
 import { TenantProvisioningService } from '../src/saas-admin/tenant-provisioning.service';
 import { JwtAuthGuard } from '../src/auth/guards/jwt-auth.guard';
+import { PlatformDomainService } from '../src/platform-domain/platform-domain.service';
 
 describe('SaaS Super Admin management endpoints (e2e)', () => {
   let app: INestApplication;
 
   const provisioning = { provisionManually: jest.fn() };
+  const platformDomain = {
+    getSettings: jest.fn(),
+    updatePrimaryDomain: jest.fn(),
+    getPaymentSettings: jest.fn(),
+    updatePaymentSettings: jest.fn(),
+  };
 
   const service = {
     listPlans: jest.fn(),
@@ -29,6 +36,7 @@ describe('SaaS Super Admin management endpoints (e2e)', () => {
       providers: [
         { provide: SaasAdminService, useValue: service },
         { provide: TenantProvisioningService, useValue: provisioning },
+        { provide: PlatformDomainService, useValue: platformDomain },
       ],
     })
       .overrideGuard(JwtAuthGuard)
@@ -155,6 +163,36 @@ describe('SaaS Super Admin management endpoints (e2e)', () => {
     expect(service.setTenantBlocked).toHaveBeenNthCalledWith(1, 4, true, 77);
     expect(service.setTenantBlocked).toHaveBeenNthCalledWith(2, 4, false, 77);
     expect(service.extendTenantSubscription).toHaveBeenCalledWith(4, 30, 77);
+  });
+
+  it('covers platform domain and Stripe settings endpoints without exposing secrets', async () => {
+    platformDomain.getSettings.mockResolvedValue({ primaryDomain: 'test.mydomain.com' });
+    platformDomain.getPaymentSettings.mockResolvedValue({
+      stripeSecretKeyConfigured: true,
+      stripeSecretKeySource: 'database',
+      stripeWebhookSecretConfigured: true,
+      stripeWebhookSecretSource: 'database',
+      stripePublishableKey: 'pk_test_public',
+      stripeCurrency: 'usd',
+    });
+    platformDomain.updatePaymentSettings.mockResolvedValue({ stripeSecretKeyConfigured: true, stripeCurrency: 'usd' });
+
+    await request(app.getHttpServer())
+      .get('/api/super-admin-management/platform-domain')
+      .expect(200)
+      .expect({ primaryDomain: 'test.mydomain.com' });
+
+    const payment = await request(app.getHttpServer())
+      .get('/api/super-admin-management/payment-settings')
+      .expect(200);
+    expect(payment.body).not.toHaveProperty('stripeSecretKey');
+    expect(payment.body).not.toHaveProperty('stripeWebhookSecret');
+
+    await request(app.getHttpServer())
+      .patch('/api/super-admin-management/payment-settings')
+      .send({ stripeSecretKey: 'sk_test_new', stripeWebhookSecret: 'whsec_new', stripeCurrency: 'usd' })
+      .expect(200);
+    expect(platformDomain.updatePaymentSettings).toHaveBeenCalledWith(expect.objectContaining({ stripeSecretKey: 'sk_test_new' }), 77);
   });
 
   it('covers the administrative audit-log endpoint', async () => {

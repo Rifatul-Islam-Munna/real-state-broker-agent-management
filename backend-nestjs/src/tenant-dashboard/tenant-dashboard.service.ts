@@ -1,21 +1,34 @@
-﻿import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { sanitizePlainText } from '../security/input-sanitizer';
+import { Not, Repository } from 'typeorm';
 import { SaasTenant } from '../saas-admin/entities/saas-tenant.entity';
 import { TenantDatabaseService } from '../tenant-database/tenant-database.service';
+import { sanitizePlainText } from '../security/input-sanitizer';
 
-const RESERVED = new Set(['www','admin','super-admin','api','app','mail','support','billing','login','register','status','docs','blog','dev','test','staging','localhost']);
+const RESERVED_SUBDOMAINS = new Set([
+  'www',
+  'admin',
+  'api',
+  'app',
+  'mail',
+  'support',
+  'help',
+  'billing',
+  'status',
+  'static',
+  'cdn',
+  'dashboard',
+  'super-admin',
+]);
 
 @Injectable()
 export class TenantDashboardService {
   constructor(
     private readonly databases: TenantDatabaseService,
-    @InjectRepository(SaasTenant) private readonly tenants: Repository<SaasTenant>,
+    @InjectRepository(SaasTenant) private readonly tenantRepo: Repository<SaasTenant>,
   ) {}
 
   context(tenant: SaasTenant) {
-    const expired = !!tenant.subscriptionExpiresAt && tenant.subscriptionExpiresAt.getTime() <= Date.now();
     return {
       tenant: {
         id: tenant.id,
@@ -23,96 +36,462 @@ export class TenantDashboardService {
         slug: tenant.slug,
         subdomain: tenant.subdomain,
         dashboardPermissions: tenant.dashboardPermissions,
-        subscriptionStartsAt: tenant.subscriptionStartsAt,
+        subscriptionStatus: this.subscriptionStatus(tenant),
         subscriptionExpiresAt: tenant.subscriptionExpiresAt,
-        subscriptionStatus: tenant.isBlocked ? 'blocked' : expired ? 'expired' : tenant.isActive ? 'active' : 'inactive',
-        plan: tenant.plan ? { id: tenant.plan.id, name: tenant.plan.name, billingDays: tenant.plan.billingDays } : null,
+        isActive: tenant.isActive,
+        isBlocked: tenant.isBlocked,
+        plan: tenant.plan
+          ? {
+              id: tenant.plan.id,
+              name: tenant.plan.name,
+              billingDays: tenant.plan.billingDays,
+            }
+          : null,
       },
     };
   }
 
   async overview(tenant: SaasTenant) {
-    return this.databases.withTenantClient(tenant.databaseName!, async (client) => {
-      const properties = await client.query("SELECT COUNT(*)::int AS count FROM tenant_property");
-      const published = await client.query("SELECT COUNT(*)::int AS count FROM tenant_property WHERE status = 'published'");
-      const leads = await client.query("SELECT COUNT(*)::int AS count FROM tenant_lead");
-      const recent = await client.query("SELECT id, action, summary, created_at FROM tenant_audit_log ORDER BY created_at DESC LIMIT 8");
-      return { ...this.context(tenant), metrics: { properties: properties.rows[0]?.count ?? 0, publishedProperties: published.rows[0]?.count ?? 0, leads: leads.rows[0]?.count ?? 0 }, recentActivity: recent.rows };
+    return this.databases.withTenantClient(this.databaseName(tenant), async (client) => {
+      const properties = await client.query(
+        `SELECT COUNT(*)::int AS total,
+                COUNT(*) FILTER (WHERE status = 'published')::int AS published
+         FROM tenant_property`,
+      );
+      const leads = await client.query('SELECT COUNT(*)::int AS total FROM tenant_lead');
+      const reports = await client.query('SELECT COUNT(*)::int AS total FROM tenant_owner_report');
+      const requests = await client.query(
+        `SELECT COUNT(*)::int AS total,
+                COUNT(*) FILTER (WHERE status = 'submitted')::int AS pending
+         FROM tenant_showing_request`,
+      );
+      const showings = await client.query(
+        `SELECT COUNT(*)::int AS total,
+                COUNT(*) FILTER (WHERE showing_at >= now() AND status = 'scheduled')::int AS upcoming
+         FROM tenant_showing`,
+      );
+      const activity = await client.query(
+        'SELECT id, action, summary, created_at FROM tenant_audit_log ORDER BY created_at DESC LIMIT 10',
+      );
+      return {
+        ...this.context(tenant),
+        metrics: {
+          properties: properties.rows[0]?.total ?? 0,
+          publishedProperties: properties.rows[0]?.published ?? 0,
+          leads: leads.rows[0]?.total ?? 0,
+          ownerReports: reports.rows[0]?.total ?? 0,
+          showingRequests: requests.rows[0]?.total ?? 0,
+          pendingShowingRequests: requests.rows[0]?.pending ?? 0,
+          showings: showings.rows[0]?.total ?? 0,
+          upcomingShowings: showings.rows[0]?.upcoming ?? 0,
+        },
+        recentActivity: activity.rows,
+      };
     });
-  }
-
-  async profile(tenant: SaasTenant) {
-    return this.databases.withTenantClient(tenant.databaseName!, async (client) => {
-      const result = await client.query("SELECT key, value FROM tenant_setting WHERE key IN ('tenant_identity','branding','public_homepage')");
-      const map = Object.fromEntries(result.rows.map((row: any) => [row.key, row.value]));
-      return { businessName: tenant.businessName, subdomain: tenant.subdomain, identity: map.tenant_identity ?? {}, branding: map.branding ?? {}, homepage: map.public_homepage ?? {} };
-    });
-  }
-
-  async updateProfile(tenant: SaasTenant, dto: any) {
-    const businessName = sanitizePlainText(dto.businessName ?? tenant.businessName, 'Business name', 160, { required: true });
-    const tagline = sanitizePlainText(dto.tagline, 'Tagline', 180);
-    const phone = sanitizePlainText(dto.phone, 'Phone', 40);
-    const email = sanitizePlainText(dto.email, 'Email', 160);
-    const address = sanitizePlainText(dto.address, 'Address', 300);
-    const headline = sanitizePlainText(dto.headline, 'Homepage headline', 240);
-    const description = sanitizePlainText(dto.description, 'Homepage description', 1200);
-
-    tenant.businessName = businessName;
-    await this.tenants.save(tenant);
-    await this.databases.withTenantClient(tenant.databaseName!, async (client) => {
-      await client.query('BEGIN');
-      try {
-        await client.query(`INSERT INTO tenant_setting(key,value) VALUES
-          ('tenant_identity',$1::jsonb),('branding',$2::jsonb),('public_homepage',$3::jsonb)
-          ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value, updated_at=now()`, [
-          JSON.stringify({ tenantId: tenant.id, businessName }),
-          JSON.stringify({ tagline }),
-          JSON.stringify({ phone, email, address, headline, description }),
-        ]);
-        await client.query('COMMIT');
-      } catch (error) { await client.query('ROLLBACK'); throw error; }
-    });
-    return this.profile(tenant);
-  }
-
-  async updateSubdomain(tenant: SaasTenant, raw: unknown) {
-    const subdomain = sanitizePlainText(raw, 'Subdomain', 63, { required: true }).toLowerCase();
-    if (!/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(subdomain)) throw new BadRequestException('Subdomain must contain lowercase letters, numbers, and hyphens');
-    if (RESERVED.has(subdomain)) throw new BadRequestException('This subdomain is reserved');
-    const conflict = await this.tenants.findOne({ where: { subdomain } });
-    if (conflict && conflict.id !== tenant.id) throw new BadRequestException('Subdomain already exists');
-    tenant.subdomain = subdomain;
-    await this.tenants.save(tenant);
-    return { subdomain };
   }
 
   async listProperties(tenant: SaasTenant) {
-    return this.databases.withTenantClient(tenant.databaseName!, async (client) => (await client.query('SELECT id,title,status,payload,created_at,updated_at FROM tenant_property ORDER BY created_at DESC')).rows);
+    return this.databases.withTenantClient(this.databaseName(tenant), async (client) => {
+      const result = await client.query(
+        'SELECT id, title, status, payload, created_at, updated_at FROM tenant_property ORDER BY updated_at DESC',
+      );
+      return result.rows;
+    });
   }
 
-  async createProperty(tenant: SaasTenant, dto: any, userId: number) {
-    const title = sanitizePlainText(dto.title, 'Property title', 240, { required: true });
-    const status = ['draft','published','archived'].includes(dto.status) ? dto.status : 'draft';
-    return this.databases.withTenantClient(tenant.databaseName!, async (client) => {
-      const result = await client.query('INSERT INTO tenant_property(title,status,payload) VALUES ($1,$2,$3::jsonb) RETURNING *', [title, status, JSON.stringify(dto.payload ?? {})]);
-      await client.query('INSERT INTO tenant_audit_log(action,actor_master_user_id,summary,metadata) VALUES ($1,$2,$3,$4::jsonb)', ['property.create', userId, `Created property ${title}`, JSON.stringify({ propertyId: result.rows[0].id })]);
+  async createProperty(tenant: SaasTenant, dto: any, actorUserId: number) {
+    const title = this.clean(dto.title, 240);
+    const status = this.propertyStatus(dto.status);
+    if (!title) throw new BadRequestException('Property title is required');
+    return this.databases.withTenantClient(this.databaseName(tenant), async (client) => {
+      const payload =
+        dto?.payload && typeof dto.payload === 'object' && !Array.isArray(dto.payload) ? dto.payload : {};
+      const result = await client.query(
+        `INSERT INTO tenant_property(title, status, payload)
+         VALUES ($1, $2, $3::jsonb)
+         RETURNING id, title, status, payload, created_at, updated_at`,
+        [title, status, JSON.stringify(payload)],
+      );
+      await this.audit(
+        client,
+        'property.created',
+        actorUserId,
+        `Created property ${title}`,
+        { propertyId: result.rows[0].id, status },
+      );
+      return result.rows[0];
+    });
+  }
+
+  async updatePropertyStatus(
+    tenant: SaasTenant,
+    propertyId: number,
+    statusInput: unknown,
+    actorUserId: number,
+  ) {
+    const status = this.propertyStatus(statusInput);
+    return this.databases.withTenantClient(this.databaseName(tenant), async (client) => {
+      const result = await client.query(
+        `UPDATE tenant_property
+         SET status = $2, updated_at = now()
+         WHERE id = $1
+         RETURNING id, title, status, payload, created_at, updated_at`,
+        [propertyId, status],
+      );
+      if (!result.rowCount) throw new NotFoundException('Property not found');
+      await this.audit(
+        client,
+        'property.status.updated',
+        actorUserId,
+        `${result.rows[0].title} marked ${status}`,
+        { propertyId, status },
+      );
       return result.rows[0];
     });
   }
 
   async listLeads(tenant: SaasTenant) {
-    return this.databases.withTenantClient(tenant.databaseName!, async (client) => (await client.query('SELECT id,full_name,email,phone,status,payload,created_at,updated_at FROM tenant_lead ORDER BY created_at DESC')).rows);
+    return this.databases.withTenantClient(this.databaseName(tenant), async (client) => {
+      const result = await client.query(this.leadSelectSql());
+      return result.rows;
+    });
   }
 
-  async createLead(tenant: SaasTenant, dto: any, userId: number) {
-    const fullName = sanitizePlainText(dto.fullName, 'Lead name', 200, { required: true });
-    const email = sanitizePlainText(dto.email, 'Lead email', 160);
-    const phone = sanitizePlainText(dto.phone, 'Lead phone', 80);
-    return this.databases.withTenantClient(tenant.databaseName!, async (client) => {
-      const result = await client.query('INSERT INTO tenant_lead(full_name,email,phone,status,payload) VALUES ($1,$2,$3,$4,$5::jsonb) RETURNING *', [fullName, email || null, phone || null, 'new', JSON.stringify(dto.payload ?? {})]);
-      await client.query('INSERT INTO tenant_audit_log(action,actor_master_user_id,summary,metadata) VALUES ($1,$2,$3,$4::jsonb)', ['lead.create', userId, `Created lead ${fullName}`, JSON.stringify({ leadId: result.rows[0].id })]);
-      return result.rows[0];
+  async createLead(tenant: SaasTenant, dto: any, actorUserId: number) {
+    const fullName = this.clean(dto.fullName, 200);
+    const email = this.clean(dto.email, 160).toLowerCase();
+    const phone = this.clean(dto.phone, 80);
+    const phoneDigits = phone.replace(/\D/g, '');
+    const propertyIds = this.idList(dto.propertyIds);
+    if (!fullName) throw new BadRequestException('Lead name is required');
+
+    return this.databases.withTenantClient(this.databaseName(tenant), async (client) => {
+      await client.query('BEGIN');
+      try {
+        await this.assertPublishedProperties(client, propertyIds);
+        const existing = await client.query(
+          `SELECT id
+           FROM tenant_lead
+           WHERE ($1 <> '' AND LOWER(COALESCE(email, '')) = LOWER($1))
+              OR ($2 <> '' AND regexp_replace(COALESCE(phone, ''), '[^0-9]', '', 'g') = $2)
+           ORDER BY id
+           LIMIT 1`,
+          [email, phoneDigits],
+        );
+
+        let leadId: number;
+        let action: string;
+        if (existing.rowCount) {
+          leadId = Number(existing.rows[0].id);
+          await client.query(
+            `UPDATE tenant_lead
+             SET full_name = $2,
+                 email = COALESCE(NULLIF($3, ''), email),
+                 phone = COALESCE(NULLIF($4, ''), phone),
+                 updated_at = now()
+             WHERE id = $1`,
+            [leadId, fullName, email, phone],
+          );
+          action = 'lead.properties.merged';
+        } else {
+          const inserted = await client.query(
+            `INSERT INTO tenant_lead(full_name, email, phone, status, payload)
+             VALUES ($1, NULLIF($2, ''), NULLIF($3, ''), 'new', '{}'::jsonb)
+             RETURNING id`,
+            [fullName, email, phone],
+          );
+          leadId = Number(inserted.rows[0].id);
+          action = 'lead.created';
+        }
+
+        for (const propertyId of propertyIds) {
+          await client.query(
+            `INSERT INTO tenant_lead_property(lead_id, property_id)
+             VALUES ($1, $2)
+             ON CONFLICT DO NOTHING`,
+            [leadId, propertyId],
+          );
+        }
+
+        await this.audit(
+          client,
+          action,
+          actorUserId,
+          existing.rowCount
+            ? `Updated the existing lead ${fullName} instead of creating a duplicate`
+            : `Created lead ${fullName}`,
+          { leadId, propertyIds },
+        );
+        const lead = await this.leadById(client, leadId);
+        await client.query('COMMIT');
+        return lead;
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      }
     });
+  }
+
+  async updateLeadProperties(
+    tenant: SaasTenant,
+    leadId: number,
+    rawPropertyIds: unknown,
+    actorUserId: number,
+  ) {
+    const propertyIds = this.idList(rawPropertyIds);
+    return this.databases.withTenantClient(this.databaseName(tenant), async (client) => {
+      await client.query('BEGIN');
+      try {
+        const lead = await client.query('SELECT id, full_name FROM tenant_lead WHERE id = $1', [leadId]);
+        if (!lead.rowCount) throw new NotFoundException('Lead not found');
+        await this.assertPublishedProperties(client, propertyIds);
+        await client.query('DELETE FROM tenant_lead_property WHERE lead_id = $1', [leadId]);
+        for (const propertyId of propertyIds) {
+          await client.query(
+            'INSERT INTO tenant_lead_property(lead_id, property_id) VALUES ($1, $2)',
+            [leadId, propertyId],
+          );
+        }
+        await this.audit(
+          client,
+          'lead.properties.updated',
+          actorUserId,
+          `Updated property interests for ${lead.rows[0].full_name}`,
+          { leadId, propertyIds },
+        );
+        const updated = await this.leadById(client, leadId);
+        await client.query('COMMIT');
+        return updated;
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      }
+    });
+  }
+
+  async getSettings(tenant: SaasTenant) {
+    return this.databases.withTenantClient(this.databaseName(tenant), async (client) => {
+      const settings = await client.query(
+        `SELECT key, value
+         FROM tenant_setting
+         WHERE key IN ('tenant_identity', 'branding', 'public_homepage', 'contact_form', 'google_tag_manager')`,
+      );
+      const map = Object.fromEntries(settings.rows.map((row: any) => [row.key, row.value]));
+      return {
+        identity: map.tenant_identity ?? {
+          tenantId: tenant.id,
+          businessName: tenant.businessName,
+        },
+        branding: map.branding ?? {},
+        homepage: map.public_homepage ?? {},
+        contactForm: map.contact_form ?? { enabled: true },
+        gtm: map.google_tag_manager ?? { containerId: '', enabled: false },
+        subdomain: tenant.subdomain,
+      };
+    });
+  }
+
+  async updateProfile(tenant: SaasTenant, dto: any) {
+    const businessName = this.clean(dto.businessName, 160);
+    if (!businessName) throw new BadRequestException('Business name is required');
+    const duplicate = await this.tenantRepo.findOne({
+      where: { businessName, id: Not(tenant.id) },
+    });
+    if (duplicate) throw new BadRequestException('Business name already exists');
+
+    const branding = {
+      primaryColor: this.clean(dto.primaryColor, 20),
+      logoUrl: this.clean(dto.logoUrl, 500),
+      tagline: this.clean(dto.tagline, 240),
+    };
+    const homepage = {
+      headline: this.clean(dto.headline, 240),
+      description: this.clean(dto.description, 2000),
+      phone: this.clean(dto.phone, 80),
+      email: this.clean(dto.email, 160).toLowerCase(),
+      address: this.clean(dto.address, 500),
+    };
+    const contactForm = { enabled: dto.contactFormEnabled !== false };
+
+    await this.databases.withTenantClient(this.databaseName(tenant), async (client) => {
+      await client.query('BEGIN');
+      try {
+        const upsert = async (key: string, value: unknown) =>
+          client.query(
+            `INSERT INTO tenant_setting(key, value) VALUES ($1, $2::jsonb)
+             ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+            [key, JSON.stringify(value)],
+          );
+        await upsert('tenant_identity', {
+          tenantId: tenant.id,
+          businessName,
+        });
+        await upsert('branding', branding);
+        await upsert('public_homepage', homepage);
+        await upsert('contact_form', contactForm);
+        await this.audit(
+          client,
+          'tenant.profile.updated',
+          tenant.ownerUserId,
+          'Updated tenant business profile',
+          null,
+        );
+        await client.query('COMMIT');
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      }
+    });
+
+    tenant.businessName = businessName;
+    await this.tenantRepo.save(tenant);
+    return this.getSettings(tenant);
+  }
+
+  async updateTracking(tenant: SaasTenant, dto: any) {
+    const enabled = Boolean(dto.enabled);
+    const containerId = this.clean(dto.containerId, 32).toUpperCase();
+    if (enabled && !/^GTM-[A-Z0-9]{5,20}$/.test(containerId)) {
+      throw new BadRequestException('Enter a valid Google Tag Manager container ID such as GTM-XXXXXXX');
+    }
+    const value = { enabled, containerId: enabled ? containerId : '' };
+    await this.databases.withTenantClient(this.databaseName(tenant), async (client) => {
+      await client.query(
+        `INSERT INTO tenant_setting(key, value) VALUES ('google_tag_manager', $1::jsonb)
+         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+        [JSON.stringify(value)],
+      );
+      await this.audit(
+        client,
+        'tenant.gtm.updated',
+        tenant.ownerUserId,
+        enabled ? 'Enabled tenant Google Tag Manager' : 'Disabled tenant Google Tag Manager',
+        { containerId: value.containerId },
+      );
+    });
+    return value;
+  }
+
+  async updateSubdomain(tenant: SaasTenant, requested: string) {
+    const subdomain = this.normalizeSubdomain(requested);
+    if (RESERVED_SUBDOMAINS.has(subdomain)) {
+      throw new BadRequestException('This subdomain is reserved');
+    }
+    const duplicate = await this.tenantRepo.findOne({
+      where: { subdomain, id: Not(tenant.id) },
+    });
+    if (duplicate) throw new BadRequestException('Subdomain already exists');
+    tenant.subdomain = subdomain;
+    await this.tenantRepo.save(tenant);
+    return { subdomain };
+  }
+
+  private leadSelectSql(where = '') {
+    return `
+      SELECT l.id,
+             l.full_name,
+             l.email,
+             l.phone,
+             l.status,
+             l.payload,
+             l.created_at,
+             l.updated_at,
+             COALESCE(
+               jsonb_agg(
+                 jsonb_build_object(
+                   'id', p.id,
+                   'title', p.title,
+                   'status', p.status
+                 )
+                 ORDER BY p.title
+               ) FILTER (WHERE p.id IS NOT NULL),
+               '[]'::jsonb
+             ) AS properties
+      FROM tenant_lead l
+      LEFT JOIN tenant_lead_property lp ON lp.lead_id = l.id
+      LEFT JOIN tenant_property p ON p.id = lp.property_id
+      ${where}
+      GROUP BY l.id, l.full_name, l.email, l.phone, l.status, l.payload, l.created_at, l.updated_at
+      ORDER BY l.updated_at DESC`;
+  }
+
+  private async leadById(client: any, leadId: number) {
+    const result = await client.query(this.leadSelectSql('WHERE l.id = $1'), [leadId]);
+    if (!result.rowCount) throw new NotFoundException('Lead not found');
+    return result.rows[0];
+  }
+
+  private async assertPublishedProperties(client: any, propertyIds: number[]) {
+    if (!propertyIds.length) return [];
+    const result = await client.query(
+      'SELECT id, title, status FROM tenant_property WHERE id = ANY($1::bigint[])',
+      [propertyIds],
+    );
+    const publishedIds = new Set(
+      result.rows.filter((item: any) => item.status === 'published').map((item: any) => Number(item.id)),
+    );
+    const invalid = propertyIds.filter((id) => !publishedIds.has(id));
+    if (invalid.length) {
+      throw new BadRequestException(
+        'Only published properties can collect or be linked to new leads.',
+      );
+    }
+    return result.rows;
+  }
+
+  private propertyStatus(value: unknown) {
+    const status = this.clean(value, 60).toLowerCase();
+    return ['draft', 'published', 'archived'].includes(status) ? status : 'draft';
+  }
+
+  private idList(value: unknown) {
+    const source = Array.isArray(value) ? value : value == null ? [] : [value];
+    return [...new Set(source.map(Number).filter((id) => Number.isInteger(id) && id > 0))].slice(
+      0,
+      100,
+    );
+  }
+
+  private normalizeSubdomain(value: string) {
+    const clean = this.clean(value, 63)
+      .toLowerCase()
+      .replace(/[^a-z0-9-]/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '');
+    if (!/^[a-z0-9](?:[a-z0-9-]{1,61}[a-z0-9])?$/.test(clean)) {
+      throw new BadRequestException('Subdomain must contain 3-63 lowercase letters, numbers, or hyphens');
+    }
+    return clean;
+  }
+
+  private clean(value: unknown, maxLength: number, field = 'Value') {
+    return sanitizePlainText(value, field, maxLength);
+  }
+
+  private databaseName(tenant: SaasTenant) {
+    if (!tenant.databaseName) {
+      throw new BadRequestException('Tenant database is not ready');
+    }
+    return tenant.databaseName;
+  }
+
+  private subscriptionStatus(tenant: SaasTenant) {
+    if (tenant.isBlocked) return 'blocked';
+    if (!tenant.isActive) return 'inactive';
+    if (tenant.subscriptionExpiresAt && tenant.subscriptionExpiresAt.getTime() <= Date.now()) return 'expired';
+    return 'active';
+  }
+  private async audit(
+    client: any,
+    action: string,
+    actorUserId: number | null,
+    summary: string,
+    metadata: unknown,
+  ) {
+    await client.query(
+      `INSERT INTO tenant_audit_log(action, actor_master_user_id, summary, metadata)
+       VALUES ($1, $2, $3, $4::jsonb)`,
+      [action, actorUserId || null, summary, metadata ? JSON.stringify(metadata) : null],
+    );
   }
 }

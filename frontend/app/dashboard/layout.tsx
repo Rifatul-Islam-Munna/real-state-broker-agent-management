@@ -1,4 +1,4 @@
-﻿import { redirect } from "next/navigation"
+import { redirect } from "next/navigation"
 
 import { DashboardSidebar } from "@/components/stitch/shared/dashboard-sidebar"
 import { DashboardTopbar } from "@/components/stitch/shared/dashboard-topbar"
@@ -22,7 +22,7 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
 
   const tenantContext = await getTenantDashboardContext()
   const agencyName = tenantContext.tenant.businessName
-  const logoUrl = null
+  const logoUrl: string | undefined = undefined
 
   return (
     <SidebarProvider className="min-h-screen bg-[var(--ether-surface)] text-[var(--ether-on-surface)]" style={{ "--sidebar-width": "280px" } as React.CSSProperties}>

@@ -20,6 +20,7 @@ describe('TenantResolutionService', () => {
     return new TenantResolutionService(
       { findOne: jest.fn(async () => result) } as any,
       { findOne: jest.fn(async () => domainResult) } as any,
+      { getPrimaryDomain: () => `${process.env.PRIMARY_DOMAIN ?? 'localhost'}` } as any,
     );
   }
 
@@ -39,6 +40,14 @@ describe('TenantResolutionService', () => {
     const resolver = service(null);
     expect(resolver.extractSubdomain('blue.localhost:3000')).toBe('blue');
     expect(resolver.isMainDomain('localhost:3000')).toBe(true);
+  });
+
+  it('supports a delegated root such as test.mydomain.com', () => {
+    process.env.PRIMARY_DOMAIN = 'test.mydomain.com';
+    const resolver = service(null);
+    expect(resolver.isMainDomain('test.mydomain.com')).toBe(true);
+    expect(resolver.extractSubdomain('rifat.test.mydomain.com')).toBe('rifat');
+    expect(resolver.extractSubdomain('nested.rifat.test.mydomain.com')).toBeNull();
   });
 
   it('resolves a ready tenant to its database registry record', async () => {

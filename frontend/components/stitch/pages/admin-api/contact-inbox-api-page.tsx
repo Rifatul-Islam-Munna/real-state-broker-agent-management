@@ -84,7 +84,7 @@ export function ContactInboxApiPage() {
     [contactRequests],
   )
 
-  const total = contactRequestsQuery.data?.total ?? contactRequests.length
+  const total = contactRequestsQuery.data?.totalCount ?? contactRequests.length
   const totalPages = contactRequestsQuery.data?.totalPages ?? 1
   const rangeStart = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1
   const rangeEnd = Math.min(page * PAGE_SIZE, total)
@@ -231,7 +231,7 @@ export function ContactInboxApiPage() {
                       </div>
 
                       <div className="rounded-xl bg-[var(--ether-surface-container-low)]/45 p-4">
-                        <p className="text-sm italic leading-7 text-[var(--ether-on-surface-variant)]">“{item.message}”</p>
+                        <p className="text-sm italic leading-7 text-[var(--ether-on-surface-variant)]">â€œ{item.message}â€</p>
                       </div>
 
                       <div className="flex flex-col justify-between gap-4 lg:items-end">

@@ -52,7 +52,9 @@ const routeGroups = [
   {
     label: "Realtors",
     hrefs: [
+      "/dashboard/showing-requests",
       "/dashboard/realtor-showings",
+      "/dashboard/owner-reports",
       "/dashboard/realtors",
       "/dashboard/realtor-showings/sequences",
       "/dashboard/showing-feedback",

@@ -3,10 +3,10 @@
 import { cookies } from "next/headers"
 import { revalidatePath } from "next/cache"
 
-const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3000/api").replace(/\/$/, "")
+const apiBase = (process.env.BASE_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000/api").replace(/\/$/, "")
 
 async function request(path: string, init: RequestInit = {}) {
-  const token = (await cookies()).get("accessToken")?.value
+  const token = (await cookies()).get("access_token")?.value
   const response = await fetch(`${apiBase}${path}`, {
     ...init,
     headers: {
@@ -29,6 +29,34 @@ function permissions(formData: FormData) {
 
 export async function getPlans() { return request("/super-admin-management/plans") }
 export async function getTenants() { return request("/super-admin-management/tenants") }
+export async function getPlatformDomain() { return request("/super-admin-management/platform-domain") }
+export async function getPaymentSettings() { return request("/super-admin-management/payment-settings") }
+
+export async function updatePlatformDomainAction(formData: FormData) {
+  await request("/super-admin-management/platform-domain", {
+    method: "PATCH",
+    body: JSON.stringify({ primaryDomain: formData.get("primaryDomain") }),
+  })
+  revalidatePath("/super-admin/settings")
+  revalidatePath("/super-admin/tenants")
+  revalidatePath("/super-admin/activity")
+}
+
+export async function updatePaymentSettingsAction(formData: FormData) {
+  await request("/super-admin-management/payment-settings", {
+    method: "PATCH",
+    body: JSON.stringify({
+      stripeSecretKey: formData.get("stripeSecretKey"),
+      stripeWebhookSecret: formData.get("stripeWebhookSecret"),
+      stripePublishableKey: formData.get("stripePublishableKey"),
+      stripeCurrency: formData.get("stripeCurrency"),
+      clearStripeSecretKey: formData.get("clearStripeSecretKey") === "on",
+      clearStripeWebhookSecret: formData.get("clearStripeWebhookSecret") === "on",
+    }),
+  })
+  revalidatePath("/super-admin/settings")
+  revalidatePath("/super-admin/activity")
+}
 
 export async function createTenantAction(formData: FormData) {
   await request("/super-admin-management/tenants", {

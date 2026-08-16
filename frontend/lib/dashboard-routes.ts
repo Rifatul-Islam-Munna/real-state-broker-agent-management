@@ -1,4 +1,4 @@
-﻿import { type AgentRoutePermission, hasAgentRoutePermission } from "@/lib/agent-route-access"
+import { type AgentRoutePermission, hasAgentRoutePermission } from "@/lib/agent-route-access"
 
 export type DashboardRoute = {
   href: string
@@ -20,7 +20,9 @@ export const dashboardRoutes: readonly DashboardRoute[] = [
   { href: "/dashboard/lead-schedule", label: "Lead Activity", icon: "event_note", permission: "lead" },
   { href: "/dashboard/replies", label: "Reply Inbox", icon: "mark_email_unread", permission: "lead" },
   { href: "/dashboard/lead-collection-templates", label: "Lead Templates", icon: "document_scanner", permission: "mail" },
+  { href: "/dashboard/showing-requests", label: "Showing Requests", icon: "assignment_turned_in", permission: "lead" },
   { href: "/dashboard/realtor-showings", label: "Realtor Showings", icon: "real_estate_agent", permission: "lead" },
+  { href: "/dashboard/owner-reports", label: "Owner Reports", icon: "outgoing_mail", permission: "lead" },
   { href: "/dashboard/realtors", label: "Realtors", icon: "group", permission: "lead" },
   { href: "/dashboard/realtor-showings/sequences", label: "Realtor Message Sequences", icon: "forward_to_inbox", permission: "lead" },
   { href: "/dashboard/showing-feedback", label: "Feedback Registry", icon: "rate_review", adminOnly: true },
@@ -46,8 +48,15 @@ export const dashboardRoutes: readonly DashboardRoute[] = [
 
 export function getDashboardRoutesForUser(role: string, permissions?: string[] | null) {
   if (role !== "Agent") return []
+  const tenantOwner = (permissions ?? []).includes("tenant-isolated")
 
   return dashboardRoutes.filter((route) => {
+    if (tenantOwner) {
+      if (route.href === "/dashboard/property-operations") {
+        return (permissions ?? []).includes("property-management-dashboard") || hasAgentRoutePermission(permissions, "properties")
+      }
+      return true
+    }
     if (route.adminOnly) return false
     if (!route.permission) return true
     return hasAgentRoutePermission(permissions, route.permission)
@@ -66,14 +75,9 @@ export function canOpenDashboardRoute(
 ) {
   if (role !== "Agent") return false
 
-  const match = [...dashboardRoutes]
+  const match = getDashboardRoutesForUser(role, permissions)
     .sort((a, b) => b.href.length - a.href.length)
     .find((route) => pathname === route.href || pathname.startsWith(`${route.href}/`))
 
-  if (!match || match.adminOnly) return false
-  return !match.permission || hasAgentRoutePermission(permissions, match.permission)
+  return Boolean(match)
 }
-
-
-
-

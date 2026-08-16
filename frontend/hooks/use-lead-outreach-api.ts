@@ -11,6 +11,7 @@ import type {
   LeadHistoryEntry,
   LeadOutreachDispatchInput,
   LeadOutreachScheduleItem,
+  TenantOutreachMonitor,
 } from "@/@types/real-estate-api"
 
 type QueryParams = Record<string, string | number | boolean | undefined | null>
@@ -45,7 +46,9 @@ function useInvalidate(keys: string[]) {
   const queryClient = useQueryClient()
 
   return () =>
-    Promise.all(keys.map((key) => queryClient.invalidateQueries({ queryKey: [key] })))
+    Promise.all(
+      keys.map((key) => queryClient.invalidateQueries({ queryKey: [key] }))
+    )
 }
 
 export function useLeadOutreachTemplates() {
@@ -57,12 +60,18 @@ export function useLeadOutreachTemplates() {
       placeholderData: undefined,
     },
     0,
-    "lead-outreach-templates",
+    "lead-outreach-templates"
   )
 }
 
 export function useDispatchLeadOutreach() {
-  const invalidate = useInvalidate(["lead-history", "lead-outreach-schedule", "lead", "leads"])
+  const invalidate = useInvalidate([
+    "lead-history",
+    "lead-outreach-schedule",
+    "lead-outreach-monitor",
+    "lead",
+    "leads",
+  ])
 
   return useCommonMutationApi<LeadHistoryEntry, LeadOutreachDispatchInput>({
     method: "POST",
@@ -73,7 +82,14 @@ export function useDispatchLeadOutreach() {
 }
 
 export function useDispatchBulkLeadOutreach() {
-  const invalidate = useInvalidate(["lead-history", "lead-outreach-schedule", "lead", "leads", "deals"])
+  const invalidate = useInvalidate([
+    "lead-history",
+    "lead-outreach-schedule",
+    "lead-outreach-monitor",
+    "lead",
+    "leads",
+    "deals",
+  ])
 
   return useCommonMutationApi<
     LeadOutreachBulkDispatchResult,
@@ -86,23 +102,49 @@ export function useDispatchBulkLeadOutreach() {
   })
 }
 
+type LeadOutreachScheduleResponse =
+  | LeadOutreachScheduleItem[]
+  | { data?: LeadOutreachScheduleItem[]; items?: LeadOutreachScheduleItem[] }
+
+function normalizeScheduleResponse(
+  response: LeadOutreachScheduleResponse | null | undefined
+) {
+  if (Array.isArray(response)) return response
+  if (Array.isArray(response?.items)) return response.items
+  if (Array.isArray(response?.data)) return response.data
+  return []
+}
+
 export function useLeadOutreachSchedule(params?: QueryParams) {
-  return useQueryWrapper<LeadOutreachScheduleItem[]>(
+  return useQueryWrapper<
+    LeadOutreachScheduleResponse,
+    LeadOutreachScheduleItem[]
+  >(
     ["lead-outreach-schedule", params],
     `/lead-outreach/schedule${buildQuery(params)}`,
     {
       ...defaultQueryOptions,
       placeholderData: undefined,
+      select: normalizeScheduleResponse,
     },
     0,
-    "lead-outreach-schedule",
+    "lead-outreach-schedule"
   )
 }
 
 export function useUpdateLeadOutreachScheduleStatus() {
-  const invalidate = useInvalidate(["lead-outreach-schedule", "lead-history", "lead", "leads"])
+  const invalidate = useInvalidate([
+    "lead-outreach-schedule",
+    "lead-outreach-monitor",
+    "lead-history",
+    "lead",
+    "leads",
+  ])
 
-  return useCommonMutationApi<LeadOutreachScheduleItem, { id: number; status: "active" | "paused" | "cancelled" }>({
+  return useCommonMutationApi<
+    LeadOutreachScheduleItem,
+    { id: number; status: "active" | "paused" | "cancelled" }
+  >({
     method: "PATCH",
     onSuccess: () => void invalidate(),
     successMessage: "Lead outreach updated",
@@ -111,12 +153,50 @@ export function useUpdateLeadOutreachScheduleStatus() {
 }
 
 export function useMarkLeadRepliesRead() {
-  const invalidate = useInvalidate(["lead-outreach-schedule", "lead-history", "lead", "leads"])
+  const invalidate = useInvalidate([
+    "lead-outreach-schedule",
+    "lead-outreach-monitor",
+    "lead-history",
+    "lead",
+    "leads",
+  ])
 
-  return useCommonMutationApi<{ ids: number[]; isRead: boolean }, { ids: number[]; isRead?: boolean }>({
+  return useCommonMutationApi<
+    { ids: number[]; isRead: boolean },
+    { ids: number[]; isRead?: boolean }
+  >({
     method: "PATCH",
     onSuccess: () => void invalidate(),
     successMessage: "Replies updated",
     url: "/lead-outreach/replies/read",
+  })
+}
+
+export function useTenantOutreachMonitor(enabled = true) {
+  return useQueryWrapper<TenantOutreachMonitor>(
+    ["lead-outreach-monitor"],
+    "/lead-outreach/monitor",
+    {
+      ...defaultQueryOptions,
+      enabled,
+      placeholderData: undefined,
+      refetchInterval: enabled ? 10_000 : false,
+    },
+    0,
+    "lead-outreach-monitor"
+  )
+}
+
+export function useRetryTenantOutreachJob() {
+  const invalidate = useInvalidate([
+    "lead-outreach-schedule",
+    "lead-outreach-monitor",
+  ])
+
+  return useCommonMutationApi<LeadOutreachScheduleItem, { id: number }>({
+    method: "POST",
+    onSuccess: () => void invalidate(),
+    successMessage: "Outreach job queued for retry",
+    url: "/lead-outreach/jobs/retry",
   })
 }

@@ -49,7 +49,8 @@ describe('TenantDomainService', () => {
     const tenantRepo = repo<any>(tenants);
     const domainRepo = repo<any>(domainRows);
     const auditRepo = repo<any>();
-    return { service: new TenantDomainService(tenantRepo as any, domainRepo as any, auditRepo as any), tenantRepo, domainRepo, auditRepo };
+    const platformDomain = { getPrimaryDomain: () => `${process.env.PRIMARY_DOMAIN ?? 'localhost'}` };
+    return { service: new TenantDomainService(tenantRepo as any, domainRepo as any, auditRepo as any, platformDomain as any), tenantRepo, domainRepo, auditRepo };
   }
 
   it('adds a pending custom domain and returns TXT/CNAME DNS instructions', async () => {

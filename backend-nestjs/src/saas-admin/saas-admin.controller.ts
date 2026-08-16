@@ -2,6 +2,7 @@
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { SaasAdminService } from './saas-admin.service';
 import { TenantProvisioningService } from './tenant-provisioning.service';
+import { PlatformDomainService } from '../platform-domain/platform-domain.service';
 
 @Controller('super-admin-management')
 @UseGuards(JwtAuthGuard)
@@ -9,6 +10,7 @@ export class SaasAdminController {
   constructor(
     private readonly service: SaasAdminService,
     private readonly provisioning: TenantProvisioningService,
+    private readonly platformDomain: PlatformDomainService,
   ) {}
 
   @Get('plans') listPlans() { return this.service.listPlans(); }
@@ -21,6 +23,16 @@ export class SaasAdminController {
   @Post('tenants') createTenant(@Body() dto: any, @Request() req: any) { return this.provisioning.provisionManually(dto, req.user.userId); }
   @Patch('tenants/:id/block') blockTenant(@Param('id', ParseIntPipe) id: number, @Body('isBlocked') isBlocked: boolean, @Request() req: any) { return this.service.setTenantBlocked(id, Boolean(isBlocked), req.user.userId); }
   @Patch('tenants/:id/extend') extendTenant(@Param('id', ParseIntPipe) id: number, @Body('days', ParseIntPipe) days: number, @Request() req: any) { return this.service.extendTenantSubscription(id, days, req.user.userId); }
+
+  @Get('platform-domain') getPlatformDomain() { return this.platformDomain.getSettings(); }
+  @Patch('platform-domain') updatePlatformDomain(@Body('primaryDomain') primaryDomain: string, @Request() req: any) {
+    return this.platformDomain.updatePrimaryDomain(primaryDomain, req.user.userId);
+  }
+
+  @Get('payment-settings') getPaymentSettings() { return this.platformDomain.getPaymentSettings(); }
+  @Patch('payment-settings') updatePaymentSettings(@Body() dto: any, @Request() req: any) {
+    return this.platformDomain.updatePaymentSettings(dto, req.user.userId);
+  }
 
   @Get('audit-logs') listAuditLogs() { return this.service.listAuditLogs(); }
 }

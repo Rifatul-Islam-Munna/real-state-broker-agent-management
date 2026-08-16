@@ -10,12 +10,115 @@ type ProxyRouteContext = {
   }>
 }
 
+function tenantPath(path: string[]) {
+  const joined = path.join("/")
+  if (joined === "agency-settings") return "tenant-workspace/agency-settings"
+  if (joined === "settings/scheduling") return "tenant-workspace/scheduling"
+  if (joined === "settings/integrations/workspace")
+    return "tenant-workspace/integrations/workspace"
+  if (joined === "settings/integrations/health")
+    return "tenant-workspace/integrations/health"
+  if (joined === "settings/integrations/gmail/connect-url")
+    return "tenant-workspace/integrations/gmail/connect-url"
+  if (joined === "pdfs/templates") return "tenant-workspace/pdf-templates"
+
+  if (joined === "dashboard/summary") return "tenant-legacy/dashboard/summary"
+  if (joined === "properties" || joined === "properties/management")
+    return "tenant-legacy/properties"
+  if (joined === "leads") return "tenant-legacy/leads"
+  if (joined === "documents/summary") return "tenant-legacy/documents/summary"
+  if (joined === "homepage-settings")
+    return "tenant-legacy/singleton/homepage-settings"
+  if (joined === "marketing-settings")
+    return "tenant-legacy/singleton/marketing-settings"
+  if (joined === "mail-inbox") return "tenant-inbox"
+  if (joined === "mail-inbox/send") return "tenant-inbox/send"
+  if (joined === "mail-inbox/convert-to-lead")
+    return "tenant-inbox/convert-to-lead"
+  if (joined === "mail-inbox/sync-status") return "tenant-inbox/sync-status"
+  if (joined === "mail-inbox/sync") return "tenant-inbox/sync"
+  if (joined === "sms-inbox") return "tenant-sms-inbox"
+  if (joined === "sms-inbox/send") return "tenant-sms-inbox/send"
+  if (joined === "sms-inbox/sync") return "tenant-sms-inbox/sync"
+  if (joined === "sms-inbox/sync-status") return "tenant-sms-inbox/sync-status"
+  if (joined === "lead-outreach/templates") return "tenant-outreach/templates"
+  if (joined === "lead-outreach/schedule") return "tenant-outreach/schedule"
+  if (joined === "lead-outreach/bulk") return "tenant-outreach/bulk"
+  if (joined === "lead-outreach/schedule-status")
+    return "tenant-outreach/schedule-status"
+  if (joined === "lead-outreach/replies/read")
+    return "tenant-outreach/replies/read"
+  if (joined === "lead-outreach/monitor") return "tenant-outreach/monitor"
+  if (joined.startsWith("lead-outreach/jobs/"))
+    return `tenant-outreach/${joined.slice("lead-outreach/".length)}`
+  if (joined === "lead-outreach") return "tenant-outreach"
+  if (joined === "lead-collection-templates/fields")
+    return "tenant-legacy/lead-collection-fields"
+  if (joined === "showing-feedback/properties")
+    return "tenant-legacy/resource/showing-feedback-properties"
+  if (joined === "realtor-showings/sequences/summary")
+    return "tenant-legacy/sequence-summary"
+
+  if (joined === "users/agents") return "tenant-legacy/resource/users-agents"
+  if (joined === "users/agents/permissions")
+    return "tenant-legacy/resource/users-agents"
+
+  const genericRoots = new Set([
+    "blogs",
+    "brokerage",
+    "contact-requests",
+    "deals",
+    "documents",
+    "lead-assignment-rules",
+    "lead-collection-templates",
+    "lead-history",
+    "lead-outreach",
+    "mail-inbox",
+    "notification",
+    "pdfs",
+    "property-chats",
+    "realtor-showings",
+    "realtors",
+    "showing-feedback",
+    "showings",
+    "sms-inbox",
+    "tools",
+    "website-inquiries",
+  ])
+  const [root, ...rest] = path
+  if (genericRoots.has(root)) {
+    if (rest[0] === "import") return `tenant-legacy/resource/${root}/import`
+    return `tenant-legacy/resource/${root}`
+  }
+
+  if (
+    joined === "auth/me" ||
+    joined.startsWith("tenant-") ||
+    joined.startsWith("public-")
+  )
+    return joined
+
+  const fallbackResource = joined
+    .replace(/[^a-zA-Z0-9_-]+/g, "-")
+    .replace(/^-|-$/g, "")
+  return `tenant-legacy/resource/${fallbackResource || "workspace"}`
+}
+
 async function forward(request: NextRequest, context: ProxyRouteContext) {
   const { path } = await context.params
   const cookieStore = await cookies()
   const accessToken = cookieStore.get("access_token")?.value
-  const targetUrl = `${baseUrl}/${path.join("/")}${request.nextUrl.search}`
+  const requestHost = (request.headers.get("host") ?? "")
+    .toLowerCase()
+    .replace(/:\d+$/, "")
+  const tenantHost =
+    request.headers.get("x-tenant-host") ??
+    (requestHost.endsWith(".localhost") ? requestHost : null)
+  const backendPath = tenantHost ? tenantPath(path) : path.join("/")
+  const targetUrl = `${baseUrl}/${backendPath}${request.nextUrl.search}`
   const contentType = request.headers.get("content-type")
+  const idempotencyKey = request.headers.get("idempotency-key")
+  const requestId = request.headers.get("x-request-id")
   const body =
     request.method === "GET" || request.method === "HEAD"
       ? undefined
@@ -27,6 +130,9 @@ async function forward(request: NextRequest, context: ProxyRouteContext) {
       headers: {
         ...(contentType ? { "Content-Type": contentType } : {}),
         ...(accessToken ? { access_token: accessToken } : {}),
+        ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
+        ...(requestId ? { "X-Request-Id": requestId } : {}),
+        ...(tenantHost ? { "x-tenant-host": tenantHost } : {}),
       },
       body,
       cache: "no-store",
@@ -40,7 +146,9 @@ async function forward(request: NextRequest, context: ProxyRouteContext) {
       status: response.status,
       headers: {
         ...(responseContentType ? { "Content-Type": responseContentType } : {}),
-        ...(contentDisposition ? { "Content-Disposition": contentDisposition } : {}),
+        ...(contentDisposition
+          ? { "Content-Disposition": contentDisposition }
+          : {}),
       },
     })
   } catch (error) {
@@ -52,10 +160,11 @@ async function forward(request: NextRequest, context: ProxyRouteContext) {
 
     return NextResponse.json(
       {
-        message: "The backend API is unavailable. Start the NestJS server and try again.",
+        message:
+          "The backend API is unavailable. Start the NestJS server and try again.",
         code: "BACKEND_UNAVAILABLE",
       },
-      { status: 503 },
+      { status: 503 }
     )
   }
 }

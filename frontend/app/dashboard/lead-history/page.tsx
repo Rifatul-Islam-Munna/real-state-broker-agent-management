@@ -1,4 +1,4 @@
-import { LeadHistoryPageV2 } from "@/components/stitch/pages/lead-history/page-v2"
+﻿import { LeadHistoryPage } from "@/components/stitch/pages/lead-history/page"
 import { buildPageMetadata } from "@/lib/build-page-metadata"
 import { requireDashboardAccess } from "@/lib/dashboard-auth"
 
@@ -10,5 +10,5 @@ export const metadata = buildPageMetadata({
 
 export default async function Page() {
   await requireDashboardAccess("lead")
-  return <LeadHistoryPageV2 />
+  return <LeadHistoryPage />
 }

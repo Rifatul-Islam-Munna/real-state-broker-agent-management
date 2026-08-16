@@ -1,1 +1,0 @@
-Only administrators sign in to Property Operations. External participants use temporary links or QR codes.

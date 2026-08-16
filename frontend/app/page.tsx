@@ -1,4 +1,4 @@
-import type { Metadata } from "next"
+﻿import type { Metadata } from "next"
 import Link from "next/link"
 import {
   ArrowRight,
@@ -129,7 +129,7 @@ export default async function SaaSLandingPage() {
                 Your website, operations, and growth in one platform.
               </h1>
               <p className="mt-6 max-w-2xl text-base leading-8 text-slate-600 sm:text-lg">
-                Launch a branded real estate presence, manage property workflows, and give your team the dashboards they need—without building the technology from scratch.
+                Launch a branded real estate presence, manage property workflows, and give your team the dashboards they needΓÇöwithout building the technology from scratch.
               </p>
               <div className="mt-8 flex flex-col gap-3 sm:flex-row">
                 <Link className="inline-flex h-13 items-center justify-center gap-2 rounded-xl bg-[#4343d5] px-6 font-semibold text-white transition hover:bg-[#3535b8]" href="#plans">

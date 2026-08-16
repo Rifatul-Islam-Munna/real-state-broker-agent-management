@@ -33,6 +33,7 @@ import { SaasAdminModule } from './saas-admin/saas-admin.module';
 import { TenantDatabaseModule } from './tenant-database/tenant-database.module';
 import { SecurityModule } from './security/security.module';
 import { TenantDashboardModule } from './tenant-dashboard/tenant-dashboard.module';
+import { PlatformDomainModule } from './platform-domain/platform-domain.module';
 
 @Module({
   imports: [
@@ -68,6 +69,7 @@ import { TenantDashboardModule } from './tenant-dashboard/tenant-dashboard.modul
     TenantDatabaseModule,
     SecurityModule,
     TenantDashboardModule,
+    PlatformDomainModule,
   ],
   controllers: [],
   providers: [AppService, DevSeedService],

@@ -1,4 +1,4 @@
-﻿# SaaS Multi-Tenant Project Checklist
+# SaaS Multi-Tenant Project Checklist
 
 > Use `[x]` only after a feature is implemented, tested, and verified. Keep unfinished work as `[ ]`.
 
@@ -29,7 +29,7 @@
 
 ## 3. Tenant Registration and Purchase
 
-- [ ] Create a tenant/customer account after a successful purchase.
+- [x] Create a tenant/customer account only after Stripe confirms the returned Checkout Session is complete and paid.
 - [x] Allow the Super Admin to create a tenant/customer manually.
 - [x] Collect the customer's business name during signup or manual creation.
 - [x] Enforce a unique business name for every tenant.
@@ -51,10 +51,10 @@
 - [x] Create a tenant database when the Super Admin manually creates a new customer.
 - [x] Run all required migrations when a tenant database is created.
 - [x] Seed required default data in each new tenant database.
-- [ ] Store each tenant's application data only in that tenant's database.
+- [x] Store tenant-facing dashboard, property, lead, profile, tracking, and subscription data only in the resolved tenant database; block tenant accounts from legacy shared-data APIs.
 - [x] Add a secure tenant database connection registry/configuration.
 - [x] Add connection pooling and safe cleanup for tenant database connections.
-- [ ] Prevent one tenant from accessing another tenant's database or data.
+- [x] Prevent cross-tenant access by matching authenticated tenant IDs to resolved domains, carrying request-scoped tenant DB context, validating server-generated database names, and blocking shared-data APIs for tenant accounts.
 - [x] Add transaction/rollback handling if tenant provisioning fails.
 - [x] Add a safe strategy for running future migrations across all tenant databases.
 - [x] Add backup and restore planning for the master database and tenant databases.
@@ -157,7 +157,22 @@
 - [x] Verify all critical actions appear in the audit log.
 - [ ] Complete a final end-to-end SaaS purchase, provisioning, login, renewal, and expiration test.
 
+## 12. Realtor Reports, Showing Requests, and Multi-Property Leads
 
-
-
-
+- [x] Keep the platform Super Admin portal on `/super-admin` and tenant realtor operations on `/dashboard`.
+- [x] Store owner-report recipients, properties, subjects, messages, channels, per-channel delivery results, sender, and sent time in the correct tenant database.
+- [x] Add an Owner Reports table and a dedicated report detail page.
+- [x] Prevent draft, archived, or otherwise inactive properties from collecting new lead links or showing requests.
+- [x] Support one lead linked to multiple published properties through a tenant-local many-to-many relationship.
+- [x] Merge repeated email or phone submissions into the existing lead instead of creating duplicate lead records.
+- [x] Add reusable showing-form templates with custom fields and fixed-property or recipient-selected-property modes.
+- [x] Add expiring, tenant-branded public showing-request links and show only published properties to recipients.
+- [x] Store submitted answers, selected property, preferred time, request status, and audit activity in the tenant database.
+- [x] Require manual showing-realtor assignment before approval.
+- [x] Create the tenant Realtor Showings record automatically and transactionally when a submitted request is approved.
+- [x] Add tenant dashboard metrics and navigation for Owner Reports, Showing Requests, and Realtor Showings.
+- [x] Add migration coverage for existing version-1 tenant databases and focused tests for inactive-property rejection, duplicate-lead merging, published-property filtering, link expiration, and request approval.
+- [x] Verify the NestJS production build and all 336 backend tests.
+- [x] Verify the frontend TypeScript check, changed-file ESLint check, and Next.js production build.
+- [x] Verify all 15 automated backend E2E tests.
+- [ ] Run a live external SMTP/SMS delivery smoke test with deployment provider credentials and approved test recipients.

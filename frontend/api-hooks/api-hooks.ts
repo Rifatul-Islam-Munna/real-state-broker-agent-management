@@ -33,7 +33,10 @@ function extractValidationMessage(errors: unknown): string | null {
   return null
 }
 
-function extractErrorMessage(payload: unknown, fallback = "Something went wrong"): string {
+function extractErrorMessage(
+  payload: unknown,
+  fallback = "Something went wrong"
+): string {
   if (!payload) return fallback
   if (typeof payload === "string") return payload.trim() || fallback
   if (typeof payload !== "object") return fallback
@@ -47,7 +50,8 @@ function extractErrorMessage(payload: unknown, fallback = "Something went wrong"
 
   if (Array.isArray(message)) {
     const firstMessage = message.find(
-      (item): item is string => typeof item === "string" && item.trim().length > 0,
+      (item): item is string =>
+        typeof item === "string" && item.trim().length > 0
     )
     if (firstMessage) return firstMessage
   }
@@ -84,7 +88,8 @@ function extractStatusCode(payload: unknown, fallback = 500): number {
 
   for (const candidate of candidates) {
     const numericStatus = Number(candidate)
-    if (Number.isFinite(numericStatus) && numericStatus > 0) return numericStatus
+    if (Number.isFinite(numericStatus) && numericStatus > 0)
+      return numericStatus
   }
 
   return fallback
@@ -115,11 +120,21 @@ function redirectToLogin() {
 async function request<T>(
   method: "GET" | "POST" | "PATCH" | "DELETE",
   url: string,
-  payload?: unknown,
+  payload?: unknown
 ): Promise<T | null> {
+  const requestId =
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`
   const response = await fetch(`${proxyBaseUrl}${url}`, {
     method,
-    headers: payload !== undefined ? { "Content-Type": "application/json" } : undefined,
+    headers: {
+      ...(payload !== undefined ? { "Content-Type": "application/json" } : {}),
+      "X-Request-Id": requestId,
+      ...(method === "POST" || method === "PATCH"
+        ? { "Idempotency-Key": requestId }
+        : {}),
+    },
     body: payload !== undefined ? JSON.stringify(payload) : undefined,
     cache: "no-store",
   })
@@ -135,7 +150,10 @@ async function request<T>(
   }
 
   throw {
-    message: extractErrorMessage(responsePayload, getFallbackMessage(response.status)),
+    message: extractErrorMessage(
+      responsePayload,
+      getFallbackMessage(response.status)
+    ),
     statusCode: extractStatusCode(responsePayload, response.status),
   } satisfies ApiError
 }
@@ -160,7 +178,7 @@ function toApiError(error: unknown): ApiError {
 
 export const PostRequestAxios = async <TResponse, TPayload = unknown>(
   url: string,
-  payload: TPayload,
+  payload: TPayload
 ): Promise<[TResponse | null, ApiError | null]> => {
   try {
     return [await request<TResponse>("POST", url, payload), null]
@@ -171,7 +189,7 @@ export const PostRequestAxios = async <TResponse, TPayload = unknown>(
 
 export const PatchRequestAxios = async <TResponse, TPayload = unknown>(
   url: string,
-  payload: TPayload,
+  payload: TPayload
 ): Promise<[TResponse | null, ApiError | null]> => {
   try {
     return [await request<TResponse>("PATCH", url, payload), null]
@@ -183,7 +201,7 @@ export const PatchRequestAxios = async <TResponse, TPayload = unknown>(
 export const GetRequestNormal = async <T>(
   url: string,
   _revalidate = 0,
-  _revalidateTags = "stumaps",
+  _revalidateTags = "stumaps"
 ): Promise<T> => {
   void _revalidate
   void _revalidateTags
@@ -193,7 +211,7 @@ export const GetRequestNormal = async <T>(
 }
 
 export const DeleteRequestAxios = async <T>(
-  url: string,
+  url: string
 ): Promise<[T | null, ApiError | null]> => {
   try {
     return [await request<T>("DELETE", url), null]

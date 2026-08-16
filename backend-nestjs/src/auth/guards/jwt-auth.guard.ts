@@ -1,10 +1,16 @@
-import { ExecutionContext, ForbiddenException, Injectable } from '@nestjs/common';
+import {
+  ExecutionContext,
+  ForbiddenException,
+  Injectable,
+} from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 
 @Injectable()
 export class JwtAuthGuard extends AuthGuard('jwt') {
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const activated = await (super.canActivate(context) as Promise<boolean> | boolean);
+    const activated = await (super.canActivate(context) as
+      | Promise<boolean>
+      | boolean);
     if (!activated) return false;
 
     const request = context.switchToHttp().getRequest();
@@ -14,6 +20,11 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     const role = String(user.role);
     const path = this.cleanPath(request.path ?? request.url ?? '');
     const method = String(request.method ?? 'GET').toUpperCase();
+    if (this.isTenantUser(user) && !this.isTenantSafePath(path)) {
+      throw new ForbiddenException(
+        'Tenant accounts can only use tenant-isolated APIs. Shared application routes are blocked.',
+      );
+    }
     if (!['Admin', 'Agent'].includes(role) && path !== '/auth/me') {
       throw new ForbiddenException('You do not have access to this area.');
     }
@@ -27,6 +38,27 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     if ((user.agentRoutePermissions ?? []).includes(permission)) return true;
 
     throw new ForbiddenException('You do not have access to this area.');
+  }
+
+  private isTenantUser(user: any) {
+    return (
+      Number.isInteger(Number(user?.tenantId)) && Number(user.tenantId) > 0
+    );
+  }
+
+  private isTenantSafePath(path: string) {
+    return (
+      path === '/auth/me' ||
+      path.startsWith('/tenant-dashboard') ||
+      path.startsWith('/tenant-subscription') ||
+      path.startsWith('/tenant-domain') ||
+      path.startsWith('/tenant-tracking') ||
+      path.startsWith('/tenant-workspace') ||
+      path.startsWith('/tenant-legacy') ||
+      path.startsWith('/tenant-outreach') ||
+      path.startsWith('/tenant-inbox') ||
+      path.startsWith('/tenant-sms-inbox')
+    );
   }
 
   private permissionForPath(path: string): string | null {
@@ -48,7 +80,8 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     }
     if (path.startsWith('/deals')) return 'deal-pipeline';
     if (path.startsWith('/mail-inbox')) return 'mail';
-    if (path.startsWith('/dashboard') || path.startsWith('/reports')) return 'dashboard';
+    if (path.startsWith('/dashboard') || path.startsWith('/reports'))
+      return 'dashboard';
     if (
       path.startsWith('/agency-settings') ||
       path.startsWith('/settings') ||
@@ -72,9 +105,17 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     ) {
       return true;
     }
-    if (path.startsWith('/brokerage/approvals') || path.startsWith('/lead-assignment-rules')) return true;
+    if (
+      path.startsWith('/brokerage/approvals') ||
+      path.startsWith('/lead-assignment-rules')
+    )
+      return true;
     if (path.startsWith('/documents')) return true;
-    if (path === '/blogs/admin' || (path.startsWith('/blogs') && method !== 'GET')) return true;
+    if (
+      path === '/blogs/admin' ||
+      (path.startsWith('/blogs') && method !== 'GET')
+    )
+      return true;
     if (path.startsWith('/users/agents') && method !== 'GET') return true;
     return false;
   }

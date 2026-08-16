@@ -23,7 +23,8 @@ export type TenantProvisioningInput = {
   firstName: string;
   lastName: string;
   email: string;
-  password: string;
+  password?: string;
+  passwordHash?: string;
   phone?: string | null;
   requestedSubdomain?: string | null;
   purchaseReference?: string | null;
@@ -68,7 +69,7 @@ export class TenantProvisioningService {
           lastName: normalized.lastName,
           email: normalized.email,
           phone: normalized.phone,
-          passwordHash: await bcrypt.hash(normalized.password, 10),
+          passwordHash: normalized.passwordHash ?? (await bcrypt.hash(normalized.password, 10)),
           role: UserRole.Agent,
           tenantRole: TenantUserRole.Owner,
           isActive: true,
@@ -172,6 +173,7 @@ export class TenantProvisioningService {
     const lastName = sanitizePlainText(input.lastName, 'Owner last name', 60, { required: true });
     const email = sanitizePlainText(input.email, 'Email', 150, { required: true }).toLowerCase();
     const password = `${input.password ?? ''}`;
+    const passwordHash = `${input.passwordHash ?? ''}`.trim() || null;
     const phoneValue = sanitizePlainText(input.phone, 'Phone', 30);
     const phone = phoneValue || null;
     const planId = Number(input.planId);
@@ -181,9 +183,10 @@ export class TenantProvisioningService {
     if (businessName.length < 2 || businessName.length > 160) throw new BadRequestException('Business name must be between 2 and 160 characters');
     if (!firstName || !lastName) throw new BadRequestException('Owner first and last name are required');
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new BadRequestException('Enter a valid email address');
-    if (password.length < 8) throw new BadRequestException('Password must be at least 8 characters');
+    if (!passwordHash && password.length < 8) throw new BadRequestException('Password must be at least 8 characters');
+    if (passwordHash && !/^\$2[aby]\$\d{2}\$/.test(passwordHash)) throw new BadRequestException('Stored password hash is invalid');
     if (!Number.isInteger(planId) || planId < 1) throw new BadRequestException('Select a valid plan');
-    return { businessName, firstName, lastName, email, password, phone, planId, requestedSubdomain, purchaseReference };
+    return { businessName, firstName, lastName, email, password, passwordHash, phone, planId, requestedSubdomain, purchaseReference };
   }
 
   private async assertUnique(manager: EntityManager, businessName: string, email: string) {
@@ -214,13 +217,11 @@ export class TenantProvisioningService {
   }
 
   private mapDashboardPermissions(permissions: string[]) {
-    const routes = new Set<string>();
+    const routes = new Set<string>(['tenant-isolated']);
     if (permissions.includes('normal-dashboard')) routes.add('dashboard');
     if (permissions.includes('property-management-dashboard')) {
       routes.add('properties');
-      routes.add('deal-pipeline');
       routes.add('lead');
-      routes.add('mail');
       routes.add('settings');
     }
     return [...routes];

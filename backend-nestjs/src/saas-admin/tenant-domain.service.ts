@@ -6,6 +6,7 @@ import { Repository } from 'typeorm';
 import { SaasAdminAuditLog } from './entities/saas-admin-audit-log.entity';
 import { SaasTenantDomain } from './entities/saas-tenant-domain.entity';
 import { SaasTenant } from './entities/saas-tenant.entity';
+import { PlatformDomainService } from '../platform-domain/platform-domain.service';
 
 @Injectable()
 export class TenantDomainService {
@@ -13,6 +14,7 @@ export class TenantDomainService {
     @InjectRepository(SaasTenant) private readonly tenants: Repository<SaasTenant>,
     @InjectRepository(SaasTenantDomain) private readonly domains: Repository<SaasTenantDomain>,
     @InjectRepository(SaasAdminAuditLog) private readonly audits: Repository<SaasAdminAuditLog>,
+    private readonly platformDomain: PlatformDomainService,
   ) {}
 
   async getForOwner(userId: number) {
@@ -134,7 +136,7 @@ export class TenantDomainService {
   }
 
   private primaryDomain() {
-    return `${process.env.PRIMARY_DOMAIN ?? 'localhost'}`.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/:\d+$/, '');
+    return this.platformDomain.getPrimaryDomain();
   }
 
   private async audit(tenantId: number, actorUserId: number, action: string, summary: string, metadata: Record<string, unknown>) {
