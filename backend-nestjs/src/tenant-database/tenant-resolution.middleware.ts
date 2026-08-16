@@ -21,8 +21,13 @@ export class TenantResolutionMiddleware implements NestMiddleware {
   ) {}
 
   async use(req: Request, _res: Response, next: NextFunction) {
-    const forwardedHost = `${req.headers['x-tenant-host'] ?? req.headers['x-forwarded-host'] ?? req.headers.host ?? ''}`;
-    const hostname = this.resolver.normalizeHostname(forwardedHost);
+    const explicitTenantHost = `${req.headers['x-tenant-host'] ?? ''}`.trim();
+    // Server-to-server/control-plane calls reach Nest through the backend's own
+    // Easypanel hostname. That hostname is infrastructure, not a tenant/custom domain.
+    // Tenant-aware frontend requests explicitly forward X-Tenant-Host.
+    if (!explicitTenantHost) return next();
+
+    const hostname = this.resolver.normalizeHostname(explicitTenantHost);
     if (this.resolver.isMainDomain(hostname)) return next();
 
     const tenant = await this.resolver.resolveHostname(hostname);

@@ -11,7 +11,7 @@ describe('TenantResolutionMiddleware', () => {
     const context: any = { run: jest.fn((_ctx: any, callback: any) => callback()) };
     const databases: any = { healthCheck: jest.fn(async () => true) };
     const middleware = new TenantResolutionMiddleware(resolver, context, databases);
-    const req: any = { headers: { host: 'blue.example.com' }, path: '/tenant-public/site' };
+    const req: any = { headers: { 'x-tenant-host': 'blue.example.com' }, path: '/tenant-public/site' };
     const next = jest.fn();
 
     await middleware.use(req, {} as any, next);
@@ -29,7 +29,7 @@ describe('TenantResolutionMiddleware', () => {
     const middleware = new TenantResolutionMiddleware(resolver, context, databases);
     const next = jest.fn();
 
-    await middleware.use({ headers: { host: 'example.com' }, path: '/' } as any, {} as any, next);
+    await middleware.use({ headers: { 'x-tenant-host': 'example.com' }, path: '/' } as any, {} as any, next);
 
     expect(next).toHaveBeenCalledTimes(1);
     expect(context.run).not.toHaveBeenCalled();
@@ -46,9 +46,9 @@ describe('TenantResolutionMiddleware', () => {
     const databases: any = { healthCheck: jest.fn(async () => true) };
     const middleware = new TenantResolutionMiddleware(resolver, context, databases);
 
-    await expect(middleware.use({ headers: { host: 'blue.example.com' }, path: '/super-admin-management/plans' } as any, {} as any, jest.fn())).rejects.toThrow('Super Admin routes');
+    await expect(middleware.use({ headers: { 'x-tenant-host': 'blue.example.com' }, path: '/super-admin-management/plans' } as any, {} as any, jest.fn())).rejects.toThrow('Super Admin routes');
 
     databases.healthCheck.mockResolvedValue(false);
-    await expect(middleware.use({ headers: { host: 'blue.example.com' }, path: '/tenant-public/site' } as any, {} as any, jest.fn())).rejects.toThrow('database is unavailable');
+    await expect(middleware.use({ headers: { 'x-tenant-host': 'blue.example.com' }, path: '/tenant-public/site' } as any, {} as any, jest.fn())).rejects.toThrow('database is unavailable');
   });
 });
