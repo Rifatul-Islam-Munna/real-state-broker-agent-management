@@ -23,17 +23,21 @@ function configuredPrimaryDomain() {
 }
 
 const fallbackPrimaryDomain = configuredPrimaryDomain()
+const fallbackTenantBaseDomain = normalizeHost(process.env.TENANT_BASE_DOMAIN ?? fallbackPrimaryDomain) || fallbackPrimaryDomain
 
-async function getPrimaryDomain() {
+async function getDomainConfig() {
   try {
     const response = await fetch(`${baseUrl}/public-saas/platform-domain`, {
       next: { revalidate: 30 },
     })
-    if (!response.ok) return fallbackPrimaryDomain
-    const payload = (await response.json()) as { primaryDomain?: string }
-    return normalizeHost(payload.primaryDomain ?? fallbackPrimaryDomain) || fallbackPrimaryDomain
+    if (!response.ok) return { primaryDomain: fallbackPrimaryDomain, tenantBaseDomain: fallbackTenantBaseDomain }
+    const payload = (await response.json()) as { primaryDomain?: string; tenantBaseDomain?: string }
+    return {
+      primaryDomain: normalizeHost(payload.primaryDomain ?? fallbackPrimaryDomain) || fallbackPrimaryDomain,
+      tenantBaseDomain: normalizeHost(payload.tenantBaseDomain ?? fallbackTenantBaseDomain) || fallbackTenantBaseDomain,
+    }
   } catch {
-    return fallbackPrimaryDomain
+    return { primaryDomain: fallbackPrimaryDomain, tenantBaseDomain: fallbackTenantBaseDomain }
   }
 }
 
@@ -41,15 +45,15 @@ function normalizeHost(value: string | null) {
   return (value ?? "").toLowerCase().split(",")[0].trim().replace(/:\d+$/, "").replace(/\.$/, "")
 }
 
-function assignedSubdomain(host: string, primaryDomain: string) {
-  if (!host || host === primaryDomain || host === `www.${primaryDomain}` || host === "127.0.0.1") return null
-  if (primaryDomain === "localhost") {
-    if (!host.endsWith(".localhost")) return null
+function assignedSubdomain(host: string, primaryDomain: string, tenantBaseDomain: string) {
+  if (!host || host === primaryDomain || host === `www.${primaryDomain}` || host === "localhost" || host === "127.0.0.1") return null
+  // Keep local tenant hosts usable even when production domain env values are loaded.
+  if (host.endsWith(".localhost")) {
     const subdomain = host.slice(0, -".localhost".length)
     return subdomain && !subdomain.includes(".") ? subdomain : null
   }
-  if (!host.endsWith(`.${primaryDomain}`)) return null
-  const subdomain = host.slice(0, -(primaryDomain.length + 1))
+  if (host === tenantBaseDomain || host === `www.${tenantBaseDomain}` || !host.endsWith(`.${tenantBaseDomain}`)) return null
+  const subdomain = host.slice(0, -(tenantBaseDomain.length + 1))
   return subdomain && !subdomain.includes(".") ? subdomain : null
 }
 
@@ -84,10 +88,10 @@ function getRequiredAgentPermission(pathname: string) {
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
-  const primaryDomain = await getPrimaryDomain()
+  const { primaryDomain, tenantBaseDomain } = await getDomainConfig()
   const host = normalizeHost(request.headers.get("x-forwarded-host") ?? request.headers.get("host"))
-  const tenantSubdomain = assignedSubdomain(host, primaryDomain)
-  const mainHost = !host || host === primaryDomain || host === `www.${primaryDomain}` || host === "127.0.0.1"
+  const tenantSubdomain = assignedSubdomain(host, primaryDomain, tenantBaseDomain)
+  const mainHost = !host || host === primaryDomain || host === `www.${primaryDomain}` || host === "localhost" || host === "127.0.0.1"
   const tenantHost = Boolean(tenantSubdomain) || !mainHost
 
   if (tenantHost) {

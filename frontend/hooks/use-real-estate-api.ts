@@ -213,6 +213,16 @@ export function useProperties(params?: QueryParams) {
   )
 }
 
+export function usePublicProperties(params?: QueryParams) {
+  return useQueryWrapper<PaginatedResult<PropertyItem>>(
+    ["public-properties", params],
+    `/public-properties${buildQuery(params)}`,
+    defaultQueryOptions,
+    0,
+    "public-properties",
+  )
+}
+
 export function useAdminHomePageSettings() {
   return useQueryWrapper<HomePageSettings>(
     ["homepage-settings"],
@@ -360,7 +370,7 @@ export function useAdminBlogPosts(params?: QueryParams) {
 export function usePublicBlogPosts(params?: QueryParams) {
   return useQueryWrapper<PaginatedResult<BlogPostSummary>>(
     ["public-blog-posts", params],
-    `/blogs${buildQuery(params)}`,
+    `/public-blogs${buildQuery(params)}`,
     defaultQueryOptions,
     0,
     "public-blog-posts",
@@ -370,7 +380,7 @@ export function usePublicBlogPosts(params?: QueryParams) {
 export function usePublicBlogPostDetail(slug?: string) {
   return useQueryWrapper<BlogPostDetail>(
     ["public-blog-post-detail", slug],
-    `/blogs/details${buildQuery({ slug })}`,
+    `/public-blogs/details${buildQuery({ slug })}`,
     {
       ...defaultQueryOptions,
       enabled: Boolean(slug),

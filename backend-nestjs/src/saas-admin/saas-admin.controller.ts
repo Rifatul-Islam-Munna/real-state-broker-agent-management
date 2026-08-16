@@ -21,6 +21,7 @@ export class SaasAdminController {
 
   @Get('tenants') listTenants() { return this.service.listTenants(); }
   @Post('tenants') createTenant(@Body() dto: any, @Request() req: any) { return this.provisioning.provisionManually(dto, req.user.userId); }
+  @Delete('tenants/:id') deleteTenant(@Param('id', ParseIntPipe) id: number, @Body('confirmation') confirmation: string, @Request() req: any) { return this.service.deleteTenant(id, confirmation, req.user.userId); }
   @Patch('tenants/:id/block') blockTenant(@Param('id', ParseIntPipe) id: number, @Body('isBlocked') isBlocked: boolean, @Request() req: any) { return this.service.setTenantBlocked(id, Boolean(isBlocked), req.user.userId); }
   @Patch('tenants/:id/extend') extendTenant(@Param('id', ParseIntPipe) id: number, @Body('days', ParseIntPipe) days: number, @Request() req: any) { return this.service.extendTenantSubscription(id, days, req.user.userId); }
 

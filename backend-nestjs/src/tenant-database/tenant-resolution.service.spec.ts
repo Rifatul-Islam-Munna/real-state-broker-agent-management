@@ -20,12 +20,18 @@ describe('TenantResolutionService', () => {
     return new TenantResolutionService(
       { findOne: jest.fn(async () => result) } as any,
       { findOne: jest.fn(async () => domainResult) } as any,
-      { getPrimaryDomain: () => `${process.env.PRIMARY_DOMAIN ?? 'localhost'}` } as any,
+      {
+        getPrimaryDomain: () => `${process.env.PRIMARY_DOMAIN ?? 'localhost'}`,
+        getTenantBaseDomain: () => `${process.env.TENANT_BASE_DOMAIN ?? process.env.PRIMARY_DOMAIN ?? 'localhost'}`,
+      } as any,
     );
   }
 
   beforeEach(() => { process.env.PRIMARY_DOMAIN = 'example.com'; });
-  afterEach(() => { delete process.env.PRIMARY_DOMAIN; });
+  afterEach(() => {
+    delete process.env.PRIMARY_DOMAIN;
+    delete process.env.TENANT_BASE_DOMAIN;
+  });
 
   it('keeps the primary domain separate and extracts one assigned subdomain', () => {
     const resolver = service(null);
@@ -42,12 +48,30 @@ describe('TenantResolutionService', () => {
     expect(resolver.isMainDomain('localhost:3000')).toBe(true);
   });
 
+  it('keeps localhost tenant development working with production domain config loaded', () => {
+    process.env.PRIMARY_DOMAIN = 'realtor.bitaradigitalit.com';
+    process.env.TENANT_BASE_DOMAIN = 'bitaradigitalit.com';
+    const resolver = service(null);
+    expect(resolver.isMainDomain('localhost:3000')).toBe(true);
+    expect(resolver.extractSubdomain('rifat.localhost:3000')).toBe('rifat');
+  });
+
   it('supports a delegated root such as test.mydomain.com', () => {
     process.env.PRIMARY_DOMAIN = 'test.mydomain.com';
     const resolver = service(null);
     expect(resolver.isMainDomain('test.mydomain.com')).toBe(true);
     expect(resolver.extractSubdomain('rifat.test.mydomain.com')).toBe('rifat');
     expect(resolver.extractSubdomain('nested.rifat.test.mydomain.com')).toBeNull();
+  });
+
+  it('supports a separate platform host and first-level tenant base domain', () => {
+    process.env.PRIMARY_DOMAIN = 'realtor.bitaradigitalit.com';
+    process.env.TENANT_BASE_DOMAIN = 'bitaradigitalit.com';
+    const resolver = service(null);
+    expect(resolver.isMainDomain('realtor.bitaradigitalit.com')).toBe(true);
+    expect(resolver.extractSubdomain('realtor.bitaradigitalit.com')).toBeNull();
+    expect(resolver.extractSubdomain('rifat.bitaradigitalit.com')).toBe('rifat');
+    expect(resolver.extractSubdomain('scharisseproparty.bitaradigitalit.com')).toBe('scharisseproparty');
   });
 
   it('resolves a ready tenant to its database registry record', async () => {

@@ -7,6 +7,7 @@ import {
   Body,
   Delete,
   Query,
+  Req,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { FileUploadService } from './file-upload.service';
@@ -38,8 +39,9 @@ export class FileUploadController {
   async uploadFile(
     @UploadedFile() file: Express.Multer.File,
     @Body('folder') folder: string,
+    @Req() request: any,
   ) {
-    return this.fileUploadService.uploadFile(file, folder);
+    return this.fileUploadService.uploadFile(file, folder, request.tenant?.id);
   }
 
   @Delete()

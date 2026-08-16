@@ -41,6 +41,11 @@ export class PlatformDomainService implements OnModuleInit {
     return this.primaryDomain || 'localhost';
   }
 
+  getTenantBaseDomain() {
+    const configured = this.normalize(this.config.get<string>('TENANT_BASE_DOMAIN') ?? '');
+    return configured || this.getPrimaryDomain();
+  }
+
   getMainFrontendUrl(path = '') {
     return this.frontendUrl(path);
   }
@@ -55,6 +60,7 @@ export class PlatformDomainService implements OnModuleInit {
     if (row?.primaryDomain) this.primaryDomain = this.normalize(row.primaryDomain);
     return {
       primaryDomain: this.getPrimaryDomain(),
+      tenantBaseDomain: this.getTenantBaseDomain(),
       frontendOrigin: this.frontendUrl(),
       updatedAt: row?.updatedAt ?? null,
       updatedByUserId: row?.updatedByUserId ?? null,
@@ -77,6 +83,7 @@ export class PlatformDomainService implements OnModuleInit {
     );
     return {
       primaryDomain,
+      tenantBaseDomain: this.getTenantBaseDomain(),
       frontendOrigin: this.frontendUrl(),
       updatedAt: saved.updatedAt,
       updatedByUserId: saved.updatedByUserId,
@@ -223,14 +230,16 @@ export class PlatformDomainService implements OnModuleInit {
     );
     const url = new URL(configured);
     const primary = this.getPrimaryDomain();
-    if (primary !== 'localhost' && this.config.get<string>('NODE_ENV') === 'production') {
+    const tenantBase = this.getTenantBaseDomain();
+    const targetDomain = subdomain ? tenantBase : primary;
+    if (targetDomain !== 'localhost' && this.config.get<string>('NODE_ENV') === 'production') {
       url.protocol = 'https:';
       url.port = '';
     }
     url.hostname = subdomain
-      ? primary === 'localhost'
+      ? tenantBase === 'localhost'
         ? `${subdomain}.localhost`
-        : `${subdomain}.${primary}`
+        : `${subdomain}.${tenantBase}`
       : primary;
     url.pathname = path.startsWith('/') ? path : `/${path}`;
     url.search = '';

@@ -9,7 +9,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { AppIcon } from "@/components/ui/app-icon"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { useProperties } from "@/hooks/use-real-estate-api"
+import { usePublicProperties } from "@/hooks/use-real-estate-api"
 import { PropertySearchCard } from "./property-search-card"
 import {
   parsePositiveInteger,
@@ -38,7 +38,7 @@ export function MainContentAreaSplitViewSection({ filterOptions }: MainContentAr
   const [propertyTypeValue, setPropertyTypeValue] = useState<"" | "Residential" | "Commercial">(currentPropertyType)
   const [listingTypeValue, setListingTypeValue] = useState<"" | "ForSale" | "ForRent">(currentListingType)
 
-  const propertiesQuery = useProperties({
+  const propertiesQuery = usePublicProperties({
     listingType: currentListingType || undefined,
     page: currentPage,
     pageSize: PROPERTY_PAGE_SIZE,

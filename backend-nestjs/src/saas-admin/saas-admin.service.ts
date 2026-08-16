@@ -61,6 +61,32 @@ export class SaasAdminService {
     return this.tenantRepo.find({ relations: ['plan'], order: { createdAt: 'DESC' } });
   }
 
+  async deleteTenant(id: number, confirmation: string, actorUserId?: number) {
+    const tenant = await this.getTenant(id);
+    const confirmedName = sanitizePlainText(confirmation, 'Tenant confirmation', 160, { required: true });
+    if (confirmedName.toLowerCase() !== tenant.businessName.trim().toLowerCase()) {
+      throw new BadRequestException('Type the tenant business name exactly to confirm deletion');
+    }
+    if (tenant.provisioningStatus === 'deleting' || tenant.provisioningStatus === 'deleting-processing') {
+      return { message: 'Tenant deletion is already queued' };
+    }
+
+    tenant.isBlocked = true;
+    tenant.isActive = false;
+    tenant.provisioningStatus = 'deleting';
+    tenant.databaseStatus = tenant.databaseName ? 'deleting' : 'deleted';
+    await this.tenantRepo.save(tenant);
+    await this.audit(
+      'tenant.delete.requested',
+      'tenant',
+      id,
+      actorUserId,
+      `Queued permanent deletion for tenant ${tenant.businessName}`,
+      { subdomain: tenant.subdomain, databaseName: tenant.databaseName },
+    );
+    return { message: 'Tenant deletion queued. Background cleanup has started.' };
+  }
+
   async setTenantBlocked(id: number, isBlocked: boolean, actorUserId?: number) {
     const tenant = await this.getTenant(id);
     tenant.isBlocked = isBlocked;

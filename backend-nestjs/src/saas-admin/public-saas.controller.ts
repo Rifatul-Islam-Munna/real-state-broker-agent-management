@@ -19,7 +19,10 @@ export class PublicSaasController {
 
   @Get('platform-domain')
   getPlatformDomain() {
-    return { primaryDomain: this.platformDomain.getPrimaryDomain() };
+    return {
+      primaryDomain: this.platformDomain.getPrimaryDomain(),
+      tenantBaseDomain: this.platformDomain.getTenantBaseDomain(),
+    };
   }
 
   @Post('checkout-session')

@@ -125,6 +125,9 @@ export class TenantDatabaseService
       await admin.query(
         `DROP DATABASE IF EXISTS ${this.quoteIdentifier(databaseName)}`,
       );
+      await admin.query(
+        `DROP ROLE IF EXISTS ${this.quoteIdentifier(this.tenantRoleName(databaseName))}`,
+      );
     } finally {
       await admin.end();
     }

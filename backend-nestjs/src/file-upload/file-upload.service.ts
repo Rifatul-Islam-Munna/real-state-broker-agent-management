@@ -54,12 +54,16 @@ export class FileUploadService implements OnModuleInit {
     }
   }
 
-  async uploadFile(file: Express.Multer.File, folder: string = 'general') {
+  async uploadFile(file: Express.Multer.File, folder: string = 'general', tenantId?: number) {
     if (!file?.buffer?.length) {
       throw new BadRequestException('No file was provided.');
     }
     folder = (folder || 'general').trim() || 'general';
-    const fileName = `${folder}/${Date.now()}-${file.originalname}`;
+    const cleanFolder = folder.replace(/[^a-zA-Z0-9/_-]+/g, '-').replace(/^\/+|\/+$/g, '') || 'general';
+    const scopedFolder = Number.isInteger(tenantId) && Number(tenantId) > 0
+      ? `tenants/${Number(tenantId)}/${cleanFolder}`
+      : cleanFolder;
+    const fileName = `${scopedFolder}/${Date.now()}-${file.originalname}`;
     try {
       await this.minioClient.putObject(
         this.bucketName,
@@ -93,5 +97,41 @@ export class FileUploadService implements OnModuleInit {
     } catch (err) {
       throw new ServiceUnavailableException('File upload is not configured or unavailable.');
     }
+  }
+
+  objectNameFromReference(value: unknown) {
+    const raw = `${value ?? ''}`.trim();
+    if (!raw || !raw.includes('://')) return null;
+    try {
+      const url = new URL(raw);
+      const marker = `/${this.bucketName}/`;
+      const index = url.pathname.indexOf(marker);
+      if (index < 0) return null;
+      return decodeURIComponent(url.pathname.slice(index + marker.length));
+    } catch {
+      return null;
+    }
+  }
+
+  async deleteTenantFiles(tenantId: number, legacyObjectNames: string[] = []) {
+    const prefix = `tenants/${tenantId}/`;
+    const names = new Set<string>();
+    await new Promise<void>((resolve, reject) => {
+      const stream = this.minioClient.listObjectsV2(this.bucketName, prefix, true);
+      stream.on('data', (item) => { if (item.name) names.add(item.name); });
+      stream.on('error', reject);
+      stream.on('end', resolve);
+    });
+    for (const name of legacyObjectNames) {
+      const clean = `${name ?? ''}`.trim();
+      if (clean) names.add(clean);
+    }
+    const all = [...names];
+    for (let index = 0; index < all.length; index += 50) {
+      const batch = all.slice(index, index + 50);
+      if (batch.length) await this.minioClient.removeObjects(this.bucketName, batch);
+      if (index + 50 < all.length) await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    return { deleted: all.length };
   }
 }

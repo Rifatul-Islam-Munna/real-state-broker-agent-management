@@ -18,6 +18,7 @@ import {
   createPlanAction,
   createTenantAction,
   deletePlanAction,
+  deleteTenantAction,
   extendTenantSubscriptionAction,
   setPlanStatusAction,
   setTenantBlockedAction,
@@ -74,6 +75,22 @@ export function ExtendTenantDialog({ tenant }: { tenant: Tenant }) {
     </Dialog>
   )
 }
+export function DeleteTenantDialog({ tenant }: { tenant: Tenant }) {
+  return (
+    <Dialog>
+      <DialogTrigger render={<Button size="sm" variant="ghost" className="text-red-700 hover:bg-red-50 hover:text-red-800" />}><Trash2 />Delete</DialogTrigger>
+      <DialogContent className="max-w-md">
+        <DialogHeader><DialogTitle>Delete {tenant.businessName}?</DialogTitle><DialogDescription>This permanently deletes the tenant database, tenant users, domain records and workspace. Type the business name exactly to confirm.</DialogDescription></DialogHeader>
+        <form action={deleteTenantAction} className="grid gap-4">
+          <input name="id" type="hidden" value={tenant.id} />
+          <label className={fieldLabel}>Confirm business name<Input name="confirmation" placeholder={tenant.businessName} required /></label>
+          <DialogFooter><Button type="submit" variant="destructive">Permanently delete tenant</Button></DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 export function TenantBlockDialog({ tenant }: { tenant: Tenant }) {
   const nextBlocked = !tenant.isBlocked
   return (

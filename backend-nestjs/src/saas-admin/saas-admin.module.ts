@@ -19,9 +19,14 @@ import { StripeCheckoutRecord } from './entities/stripe-checkout-record.entity';
 import { StripeCheckoutService } from './stripe-checkout.service';
 import { TenantAccountController } from './tenant-account.controller';
 import { TenantAccountService } from './tenant-account.service';
+import { FileUploadModule } from '../file-upload/file-upload.module';
+import { TenantDeletionWorkerService } from './tenant-deletion-worker.service';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([SubscriptionPlan, SaasTenant, SaasAdminAuditLog, SaasTenantDomain, StripeCheckoutRecord, User])],
+  imports: [
+    TypeOrmModule.forFeature([SubscriptionPlan, SaasTenant, SaasAdminAuditLog, SaasTenantDomain, StripeCheckoutRecord, User]),
+    FileUploadModule,
+  ],
   controllers: [SaasAdminController, PublicSaasController, TenantDomainController, TenantSubscriptionController, TenantTrackingController, TenantAccountController],
   providers: [
     SaasAdminService,
@@ -31,6 +36,7 @@ import { TenantAccountService } from './tenant-account.service';
     TenantTrackingService,
     StripeCheckoutService,
     TenantAccountService,
+    TenantDeletionWorkerService,
   ],
   exports: [SaasAdminService],
 })

@@ -126,6 +126,17 @@ export async function deletePlanAction(formData: FormData) {
   revalidatePath("/super-admin/activity")
 }
 
+export async function deleteTenantAction(formData: FormData) {
+  const id = Number(formData.get("id"))
+  await request(`/super-admin-management/tenants/${id}`, {
+    method: "DELETE",
+    body: JSON.stringify({ confirmation: formData.get("confirmation") }),
+  })
+  revalidatePath("/super-admin/tenants")
+  revalidatePath("/super-admin")
+  revalidatePath("/super-admin/activity")
+}
+
 export async function setTenantBlockedAction(formData: FormData) {
   const id = Number(formData.get("id"))
   const isBlocked = formData.get("isBlocked") === "true"

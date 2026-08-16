@@ -41,8 +41,13 @@ async function bootstrap() {
       try {
         const host = new URL(origin).hostname.toLowerCase();
         const primary = platformDomain.getPrimaryDomain();
-        const tenantPrefix = host.endsWith(`.${primary}`) ? host.slice(0, -(primary.length + 1)) : '';
-        if (host === primary || host === `www.${primary}` || (tenantPrefix && !tenantPrefix.includes('.'))) {
+        const tenantBase = platformDomain.getTenantBaseDomain();
+        const tenantPrefix = host.endsWith(`.${tenantBase}`) ? host.slice(0, -(tenantBase.length + 1)) : '';
+        if (
+          host === primary ||
+          host === `www.${primary}` ||
+          (host !== primary && tenantPrefix && !tenantPrefix.includes('.'))
+        ) {
           return callback(null, true);
         }
       } catch {

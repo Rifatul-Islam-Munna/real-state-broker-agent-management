@@ -1,14 +1,40 @@
-import { Body, Controller, Get, NotFoundException, Post, Request } from '@nestjs/common';
+﻿import { Body, Controller, Get, NotFoundException, Post, Query, Request } from '@nestjs/common';
 import { TenantDatabaseService } from './tenant-database.service';
 import { TenantPublicInquiryService } from './tenant-public-inquiry.service';
+import { TenantPublicContentService } from './tenant-public-content.service';
 
 @Controller('tenant-public')
 export class TenantPublicController {
   constructor(
     private readonly databases: TenantDatabaseService,
     private readonly inquiries: TenantPublicInquiryService,
+    private readonly content: TenantPublicContentService,
   ) {}
 
+
+  @Get('properties')
+  properties(@Request() req: any, @Query() query: Record<string, unknown>) {
+    if (!req.tenant?.databaseName) throw new NotFoundException('Tenant hostname is required');
+    return this.content.listProperties(req.tenant, query);
+  }
+
+  @Get('properties/filters')
+  propertyFilters(@Request() req: any) {
+    if (!req.tenant?.databaseName) throw new NotFoundException('Tenant hostname is required');
+    return this.content.propertyFilters(req.tenant);
+  }
+
+  @Get('blogs')
+  blogs(@Request() req: any, @Query() query: Record<string, unknown>) {
+    if (!req.tenant?.databaseName) throw new NotFoundException('Tenant hostname is required');
+    return this.content.listBlogs(req.tenant, query);
+  }
+
+  @Get('blogs/details')
+  blogDetails(@Request() req: any, @Query('slug') slug: string) {
+    if (!req.tenant?.databaseName) throw new NotFoundException('Tenant hostname is required');
+    return this.content.blogDetails(req.tenant, slug);
+  }
   @Post('property-inquiries')
   propertyInquiry(@Request() req: any, @Body() body: any) {
     if (!req.tenant?.databaseName) throw new NotFoundException('Tenant hostname is required');
@@ -45,3 +71,4 @@ export class TenantPublicController {
     });
   }
 }
+

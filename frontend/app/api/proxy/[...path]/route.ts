@@ -103,6 +103,15 @@ function tenantPath(path: string[]) {
   return `tenant-legacy/resource/${fallbackResource || "workspace"}`
 }
 
+function publicReadPath(path: string[], tenantHost: string | null) {
+  const joined = path.join("/")
+  if (joined === "public-properties") return tenantHost ? "tenant-public/properties" : "properties"
+  if (joined === "public-properties/filters") return tenantHost ? "tenant-public/properties/filters" : "properties/filters"
+  if (joined === "public-blogs") return tenantHost ? "tenant-public/blogs" : "blogs"
+  if (joined === "public-blogs/details") return tenantHost ? "tenant-public/blogs/details" : "blogs/details"
+  return null
+}
+
 async function forward(request: NextRequest, context: ProxyRouteContext) {
   const { path } = await context.params
   const cookieStore = await cookies()
@@ -125,7 +134,8 @@ async function forward(request: NextRequest, context: ProxyRouteContext) {
       : `${tenantHost}${forwardedPort}`
     : null
   const tenantOrigin = originHost ? `${forwardedProto}://${originHost}` : null
-  const backendPath = tenantHost ? tenantPath(path) : path.join("/")
+  const explicitPublicPath = request.method === "GET" ? publicReadPath(path, tenantHost) : null
+  const backendPath = explicitPublicPath ?? (tenantHost ? tenantPath(path) : path.join("/"))
   const targetUrl = `${baseUrl}/${backendPath}${request.nextUrl.search}`
   const contentType = request.headers.get("content-type")
   const idempotencyKey = request.headers.get("idempotency-key")

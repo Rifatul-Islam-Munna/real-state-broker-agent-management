@@ -1,3 +1,4 @@
+import { headers } from "next/headers"
 import { NextResponse } from "next/server"
 
 const baseUrl = process.env.BASE_URL ?? "http://localhost:4000/api"
@@ -17,6 +18,8 @@ async function forwardResponse(response: Response) {
 }
 
 export async function POST(request: Request) {
+  const incomingHeaders = await headers()
+  const tenantHost = incomingHeaders.get("x-tenant-host") ?? incomingHeaders.get("x-forwarded-host") ?? incomingHeaders.get("host")
   const formData = await request.formData()
   const file = formData.get("file") ?? formData.get("File")
   const folder = formData.get("folder") ?? formData.get("Folder")
@@ -32,6 +35,7 @@ export async function POST(request: Request) {
   const response = await fetch(`${baseUrl}/upload`, {
     body: payload,
     cache: "no-store",
+    headers: tenantHost ? { "x-tenant-host": tenantHost } : undefined,
     method: "POST",
   })
 

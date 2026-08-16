@@ -27,6 +27,10 @@ export class TenantResolutionService {
     return this.platformDomain.getPrimaryDomain();
   }
 
+  getTenantBaseDomain() {
+    return this.platformDomain.getTenantBaseDomain();
+  }
+
   normalizeHostname(value: string | undefined) {
     return `${value ?? ''}`.trim().toLowerCase().split(',')[0].trim().replace(/^https?:\/\//, '').replace(/:\d+$/, '').replace(/\.$/, '');
   }
@@ -34,21 +38,23 @@ export class TenantResolutionService {
   extractSubdomain(hostname: string) {
     const host = this.normalizeHostname(hostname);
     const primary = this.getPrimaryDomain();
-    if (!host || host === primary || host === `www.${primary}` || host === '127.0.0.1') return null;
-    if (primary === 'localhost') {
-      if (!host.endsWith('.localhost')) return null;
+    const tenantBase = this.getTenantBaseDomain();
+    if (!host || host === primary || host === `www.${primary}` || host === 'localhost' || host === '127.0.0.1') return null;
+    // Local tenant development must keep working even when production domain
+    // values are present in the environment (for example rifat.localhost:3000).
+    if (host.endsWith('.localhost')) {
       const subdomain = host.slice(0, -'.localhost'.length);
       return subdomain && !subdomain.includes('.') ? subdomain : null;
     }
-    if (!host.endsWith(`.${primary}`)) return null;
-    const subdomain = host.slice(0, -(primary.length + 1));
+    if (host === tenantBase || host === `www.${tenantBase}` || !host.endsWith(`.${tenantBase}`)) return null;
+    const subdomain = host.slice(0, -(tenantBase.length + 1));
     return subdomain && !subdomain.includes('.') ? subdomain : null;
   }
 
   isMainDomain(hostname: string) {
     const host = this.normalizeHostname(hostname);
     const primary = this.getPrimaryDomain();
-    return host === primary || host === `www.${primary}` || host === '127.0.0.1';
+    return host === primary || host === `www.${primary}` || host === 'localhost' || host === '127.0.0.1';
   }
 
   async resolveAssignedSubdomain(hostname: string): Promise<ResolvedTenant | null> {
