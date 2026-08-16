@@ -5,7 +5,24 @@ import { getDefaultAgentRoute, hasAgentRoutePermission } from "@/lib/agent-route
 import { canOpenDashboardRoute, getDashboardHomePath } from "@/lib/dashboard-routes"
 
 const baseUrl = process.env.BASE_URL ?? "http://localhost:4000/api"
-const fallbackPrimaryDomain = (process.env.PRIMARY_DOMAIN ?? "localhost").toLowerCase().replace(/^https?:\/\//, "").replace(/:\d+$/, "")
+
+function configuredPrimaryDomain() {
+  const explicit = process.env.PRIMARY_DOMAIN?.trim()
+  if (explicit) return explicit.toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "").replace(/:\d+$/, "")
+
+  const frontendUrl = process.env.FRONTEND_URL?.trim()
+  if (frontendUrl) {
+    try {
+      return new URL(frontendUrl).hostname.toLowerCase().replace(/\.$/, "")
+    } catch {
+      // Fall through to localhost for local development.
+    }
+  }
+
+  return "localhost"
+}
+
+const fallbackPrimaryDomain = configuredPrimaryDomain()
 
 async function getPrimaryDomain() {
   try {
