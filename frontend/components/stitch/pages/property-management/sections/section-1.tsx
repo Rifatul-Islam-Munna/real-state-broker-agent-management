@@ -91,7 +91,7 @@ function getStatusLabel(listing: PropertyManagementListing) {
   if (listing.status === "PendingApproval") return "Pending Approval"
   if (listing.status === "UnderOffer") return "Under Contract"
   if (listing.status === "Open") return "Active"
-  return listing.status.replace(/([A-Z])/g, " $1").trim()
+  return `${listing.status ?? "Draft"}`.replace(/([A-Z])/g, " $1").trim()
 }
 
 export function Section1Section({

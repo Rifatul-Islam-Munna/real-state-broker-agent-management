@@ -1,6 +1,7 @@
 import {
   extractConfiguredLinkedPageLinks,
   extractLinkedLeadTextFromUrl,
+  loadConfiguredLinkedPage,
 } from './linked-page-loader';
 import { normalizeLinkedPageConfig } from './linked-page-config';
 
@@ -35,5 +36,31 @@ describe('linked page loader', () => {
     expect(text).toContain('Phone: 754-223-9582');
     expect(text).toContain('Control Hash: abc123');
     expect(text).toContain('Inquiry id: 9107');
+  });
+
+  test('uses current email button instead of saved sample button', async () => {
+    const result = await loadConfiguredLinkedPage(
+      {
+        fromAddress: 'new-lead@convo.zillow.com',
+        subject: 'Jean is requesting an application',
+        htmlBody:
+          '<a href="https://www.zillow.com/rental-manager/inquiry-contact?name=Jean%20Melo&phone=954-555-0102">Send application</a>',
+      },
+      {
+        enabled: true,
+        allowedHosts: ['zillow.com', '*.zillow.com'],
+        urlIncludes: ['inquiry-contact'],
+        linkTextIncludes: [],
+        maxLinks: 3,
+        openPage: false,
+        autoFillContactFields: true,
+        selectedUrl:
+          'https://www.zillow.com/rental-manager/inquiry-contact?name=Danish%20Liaqat&phone=419-9734-11',
+      },
+    );
+
+    expect(result?.text).toContain('Name: Jean Melo');
+    expect(result?.text).toContain('Phone: 954-555-0102');
+    expect(result?.text).not.toContain('Danish Liaqat');
   });
 });

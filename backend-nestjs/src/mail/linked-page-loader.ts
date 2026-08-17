@@ -37,9 +37,6 @@ export async function loadConfiguredLinkedPage(
   const candidates = extractConfiguredLinkedPageLinks(input, config)
     .sort((left, right) => scoreLink(right, config) - scoreLink(left, config))
     .slice(0, config.maxLinks);
-  if (config.selectedUrl) {
-    candidates.unshift(...expandRedirectTargets([{ url: config.selectedUrl, text: 'Selected link' }]));
-  }
 
   for (const candidate of candidates) {
     const urlFields = linkedCandidateHostAllowed(candidate.url, config)

@@ -254,20 +254,49 @@ export class TenantMailInboxService {
     return this.databases.withTenantClient(
       this.databaseName(tenant),
       async (client) => {
-        const result = await client.query(
-          `DELETE FROM tenant_outreach_job
-           WHERE id = $1 AND channel = 'Email'
-           RETURNING id`,
-          [id],
-        );
-        if (!result.rowCount) {
-          throw new NotFoundException('Tenant mail item was not found.');
+        await client.query('BEGIN');
+        try {
+          const current = await client.query(
+            `SELECT id, direction, provider, provider_message_id
+             FROM tenant_outreach_job
+             WHERE id = $1 AND channel = 'Email'
+             FOR UPDATE`,
+            [id],
+          );
+          if (!current.rowCount) {
+            throw new NotFoundException('Tenant mail item was not found.');
+          }
+          const row = current.rows[0];
+          const provider = `${row.provider ?? ''}`.trim();
+          const providerMessageId = `${row.provider_message_id ?? ''}`.trim();
+          if (
+            row.direction === 'Incoming' &&
+            providerMessageId &&
+            /^(gmail|imap):/i.test(provider)
+          ) {
+            await client.query(
+              `INSERT INTO tenant_mail_deletion_tombstone(provider, provider_message_id)
+               VALUES ($1, $2)
+               ON CONFLICT (provider, provider_message_id)
+               DO UPDATE SET deleted_at = now()`,
+              [provider, providerMessageId],
+            );
+          }
+          await client.query(
+            `DELETE FROM tenant_outreach_job
+             WHERE id = $1 AND channel = 'Email'`,
+            [id],
+          );
+          await client.query('COMMIT');
+          return {
+            id: Number(row.id),
+            deleted: true,
+            providerMessageDeleted: false,
+          };
+        } catch (error) {
+          await client.query('ROLLBACK');
+          throw error;
         }
-        return {
-          id: Number(result.rows[0].id),
-          deleted: true,
-          providerMessageDeleted: false,
-        };
       },
     );
   }
@@ -276,6 +305,9 @@ export class TenantMailInboxService {
     if (!Number.isInteger(mailInboxId) || mailInboxId <= 0) {
       throw new BadRequestException('Mail item id is required.');
     }
+    const templateLead =
+      await this.inboxSync.convertStoredEmailWithTemplate(tenant, mailInboxId);
+    if (templateLead) return this.mapLead(templateLead);
     return this.databases.withTenantClient(
       this.databaseName(tenant),
       async (client) => {
@@ -377,6 +409,8 @@ export class TenantMailInboxService {
       isStarred: payload.isStarred === true,
       extractionDetails: {
         ...(payload.extractionDetails ?? {}),
+        leadCreationStatus: payload.leadCreationStatus ?? '',
+        skipReason: payload.leadCreationSkipReason ?? '',
         queueStatus: internalStatus,
         provider: row.provider ?? '',
         providerMessageId: row.provider_message_id ?? '',

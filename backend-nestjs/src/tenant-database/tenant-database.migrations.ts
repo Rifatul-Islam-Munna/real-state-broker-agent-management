@@ -300,4 +300,18 @@ export const TENANT_DATABASE_MIGRATIONS: TenantDatabaseMigration[] = [
       )`,
     ],
   },
+  {
+    version: 6,
+    name: 'tenant_mail_deletion_tombstones',
+    statements: [
+      `CREATE TABLE IF NOT EXISTS tenant_mail_deletion_tombstone (
+        provider varchar(100) NOT NULL,
+        provider_message_id varchar(240) NOT NULL,
+        deleted_at timestamptz NOT NULL DEFAULT now(),
+        PRIMARY KEY (provider, provider_message_id)
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_tenant_mail_deletion_tombstone_deleted
+        ON tenant_mail_deletion_tombstone(deleted_at DESC)`,
+    ],
+  },
 ];

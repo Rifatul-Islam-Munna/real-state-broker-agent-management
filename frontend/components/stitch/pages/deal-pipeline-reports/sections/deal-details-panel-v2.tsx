@@ -122,7 +122,7 @@ export function DealDetailsPanel({
               <DetailItem label="Linked lead" value={linkedLeadLabel} />
               <DetailItem
                 label="Commission status"
-                value={deal.commissionStatus.replace(/([A-Z])/g, " $1").trim()}
+                value={`${deal.commissionStatus ?? "Pending"}`.replace(/([A-Z])/g, " $1").trim()}
               />
             </div>
           </CardContent>

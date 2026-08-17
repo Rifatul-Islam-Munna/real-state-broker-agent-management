@@ -19,6 +19,17 @@ import { SaasTenant } from '../saas-admin/entities/saas-tenant.entity';
 import { TenantDatabaseService } from '../tenant-database/tenant-database.service';
 import { TenantWorkspaceSettingsService } from './tenant-workspace-settings.service';
 
+type InboxSyncStats = {
+  imported: number;
+  matched: number;
+  created: number;
+  skipped: number;
+};
+
+type InboxStoreResult = InboxSyncStats & {
+  reason: string;
+};
+
 @Injectable()
 export class TenantInboxSyncService {
   private readonly logger = new Logger(TenantInboxSyncService.name);
@@ -101,20 +112,21 @@ export class TenantInboxSyncService {
       if (!due) return { imported: 0, skipped: true, message: 'Tenant inbox sync is not due.' };
     }
     const authType = this.text(config.authType).toLowerCase();
-    if (authType === 'gmail-oauth' || config.gmailRefreshToken) {
-      await this.syncGmail(databaseName, config, tenant);
-    } else {
-      await this.syncImap(databaseName, config);
-    }
+    const stats = authType === 'gmail-oauth' || config.gmailRefreshToken
+      ? await this.syncGmail(databaseName, config, tenant)
+      : await this.syncImap(databaseName, config);
     const deletedLocalMessages = await this.cleanupLocalInbox(
       databaseName,
       this.retentionDays(config.localInboxRetentionDays),
     );
     return {
-      imported: 0,
-      skipped: false,
+      ...(await this.getStatus(tenant)),
+      imported: stats.imported,
+      matched: stats.matched,
+      created: stats.created,
+      skipped: stats.skipped,
       deletedLocalMessages,
-      message: 'Tenant inbox sync completed.',
+      message: `Mailbox sync completed: ${stats.imported} imported, ${stats.created} leads created, ${stats.matched} matched, ${stats.skipped} skipped.`,
     };
   }
 
@@ -144,6 +156,13 @@ export class TenantInboxSyncService {
         lastCreatedLeadCount: Number(row.created_count) || 0,
         lastSkippedCount: Number(row.skipped_count) || 0,
         lastError: row.last_error ?? null,
+        statusMessage: row.last_error
+          ? `Sync error: ${row.last_error}`
+          : row.last_completed_at
+            ? `${Number(row.imported_count) || 0} imported · ${Number(row.created_count) || 0} leads created · ${Number(row.matched_count) || 0} matched · ${Number(row.skipped_count) || 0} skipped`
+            : config?.enableInboxSync === true
+              ? 'Ready to sync.'
+              : 'Mailbox sync is disabled.',
       };
     });
   }
@@ -213,6 +232,7 @@ export class TenantInboxSyncService {
     tenant: SaasTenant,
   ) {
     const providerKey = `gmail:${this.text(config.gmailEmail, config.username)}`;
+    const stats = this.emptyStats();
     await this.markStarted(databaseName, providerKey);
     try {
       const accessToken = await this.gmailAccessToken(databaseName, config, tenant);
@@ -238,7 +258,7 @@ export class TenantInboxSyncService {
         const sender = this.extractAddress(headers.from);
         const recipient = this.extractAddress(headers.to);
         const bodies = this.gmailBodies(message.payload);
-        await this.storeInbound(databaseName, {
+        this.addStats(stats, await this.storeInbound(databaseName, {
           channel: 'email',
           providerKey,
           providerMessageId: id,
@@ -259,9 +279,11 @@ export class TenantInboxSyncService {
             headers,
             htmlBody: bodies.html,
           },
-        });
+        }));
       }
-      await this.markCompleted(databaseName, providerKey, selectedMessages[0]?.id ?? null);
+      await this.markCompleted(databaseName, providerKey, selectedMessages[0]?.id ?? null, stats);
+      this.logger.log(`Mailbox sync ${databaseName}: ${JSON.stringify(stats)}`);
+      return stats;
     } catch (error) {
       await this.markFailed(databaseName, providerKey, error);
       throw error;
@@ -342,6 +364,7 @@ export class TenantInboxSyncService {
 
   private async syncImap(databaseName: string, config: any) {
     const providerKey = `imap:${this.text(config.mailboxTag, config.imapUsername ?? config.username)}`;
+    const stats = this.emptyStats();
     await this.markStarted(databaseName, providerKey);
     let connection: any;
     try {
@@ -384,7 +407,7 @@ export class TenantInboxSyncService {
             const recipient = this.text(parsed.to?.value?.[0]?.address);
             const uidValidity = `${connection.mailbox?.uidValidity ?? '0'}`;
             const mailboxTag = this.matchImapTag(item.flags, syncTags) || 'imap';
-            await this.storeInbound(databaseName, {
+            this.addStats(stats, await this.storeInbound(databaseName, {
               channel: 'email',
               providerKey,
               providerMessageId: `${uidValidity}:${item.uid}`,
@@ -403,14 +426,17 @@ export class TenantInboxSyncService {
                 uidValidity,
                 htmlBody: this.text(parsed.html),
               },
-            });
+            }));
           }
         }
         await this.markCompleted(
           databaseName,
           providerKey,
           selected.length ? `${selected[selected.length - 1]}` : null,
+          stats,
         );
+        this.logger.log(`Mailbox sync ${databaseName}: ${JSON.stringify(stats)}`);
+        return stats;
       } finally {
         lock.release();
       }
@@ -425,6 +451,7 @@ export class TenantInboxSyncService {
   private async syncSms(databaseName: string, config: any) {
     const provider = this.text(config.providerName, 'Twilio').toLowerCase();
     const providerKey = `${provider}:${this.text(config.fromNumber)}`;
+    const stats = this.emptyStats();
     await this.markStarted(databaseName, providerKey);
     try {
       if (provider !== 'twilio') {
@@ -452,7 +479,7 @@ export class TenantInboxSyncService {
       const messages = Array.isArray(result.messages) ? result.messages : [];
       for (const message of messages.reverse()) {
         if (!`${message.direction ?? ''}`.toLowerCase().includes('inbound')) continue;
-        await this.storeInbound(databaseName, {
+        this.addStats(stats, await this.storeInbound(databaseName, {
           channel: 'sms',
           providerKey,
           providerMessageId: this.text(message.sid),
@@ -462,9 +489,10 @@ export class TenantInboxSyncService {
           body: this.text(message.body),
           receivedAt: message.date_sent ? new Date(message.date_sent) : new Date(),
           payload: message,
-        });
+        }));
       }
-      await this.markCompleted(databaseName, providerKey, messages[0]?.sid ?? null);
+      await this.markCompleted(databaseName, providerKey, messages[0]?.sid ?? null, stats);
+      return stats;
     } catch (error) {
       await this.markFailed(databaseName, providerKey, error);
       throw error;
@@ -488,17 +516,39 @@ export class TenantInboxSyncService {
       leadTemplateTags?: string[];
       payload: any;
     },
-  ) {
-    if (!input.providerMessageId || !input.sender) return;
-    await this.databases.withTenantClient(databaseName, async (client) => {
+  ): Promise<InboxStoreResult> {
+    if (!input.providerMessageId || !input.sender) {
+      return { ...this.emptyStats(), skipped: 1, reason: 'Missing provider message id or sender.' };
+    }
+    return this.databases.withTenantClient(databaseName, async (client) => {
       await client.query('BEGIN');
       try {
+        const deleted = await client.query(
+          `SELECT 1
+           FROM tenant_mail_deletion_tombstone
+           WHERE provider = $1 AND provider_message_id = $2
+           LIMIT 1`,
+          [input.providerKey, input.providerMessageId],
+        );
+        if (deleted.rowCount) {
+          await client.query('COMMIT');
+          const reason = 'Message was deleted locally; sync reimport blocked.';
+          this.logger.log(`Mailbox message tombstoned ${JSON.stringify({
+            databaseName,
+            providerMessageId: input.providerMessageId,
+          })}`);
+          return { ...this.emptyStats(), skipped: 1, reason };
+        }
         let lead = await this.findLead(client, input.channel, input.sender);
         let parserResult: any = null;
+        let created = false;
         if (!lead && input.channel === 'email' && input.autoCreateLeads === true) {
           const parsed = await this.createOrMatchLeadFromTemplate(client, input);
           lead = parsed?.lead ?? null;
           parserResult = parsed?.result ?? null;
+          created = parsed?.created === true;
+        } else if (!lead && input.channel === 'email') {
+          parserResult = this.parserFailure('Automatic lead creation is disabled.');
         }
         const channel = input.channel === 'email' ? 'Email' : 'SMS';
         const key = createHash('sha256')
@@ -508,15 +558,10 @@ export class TenantInboxSyncService {
           ...(input.payload ?? {}),
           mailbox: this.text(input.mailboxTag),
           lead,
+          leadCreationStatus: lead ? (created ? 'Created' : 'Matched') : 'Skipped',
+          leadCreationSkipReason: lead ? '' : this.parserSkipReason(parserResult),
           ...(parserResult
-            ? {
-                leadCollection: {
-                  templateId: parserResult.templateId,
-                  templateName: parserResult.templateName,
-                  confidence: parserResult.confidence,
-                  extractedFields: parserResult.extractedFields,
-                },
-              }
+            ? this.parserPayload(parserResult)
             : {}),
         };
         const inserted = await client.query(
@@ -597,11 +642,116 @@ export class TenantInboxSyncService {
           );
         }
         await client.query('COMMIT');
+        const imported = inserted.rows[0]?.was_inserted === true ? 1 : 0;
+        const skipped = input.channel === 'email' && !lead ? 1 : 0;
+        const reason = lead
+          ? created
+            ? `Lead created with parser ${parserResult?.templateName || parserResult?.templateId || 'unknown'}.`
+            : 'Email matched an existing lead.'
+          : this.parserSkipReason(parserResult);
+        const outcome = {
+          imported,
+          matched: lead ? 1 : 0,
+          created: created ? 1 : 0,
+          skipped,
+          reason,
+        };
+        if (skipped) {
+          this.logger.warn(`Mailbox lead skipped ${JSON.stringify({
+            databaseName,
+            providerMessageId: input.providerMessageId,
+            mailboxTag: input.mailboxTag ?? '',
+            reason,
+          })}`);
+        } else if (input.channel === 'email') {
+          this.logger.log(`Mailbox lead processed ${JSON.stringify({
+            databaseName,
+            providerMessageId: input.providerMessageId,
+            leadId: Number(lead?.id) || null,
+            created,
+          })}`);
+        }
+        return outcome;
       } catch (error) {
         await client.query('ROLLBACK');
         throw error;
       }
     });
+  }
+
+  async convertStoredEmailWithTemplate(
+    tenant: SaasTenant,
+    mailInboxId: number,
+  ) {
+    const config: any = await this.settings.getRawSmtp(tenant);
+    return this.databases.withTenantClient(
+      this.databaseName(tenant),
+      async (client) => {
+        await client.query('BEGIN');
+        try {
+          const mail = await client.query(
+            `SELECT id, lead_id, recipient_email, title, body, payload,
+                    COALESCE(occurred_at, created_at) AS received_at
+             FROM tenant_outreach_job
+             WHERE id = $1 AND channel = 'Email' AND direction = 'Incoming'`,
+            [mailInboxId],
+          );
+          if (!mail.rowCount) {
+            await client.query('ROLLBACK');
+            return null;
+          }
+          const item = mail.rows[0];
+          if (Number(item.lead_id) > 0) {
+            const existing = await client.query(
+              `SELECT * FROM tenant_lead WHERE id = $1`,
+              [Number(item.lead_id)],
+            );
+            await client.query('COMMIT');
+            return existing.rows[0] ?? null;
+          }
+          const payload =
+            item.payload && typeof item.payload === 'object'
+              ? item.payload
+              : {};
+          const parsed = await this.createOrMatchLeadFromTemplate(client, {
+            sender: this.text(item.recipient_email).toLowerCase(),
+            subject: this.text(item.title),
+            body: this.text(item.body),
+            receivedAt: item.received_at
+              ? new Date(item.received_at)
+              : new Date(),
+            mailboxTag: this.text(payload.mailbox),
+            leadTemplateTags: this.stringList(config?.leadTemplateTags),
+            payload,
+          });
+          if (!parsed?.result) {
+            await client.query('COMMIT');
+            return null;
+          }
+          const parserPayload = this.parserPayload(parsed.result);
+          const nextPayload = { ...payload, ...parserPayload };
+          await client.query(
+            `UPDATE tenant_outreach_job
+             SET lead_id = COALESCE($2, lead_id),
+                 recipient_name = COALESCE(NULLIF($3, ''), recipient_name),
+                 payload = $4::jsonb,
+                 updated_at = now()
+             WHERE id = $1`,
+            [
+              mailInboxId,
+              parsed.lead?.id ?? null,
+              this.text(parsed.lead?.full_name, parsed.lead?.fullName),
+              JSON.stringify(nextPayload),
+            ],
+          );
+          await client.query('COMMIT');
+          return parsed.lead ?? null;
+        } catch (error) {
+          await client.query('ROLLBACK');
+          throw error;
+        }
+      },
+    );
   }
 
   private async createOrMatchLeadFromTemplate(
@@ -623,7 +773,13 @@ export class TenantInboxSyncService {
          AND COALESCE(payload->>'isActive', 'false') = 'true'
        ORDER BY updated_at DESC, id DESC`,
     );
-    if (!savedTemplates.rowCount) return null;
+    if (!savedTemplates.rowCount) {
+      return {
+        lead: null,
+        created: false,
+        result: this.parserFailure('No active lead parser is configured.'),
+      };
+    }
 
     const allowedTemplateTags = this.stringList(input.leadTemplateTags).map((item) => item.toLowerCase());
     const templates = savedTemplates.rows
@@ -657,7 +813,15 @@ export class TenantInboxSyncService {
         const inboundTag = this.text(input.mailboxTag).toLowerCase();
         return !tags.length || !inboundTag || tags.includes(inboundTag);
       });
-    if (!templates.length) return null;
+    if (!templates.length) {
+      return {
+        lead: null,
+        created: false,
+        result: this.parserFailure(
+          'Active parsers were excluded by mailbox or lead-template tags.',
+        ),
+      };
+    }
 
     const emailInput = {
       fromAddress: this.text(input.sender).toLowerCase(),
@@ -668,7 +832,9 @@ export class TenantInboxSyncService {
     };
     let result = parseLeadCollectionTemplates(templates, emailInput);
     let template = templates.find((item: any) => item.id === result.templateId);
-    if (!template || !result.matched) return null;
+    if (!template || !result.matched) {
+      return { lead: null, created: false, result };
+    }
 
     const linkedConfig = normalizeLinkedPageConfig(template.linkedPageConfig);
     if (linkedConfig.enabled) {
@@ -685,14 +851,17 @@ export class TenantInboxSyncService {
       result.confidence < result.threshold ||
       result.missingRequiredFields.length > 0
     ) {
-      return { lead: null, result };
+      return { lead: null, created: false, result };
     }
 
     const values = result.values ?? {};
     const name = this.text(values.name, this.text(values.email, this.text(values.phone)));
     const email = this.text(values.email).toLowerCase();
     const phone = this.text(values.phone);
-    if (!name && !email && !phone) return { lead: null, result };
+    if (!name && !email && !phone) {
+      result.diagnostics.push('No usable name, email, or phone was extracted.');
+      return { lead: null, created: false, result };
+    }
 
     const existing = await this.findLeadFromParsedValues(
       client,
@@ -750,7 +919,70 @@ export class TenantInboxSyncService {
         [lead.id, propertyId],
       );
     }
-    return { lead, result };
+    return { lead, created: !existing, result };
+  }
+
+  private parserPayload(parserResult: any) {
+    return {
+      extractedLead: parserResult.values ?? {},
+      extractionConfidence: Number(parserResult.confidence) || 0,
+      leadCollectionTemplateId: parserResult.templateId ?? null,
+      leadCollectionTemplateName: parserResult.templateName ?? '',
+      aiFallbackUsed: false,
+      extractionDetails: {
+        matched: parserResult.matched === true,
+        matchScore: Number(parserResult.matchScore) || 0,
+        threshold: Number(parserResult.threshold) || 0,
+        missingRequiredFields: parserResult.missingRequiredFields ?? [],
+        diagnostics: parserResult.diagnostics ?? [],
+      },
+      leadCollection: {
+        templateId: parserResult.templateId,
+        templateName: parserResult.templateName,
+        confidence: parserResult.confidence,
+        extractedFields: parserResult.extractedFields,
+      },
+    };
+  }
+
+  private parserFailure(reason: string) {
+    return {
+      matched: false,
+      templateId: null,
+      templateName: '',
+      matchScore: 0,
+      confidence: 0,
+      threshold: 0.82,
+      values: {},
+      missingRequiredFields: [],
+      extractedFields: [],
+      diagnostics: [reason],
+      scopeMatched: false,
+    };
+  }
+
+  private parserSkipReason(result: any) {
+    if (!result) return 'No parser result was produced.';
+    if (!result.matched) {
+      return this.text(result.diagnostics?.[0], 'No active parser matched this email.');
+    }
+    const missing = this.stringList(result.missingRequiredFields);
+    if (missing.length) return `Missing required fields: ${missing.join(', ')}.`;
+    if (Number(result.confidence) < Number(result.threshold)) {
+      return `Parser confidence ${Math.round(Number(result.confidence) * 100)}% is below ${Math.round(Number(result.threshold) * 100)}%.`;
+    }
+    return this.text(result.diagnostics?.at?.(-1), 'Parser did not produce a usable lead.');
+  }
+
+  private emptyStats(): InboxSyncStats {
+    return { imported: 0, matched: 0, created: 0, skipped: 0 };
+  }
+
+  private addStats(target: InboxSyncStats, value: InboxSyncStats) {
+    target.imported += value.imported;
+    target.matched += value.matched;
+    target.created += value.created;
+    target.skipped += value.skipped;
   }
 
   private async findLeadFromParsedValues(
@@ -949,7 +1181,10 @@ export class TenantInboxSyncService {
          ) VALUES ('mail-inbox', 'processing', $1::jsonb, now(), now(), '')
          ON CONFLICT (sync_key) DO UPDATE
          SET status = 'processing', last_started_at = now(),
-             last_error = '', locked_at = now(), updated_at = now()`,
+             last_error = '', locked_at = now(),
+             imported_count = 0, matched_count = 0,
+             created_count = 0, skipped_count = 0,
+             updated_at = now()`,
         [JSON.stringify({ providerKey })],
       ),
     );
@@ -959,23 +1194,35 @@ export class TenantInboxSyncService {
     databaseName: string,
     providerKey: string,
     cursor: string | null,
+    stats: InboxSyncStats,
   ) {
     await this.databases.withTenantClient(databaseName, (client) =>
       client.query(
         `INSERT INTO tenant_sync_state(
            sync_key, status, cursor, last_completed_at, last_succeeded_at,
-           next_run_at, locked_at, locked_by, last_error
+           next_run_at, locked_at, locked_by, last_error,
+           imported_count, matched_count, created_count, skipped_count
          ) VALUES (
            'mail-inbox', 'sent', $1::jsonb, now(), now(),
-           now() + interval '5 minutes', NULL, NULL, ''
+           now() + interval '5 minutes', NULL, NULL, '', $2, $3, $4, $5
          )
          ON CONFLICT (sync_key) DO UPDATE
          SET status = 'sent', cursor = EXCLUDED.cursor,
              last_completed_at = now(), last_succeeded_at = now(),
              next_run_at = now() + interval '5 minutes',
              locked_at = NULL, locked_by = NULL, last_error = '',
+             imported_count = EXCLUDED.imported_count,
+             matched_count = EXCLUDED.matched_count,
+             created_count = EXCLUDED.created_count,
+             skipped_count = EXCLUDED.skipped_count,
              updated_at = now()`,
-        [JSON.stringify({ providerKey, cursor })],
+        [
+          JSON.stringify({ providerKey, cursor }),
+          stats.imported,
+          stats.matched,
+          stats.created,
+          stats.skipped,
+        ],
       ),
     );
   }

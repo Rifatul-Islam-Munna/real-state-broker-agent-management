@@ -428,6 +428,11 @@ export class TenantLegacyCompatibilityService {
 
   private leadItem(row: any) {
     const payload = row?.payload && typeof row.payload === 'object' ? row.payload : {};
+    const notes = Array.isArray(payload.notes)
+      ? payload.notes
+      : `${payload.notes ?? ''}`.trim()
+        ? [`${payload.notes}`]
+        : [];
     return {
       ...payload,
       id: Number(row.id),
@@ -435,11 +440,26 @@ export class TenantLegacyCompatibilityService {
       email: row.email ?? '',
       phone: row.phone ?? '',
       stage: payload.stage || this.titleCase(row.status || 'new'),
-      priority: payload.priority || 'Medium',
+      summary: payload.summary || '',
+      property: payload.property || '',
+      propertyId: payload.propertyId ?? null,
+      priority: payload.priority || 'Warm',
       source: payload.source || 'Manual',
       budget: payload.budget || '',
+      creditScore: payload.creditScore || '',
+      combinedCreditScore: payload.combinedCreditScore || '',
+      monthlyEarning: payload.monthlyEarning || '',
+      combinedMonthlyEarning: payload.combinedMonthlyEarning || '',
+      interest: payload.interest || '',
+      timeline: payload.timeline || '',
       preferredLocation: payload.preferredLocation || '',
-      notes: payload.notes || '',
+      notes,
+      agent: payload.agent || '',
+      agentId: payload.agentId ?? null,
+      inBoard: payload.inBoard === true,
+      nextActionDate: payload.nextActionDate ?? null,
+      nextActionType: payload.nextActionType || 'Review lead',
+      followUpStatus: payload.followUpStatus || 'Open',
       assignedAgentId: payload.assignedAgentId ?? null,
       assignedAgentName: payload.assignedAgentName ?? null,
       linkedDealId: payload.linkedDealId ?? null,

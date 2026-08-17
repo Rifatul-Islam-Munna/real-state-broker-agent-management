@@ -767,6 +767,9 @@ function ProfessionalMailWorkspace({ initialMailId }: { initialMailId?: number }
                         <div>
                           <p className="ether-label-caps text-[10px] text-[var(--ether-outline)]">Parser</p>
                           <p className="mt-2 font-semibold text-[var(--ether-on-surface)]">{selected.extractionMethod} ? {Math.round((selected.extractionConfidence ?? 0) * 100)}%</p>
+                          {!selected.leadId && extractionSkipReason(selected) ? (
+                            <p className="mt-2 text-xs leading-5 text-red-600">{extractionSkipReason(selected)}</p>
+                          ) : null}
                         </div>
                       ) : null}
                     </div>
@@ -1247,13 +1250,13 @@ function sameMailThread(left: MailInboxItem, right: MailInboxItem) {
   if (left.id === right.id) return true
   if (left.leadId && right.leadId && left.leadId === right.leadId) return true
   return (
-    left.email.toLowerCase() === right.email.toLowerCase() &&
+    `${left.email ?? ""}`.toLowerCase() === `${right.email ?? ""}`.toLowerCase() &&
     normalizeSubject(left.subject) === normalizeSubject(right.subject)
   )
 }
 
 function normalizeSubject(value: string) {
-  return value
+  return `${value ?? ""}`
     .toLowerCase()
     .replace(/^\s*((re|fw|fwd)\s*:\s*)+/i, "")
     .trim()
@@ -1265,6 +1268,14 @@ function normalizeReplySubject(value: string) {
 
 function plainSnippet(value: string) {
   return htmlToText(value).replace(/\s+/g, " ").trim().slice(0, 160)
+}
+
+function extractionSkipReason(item: MailInboxItem) {
+  const direct = item.extractionDetails?.skipReason
+  if (typeof direct === "string" && direct.trim()) return direct
+  const diagnostics = item.extractionDetails?.diagnostics
+  if (!Array.isArray(diagnostics)) return ""
+  return diagnostics.filter((value): value is string => typeof value === "string").join(" ")
 }
 
 function htmlToText(value: string) {

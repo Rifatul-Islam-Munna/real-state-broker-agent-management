@@ -38,7 +38,7 @@ function getInitials(name?: string | null) {
 }
 
 function statusLabel(status: string) {
-  return status.replace(/([A-Z])/g, " $1").trim()
+  return `${status ?? ""}`.replace(/([A-Z])/g, " $1").trim()
 }
 
 export function PropertyChatInboxPage() {

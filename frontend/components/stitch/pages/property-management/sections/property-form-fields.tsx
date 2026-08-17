@@ -55,7 +55,7 @@ export function PropertyFormFieldsSection({
       : "Assign later"
   const propertyTypeLabel = formValues.propertyType === "Commercial" ? "Commercial" : "Residential"
   const listingTypeLabel = formValues.listingType === "ForRent" ? "For Rent" : "For Sale"
-  const listingStatusLabel = formValues.status.replace(/([A-Z])/g, " $1").trim()
+  const listingStatusLabel = `${formValues.status ?? "Draft"}`.replace(/([A-Z])/g, " $1").trim()
   const amenityOptions = useMemo(() => {
     const mergedAmenities = new Set(
       [...defaultAmenityOptions, ...(formValues.keyAmenities ?? [])]

@@ -43,7 +43,7 @@ function estimateMonthlyPayment(priceLabel: string) {
 }
 
 function statusLabel(status: string) {
-  return status.replace(/([A-Z])/g, " $1").trim()
+  return `${status ?? ""}`.replace(/([A-Z])/g, " $1").trim()
 }
 
 function amenityIcon(value: string) {

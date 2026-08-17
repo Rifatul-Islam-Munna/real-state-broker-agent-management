@@ -1198,7 +1198,7 @@ export class TenantOutreachService {
           ? this.text(row.body).slice(0, 240)
           : row.status === 'sent'
             ? `${row.channel} accepted by ${row.provider || 'the provider'}.`
-            : `${row.channel} is ${row.status.replace('_', ' ')}.`,
+            : `${row.channel ?? 'Message'} is ${`${row.status ?? 'scheduled'}`.replace('_', ' ')}.`,
       body: row.body,
       provider: row.provider,
       providerMessageId: row.provider_message_id,

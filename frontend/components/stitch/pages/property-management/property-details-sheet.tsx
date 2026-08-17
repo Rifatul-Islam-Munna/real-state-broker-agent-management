@@ -447,7 +447,7 @@ function formatDate(value?: string | null) {
 }
 
 function formatStatus(value: string) {
-  return value.replace(/([A-Z])/g, " $1").trim()
+  return `${value ?? ""}`.replace(/([A-Z])/g, " $1").trim()
 }
 
 
