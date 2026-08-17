@@ -148,6 +148,49 @@ describe('TenantInboxSyncService connection compatibility', () => {
   });
 });
 
+describe('TenantInboxSyncService stored email recovery', () => {
+  test('re-parses previously skipped inbound emails after a sync', async () => {
+    const query = jest.fn().mockResolvedValue({
+      rowCount: 1,
+      rows: [{ id: 101 }],
+    });
+    const databases = {
+      withTenantClient: jest.fn((_database: string, callback: any) => callback({ query })),
+    };
+    const settings = {
+      getRawSmtp: jest.fn().mockResolvedValue({ enableInboxSync: true }),
+    };
+    const service = new TenantInboxSyncService(
+      {} as any,
+      databases as any,
+      settings as any,
+    );
+    const convert = jest
+      .spyOn(service as any, 'convertStoredEmailWithTemplate')
+      .mockResolvedValue({ id: 9, full_name: 'Jean Melo' });
+
+    await expect((service as any).recoverSkippedInboundEmails(
+      { databaseName: 'tenant_1_demo' } as any,
+      { autoCreateLeads: true },
+    )).resolves.toEqual({ scanned: 1, converted: 1 });
+    expect(convert).toHaveBeenCalledWith(
+      { databaseName: 'tenant_1_demo' },
+      101,
+    );
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining("lead_id IS NULL"),
+    );
+  });
+
+  test('skips recovery when automatic lead creation is disabled', async () => {
+    const service = new TenantInboxSyncService({} as any, {} as any, {} as any);
+    await expect((service as any).recoverSkippedInboundEmails(
+      { databaseName: 'tenant_1_demo' } as any,
+      { autoCreateLeads: false },
+    )).resolves.toEqual({ scanned: 0, converted: 0 });
+  });
+});
+
 describe('TenantInboxSyncService active parser processing', () => {
   test('creates a lead from any matching active parser regardless of mailbox tags', async () => {
     const query = jest.fn(async (sql: string) => {
@@ -199,6 +242,69 @@ describe('TenantInboxSyncService active parser processing', () => {
     expect(parsed).toMatchObject({ created: true, lead: { id: 31 } });
     expect(parsed.result).toMatchObject({ matched: true, templateId: 8 });
     expect(query.mock.calls.some(([sql]) => sql.includes('INSERT INTO tenant_lead('))).toBe(true);
+  });
+
+  test('records the parser skip reason when a stored email still cannot be converted', async () => {
+    const query = jest.fn(async (sql: string) => {
+      if (sql.includes('FROM tenant_outreach_job')) {
+        return {
+          rowCount: 1,
+          rows: [{
+            id: 42,
+            lead_id: null,
+            recipient_email: 'jean@convo.zillow.com',
+            title: 'Jean is requesting an application',
+            body: 'New application request',
+            payload: { htmlBody: '<a>Send application</a>', mailbox: 'Leads' },
+            received_at: new Date('2026-08-17T19:01:00Z'),
+          }],
+        };
+      }
+      return { rowCount: 0, rows: [] };
+    });
+    const databases = {
+      withTenantClient: jest.fn((_database: string, callback: any) => callback({ query })),
+    };
+    const settings = {
+      getRawSmtp: jest.fn().mockResolvedValue({ leadTemplateTags: ['Leads'] }),
+    };
+    const service = new TenantInboxSyncService(
+      {} as any,
+      databases as any,
+      settings as any,
+    );
+    jest.spyOn(service as any, 'createOrMatchLeadFromTemplate').mockResolvedValue({
+      lead: null,
+      created: false,
+      result: {
+        matched: false,
+        templateId: null,
+        templateName: '',
+        matchScore: 0,
+        confidence: 0,
+        threshold: 0.82,
+        values: {},
+        missingRequiredFields: [],
+        extractedFields: [],
+        diagnostics: ['No saved template matched this email.'],
+        scopeMatched: false,
+      },
+    });
+
+    await expect(service.convertStoredEmailWithTemplate(
+      { databaseName: 'tenant_1_demo' } as any,
+      42,
+    )).resolves.toBeNull();
+
+    const updateCall = query.mock.calls.find(
+      (call: unknown[]) =>
+        String(call[0]).includes('SET lead_id = COALESCE($2, lead_id)'),
+    );
+    expect(updateCall).toBeDefined();
+    const payload = JSON.parse(String((updateCall as unknown[])[3]));
+    expect(payload.leadCreationStatus).toBe('Skipped');
+    expect(payload.leadCreationSkipReason).toContain('No saved template matched');
+    expect(payload.lastLeadRecoveryAttemptAt).toBeDefined();
   });
 
   test('uses provider sender for dedupe only when parser extracted no contact', async () => {

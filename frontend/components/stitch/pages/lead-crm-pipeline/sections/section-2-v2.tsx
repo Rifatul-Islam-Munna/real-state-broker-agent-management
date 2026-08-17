@@ -514,7 +514,7 @@ export function Section2Section({
         onOpenChange={(open) => (!open ? setSelectedLeadId(null) : null)}
       >
         <SheetContent
-          className="w-full gap-0 bg-background p-0 sm:max-w-none"
+          className="!w-full !max-w-full gap-0 overflow-hidden bg-background p-0 sm:!w-[42rem] sm:!max-w-[calc(100vw-2rem)]"
           showCloseButton={false}
           side="right"
         >

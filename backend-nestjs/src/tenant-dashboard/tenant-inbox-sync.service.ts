@@ -119,6 +119,10 @@ export class TenantInboxSyncService {
       databaseName,
       this.retentionDays(config.localInboxRetentionDays),
     );
+    const recovered = await this.recoverSkippedInboundEmails(tenant, config);
+    const recoveredNote = recovered.converted
+      ? `, ${recovered.converted} previously skipped ${recovered.converted === 1 ? 'email was' : 'emails were'} recovered.`
+      : '';
     return {
       ...(await this.getStatus(tenant)),
       imported: stats.imported,
@@ -126,7 +130,8 @@ export class TenantInboxSyncService {
       created: stats.created,
       skipped: stats.skipped,
       deletedLocalMessages,
-      message: `Mailbox sync completed: ${stats.imported} imported, ${stats.created} leads created, ${stats.matched} matched, ${stats.skipped} skipped.`,
+      recoveredLeadCount: recovered.converted,
+      message: `Mailbox sync completed: ${stats.imported} imported, ${stats.created} leads created, ${stats.matched} matched, ${stats.skipped} skipped.${recoveredNote}`,
     };
   }
 
@@ -742,12 +747,16 @@ export class TenantInboxSyncService {
             leadTemplateTags: this.stringList(config?.leadTemplateTags),
             payload,
           });
-          if (!parsed?.result) {
-            await client.query('COMMIT');
-            return null;
-          }
-          const parserPayload = this.parserPayload(parsed.result);
-          const nextPayload = { ...payload, ...parserPayload };
+          const parserPayload = this.parserPayload(parsed?.result);
+          const nextPayload = {
+            ...payload,
+            ...parserPayload,
+            leadCreationStatus: parsed?.lead ? 'Matched' : 'Skipped',
+            leadCreationSkipReason: parsed?.lead
+              ? ''
+              : this.parserSkipReason(parsed?.result),
+            lastLeadRecoveryAttemptAt: new Date().toISOString(),
+          };
           await client.query(
             `UPDATE tenant_outreach_job
              SET lead_id = COALESCE($2, lead_id),
@@ -757,19 +766,64 @@ export class TenantInboxSyncService {
              WHERE id = $1`,
             [
               mailInboxId,
-              parsed.lead?.id ?? null,
-              this.text(parsed.lead?.full_name, parsed.lead?.fullName),
+              parsed?.lead?.id ?? null,
+              this.text(parsed?.lead?.full_name, parsed?.lead?.fullName),
               JSON.stringify(nextPayload),
             ],
           );
           await client.query('COMMIT');
-          return parsed.lead ?? null;
+          return parsed?.lead ?? null;
         } catch (error) {
           await client.query('ROLLBACK');
           throw error;
         }
       },
     );
+  }
+
+  private async recoverSkippedInboundEmails(tenant: SaasTenant, config: any) {
+    if (config?.autoCreateLeads === false) {
+      return { scanned: 0, converted: 0 };
+    }
+    const databaseName = this.databaseName(tenant);
+    return this.databases.withTenantClient(databaseName, async (client) => {
+      const result = await client.query(
+        `SELECT id
+         FROM tenant_outreach_job
+         WHERE channel = 'Email'
+           AND direction = 'Incoming'
+           AND source_type = 'mail-inbox'
+           AND lead_id IS NULL
+           AND COALESCE((payload->>'leadCreationStatus'), '') NOT IN ('Created', 'Matched')
+           AND COALESCE((payload->>'lastLeadRecoveryAttemptAt')::timestamp, 'epoch')
+               < now() - interval '6 hours'
+         ORDER BY COALESCE(occurred_at, created_at) ASC, id ASC
+         LIMIT 50`,
+      );
+      let converted = 0;
+      for (const row of result.rows) {
+        try {
+          const lead = await this.convertStoredEmailWithTemplate(
+            tenant,
+            Number(row.id),
+          );
+          if (lead) converted += 1;
+        } catch (error) {
+          this.logger.warn(`Stored email recovery failed ${JSON.stringify({
+            databaseName,
+            mailInboxId: Number(row.id),
+            error: this.message(error),
+          })}`);
+        }
+      }
+      if (result.rowCount) {
+        this.logger.log(`Stored email recovery ${databaseName}: ${JSON.stringify({
+          scanned: result.rowCount,
+          converted,
+        })}`);
+      }
+      return { scanned: result.rowCount ?? 0, converted };
+    });
   }
 
   private async createOrMatchLeadFromTemplate(

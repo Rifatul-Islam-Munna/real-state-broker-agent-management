@@ -213,14 +213,14 @@ export function LeadDetailsPanel({
     .join("")
 
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-white">
+    <div className="flex h-full min-w-0 flex-col overflow-hidden bg-white [overflow-wrap:anywhere]">
       <header className="flex items-center justify-between gap-4 border-b border-[var(--ether-outline-variant)] px-6 py-4">
-        <div>
+        <div className="min-w-0 flex-1">
           <p className="ether-label-caps text-[10px] text-[var(--ether-outline)]">Lead Management</p>
-          <h2 className="mt-1 text-xl font-bold tracking-[-0.02em] text-[var(--ether-on-surface)]">{lead.name}</h2>
+          <h2 className="mt-1 break-words text-xl font-bold tracking-[-0.02em] text-[var(--ether-on-surface)]">{lead.name}</h2>
         </div>
         <button
-          className="inline-flex items-center gap-2 rounded-lg border border-[var(--ether-outline-variant)] px-3 py-2 text-xs font-semibold text-[var(--ether-on-surface-variant)] transition hover:bg-[var(--ether-surface-container-low)]"
+          className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-[var(--ether-outline-variant)] px-3 py-2 text-xs font-semibold text-[var(--ether-on-surface-variant)] transition hover:bg-[var(--ether-surface-container-low)]"
           onClick={onClose}
           type="button"
         >
@@ -229,7 +229,7 @@ export function LeadDetailsPanel({
         </button>
       </header>
 
-      <div className="custom-scrollbar flex-1 overflow-y-auto">
+      <div className="custom-scrollbar min-w-0 flex-1 overflow-x-hidden overflow-y-auto">
         <section className="space-y-4 border-b border-[var(--ether-outline-variant)] bg-[color-mix(in_srgb,var(--ether-surface-container-low)_40%,white)] px-6 py-5">
           <div className="flex flex-wrap items-center gap-2">
             <span className="inline-flex items-center rounded-full border border-[var(--ether-primary)]/20 bg-[var(--ether-primary-fixed)] px-2.5 py-1 text-[10px] font-bold uppercase text-[var(--ether-primary)]">
@@ -278,7 +278,7 @@ export function LeadDetailsPanel({
           <section>
             <h3 className="ether-label-caps flex items-center gap-2 text-[10px] text-[var(--ether-outline)]"><AppIcon name="person" /> Client Information</h3>
             <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-5">
-              <div><p className="ether-label-caps text-[9px] text-[var(--ether-outline)]">Email Address</p><p className="mt-1 text-xs font-semibold text-[var(--ether-on-surface)]">{displayText(lead.email)}</p></div>
+              <div className="min-w-0"><p className="ether-label-caps text-[9px] text-[var(--ether-outline)]">Email Address</p><p className="mt-1 break-all text-xs font-semibold text-[var(--ether-on-surface)]">{displayText(lead.email)}</p></div>
               <div><p className="ether-label-caps text-[9px] text-[var(--ether-outline)]">Phone</p><p className="mt-1 text-xs font-semibold text-[var(--ether-on-surface)]">{displayText(lead.phone)}</p></div>
               <div><p className="ether-label-caps text-[9px] text-[var(--ether-outline)]">Source</p><p className="mt-1 text-xs font-semibold text-[var(--ether-on-surface)]">{sourceLabel}</p></div>
               <div>
@@ -327,8 +327,8 @@ export function LeadDetailsPanel({
         </div>
       </div>
 
-      <footer className="flex items-center justify-between border-t border-[var(--ether-outline-variant)] bg-[var(--ether-surface-container-low)] px-5 py-4">
-        <div className="flex items-center gap-3">
+      <footer className="flex min-w-0 items-center justify-between gap-4 border-t border-[var(--ether-outline-variant)] bg-[var(--ether-surface-container-low)] px-5 py-4">
+        <div className="flex min-w-0 flex-wrap items-center gap-3">
           <button className="inline-flex items-center gap-1 text-xs font-bold text-[var(--ether-error)] hover:underline" onClick={() => onDialogOpen("cancel", lead.id)} type="button">
             <AppIcon name="delete" /> Archive Lead
           </button>
@@ -336,7 +336,7 @@ export function LeadDetailsPanel({
             {lead.inBoard ? "Remove from board" : "Add to board"}
           </button>
         </div>
-        <div className="text-right"><p className="ether-label-caps text-[9px] text-[var(--ether-outline)]">Managed By</p><p className="text-xs font-bold text-[var(--ether-on-surface)]">Estate Operations</p></div>
+        <div className="shrink-0 text-right"><p className="ether-label-caps text-[9px] text-[var(--ether-outline)]">Managed By</p><p className="text-xs font-bold text-[var(--ether-on-surface)]">Estate Operations</p></div>
       </footer>
     </div>
   )
