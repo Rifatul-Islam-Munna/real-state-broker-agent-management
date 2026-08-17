@@ -629,7 +629,135 @@ describe('TenantInboxSyncService active parser processing', () => {
     const insertParams = (insertCall as unknown[])[1] as unknown[];
     const payload = JSON.parse(String(insertParams[3]));
     expect(payload.name).toBe('Matthew kutuk');
-    expect(payload.phone).toBe('561-502-3528');
+    expect(payload.phone).toBe('+15615023528');
+  });
+
+  test('normalizes the extracted phone with the tenant default country', async () => {
+    const query = jest.fn(async (sql: string) => {
+      if (sql.includes("resource = 'lead-collection-templates'")) {
+        return {
+          rowCount: 1,
+          rows: [{
+            id: 12,
+            payload: {
+              name: 'Realtor parser',
+              senderPatterns: ['*@email.realtor.com'],
+              mappings: [{
+                field: 'phone',
+                label: 'Phone',
+                source: 'EmailBody',
+                prefix: '',
+                suffix: '',
+                occurrence: 0,
+                required: false,
+                transform: 'Phone',
+              }],
+              requiredFields: [],
+              confidenceThreshold: 0.82,
+            },
+          }],
+        };
+      }
+      if (sql.includes("key = 'agency_workspace_settings'")) {
+        return {
+          rowCount: 1,
+          rows: [{ value: { profile: { defaultPhoneCountry: 'US' } } }],
+        };
+      }
+      if (sql.includes('INSERT INTO tenant_lead(')) {
+        return { rowCount: 1, rows: [{ id: 48, full_name: 'Johny Tobon' }] };
+      }
+      return { rowCount: 0, rows: [] };
+    });
+    const service = new TenantInboxSyncService({} as any, {} as any, {} as any);
+
+    const parsed = await (service as any).createOrMatchLeadFromTemplate({ query }, {
+      sender: 'leads@email.realtor.com',
+      subject: 'New realtor.com lead - Johny Tobon',
+      body: 'Name: Johny Tobon\nPhone: 3058792145',
+      receivedAt: new Date('2026-08-18T00:00:00Z'),
+      mailboxTag: 'leads',
+      leadTemplateTags: [],
+      payload: {},
+    });
+
+    expect(parsed).toMatchObject({ created: true, lead: { id: 48 } });
+    const insertCall = query.mock.calls.find(
+      (call: unknown[]) =>
+        String(call[0]).includes('INSERT INTO tenant_lead('),
+    );
+    const insertParams = (insertCall as unknown[])[1] as unknown[];
+    expect(insertParams[2]).toBe('+13058792145');
+    const payload = JSON.parse(String(insertParams[3]));
+    expect(payload.phone).toBe('+13058792145');
+  });
+
+  test('sync extraction matches the template Test button via rebuilt mappings', async () => {
+    const query = jest.fn(async (sql: string) => {
+      if (sql.includes("resource = 'lead-collection-templates'")) {
+        return {
+          rowCount: 1,
+          rows: [{
+            id: 13,
+            payload: {
+              name: 'Realtor parser',
+              senderPatterns: ['*@email.realtor.com'],
+              subjectPattern: 'New realtor.com lead',
+              subjectMatchMode: 'Contains',
+              sourceHtml: [
+                '<table><tr><td>Name</td><td>Johny Tobon</td></tr>',
+                '<tr><td>Phone</td><td>3058792145</td></tr></table>',
+              ].join(''),
+              sourceText: '',
+              mappings: [{
+                field: 'name',
+                label: 'Name',
+                source: 'EmailBody',
+                sampleValue: 'Johny Tobon',
+                selectionStart: 3,
+                selectionEnd: 14,
+                prefix: 'Name:',
+                suffix: '',
+                occurrence: 0,
+                required: true,
+                transform: 'Text',
+              }],
+              requiredFields: ['name'],
+              confidenceThreshold: 0.5,
+            },
+          }],
+        };
+      }
+      if (sql.includes('INSERT INTO tenant_lead(')) {
+        return { rowCount: 1, rows: [{ id: 49, full_name: 'Sarah Lane' }] };
+      }
+      return { rowCount: 0, rows: [] };
+    });
+    const service = new TenantInboxSyncService({} as any, {} as any, {} as any);
+
+    const parsed = await (service as any).createOrMatchLeadFromTemplate({ query }, {
+      sender: 'leads@email.realtor.com',
+      subject: 'New realtor.com lead - Sarah Lane',
+      body: [
+        'New lead from realtor.com',
+        'Name',
+        'Sarah Lane',
+        'Phone',
+        '7862526727',
+      ].join('\n'),
+      receivedAt: new Date('2026-08-18T00:00:00Z'),
+      mailboxTag: 'leads',
+      leadTemplateTags: [],
+      payload: {},
+    });
+
+    expect(parsed).toMatchObject({ created: true, lead: { id: 49 } });
+    const insertCall = query.mock.calls.find(
+      (call: unknown[]) =>
+        String(call[0]).includes('INSERT INTO tenant_lead('),
+    );
+    const insertParams = (insertCall as unknown[])[1] as unknown[];
+    expect(insertParams[0]).toBe('Sarah Lane');
   });
 
   test('replaces a CTA template name and provider email with real values', async () => {
@@ -686,6 +814,180 @@ describe('TenantInboxSyncService active parser processing', () => {
     const payload = JSON.parse(String(insertParams[3]));
     expect(payload.name).toBe('Jean Melo Cordova');
     expect(payload.email ?? '').toBe('');
+  });
+
+  test('does not use the raw email or phone as the lead name', async () => {
+    const query = jest.fn(async (sql: string) => {
+      if (sql.includes("resource = 'lead-collection-templates'")) {
+        return {
+          rowCount: 1,
+          rows: [{
+            id: 10,
+            payload: {
+              name: 'Generic parser',
+              senderPatterns: ['*@realtor.com'],
+              mappings: [],
+              requiredFields: [],
+              confidenceThreshold: 0.82,
+            },
+          }],
+        };
+      }
+      if (sql.includes('INSERT INTO tenant_lead(')) {
+        return { rowCount: 1, rows: [{ id: 46, full_name: 'Inbound lead' }] };
+      }
+      return { rowCount: 0, rows: [] };
+    });
+    const service = new TenantInboxSyncService({} as any, {} as any, {} as any);
+
+    const parsed = await (service as any).createOrMatchLeadFromTemplate({ query }, {
+      sender: 'leads@email.realtor.com',
+      subject: 'New lead',
+      body: 'Phone: 981-012-0026\nProperty: 1401 Grant St Unit#3',
+      receivedAt: new Date('2026-08-18T00:00:00Z'),
+      mailboxTag: 'leads',
+      leadTemplateTags: [],
+      payload: {},
+    });
+
+    expect(parsed).toMatchObject({ created: true, lead: { id: 46 } });
+    const insertCall = query.mock.calls.find(
+      (call: unknown[]) =>
+        String(call[0]).includes('INSERT INTO tenant_lead('),
+    );
+    const insertParams = (insertCall as unknown[])[1] as unknown[];
+    expect(insertParams[0]).toBe('Inbound lead');
+  });
+
+  test('derives a display name from a personal email when no name is present', async () => {
+    const query = jest.fn(async (sql: string) => {
+      if (sql.includes("resource = 'lead-collection-templates'")) {
+        return {
+          rowCount: 1,
+          rows: [{
+            id: 11,
+            payload: {
+              name: 'Generic parser',
+              senderPatterns: ['*@realtor.com'],
+              mappings: [],
+              requiredFields: [],
+              confidenceThreshold: 0.82,
+            },
+          }],
+        };
+      }
+      if (sql.includes('INSERT INTO tenant_lead(')) {
+        return { rowCount: 1, rows: [{ id: 47, full_name: 'Norah Bec' }] };
+      }
+      return { rowCount: 0, rows: [] };
+    });
+    const service = new TenantInboxSyncService({} as any, {} as any, {} as any);
+
+    const parsed = await (service as any).createOrMatchLeadFromTemplate({ query }, {
+      sender: 'leads@email.realtor.com',
+      subject: 'New lead',
+      body: 'Email: norah.bec@gmail.com\nPhone: 786-252-6727',
+      receivedAt: new Date('2026-08-18T00:00:00Z'),
+      mailboxTag: 'leads',
+      leadTemplateTags: [],
+      payload: {},
+    });
+
+    expect(parsed).toMatchObject({ created: true, lead: { id: 47 } });
+    const insertCall = query.mock.calls.find(
+      (call: unknown[]) =>
+        String(call[0]).includes('INSERT INTO tenant_lead('),
+    );
+    const insertParams = (insertCall as unknown[])[1] as unknown[];
+    expect(insertParams[0]).toBe('Norah Bec');
+  });
+
+  test('re-derives a wrong lead name from the stored email during backfill', async () => {
+    const query = jest.fn(async (sql: string) => {
+      if (sql.includes("OR full_name = 'Inbound lead'")) {
+        return {
+          rowCount: 1,
+          rows: [{
+            id: 21,
+            full_name: '7862526727',
+            email: 'norah.bec@gmail.com',
+            phone: '7862526727',
+            payload: {
+              latestEmailSubject: 'New lead',
+              latestEmailBody: 'Email: norah.bec@gmail.com\nPhone: 7862526727',
+            },
+          }],
+        };
+      }
+      if (sql.includes('SET full_name = $2')) {
+        return { rowCount: 1, rows: [{ id: 21 }] };
+      }
+      return { rowCount: 0, rows: [] };
+    });
+    const databases = {
+      withTenantClient: jest.fn((_database: string, callback: any) => callback({ query })),
+    };
+    const service = new TenantInboxSyncService({} as any, databases as any, {} as any);
+
+    const result = await (service as any).fixMissingLeadNames({
+      databaseName: 'tenant_1_demo',
+    } as any);
+    expect(result.fixed).toBe(1);
+    const updateCall = query.mock.calls.find(
+      (call: unknown[]) => String(call[0]).includes('SET full_name = $2'),
+    );
+    expect(updateCall).toBeDefined();
+    const params = (updateCall as unknown[])[1] as unknown[];
+    expect(params[1]).toBe('Norah Bec');
+  });
+
+  test('backfill drops a provider address email and adds the country code to the phone', async () => {
+    const query = jest.fn(async (sql: string) => {
+      if (sql.includes("OR full_name = 'Inbound lead'")) {
+        return {
+          rowCount: 1,
+          rows: [{
+            id: 22,
+            full_name: 'Inbound lead',
+            email: 'leads@email.realtor.com',
+            phone: '3058792145',
+            payload: {
+              latestEmailSubject: 'com lead - Johny Tobon',
+              latestEmailBody: 'Name: Johny Tobon\nPhone: 3058792145',
+              htmlBody: '<p>Reply to <a href="mailto:johnyalto@hotmail.com">johnyalto@hotmail.com</a></p>',
+              inboundReplyAddress: 'leads@email.realtor.com',
+            },
+          }],
+        };
+      }
+      if (sql.includes("key = 'agency_workspace_settings'")) {
+        return {
+          rowCount: 1,
+          rows: [{ value: { profile: { defaultPhoneCountry: 'US' } } }],
+        };
+      }
+      if (sql.includes('SET full_name = $2')) {
+        return { rowCount: 1, rows: [{ id: 22 }] };
+      }
+      return { rowCount: 0, rows: [] };
+    });
+    const databases = {
+      withTenantClient: jest.fn((_database: string, callback: any) => callback({ query })),
+    };
+    const service = new TenantInboxSyncService({} as any, databases as any, {} as any);
+
+    const result = await (service as any).fixMissingLeadNames({
+      databaseName: 'tenant_1_demo',
+    } as any);
+    expect(result.fixed).toBe(1);
+    const updateCall = query.mock.calls.find(
+      (call: unknown[]) => String(call[0]).includes('SET full_name = $2'),
+    );
+    expect(updateCall).toBeDefined();
+    const params = (updateCall as unknown[])[1] as unknown[];
+    expect(params[1]).toBe('Johny Tobon');
+    expect(params[2]).toBe('johnyalto@hotmail.com');
+    expect(params[3]).toBe('+13058792145');
   });
 
   test('records the parser skip reason when a stored email still cannot be converted', async () => {

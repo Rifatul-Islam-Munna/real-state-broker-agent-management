@@ -6,12 +6,16 @@ import type { PoolClient } from 'pg';
 import { Repository } from 'typeorm';
 import {
   buildLeadCollectionFingerprint,
+  buildLeadCollectionMappings,
+  deriveNameFromEmail,
   extractLeadBasicsFromEmail,
+  isProviderSenderAddress,
   parseLeadCollectionTemplate,
   parseLeadCollectionTemplates,
   prepareLeadCollectionSource,
   sanitizeLeadName,
 } from '../mail/lead-collection-parser';
+import { normalizePhoneNumber } from '../common/phone-normalizer';
 import { normalizeLinkedPageConfig } from '../mail/linked-page-config';
 import {
   enrichEmailWithLinkedPage,
@@ -160,6 +164,7 @@ export class TenantInboxSyncService {
     const propertyLinked = await this.linkMissingLeadProperties(tenant);
     const welcomeSent = await this.autoSendWelcomeForLeads(tenant);
     await this.scheduleTenantFollowUps(tenant);
+    const namesFixed = await this.fixMissingLeadNames(tenant);
     const recoveredNote = recovered.converted
       ? `, ${recovered.converted} previously skipped ${recovered.converted === 1 ? 'email was' : 'emails were'} recovered.`
       : '';
@@ -168,6 +173,9 @@ export class TenantInboxSyncService {
       : '';
     const welcomeNote = welcomeSent.enqueued
       ? `, ${welcomeSent.enqueued} welcome ${welcomeSent.enqueued === 1 ? 'message was' : 'messages were'} auto-scheduled.`
+      : '';
+    const nameNote = namesFixed.fixed
+      ? `, ${namesFixed.fixed} ${namesFixed.fixed === 1 ? 'lead name was' : 'lead names were'} corrected from the original email.`
       : '';
     return {
       ...(await this.getStatus(tenant)),
@@ -179,7 +187,8 @@ export class TenantInboxSyncService {
       recoveredLeadCount: recovered.converted,
       linkedPropertyCount: propertyLinked.linked,
       autoWelcomeScheduledCount: welcomeSent.enqueued,
-      message: `Mailbox sync completed: ${stats.imported} imported, ${stats.created} leads created, ${stats.matched} matched, ${stats.skipped} skipped.${recoveredNote}${propertyNote}${welcomeNote}`,
+      correctedLeadNameCount: namesFixed.fixed,
+      message: `Mailbox sync completed: ${stats.imported} imported, ${stats.created} leads created, ${stats.matched} matched, ${stats.skipped} skipped.${recoveredNote}${propertyNote}${welcomeNote}${nameNote}`,
     };
   }
 
@@ -1080,6 +1089,130 @@ export class TenantInboxSyncService {
   }
 
   /**
+   * Re-derives display names for existing leads whose name is missing,
+   * "Inbound lead", or the raw email/phone. Also drops provider addresses
+   * (e.g. leads@email.realtor.com) that were stored as the lead email and
+   * normalizes stored phones to E.164 with the tenant's default country.
+   * Uses the stored email body first, then derives from a personal email
+   * local part. Idempotent and capped.
+   */
+  private async fixMissingLeadNames(tenant: SaasTenant) {
+    const databaseName = this.databaseName(tenant);
+    return this.databases.withTenantClient(databaseName, async (client) => {
+      const defaultPhoneCountry = await this.defaultPhoneCountryFromClient(client);
+      const result = await client.query(
+        `SELECT id, full_name, email, phone, payload
+         FROM tenant_lead
+         WHERE full_name IS NULL
+            OR full_name = ''
+            OR full_name = 'Inbound lead'
+            OR (email IS NOT NULL AND LOWER(full_name) = LOWER(email))
+            OR (phone IS NOT NULL AND full_name = phone)
+         ORDER BY created_at ASC, id ASC
+         LIMIT 100`,
+      );
+      let fixed = 0;
+      for (const row of result.rows) {
+        try {
+          const payload = this.jsonObject(row.payload);
+          const subject = this.text(payload?.latestEmailSubject);
+          const body = this.text(payload?.latestEmailBody);
+          const email = this.text(row.email).toLowerCase();
+          const currentName = this.text(row.full_name);
+          const currentPhone = this.text(row.phone);
+          let name = '';
+          let basicsEmail = '';
+          if (body || subject) {
+            const basics = extractLeadBasicsFromEmail({
+              fromAddress: this.text(payload?.inboundReplyAddress),
+              subject,
+              htmlBody: this.text(payload?.htmlBody),
+              textBody: body,
+            });
+            name = sanitizeLeadName(basics.name, subject);
+            basicsEmail = basics.email;
+          }
+          if (!name) name = deriveNameFromEmail(email);
+          name = name || 'Inbound lead';
+          const correctedEmail =
+            basicsEmail &&
+            basicsEmail !== email &&
+            isProviderSenderAddress(email)
+              ? basicsEmail
+              : '';
+          const normalizedPhone = currentPhone
+            ? normalizePhoneNumber(currentPhone, defaultPhoneCountry)
+            : '';
+          const correctedPhone =
+            normalizedPhone &&
+            normalizedPhone !== currentPhone
+              ? normalizedPhone
+              : '';
+          if (
+            name === currentName &&
+            !correctedEmail &&
+            !correctedPhone
+          ) {
+            continue;
+          }
+          await client.query(
+            `UPDATE tenant_lead
+             SET full_name = $2,
+                 email = COALESCE(NULLIF($3, ''), email),
+                 phone = COALESCE(NULLIF($4, ''), phone),
+                 payload = COALESCE(payload, '{}'::jsonb) || $5::jsonb,
+                 updated_at = now()
+             WHERE id = $1`,
+            [
+              Number(row.id),
+              name,
+              correctedEmail,
+              correctedPhone,
+              JSON.stringify({
+                ...(name !== currentName
+                  ? { name, nameSource: 'backfill' }
+                  : {}),
+                ...(correctedEmail
+                  ? { email: correctedEmail, emailSource: 'backfill' }
+                  : {}),
+                ...(correctedPhone
+                  ? { phone: correctedPhone, phoneSource: 'backfill' }
+                  : {}),
+              }),
+            ],
+          );
+          fixed += 1;
+        } catch (error) {
+          this.logger.warn(`Lead detail correction failed ${JSON.stringify({
+            databaseName,
+            leadId: Number(row.id),
+            error: this.message(error),
+          })}`);
+        }
+      }
+      if (result.rowCount) {
+        this.logger.log(`Lead detail correction ${databaseName}: ${JSON.stringify({
+          scanned: result.rowCount,
+          fixed,
+        })}`);
+      }
+      return { scanned: result.rowCount ?? 0, fixed };
+    });
+  }
+
+  private async defaultPhoneCountryFromClient(client: PoolClient) {
+    try {
+      const row = await client.query(
+        `SELECT value FROM tenant_setting WHERE key = 'agency_workspace_settings' LIMIT 1`,
+      );
+      const value = row.rows?.[0]?.value;
+      return this.text(value?.profile?.defaultPhoneCountry) || 'US';
+    } catch {
+      return 'US';
+    }
+  }
+
+  /**
    * Schedules the FollowUp1/2/3 templates after a welcome message has been
    * sent, at their configured gap days, when follow-ups are enabled. Queued
    * jobs wait until due and are auto-cancelled if the lead replies first.
@@ -1285,14 +1418,18 @@ export class TenantInboxSyncService {
     const templates = savedTemplates.rows
       .map((row: any) => {
       const saved = row.payload && typeof row.payload === 'object' ? row.payload : {};
-      const mappings = Array.isArray(saved.mappings) ? saved.mappings : [];
+      const rawMappings = Array.isArray(saved.mappings) ? saved.mappings : [];
       const sourceText = prepareLeadCollectionSource({
         htmlBody: this.text(saved.sourceHtml),
         textBody: this.text(saved.sourceText),
       });
+      // Rebuild full mapping anchors (prefix/suffix/occurrence/selection) from
+      // the saved sample exactly like the template Test button does, so live
+      // sync extraction matches what the user sees when testing.
+      const mappings = buildLeadCollectionMappings(sourceText, rawMappings);
       const bodyFingerprint = Array.isArray(saved.bodyFingerprint) && saved.bodyFingerprint.length
         ? saved.bodyFingerprint
-        : buildLeadCollectionFingerprint(sourceText, mappings);
+        : buildLeadCollectionFingerprint(sourceText, rawMappings);
       return {
         ...saved,
         id: Number(row.id),
@@ -1357,6 +1494,15 @@ export class TenantInboxSyncService {
     }
 
     const values = result.values ?? {};
+    const email = this.text(values.email).toLowerCase();
+    let phone = this.text(values.phone);
+    if (phone) {
+      phone = normalizePhoneNumber(
+        phone,
+        await this.defaultPhoneCountryFromClient(client),
+      );
+      values.phone = phone;
+    }
     let name = sanitizeLeadName(
       this.text(values.name),
       this.text(input.subject),
@@ -1366,12 +1512,14 @@ export class TenantInboxSyncService {
       name = sanitizeLeadName(basics.name, this.text(input.subject));
       if (name) values.name = name;
     }
-    name = name || this.text(
-      values.email,
-      this.text(values.phone, 'Inbound lead'),
-    );
-    const email = this.text(values.email).toLowerCase();
-    const phone = this.text(values.phone);
+    if (!name) {
+      const derived = deriveNameFromEmail(email);
+      if (derived) {
+        name = derived;
+        values.name = derived;
+      }
+    }
+    name = name || 'Inbound lead';
     const existing = await this.findLeadFromParsedValues(
       client,
       email,

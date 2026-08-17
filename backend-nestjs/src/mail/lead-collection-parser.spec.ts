@@ -1,10 +1,13 @@
 import {
   buildLeadCollectionFingerprint,
   buildLeadCollectionMappings,
+  deriveNameFromEmail,
+  extractLeadBasicsFromEmail,
   htmlToLeadCollectionText,
   parseLeadCollectionTemplate,
   parseLeadCollectionTemplates,
   sanitizeLeadName,
+  subjectNameFromSubject,
 } from './lead-collection-parser';
 
 describe('lead collection template parser', () => {
@@ -373,5 +376,283 @@ describe('lead collection template parser', () => {
     expect(sanitizeLeadName('Apply Now', 'Apply Now')).toBe('');
     expect(sanitizeLeadName('Jean Melo Cordova')).toBe('Jean Melo Cordova');
     expect(sanitizeLeadName('Matthew kutuk')).toBe('Matthew kutuk');
+  });
+
+  it('extracts a labeled Name field from the email body', () => {
+    const result = parseLeadCollectionTemplate({
+      ...template,
+      mappings: [],
+      requiredFields: [],
+    }, {
+      fromAddress: 'leads@email.realtor.com',
+      subject: 'New lead',
+      textBody: [
+        'Name: Norah Bec',
+        'Email: norahsbec@gmail.com',
+        'Phone: 786-252-6727',
+      ].join('\n'),
+    });
+    expect(result.values.name).toBe('Norah Bec');
+  });
+
+  it('extracts a From-header name', () => {
+    const result = parseLeadCollectionTemplate({
+      ...template,
+      mappings: [],
+      requiredFields: [],
+    }, {
+      fromAddress: 'norahsbec@gmail.com',
+      subject: 'New message',
+      textBody: [
+        'From: Norah Bec <norahsbec@gmail.com>',
+        'Phone: 786-252-6727',
+      ].join('\n'),
+    });
+    expect(result.values.name).toBe('Norah Bec');
+  });
+
+  it('extracts a name on the line after the Name label (realtor.com table layout)', () => {
+    const result = parseLeadCollectionTemplate({
+      ...template,
+      mappings: [],
+      requiredFields: [],
+    }, {
+      fromAddress: 'leads@email.realtor.com',
+      subject: 'com lead - Gerard Piette',
+      textBody: [
+        'New lead from realtor.com',
+        'Name',
+        'Gerard Piette',
+        'Phone',
+        '9545365129',
+        'Email',
+        'g.piette@yahoo.com',
+      ].join('\n'),
+    });
+    expect(result.values.name).toBe('Gerard Piette');
+    expect(result.values.phone).toBe('9545365129');
+    expect(result.values.email).toBe('g.piette@yahoo.com');
+  });
+
+  it('extracts the prospect name from the email subject', () => {
+    expect(subjectNameFromSubject('com lead - Gerard Piette')).toBe('Gerard Piette');
+    expect(subjectNameFromSubject('New Lead: Jane Doe')).toBe('Jane Doe');
+    expect(subjectNameFromSubject('Inquiry - John Smith')).toBe('John Smith');
+    expect(subjectNameFromSubject('New message from Zillow')).toBe('');
+  });
+
+  it('derives a readable name from a personal email local part', () => {
+    expect(deriveNameFromEmail('norah.bec@gmail.com')).toBe('Norah Bec');
+    expect(deriveNameFromEmail('john.doe@example.com')).toBe('John Doe');
+    expect(deriveNameFromEmail('leads@email.realtor.com')).toBe('');
+    expect(deriveNameFromEmail('rentalapplications@zillow.com')).toBe('');
+    expect(deriveNameFromEmail('user1234@gmail.com')).toBe('');
+    expect(deriveNameFromEmail('abc@gmail.com')).toBe('');
+    expect(deriveNameFromEmail('norahsbec@gmail.com')).toBe('');
+  });
+
+  it('picks the prospect email from a mailto link over the provider address', () => {
+    const result = extractLeadBasicsFromEmail({
+      fromAddress: 'leads@email.realtor.com',
+      subject: 'com lead - Johny Tobon',
+      htmlBody: `
+        <table><tr><td>Name</td><td>Johny Tobon</td></tr></table>
+        <p>For help, contact <a href="mailto:leads@email.realtor.com">leads@email.realtor.com</a></p>
+        <p>Reply to <a href="mailto:johnyalto@hotmail.com">johnyalto@hotmail.com</a></p>
+      `,
+    });
+    expect(result.name).toBe('Johny Tobon');
+    expect(result.email).toBe('johnyalto@hotmail.com');
+  });
+
+  it('skips the provider address even when it appears first in the body', () => {
+    const result = extractLeadBasicsFromEmail({
+      fromAddress: 'leads@email.realtor.com',
+      subject: 'New realtor.com lead - Johny Tobon',
+      htmlBody: `
+        <p>Questions? Email <a href="mailto:leads@email.realtor.com">leads@email.realtor.com</a>.</p>
+        <table><tr><td>Name</td><td>Johny Tobon</td></tr>
+        <tr><td>Email</td><td>johnyalto@hotmail.com</td></tr>
+        <tr><td>Phone</td><td>3058792145</td></tr></table>
+      `,
+    });
+    expect(result.name).toBe('Johny Tobon');
+    expect(result.email).toBe('johnyalto@hotmail.com');
+    expect(result.phone).toBe('3058792145');
+  });
+
+  it('replaces a mapped provider email with the mailto prospect email', () => {
+    const result = parseLeadCollectionTemplate({
+      ...template,
+      id: 77,
+      name: 'Realtor live',
+      senderPatterns: ['*@email.realtor.com'],
+      subjectPattern: 'New realtor.com lead',
+      subjectMatchMode: 'Contains',
+      bodyFingerprint: [],
+      mappings: [{
+        field: 'name',
+        label: 'Name',
+        source: 'EmailBody',
+        sampleValue: '',
+        selectionStart: -1,
+        selectionEnd: -1,
+        prefix: 'Name',
+        suffix: '',
+        occurrence: 0,
+        required: true,
+        transform: 'Text',
+      }, {
+        field: 'email',
+        label: 'Email',
+        source: 'EmailBody',
+        sampleValue: '',
+        selectionStart: -1,
+        selectionEnd: -1,
+        prefix: 'Email',
+        suffix: '',
+        occurrence: 0,
+        required: true,
+        transform: 'Email',
+      }, {
+        field: 'phone',
+        label: 'Phone',
+        source: 'EmailBody',
+        sampleValue: '',
+        selectionStart: -1,
+        selectionEnd: -1,
+        prefix: 'Phone',
+        suffix: '',
+        occurrence: 0,
+        required: true,
+        transform: 'Phone',
+      }],
+      requiredFields: ['name', 'email', 'phone'],
+      confidenceThreshold: 0.5,
+    }, {
+      fromAddress: 'leads@email.realtor.com',
+      subject: 'New realtor.com lead - Johny Tobon',
+      htmlBody: `
+        <table><tr><td>Name</td><td>Johny Tobon</td></tr>
+        <tr><td>Email</td><td>leads@email.realtor.com</td></tr>
+        <tr><td>Phone</td><td>3058792145</td></tr></table>
+        <p>Reply to <a href="mailto:johnyalto@hotmail.com">johnyalto@hotmail.com</a></p>
+      `,
+    });
+    expect(result.values.name).toBe('Johny Tobon');
+    expect(result.values.email).toBe('johnyalto@hotmail.com');
+    expect(result.values.phone).toBe('3058792145');
+  });
+
+  it('extracts table-cell values with the UI-style "Name:" label prefix', () => {
+    const result = parseLeadCollectionTemplate({
+      ...template,
+      id: 88,
+      name: 'Realtor table layout',
+      senderPatterns: ['*@email.realtor.com'],
+      subjectPattern: 'New realtor.com lead',
+      subjectMatchMode: 'Contains',
+      bodyFingerprint: [],
+      mappings: [{
+        field: 'name',
+        label: 'Name',
+        source: 'EmailBody',
+        sampleValue: 'Johny Tobon',
+        selectionStart: -1,
+        selectionEnd: -1,
+        prefix: 'Name:',
+        suffix: '',
+        occurrence: 0,
+        required: true,
+        transform: 'Text',
+      }, {
+        field: 'phone',
+        label: 'Phone',
+        source: 'EmailBody',
+        sampleValue: '3058792145',
+        selectionStart: -1,
+        selectionEnd: -1,
+        prefix: 'Phone:',
+        suffix: '',
+        occurrence: 0,
+        required: true,
+        transform: 'Phone',
+      }],
+      requiredFields: ['name', 'phone'],
+      confidenceThreshold: 0.5,
+    }, {
+      fromAddress: 'leads@email.realtor.com',
+      subject: 'New realtor.com lead - Sarah Lane',
+      textBody: [
+        'New lead from realtor.com',
+        'Name',
+        'Sarah Lane',
+        'Phone',
+        '7862526727',
+      ].join('\n'),
+    });
+    expect(result.values.name).toBe('Sarah Lane');
+    expect(result.values.phone).toBe('7862526727');
+  });
+
+  it('respects the mapped occurrence when a label repeats', () => {
+    const result = parseLeadCollectionTemplate({
+      ...template,
+      id: 89,
+      name: 'Repeated label layout',
+      senderPatterns: ['*@example.com'],
+      subjectPattern: 'Inquiry',
+      subjectMatchMode: 'Contains',
+      bodyFingerprint: [],
+      mappings: [{
+        field: 'name',
+        label: 'Contact',
+        source: 'EmailBody',
+        sampleValue: 'Sarah Lane',
+        selectionStart: -1,
+        selectionEnd: -1,
+        prefix: 'Contact',
+        suffix: '',
+        occurrence: 1,
+        required: true,
+        transform: 'Text',
+      }],
+      requiredFields: ['name'],
+      confidenceThreshold: 0.5,
+    }, {
+      fromAddress: 'inbox@example.com',
+      subject: 'Inquiry about a listing',
+      textBody: [
+        'Agent contact',
+        'Sam Wells',
+        'Lead contact',
+        'Sarah Lane',
+      ].join('\n'),
+    });
+    expect(result.values.name).toBe('Sarah Lane');
+  });
+
+  it('recovers the property from the body when the mapped address misses', () => {
+    const result = parseLeadCollectionTemplate({
+      ...template,
+      id: 90,
+      name: 'Property recovery',
+      senderPatterns: ['*@example.com'],
+      subjectPattern: 'New lead',
+      subjectMatchMode: 'Contains',
+      bodyFingerprint: [],
+      mappings: [],
+      requiredFields: ['property'],
+      confidenceThreshold: 0.5,
+    }, {
+      fromAddress: 'leads@example.com',
+      subject: 'New lead',
+      textBody: [
+        'I am interested in 8526 NW 107th Psge Unit 2-40, Doral, FL 33178.',
+        'Phone: 786-252-6727',
+      ].join('\n'),
+    });
+    expect(result.values.property).toContain('8526 NW 107th Psge');
+    expect(result.missingRequiredFields).not.toContain('property');
   });
 });

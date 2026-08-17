@@ -262,7 +262,9 @@ export function parseLeadCollectionTemplate(
     else delete values.name;
   }
   if (!values.name) {
-    const candidate = sanitizeLeadName(firstNameFromText(text), input.subject);
+    const candidate =
+      sanitizeLeadName(firstNameFromText(text), input.subject) ||
+      subjectNameFromSubject(input.subject);
     if (candidate) {
       values.name = candidate;
       diagnostics.push('name: person name fallback');
@@ -273,17 +275,18 @@ export function parseLeadCollectionTemplate(
   }
   if (!values.email) {
     const fromAddress = `${input.fromAddress ?? ''}`.toLowerCase();
+    const hrefs = `${input.htmlBody ?? ''}`
+      .match(/href\s*=\s*["'][^"']+["']/gi)
+      ?.join(' ') ?? '';
     const labeled = firstLabeledEmail(text);
-    const generic = firstEmail(text) ?? '';
     const labeledCandidate =
-      labeled && !isProviderSenderAddress(labeled) ? labeled : '';
-    const genericCandidate =
-      generic &&
-      generic !== fromAddress &&
-      !isProviderSenderAddress(generic)
-        ? generic
+      labeled &&
+      labeled !== fromAddress &&
+      !isProviderSenderAddress(labeled)
+        ? labeled
         : '';
-    const candidate = labeledCandidate || genericCandidate;
+    const candidate =
+      labeledCandidate || firstPersonalEmail(text, hrefs, fromAddress);
     if (candidate) {
       values.email = candidate;
       diagnostics.push('email: generic email validation fallback');
@@ -294,6 +297,34 @@ export function parseLeadCollectionTemplate(
     if (candidate) {
       values.phone = candidate;
       diagnostics.push('phone: generic phone validation fallback');
+    }
+  }
+  if (!values.property) {
+    const candidate = firstPropertyFromText(text);
+    if (candidate) {
+      values.property = candidate;
+      diagnostics.push('property: address pattern fallback');
+    }
+  }
+  if (!values.creditScore && fieldRequested(template, 'creditScore')) {
+    const candidate = labeledCreditScore(text) ?? firstCreditScore(text);
+    if (candidate) {
+      values.creditScore = candidate;
+      diagnostics.push('creditScore: generic credit score fallback');
+    }
+  }
+  if (
+    !values.budget &&
+    !values.monthlyEarning &&
+    (fieldRequested(template, 'budget') || fieldRequested(template, 'monthlyEarning'))
+  ) {
+    const candidate = firstBudgetFromText(text);
+    if (candidate) {
+      const target = fieldRequested(template, 'budget')
+        ? 'budget'
+        : 'monthlyEarning';
+      values[target] = candidate;
+      diagnostics.push(`${target}: numeric value fallback`);
     }
   }
 
@@ -386,11 +417,12 @@ function extractMappedValue(text: string, mapping: LeadCollectionFieldMapping) {
 
   const prefixCandidates = anchorCandidates(mapping.prefix, 'tail');
   const suffixCandidates = anchorCandidates(mapping.suffix, 'head');
+  const occurrence = Math.max(0, finiteInt(mapping.occurrence, 0));
   let start = -1;
   let matchedPrefix = '';
 
   for (const prefix of prefixCandidates) {
-    const index = findInsensitive(text, prefix);
+    const index = findPrefixOccurrence(text, prefix, occurrence);
     if (index >= 0) {
       start = index + prefix.length;
       matchedPrefix = prefix;
@@ -414,7 +446,7 @@ function extractMappedValue(text: string, mapping: LeadCollectionFieldMapping) {
   let end = -1;
   let matchedSuffix = '';
   for (const suffix of suffixCandidates) {
-    const index = findInsensitive(text, suffix, start);
+    const index = findPrefixOccurrence(text, suffix, occurrence, start);
     if (index >= start) {
       end = index;
       matchedSuffix = suffix;
@@ -475,14 +507,25 @@ function buildSuffixAnchor(text: string, selectionEnd: number) {
 function anchorCandidates(anchor: string, direction: 'head' | 'tail') {
   const normalized = normalizeLeadCollectionText(anchor);
   if (!normalized) return [];
+  const variants = [normalized];
+  // UI-saved label anchors end with ':' (e.g. "Name:"), but table-cell emails
+  // render the label and value on separate lines without a colon. Try both.
+  if (normalized.endsWith(':')) {
+    variants.push(normalized.slice(0, -1).trim());
+  } else {
+    variants.push(`${normalized}:`);
+  }
   const sizes = [normalized.length, 120, 80, 50, 28]
     .filter((size) => size > 0 && size <= normalized.length);
   const lines = normalized.split('\n').map((line) => line.trim()).filter(Boolean);
   const nearestLine = direction === 'tail' ? lines[lines.length - 1] : lines[0];
   return [...new Set([
-    ...sizes.map((size) =>
-      direction === 'tail' ? normalized.slice(-size) : normalized.slice(0, size),
-    ),
+    ...variants.flatMap((variant) => [
+      ...sizes.map((size) =>
+        direction === 'tail' ? variant.slice(-size) : variant.slice(0, size),
+      ),
+      variant,
+    ]),
     nearestLine,
   ])].filter((value) => value && value.length >= 3);
 }
@@ -576,7 +619,7 @@ const PROVIDER_SENDER_DOMAINS = [
   'streeteasy.com',
 ];
 
-function isProviderSenderAddress(email: string) {
+export function isProviderSenderAddress(email: string) {
   const domain = `${email ?? ''}`.split('@')[1]?.toLowerCase() ?? '';
   if (!domain) return false;
   return PROVIDER_SENDER_DOMAINS.some(
@@ -616,18 +659,15 @@ export function extractLeadBasicsFromEmail(input: LeadCollectionEmailInput) {
     ?.join(' ') ?? '';
   const fromAddress = `${input.fromAddress ?? ''}`.toLowerCase();
   const labeled = firstLabeledEmail(text);
-  const generic = firstEmail(text) ?? '';
   const usableLabeled =
-    labeled && !isProviderSenderAddress(labeled) ? labeled : '';
-  const usableGeneric =
-    generic &&
-    generic !== fromAddress &&
-    !isProviderSenderAddress(generic)
-      ? generic
+    labeled && labeled !== fromAddress && !isProviderSenderAddress(labeled)
+      ? labeled
       : '';
   return {
-    name: sanitizeLeadName(firstNameFromText(text), input.subject),
-    email: usableLabeled || usableGeneric,
+    name:
+      sanitizeLeadName(firstNameFromText(text), input.subject) ||
+      subjectNameFromSubject(input.subject),
+    email: usableLabeled || firstPersonalEmail(text, hrefs, fromAddress),
     phone: firstPhone(text) || firstPhone(hrefs) || '',
   };
 }
@@ -649,7 +689,73 @@ function firstNameFromText(value: string) {
     /([A-Z][a-z]+)'s\s+(?:phone|contact|message|application)/,
   )?.[1];
   if (possessive) return possessive;
+  const labeled = text.match(
+    /(?:^|\n)\s*(?:name|full name|client name|lead name|applicant name|buyer name|tenant name|prospect name|renter name|contact name)\s*(?:[:|–—-]\s*|\n)\s*([A-Z][A-Za-z' -]{1,60})(?:\n|$)/i,
+  )?.[1];
+  if (labeled) return labeled.trim();
+  const fromHeader = text.match(
+    /(?:^|\n)\s*(?:from|sender|lead|prospect|buyer|tenant|applicant|renter|client)\s*[:|–—-]\s*([A-Z][A-Za-z' -]{1,60})(?:\s*<[^>]+>)?\s*(?:\n|$)/i,
+  )?.[1];
+  if (fromHeader) return fromHeader.trim();
+  const angle = text.match(/<([A-Za-z][A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})>/);
+  if (angle) {
+    const before = text.slice(0, angle.index).replace(/\s+$/, '');
+    const trailingName = before.match(/([A-Z][a-z]+(?:\s+[A-Za-z]+){0,2})\s*$/);
+    if (trailingName) return trailingName[1];
+  }
+  const parenthesized = text.match(
+    /\b(?:from|by|name|contact)\s+([A-Z][A-Za-z' -]{1,60})\s*\([^)]*@[^)]*\)/i,
+  )?.[1];
+  if (parenthesized) return parenthesized.trim();
   return '';
+}
+
+/**
+ * Extracts the prospect name from email subjects like "com lead - Gerard
+ * Piette", "New Lead: Jane Doe", "Inquiry - John Smith".
+ */
+export function subjectNameFromSubject(subject: string) {
+  const raw = `${subject ?? ''}`.trim().replace(/\s+/g, ' ');
+  if (!raw) return '';
+  const cleaned = raw.replace(
+    /^(?:new\s+)?(?:lead|leads|inquiry|inquiries|showing|application|applicant|buyer|renter|tenant|prospect|request|message|contact|question|inbox|com\s+lead|realtor\.com\s+lead|zillow\s+lead)\s*[-–—:|]\s*/i,
+    '',
+  );
+  if (!cleaned || cleaned === raw) return '';
+  const match = cleaned.match(
+    /(?:^|[-–—:|])\s*([A-Z][A-Za-z']+(?:\s+[A-Za-z']+){0,3})\s*$/,
+  );
+  if (!match) return '';
+  const name = match[1].trim();
+  if (!name) return '';
+  return sanitizeLeadName(name, subject);
+}
+
+/**
+ * Derives a readable display name from a personal email local part,
+ * e.g. norahsbec@gmail.com -> "Norah S Bec". Only used when no real name
+ * was extracted and the address is not a provider/system sender.
+ */
+export function deriveNameFromEmail(email: string) {
+  const address = `${email ?? ''}`.trim().toLowerCase();
+  const local = address.split('@')[0] ?? '';
+  if (!local || local.length < 3 || isProviderSenderAddress(address)) return '';
+  const parts = local
+    .replace(/[^a-z0-9._-]/g, '')
+    .split(/[._-]+/)
+    .map((part) => part.trim())
+    .filter((part) => part.length > 1);
+  if (parts.length < 2) return '';
+  const digitsOnly = parts.every((part) => /^\d+$/.test(part));
+  if (digitsOnly) return '';
+  const name = parts
+    .map((part) => {
+      if (/^\d+$/.test(part)) return '';
+      return part[0].toUpperCase() + part.slice(1);
+    })
+    .filter(Boolean)
+    .join(' ');
+  return name && name.split(' ').length >= 2 ? name : '';
 }
 
 function firstLabeledEmail(value: string) {
@@ -662,6 +768,29 @@ function firstLabeledEmail(value: string) {
 
 function firstEmail(value: string) {
   return value.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)?.[0]?.toLowerCase();
+}
+
+function hrefEmails(hrefs: string) {
+  return [
+    ...hrefs.matchAll(/mailto:([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/gi),
+  ].map((match) => match[1].toLowerCase());
+}
+
+/**
+ * Finds the first personal (non-provider, non-sender) email across the body
+ * text and mailto: links. Provider addresses like leads@email.realtor.com or
+ * rentalapplications@zillow.com are skipped so the prospect's real address
+ * wins even when it appears later in the message.
+ */
+function firstPersonalEmail(text: string, hrefs = '', fromAddress = '') {
+  const from = `${fromAddress ?? ''}`.toLowerCase();
+  const candidates = [
+    ...(text.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi) ?? []),
+    ...hrefEmails(hrefs),
+  ]
+    .map((value) => value.toLowerCase())
+    .filter((value) => value !== from);
+  return candidates.find((value) => !isProviderSenderAddress(value)) ?? '';
 }
 
 function firstPhone(value: string) {
@@ -691,6 +820,47 @@ function firstCreditScore(value: string) {
     const score = Number(candidate);
     return score >= 300 && score <= 850;
   });
+}
+
+/**
+ * Extracts a property address from email body text: a labeled address line
+ * or a street-number line (e.g. "8526 NW 107th Psge Unit 2-40, Doral, FL").
+ */
+function firstPropertyFromText(value: string) {
+  const text = normalizeLeadCollectionText(value);
+  const labeled = text.match(
+    /(?:^|\n)\s*(?:property(?: address)?|address|street address|listing address|location)\s*[:|–—-]?\s*([^\n]{5,160})/i,
+  )?.[1]?.trim();
+  if (labeled) return cleanPropertyCandidate(labeled);
+  const street = text.match(
+    /(?:^|[\n"“\s])(\d{1,6}\s+[A-Za-z][A-Za-z0-9 .'#/-]{2,120})/
+  )?.[1]?.trim();
+  return cleanPropertyCandidate(street ?? '');
+}
+
+function cleanPropertyCandidate(value: string) {
+  const cleaned = `${value ?? ''}`
+    .replace(/\s+/g, ' ')
+    .replace(/[.,;:]+\s*$/, '')
+    .trim();
+  if (cleaned.length < 5) return '';
+  if (cleaned.includes('|')) return '';
+  if (/\b(?:call|tel|fax|www\.|http)/i.test(cleaned)) return '';
+  if (/^\(?\d{3}\)?[-\s]\d{3}[-\s]\d{4}/.test(cleaned)) return '';
+  if (/^(realtor\.com|zillow|the|please|thank|call|visit|view|click|more|download)/i.test(cleaned)) return '';
+  return cleaned.slice(0, 200);
+}
+
+function firstBudgetFromText(value: string) {
+  const text = normalizeLeadCollectionText(value);
+  const labeled = text.match(
+    /(?:^|\n)\s*(?:budget|monthly earning|monthly income|income|rent budget|max budget)\s*[:|–—-]?\s*([^\n]{1,60})/i,
+  )?.[1]?.trim();
+  if (labeled) {
+    const digits = labeled.match(/\$?\s*([\d,]{3,})/);
+    if (digits) return digits[1].replace(/,/g, '');
+  }
+  return '';
 }
 
 function labeledCreditScore(value: string) {
@@ -751,6 +921,43 @@ function findOccurrence(value: string, search: string, occurrence: number) {
     from = found + search.length;
   }
   return found;
+}
+
+/**
+ * Finds the Nth occurrence of an anchor. Single-line anchors (like a label
+ * "Name") are matched only at line starts so they don't hit mid-word or
+ * mid-sentence matches; multi-line anchors use plain substring search.
+ */
+function findPrefixOccurrence(
+  text: string,
+  anchor: string,
+  occurrence: number,
+  fromIndex = 0,
+) {
+  if (anchor.includes('\n') || anchor.length > 48) {
+    const found = findOccurrence(text.slice(fromIndex), anchor, occurrence);
+    return found >= 0 ? found + fromIndex : -1;
+  }
+  const safe = escapeRegExp(anchor);
+  const pattern = new RegExp(
+    `(^|\\n)\\s*${safe}(?=[\\s:;|\\u2013\\u2014-]|$)`,
+    'gi',
+  );
+  let from = fromIndex;
+  let occurrenceIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(text)) !== null) {
+    // Return the anchor START so callers can add the anchor length.
+    const index = match.index + match[0].length - safe.length;
+    if (index <= from) {
+      if (pattern.lastIndex === match.index) pattern.lastIndex += 1;
+      continue;
+    }
+    if (occurrenceIndex === occurrence) return index;
+    occurrenceIndex += 1;
+    if (pattern.lastIndex === match.index) pattern.lastIndex += 1;
+  }
+  return -1;
 }
 
 function hasFlexibleText(value: string, search: string) {
