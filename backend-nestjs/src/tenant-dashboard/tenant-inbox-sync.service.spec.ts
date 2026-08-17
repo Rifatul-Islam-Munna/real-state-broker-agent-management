@@ -632,6 +632,62 @@ describe('TenantInboxSyncService active parser processing', () => {
     expect(payload.phone).toBe('561-502-3528');
   });
 
+  test('replaces a CTA template name and provider email with real values', async () => {
+    const query = jest.fn(async (sql: string) => {
+      if (sql.includes("resource = 'lead-collection-templates'")) {
+        return {
+          rowCount: 1,
+          rows: [{
+            id: 9,
+            payload: {
+              name: 'Realtor parser',
+              senderPatterns: ['*@realtor.com'],
+              mappings: [{
+                field: 'name',
+                label: 'Name',
+                source: 'EmailBody',
+                prefix: '',
+                suffix: ' to schedule',
+                occurrence: 0,
+                required: false,
+                transform: 'Text',
+              }],
+              requiredFields: [],
+              confidenceThreshold: 0.82,
+            },
+          }],
+        };
+      }
+      if (sql.includes('INSERT INTO tenant_lead(')) {
+        return { rowCount: 1, rows: [{ id: 45, full_name: 'Jean Melo Cordova' }] };
+      }
+      return { rowCount: 0, rows: [] };
+    });
+    const service = new TenantInboxSyncService({} as any, {} as any, {} as any);
+
+    const parsed = await (service as any).createOrMatchLeadFromTemplate({ query }, {
+      sender: 'leads@email.realtor.com',
+      subject: 'Apply Now',
+      body: 'Apply Now to schedule a tour.\nJean Melo Cordova requested an application.\nEmail: leads@email.realtor.com\nPhone: 954-630-6208',
+      receivedAt: new Date('2026-08-18T00:00:00Z'),
+      mailboxTag: 'leads',
+      leadTemplateTags: [],
+      payload: {},
+    });
+
+    expect(parsed).toMatchObject({ created: true, lead: { id: 45 } });
+    const insertCall = query.mock.calls.find(
+      (call: unknown[]) =>
+        String(call[0]).includes('INSERT INTO tenant_lead('),
+    );
+    expect(insertCall).toBeDefined();
+    const insertParams = (insertCall as unknown[])[1] as unknown[];
+    expect(insertParams[0]).toBe('Jean Melo Cordova');
+    const payload = JSON.parse(String(insertParams[3]));
+    expect(payload.name).toBe('Jean Melo Cordova');
+    expect(payload.email ?? '').toBe('');
+  });
+
   test('records the parser skip reason when a stored email still cannot be converted', async () => {
     const query = jest.fn(async (sql: string) => {
       if (sql.includes('FROM tenant_outreach_job')) {

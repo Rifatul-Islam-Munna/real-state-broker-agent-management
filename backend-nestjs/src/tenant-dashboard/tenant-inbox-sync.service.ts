@@ -10,6 +10,7 @@ import {
   parseLeadCollectionTemplate,
   parseLeadCollectionTemplates,
   prepareLeadCollectionSource,
+  sanitizeLeadName,
 } from '../mail/lead-collection-parser';
 import { normalizeLinkedPageConfig } from '../mail/linked-page-config';
 import {
@@ -1356,9 +1357,18 @@ export class TenantInboxSyncService {
     }
 
     const values = result.values ?? {};
-    const name = this.text(
-      values.name,
-      this.text(values.email, this.text(values.phone, 'Inbound lead')),
+    let name = sanitizeLeadName(
+      this.text(values.name),
+      this.text(input.subject),
+    );
+    if (!name) {
+      const basics = extractLeadBasicsFromEmail(emailInput);
+      name = sanitizeLeadName(basics.name, this.text(input.subject));
+      if (name) values.name = name;
+    }
+    name = name || this.text(
+      values.email,
+      this.text(values.phone, 'Inbound lead'),
     );
     const email = this.text(values.email).toLowerCase();
     const phone = this.text(values.phone);

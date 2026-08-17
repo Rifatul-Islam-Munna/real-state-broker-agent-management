@@ -46,6 +46,7 @@ function errorMessage(error: unknown) {
 export type TenantActionState = {
   ok: boolean
   message: string
+  publicUrl?: string | null
 }
 
 export type TenantDashboardContext = {
@@ -365,22 +366,31 @@ export async function createTenantShowingRequestAction(
   formData: FormData,
 ): Promise<TenantActionState> {
   try {
-    await request("/tenant-dashboard/showing-requests", {
-      method: "POST",
-      body: JSON.stringify({
-        leadId: numberValue(formData.get("leadId")),
-        templateId: numberValue(formData.get("templateId")),
-        propertyId: numberValue(formData.get("propertyId")),
-        propertyMode: stringValue(formData.get("propertyMode")),
-        title: stringValue(formData.get("title")),
-        message: stringValue(formData.get("message")),
-        expiryHours: Number(formData.get("expiryHours") ?? 72),
-        channels: formData.getAll("channels").map(String),
-      }),
-    })
+    const created = await request<TenantShowingRequest>(
+      "/tenant-dashboard/showing-requests",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          leadId: numberValue(formData.get("leadId")),
+          templateId: numberValue(formData.get("templateId")),
+          propertyId: numberValue(formData.get("propertyId")),
+          propertyMode: stringValue(formData.get("propertyMode")),
+          title: stringValue(formData.get("title")),
+          message: stringValue(formData.get("message")),
+          expiryHours: Number(formData.get("expiryHours") ?? 72),
+          channels: formData.getAll("channels").map(String),
+        }),
+      },
+    )
     revalidatePath("/dashboard/showing-requests")
     revalidatePath("/dashboard")
-    return { ok: true, message: "Showing request created. Open its detail page to copy the secure link." }
+    return {
+      ok: true,
+      message: created?.publicUrl
+        ? created.publicUrl
+        : "Showing request created. Open its detail page to copy the secure link.",
+      publicUrl: created?.publicUrl ?? null,
+    }
   } catch (error) {
     return { ok: false, message: errorMessage(error) }
   }

@@ -10,6 +10,7 @@ import {
   FilePlus2,
   GripVertical,
   Plus,
+  Search,
   Send,
   Settings2,
   Trash2,
@@ -67,6 +68,7 @@ export function TenantShowingRequestsWorkspace({ leads, properties, templates, r
   const [requestState, requestAction, requestPending] = useActionState(createTenantShowingRequestAction, initialState)
   const [templateState, templateAction, templatePending] = useActionState(createTenantShowingTemplateAction, initialState)
   const [selectedLeadId, setSelectedLeadId] = useState("")
+  const [leadSearch, setLeadSearch] = useState("")
   const [selectedTemplateId, setSelectedTemplateId] = useState(templates[0] ? String(templates[0].id) : "")
   const initialMode = templates[0]?.propertyMode ?? "fixed"
   const [propertyMode, setPropertyMode] = useState<"fixed" | "respondent">(initialMode)
@@ -84,12 +86,22 @@ export function TenantShowingRequestsWorkspace({ leads, properties, templates, r
     return properties.filter((property) => property.status === "published" && linkedIds.has(property.id))
   }, [properties, selectedLead])
 
-  const handleLeadChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
-    const leadId = event.target.value
-    setSelectedLeadId(leadId)
-    const lead = leads.find((item) => String(item.id) === leadId)
-    const firstPublished = (lead?.properties ?? []).find((property) => property.status === "published")
-    setSelectedPropertyId(firstPublished ? String(firstPublished.id) : "")
+  const handleLeadSearch = (value: string) => {
+    setLeadSearch(value)
+    const normalized = value.trim().toLowerCase()
+    const lead = leads.find(
+      (item) =>
+        item.full_name.toLowerCase() === normalized ||
+        item.email?.toLowerCase() === normalized ||
+        item.phone?.toLowerCase() === normalized,
+    )
+    if (lead) {
+      setSelectedLeadId(String(lead.id))
+      const firstPublished = (lead.properties ?? []).find((property) => property.status === "published")
+      setSelectedPropertyId(firstPublished ? String(firstPublished.id) : "")
+    } else if (!normalized) {
+      setSelectedLeadId("")
+    }
   }
 
   const handleTemplateChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
@@ -185,7 +197,39 @@ export function TenantShowingRequestsWorkspace({ leads, properties, templates, r
           <article className="rounded-[24px] border border-slate-200 bg-white p-6 shadow-[0_16px_45px_rgba(15,23,42,0.06)] sm:p-7">
             <div className="flex items-start gap-4"><span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-[#fff6df] text-[#946710]"><Send className="size-5" /></span><div><h2 className="text-xl font-bold">Send showing form</h2><p className="mt-1 text-sm leading-6 text-slate-600">A linked live property is filled automatically. You can change it or let the recipient choose.</p></div></div>
             <form action={requestAction} className="mt-7 grid gap-5">
-              <label className="grid gap-2 text-sm font-semibold">Lead<select className="h-12 rounded-xl border border-slate-300 bg-white px-4 outline-none focus:border-[#17213b]" name="leadId" onChange={handleLeadChange} required value={selectedLeadId}><option value="">Choose lead</option>{leads.map((lead) => <option key={lead.id} value={lead.id}>{lead.full_name} - {lead.email || lead.phone || "no contact"}</option>)}</select></label>
+              <label className="grid gap-2 text-sm font-semibold">
+                Lead
+                <span className="relative">
+                  <input
+                    aria-label="Search and choose lead"
+                    autoComplete="off"
+                    className="h-12 w-full rounded-xl border border-slate-300 bg-white px-4 pr-10 outline-none focus:border-[#17213b]"
+                    list="showing-request-lead-options"
+                    onChange={(event) => handleLeadSearch(event.target.value)}
+                    placeholder="Search lead by name, email, or phone…"
+                    value={leadSearch}
+                  />
+                  <Search className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+                </span>
+                <datalist id="showing-request-lead-options">
+                  {leads.map((lead) => (
+                    <option key={lead.id} value={lead.full_name}>
+                      {lead.email || lead.phone || "no contact"}
+                    </option>
+                  ))}
+                </datalist>
+                <input name="leadId" type="hidden" value={selectedLeadId} />
+                {selectedLead ? (
+                  <span className="flex items-center gap-1.5 text-xs font-medium text-emerald-700">
+                    <CheckCircle2 className="size-3.5" />
+                    {selectedLead.email || selectedLead.phone || "Lead selected"}
+                  </span>
+                ) : (
+                  <span className="text-xs font-normal text-slate-400">
+                    Start typing to search your leads
+                  </span>
+                )}
+              </label>
               <label className="grid gap-2 text-sm font-semibold">Template<select className="h-12 rounded-xl border border-slate-300 bg-white px-4 outline-none focus:border-[#17213b]" name="templateId" onChange={handleTemplateChange} required value={selectedTemplateId}><option value="">Choose template</option>{templates.map((template) => <option key={template.id} value={template.id}>{template.name}</option>)}</select></label>
               <input name="propertyMode" type="hidden" value={propertyMode} />
 
@@ -199,7 +243,31 @@ export function TenantShowingRequestsWorkspace({ leads, properties, templates, r
               <label className="grid gap-2 text-sm font-semibold">Intro message<textarea className="min-h-28 rounded-xl border border-slate-300 p-4 font-normal leading-6 outline-none focus:border-[#17213b]" name="message" placeholder="Invite the lead and explain what happens after submission." /></label>
               <label className="grid gap-2 text-sm font-semibold">Link expires after<select className="h-12 rounded-xl border border-slate-300 bg-white px-4 font-normal outline-none focus:border-[#17213b]" defaultValue="72" name="expiryHours"><option value="24">24 hours</option><option value="48">48 hours</option><option value="72">3 days</option><option value="168">7 days</option><option value="336">14 days</option><option value="720">30 days</option></select></label>
               <fieldset className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><legend className="px-1 text-sm font-semibold">Send through</legend><div className="mt-2 flex flex-wrap gap-5 text-sm"><label className="flex items-center gap-2"><input defaultChecked name="channels" type="checkbox" value="Email" /> Email</label><label className="flex items-center gap-2"><input name="channels" type="checkbox" value="SMS" /> SMS</label></div></fieldset>
-              {requestState.message ? <div className={`flex items-start gap-3 rounded-xl px-4 py-3 text-sm ${requestState.ok ? "bg-emerald-50 text-emerald-800" : "bg-rose-50 text-rose-800"}`} role="status">{requestState.ok ? <CheckCircle2 className="mt-0.5 size-4 shrink-0" /> : <TriangleAlert className="mt-0.5 size-4 shrink-0" />}<span>{requestState.message}</span></div> : null}
+              {requestState.message ? (
+                <div className={`flex flex-col gap-3 rounded-xl px-4 py-3 text-sm ${requestState.ok ? "bg-emerald-50 text-emerald-800" : "bg-rose-50 text-rose-800"}`} role="status">
+                  <span className="flex items-start gap-3">
+                    {requestState.ok ? <CheckCircle2 className="mt-0.5 size-4 shrink-0" /> : <TriangleAlert className="mt-0.5 size-4 shrink-0" />}
+                    <span>{requestState.ok ? "Showing request created. Share the secure link anywhere:" : requestState.message}</span>
+                  </span>
+                  {requestState.ok && requestState.publicUrl ? (
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                      <code className="min-w-0 flex-1 truncate rounded-lg border border-emerald-200 bg-white px-3 py-2 text-xs text-emerald-900">{requestState.publicUrl}</code>
+                      <button
+                        className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-emerald-800 px-3 text-xs font-bold text-white transition hover:bg-emerald-900"
+                        onClick={() => {
+                          void navigator.clipboard.writeText(requestState.publicUrl ?? "")
+                          setCopiedLinkId(0)
+                          window.setTimeout(() => setCopiedLinkId((current) => (current === 0 ? null : current)), 1600)
+                        }}
+                        type="button"
+                      >
+                        {copiedLinkId === 0 ? <CheckCircle2 className="size-3.5" /> : <ClipboardList className="size-3.5" />}
+                        {copiedLinkId === 0 ? "Copied" : "Copy link"}
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
               <button className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-[#17213b] px-5 font-semibold text-white shadow-lg shadow-[#17213b]/15 disabled:opacity-60" disabled={requestPending || !templates.length || !leads.length} type="submit"><Send className="size-4" /> {requestPending ? "Creating..." : "Create and send request"}</button>
             </form>
           </article>

@@ -161,6 +161,7 @@ export function Section2Section({
   const [csvRows, setCsvRows] = useState<Array<Record<string, string>>>([])
   const [csvMapping, setCsvMapping] = useState({ ...emptyLeadMapping })
   const [csvMessage, setCsvMessage] = useState<string | null>(null)
+  const [exporting, setExporting] = useState(false)
   const importLeadsMutation = useImportLeads()
 
   useEffect(() => {
@@ -210,6 +211,95 @@ export function Section2Section({
     setDeleteMessage(null)
     setSelectedIds([])
     setDeleteConfirmOpen(false)
+  }
+
+  async function exportLeadsCsv() {
+    setExporting(true)
+    try {
+      const rows: LeadItem[] = []
+      const pageSize = 200
+      let page = 1
+      let totalCount = Infinity
+      while (rows.length < totalCount && page <= 200) {
+        const params = new URLSearchParams()
+        if (searchTerm?.trim()) params.set("search", searchTerm.trim())
+        if (dateFilter) params.set("date", dateFilter)
+        params.set("page", String(page))
+        params.set("pageSize", String(pageSize))
+        const response = await fetch(`/api/proxy/leads?${params.toString()}`)
+        if (!response.ok) throw new Error("Failed to fetch leads for export.")
+        const data = await response.json()
+        const items = Array.isArray(data?.items) ? data.items : []
+        totalCount = Number(data?.totalCount ?? items.length)
+        rows.push(...items)
+        if (items.length < pageSize) break
+        page += 1
+      }
+      if (rows.length === 0) {
+        setCsvMessage("No leads match the current filters to export.")
+        return
+      }
+      const headers = [
+        "Name",
+        "Email",
+        "Phone",
+        "Property",
+        "Stage",
+        "Priority",
+        "Source",
+        "Interest",
+        "Budget",
+        "Credit Score",
+        "Monthly Earning",
+        "Timeline",
+        "Created At",
+        "Last Activity",
+        "Notes",
+      ]
+      const escapeCell = (value: unknown) => {
+        const text = `${value ?? ""}`
+        return `"${text.replace(/"/g, "\"\"")}"`
+      }
+      const lines = [headers.map(escapeCell).join(",")]
+      for (const lead of rows) {
+        lines.push(
+          [
+            lead.name,
+            lead.email,
+            lead.phone,
+            lead.property,
+            lead.stage,
+            lead.priority,
+            lead.source,
+            lead.interest,
+            lead.budget,
+            lead.creditScore,
+            lead.monthlyEarning,
+            lead.timeline,
+            lead.createdAt ? new Date(lead.createdAt).toLocaleString() : "",
+            lead.lastActivityAt ? new Date(lead.lastActivityAt).toLocaleString() : "",
+            (lead.notes ?? []).join(" | "),
+          ]
+            .map(escapeCell)
+            .join(","),
+        )
+      }
+      const csv = "\uFEFF" + lines.join("\r\n")
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement("a")
+      link.href = url
+      link.download = dateFilter
+        ? `leads-${dateFilter}.csv`
+        : `leads-export-${new Date().toISOString().slice(0, 10)}.csv`
+      link.click()
+      URL.revokeObjectURL(url)
+      setCsvMessage(`Exported ${rows.length} lead${rows.length === 1 ? "" : "s"} to CSV.`)
+    } catch (error) {
+      setCsvMessage(error instanceof Error ? error.message : "Export failed.")
+    } finally {
+      setExporting(false)
+    }
   }
 
   function downloadLeadSample() {
@@ -391,11 +481,20 @@ export function Section2Section({
           <div className="flex flex-wrap items-center gap-2">
             <Button
               className="h-10 rounded-lg border-[var(--ether-secondary)] bg-transparent px-4 font-semibold text-[var(--ether-secondary)] hover:bg-[color-mix(in_srgb,var(--ether-secondary-container)_20%,white)]"
-              onClick={downloadLeadSample}
+              onClick={() => void exportLeadsCsv()}
               type="button"
               variant="outline"
             >
               <AppIcon name="download" />
+              {exporting ? "Exporting…" : "Export CSV"}
+            </Button>
+            <Button
+              className="h-10 rounded-lg border-[var(--ether-outline-variant)] bg-white px-4 font-semibold text-[var(--ether-on-surface-variant)] shadow-[var(--shadow-surface-1)]"
+              onClick={downloadLeadSample}
+              type="button"
+              variant="outline"
+            >
+              <AppIcon name="description" />
               Sample CSV
             </Button>
             <Button
@@ -435,6 +534,11 @@ export function Section2Section({
           ))}
         </section>
 
+        {csvMessage ? (
+          <Alert variant={csvMessage.startsWith("Exported") ? undefined : "destructive"}>
+            <AlertDescription>{csvMessage}</AlertDescription>
+          </Alert>
+        ) : null}
         {isLoading ? (
           <Alert>
             <AlertDescription>{"Loading leads..."}</AlertDescription>

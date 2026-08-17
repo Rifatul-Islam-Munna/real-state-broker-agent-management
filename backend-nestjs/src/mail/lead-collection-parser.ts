@@ -256,18 +256,34 @@ export function parseLeadCollectionTemplate(
     diagnostics.push(`${mapping.field}: ${result.reason}`);
   }
 
+  if (values.name) {
+    const cleanName = sanitizeLeadName(values.name, input.subject);
+    if (cleanName) values.name = cleanName;
+    else delete values.name;
+  }
   if (!values.name) {
-    const candidate = firstNameFromText(text);
+    const candidate = sanitizeLeadName(firstNameFromText(text), input.subject);
     if (candidate) {
       values.name = candidate;
       diagnostics.push('name: person name fallback');
     }
   }
+  if (values.email && isProviderSenderAddress(values.email)) {
+    delete values.email;
+  }
   if (!values.email) {
     const fromAddress = `${input.fromAddress ?? ''}`.toLowerCase();
     const labeled = firstLabeledEmail(text);
     const generic = firstEmail(text) ?? '';
-    const candidate = labeled || (generic && generic !== fromAddress ? generic : '');
+    const labeledCandidate =
+      labeled && !isProviderSenderAddress(labeled) ? labeled : '';
+    const genericCandidate =
+      generic &&
+      generic !== fromAddress &&
+      !isProviderSenderAddress(generic)
+        ? generic
+        : '';
+    const candidate = labeledCandidate || genericCandidate;
     if (candidate) {
       values.email = candidate;
       diagnostics.push('email: generic email validation fallback');
@@ -544,6 +560,52 @@ function genericTransformCandidate(text: string, transform: LeadCollectionFieldT
   return '';
 }
 
+const PROVIDER_SENDER_DOMAINS = [
+  'zillow.com',
+  'convo.zillow.com',
+  'realtor.com',
+  'trulia.com',
+  'hotpads.com',
+  'redfin.com',
+  'apartments.com',
+  'homes.com',
+  'zumper.com',
+  'apartmentlist.com',
+  'movoto.com',
+  'homefinder.com',
+  'streeteasy.com',
+];
+
+function isProviderSenderAddress(email: string) {
+  const domain = `${email ?? ''}`.split('@')[1]?.toLowerCase() ?? '';
+  if (!domain) return false;
+  return PROVIDER_SENDER_DOMAINS.some(
+    (provider) => domain === provider || domain.endsWith(`.${provider}`),
+  );
+}
+
+/**
+ * Rejects template-mapped names that are actually page CTAs or the email
+ * subject (e.g. "Apply Now", "Request Information") instead of a real name.
+ */
+export function sanitizeLeadName(name: string, subject = '') {
+  const value = `${name ?? ''}`.trim().replace(/\s+/g, ' ');
+  if (value.length < 2) return '';
+  if (/[@\d]/.test(value) && !/[a-zA-Z]{2,}/.test(value)) return '';
+  const normalized = value.toLowerCase();
+  const subjectNormalized = `${subject ?? ''}`.trim().toLowerCase();
+  if (subjectNormalized && normalized === subjectNormalized) return '';
+  const ctaPhrase =
+    /^(apply|request|inquire|enquire|get|learn|find|book|schedule|view|see|search|contact|download|read|start|sign)\s+(now|more|info|information|a quote|a tour|today|here|started|in touch|with us|for free)\b/.test(
+      normalized,
+    );
+  const singleVerb = /^(apply|request|inquire|enquire|learn|book|schedule|contact|search|view|find|download|read|sign)$/.test(
+    normalized,
+  );
+  if (ctaPhrase || singleVerb) return '';
+  return value;
+}
+
 export function extractLeadBasicsFromEmail(input: LeadCollectionEmailInput) {
   const text = prepareLeadCollectionSource({
     htmlBody: input.htmlBody,
@@ -555,9 +617,17 @@ export function extractLeadBasicsFromEmail(input: LeadCollectionEmailInput) {
   const fromAddress = `${input.fromAddress ?? ''}`.toLowerCase();
   const labeled = firstLabeledEmail(text);
   const generic = firstEmail(text) ?? '';
+  const usableLabeled =
+    labeled && !isProviderSenderAddress(labeled) ? labeled : '';
+  const usableGeneric =
+    generic &&
+    generic !== fromAddress &&
+    !isProviderSenderAddress(generic)
+      ? generic
+      : '';
   return {
-    name: firstNameFromText(text),
-    email: labeled || (generic && generic !== fromAddress ? generic : ''),
+    name: sanitizeLeadName(firstNameFromText(text), input.subject),
+    email: usableLabeled || usableGeneric,
     phone: firstPhone(text) || firstPhone(hrefs) || '',
   };
 }

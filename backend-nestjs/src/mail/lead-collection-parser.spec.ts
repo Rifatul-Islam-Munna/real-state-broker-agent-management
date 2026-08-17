@@ -4,6 +4,7 @@ import {
   htmlToLeadCollectionText,
   parseLeadCollectionTemplate,
   parseLeadCollectionTemplates,
+  sanitizeLeadName,
 } from './lead-collection-parser';
 
 describe('lead collection template parser', () => {
@@ -326,5 +327,51 @@ describe('lead collection template parser', () => {
     expect(result.values.name).toBe('Matthew kutuk');
     expect(result.values.email).toBe('matthew@example.com');
     expect(result.values.phone).toBe('561-502-3528');
+  });
+
+  it('ignores provider sender addresses when no real email is present', () => {
+    const result = parseLeadCollectionTemplate({
+      ...template,
+      mappings: [],
+      requiredFields: [],
+    }, {
+      fromAddress: 'leads@email.realtor.com',
+      subject: 'New realtor.com lead',
+      textBody: [
+        'A new lead has been sent to you.',
+        'Contact the sender at leads@email.realtor.com.',
+        'Phone: 347-737-4177',
+      ].join('\n'),
+    });
+    expect(result.values.name ?? '').toBe('');
+    expect(result.values.email ?? '').toBe('');
+    expect(result.values.phone).toBe('347-737-4177');
+  });
+
+  it('ignores Zillow system sender addresses like rentalapplications@zillow.com', () => {
+    const result = parseLeadCollectionTemplate({
+      ...template,
+      mappings: [],
+      requiredFields: [],
+    }, {
+      fromAddress: 'rentalapplications@zillow.com',
+      subject: 'New application',
+      textBody: [
+        'Jean Melo Cordova requested an application.',
+        'For questions email rentalapplications@zillow.com.',
+        'Phone: 954-630-6208',
+      ].join('\n'),
+    });
+    expect(result.values.name).toBe('Jean Melo Cordova');
+    expect(result.values.email ?? '').toBe('');
+    expect(result.values.phone).toBe('954-630-6208');
+  });
+
+  it('rejects CTA phrases as names', () => {
+    expect(sanitizeLeadName('Apply Now')).toBe('');
+    expect(sanitizeLeadName('Request Information')).toBe('');
+    expect(sanitizeLeadName('Apply Now', 'Apply Now')).toBe('');
+    expect(sanitizeLeadName('Jean Melo Cordova')).toBe('Jean Melo Cordova');
+    expect(sanitizeLeadName('Matthew kutuk')).toBe('Matthew kutuk');
   });
 });
