@@ -149,7 +149,9 @@ export class TenantLegacyCompatibilityService {
         'SELECT id, payload, created_at, updated_at FROM tenant_legacy_resource WHERE resource = $1 ORDER BY updated_at DESC',
         [cleanResource],
       );
-      const items = result.rows.map((row: any) => this.genericItem(row));
+      const items = result.rows.map((row: any) =>
+        cleanResource === 'deals' ? this.dealItem(row) : this.genericItem(row),
+      );
       if (query?.id) return items.find((item: any) => item.id === Number(query.id)) ?? null;
       if (query?.slug) return items.find((item: any) => `${item.slug ?? ''}` === `${query.slug}`) ?? null;
       const filtered = this.filter(items, query);
@@ -168,7 +170,9 @@ export class TenantLegacyCompatibilityService {
          RETURNING id, payload, created_at, updated_at`,
         [cleanResource, JSON.stringify(body ?? {})],
       );
-      return this.genericItem(result.rows[0]);
+      return cleanResource === 'deals'
+        ? this.dealItem(result.rows[0])
+        : this.genericItem(result.rows[0]);
     });
   }
 
@@ -187,7 +191,9 @@ export class TenantLegacyCompatibilityService {
          WHERE resource = $1 AND id = $2 RETURNING id, payload, created_at, updated_at`,
         [cleanResource, id, JSON.stringify(payload)],
       );
-      return this.genericItem(result.rows[0]);
+      return cleanResource === 'deals'
+        ? this.dealItem(result.rows[0])
+        : this.genericItem(result.rows[0]);
     });
   }
 
@@ -478,6 +484,40 @@ export class TenantLegacyCompatibilityService {
     return {
       ...payload,
       id: Number(row.id),
+      createdAt: payload.createdAt ?? row.created_at,
+      updatedAt: payload.updatedAt ?? row.updated_at,
+    };
+  }
+
+  private dealItem(row: any) {
+    const payload = row?.payload && typeof row.payload === 'object' ? row.payload : {};
+    const allowedStages = new Set([
+      'OfferMade', 'OfferAccepted', 'UnderContract', 'Inspection',
+      'Financing', 'Closing', 'Completed', 'Canceled',
+    ]);
+    const allowedTypes = new Set(['Residential', 'Commercial', 'Industrial']);
+    const stage = allowedStages.has(payload.stage) ? payload.stage : 'OfferMade';
+    const type = allowedTypes.has(payload.type) ? payload.type : 'Residential';
+    return {
+      ...payload,
+      id: Number(row.id),
+      title: `${payload.title ?? ''}`,
+      client: `${payload.client ?? payload.sourceLeadName ?? ''}`,
+      type,
+      stage,
+      value: Number(payload.value) || 0,
+      commissionRate: Number(payload.commissionRate) || 0,
+      commissionAmount: Number(payload.commissionAmount) || 0,
+      commissionStatus: `${payload.commissionStatus ?? 'Estimated'}`,
+      commissionPayoutNote: `${payload.commissionPayoutNote ?? ''}`,
+      deadline: `${payload.deadline ?? ''}`,
+      expectedClosingDate: payload.expectedClosingDate ?? null,
+      note: `${payload.note ?? ''}`,
+      agent: `${payload.agent ?? ''}`,
+      agentId: Number(payload.agentId) || null,
+      sourceLeadId: Number(payload.sourceLeadId) || null,
+      sourceLeadName: `${payload.sourceLeadName ?? ''}`,
+      checklistItems: Array.isArray(payload.checklistItems) ? payload.checklistItems : [],
       createdAt: payload.createdAt ?? row.created_at,
       updatedAt: payload.updatedAt ?? row.updated_at,
     };

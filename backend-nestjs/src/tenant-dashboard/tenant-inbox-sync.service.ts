@@ -132,6 +132,11 @@ export class TenantInboxSyncService {
 
   async getStatus(tenant: SaasTenant) {
     const config: any = await this.settings.getRawSmtp(tenant);
+    const authType = this.text(config?.authType).toLowerCase();
+    const imap = this.imapConnectionConfig(config);
+    const isConfigured = authType === 'gmail-oauth' || config?.gmailRefreshToken
+      ? Boolean(config?.gmailRefreshToken)
+      : Boolean(imap.host && imap.user && imap.pass);
     return this.databases.withTenantClient(this.databaseName(tenant), async (client) => {
       const result = await client.query(
         `SELECT status, cursor, last_started_at, last_completed_at,
@@ -140,13 +145,16 @@ export class TenantInboxSyncService {
          FROM tenant_sync_state WHERE sync_key = 'mail-inbox'`,
       );
       const row = result.rows[0] ?? {};
+      const lastStartedAt = row.last_started_at ? new Date(row.last_started_at).getTime() : 0;
+      const processingIsFresh = row.status === 'processing'
+        && lastStartedAt > Date.now() - 30 * 60_000;
       return {
-        isConfigured: Boolean(config?.imapHost || config?.gmailRefreshToken),
+        isConfigured,
         syncEnabled: config?.enableInboxSync === true,
         syncIntervalMinutes: Number(config?.syncIntervalMinutes) || 5,
         localInboxRetentionDays: this.retentionDays(config?.localInboxRetentionDays),
         status: row.status ?? 'scheduled',
-        isRunning: row.status === 'processing',
+        isRunning: processingIsFresh,
         lastStartedAt: row.last_started_at ?? null,
         lastCompletedAt: row.last_completed_at ?? null,
         lastSucceededAt: row.last_succeeded_at ?? null,
@@ -156,7 +164,9 @@ export class TenantInboxSyncService {
         lastCreatedLeadCount: Number(row.created_count) || 0,
         lastSkippedCount: Number(row.skipped_count) || 0,
         lastError: row.last_error ?? null,
-        statusMessage: row.last_error
+        statusMessage: row.status === 'processing' && !processingIsFresh
+          ? 'Previous sync was interrupted. Click Sync now to retry.'
+          : row.last_error
           ? `Sync error: ${row.last_error}`
           : row.last_completed_at
             ? `${Number(row.imported_count) || 0} imported · ${Number(row.created_count) || 0} leads created · ${Number(row.matched_count) || 0} matched · ${Number(row.skipped_count) || 0} skipped`
@@ -194,9 +204,7 @@ export class TenantInboxSyncService {
       return true;
     }
 
-    const host = this.text(config.imapHost);
-    const user = this.text(config.imapUsername, config.username);
-    const pass = this.text(config.imapPassword, config.password);
+    const { host, user, pass } = this.imapConnectionConfig(config);
     const uid = Number(message.payload?.uid ?? `${message.providerMessageId ?? ''}`.split(':').pop());
     if (!host || !user || !pass || !Number.isInteger(uid) || uid <= 0) return false;
     const { ImapFlow } = require('imapflow');
@@ -368,9 +376,7 @@ export class TenantInboxSyncService {
     await this.markStarted(databaseName, providerKey);
     let connection: any;
     try {
-      const host = this.text(config.imapHost);
-      const user = this.text(config.imapUsername, config.username);
-      const pass = this.text(config.imapPassword, config.password);
+      const { host, user, pass } = this.imapConnectionConfig(config);
       if (!host || !user || !pass) throw new Error('Tenant IMAP configuration is incomplete.');
       const { ImapFlow } = require('imapflow');
       const { simpleParser } = require('mailparser');
@@ -1352,6 +1358,21 @@ export class TenantInboxSyncService {
       );
       return result.rows[0]?.due !== false;
     });
+  }
+
+  private imapConnectionConfig(config: any) {
+    const smtpHost = this.text(config?.host).toLowerCase();
+    const provider = this.text(config?.providerName).toLowerCase();
+    const inferredHost = smtpHost.includes('gmail') || provider.includes('gmail')
+      ? 'imap.gmail.com'
+      : smtpHost.includes('office365') || smtpHost.includes('outlook') || provider.includes('outlook')
+        ? 'outlook.office365.com'
+        : '';
+    return {
+      host: this.text(config?.imapHost, inferredHost),
+      user: this.text(config?.imapUsername, config?.username),
+      pass: this.text(config?.imapPassword, config?.password),
+    };
   }
 
   private databaseName(tenant: SaasTenant) {

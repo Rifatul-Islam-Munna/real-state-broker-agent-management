@@ -451,7 +451,7 @@ export function Section2Section({
                 </thead>
                 <tbody>
                   {orderedLeads.map((lead, index) => {
-                    const initials = lead.name.split(" ").filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase()
+                    const initials = `${lead.name ?? ""}`.split(" ").filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase()
                     const avatarTone = index % 3 === 0 ? "bg-[var(--ether-primary-fixed)] text-[var(--ether-primary)]" : index % 3 === 1 ? "bg-[var(--ether-tertiary-fixed)] text-[var(--ether-tertiary)]" : "bg-[color-mix(in_srgb,var(--ether-secondary-container)_35%,white)] text-[var(--ether-secondary)]"
                     return (
                       <tr className="group transition hover:bg-[var(--ether-surface-container-low)]" key={lead.id}>

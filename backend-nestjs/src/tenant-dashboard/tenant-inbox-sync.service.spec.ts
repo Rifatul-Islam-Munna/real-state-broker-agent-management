@@ -131,3 +131,19 @@ describe('TenantInboxSyncService deleted mail protection', () => {
     expect(query.mock.calls.map(([sql]) => sql.trim())).toContain('COMMIT');
   });
 });
+
+describe('TenantInboxSyncService connection compatibility', () => {
+  test('infers Gmail IMAP settings from existing SMTP config', () => {
+    const service = new TenantInboxSyncService({} as any, {} as any, {} as any);
+    expect((service as any).imapConnectionConfig({
+      providerName: 'Gmail',
+      host: 'smtp.gmail.com',
+      username: 'agent@example.com',
+      password: 'app-password',
+    })).toEqual({
+      host: 'imap.gmail.com',
+      user: 'agent@example.com',
+      pass: 'app-password',
+    });
+  });
+});
