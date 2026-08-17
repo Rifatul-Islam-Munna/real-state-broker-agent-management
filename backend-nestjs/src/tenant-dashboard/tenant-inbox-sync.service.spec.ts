@@ -147,3 +147,72 @@ describe('TenantInboxSyncService connection compatibility', () => {
     });
   });
 });
+
+describe('TenantInboxSyncService active parser processing', () => {
+  test('creates a lead from any matching active parser regardless of mailbox tags', async () => {
+    const query = jest.fn(async (sql: string) => {
+      if (sql.includes("resource = 'lead-collection-templates'")) {
+        return {
+          rowCount: 1,
+          rows: [{
+            id: 8,
+            payload: {
+              name: 'Generic provider parser',
+              senderPatterns: ['*@example.com'],
+              mailboxTags: ['different-mailbox'],
+              mappings: [{
+                field: 'property',
+                label: 'Property',
+                source: 'EmailBody',
+                sampleValue: '123 Main St',
+                selectionStart: 10,
+                selectionEnd: 21,
+                prefix: 'Property:',
+                suffix: '',
+                occurrence: 0,
+                required: false,
+                transform: 'Text',
+              }],
+              requiredFields: ['name'],
+              confidenceThreshold: 0.99,
+            },
+          }],
+        };
+      }
+      if (sql.includes('INSERT INTO tenant_lead(')) {
+        return { rowCount: 1, rows: [{ id: 31, full_name: 'Inbound lead' }] };
+      }
+      return { rowCount: 0, rows: [] };
+    });
+    const service = new TenantInboxSyncService({} as any, {} as any, {} as any);
+
+    const parsed = await (service as any).createOrMatchLeadFromTemplate({ query }, {
+      sender: 'lead@example.com',
+      subject: 'New inquiry',
+      body: 'Property: 123 Main St',
+      receivedAt: new Date('2026-08-18T00:00:00Z'),
+      mailboxTag: 'leads',
+      leadTemplateTags: ['another-tag'],
+      payload: {},
+    });
+
+    expect(parsed).toMatchObject({ created: true, lead: { id: 31 } });
+    expect(parsed.result).toMatchObject({ matched: true, templateId: 8 });
+    expect(query.mock.calls.some(([sql]) => sql.includes('INSERT INTO tenant_lead('))).toBe(true);
+  });
+
+  test('uses provider sender for dedupe only when parser extracted no contact', async () => {
+    const query = jest.fn().mockResolvedValue({ rowCount: 0, rows: [] });
+    const service = new TenantInboxSyncService({} as any, {} as any, {} as any);
+    await (service as any).findLeadFromParsedValues(
+      { query },
+      'person@example.com',
+      '',
+      'shared-provider@example.net',
+    );
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining("$1 = '' AND $2 = '' AND $3 <> ''"),
+      ['person@example.com', '', 'shared-provider@example.net'],
+    );
+  });
+});

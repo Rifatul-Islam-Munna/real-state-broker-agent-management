@@ -23,4 +23,29 @@ describe('TenantLegacyCompatibilityService response defaults', () => {
       checklistItems: [],
     });
   });
+
+  test('returns lead history as an array for the lead detail UI', async () => {
+    const query = jest.fn().mockResolvedValue({
+      rows: [{
+        id: 12,
+        payload: { leadId: 7, action: 'Created' },
+        created_at: new Date('2026-08-18T00:00:00Z'),
+        updated_at: new Date('2026-08-18T00:00:00Z'),
+      }],
+    });
+    const databases = {
+      withTenantClient: jest.fn((_database: string, callback: any) => callback({ query })),
+    };
+    const service = new TenantLegacyCompatibilityService(
+      databases as any,
+      {} as any,
+      {} as any,
+    );
+
+    await expect(service.genericList(
+      { databaseName: 'tenant_1_demo' } as any,
+      'lead-history',
+      { leadId: 7 },
+    )).resolves.toEqual([expect.objectContaining({ id: 12, leadId: 7 })]);
+  });
 });

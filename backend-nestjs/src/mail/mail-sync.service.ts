@@ -364,13 +364,6 @@ export class MailInboxSyncBackgroundService {
       textBody: inbound.body,
       mailboxTag: inbound.mailboxTag,
     });
-    if (
-      config.leadTemplateTags.length &&
-      !config.leadTemplateTags.map((item) => item.toLowerCase()).includes(inbound.mailboxTag.toLowerCase())
-    ) {
-      templateResult.scopeMatched = false;
-      templateResult.diagnostics.push(`mailbox-tag: ${inbound.mailboxTag || 'untagged'} is not enabled for lead templates`);
-    }
     const fallback = await this.mailboxLeadIntelligence.extractLeadFromEmail({
       ...inbound,
       receivedAt: inbound.receivedAt,
@@ -381,9 +374,9 @@ export class MailInboxSyncBackgroundService {
     const defaultPhoneCountry = agencySettings.profile?.defaultPhoneCountry ?? 'US';
     extracted.phone = normalizePhoneNumber(extracted.phone, defaultPhoneCountry);
     const matchedProperty = this.matchProperty(properties, inbound, extracted);
-    const combined = `${inbound.subject}\n${inbound.body}`.toLowerCase();
     const leadTemplateAllowed = templateResult.scopeMatched !== false && templateResult.matched === true;
-    const isPropertyInquiry = leadTemplateAllowed && (!!matchedProperty || extracted.shouldCreateLead === true || this.isPropertyInquiry(combined));
+    const combined = `${inbound.subject}\n${inbound.body}`.toLowerCase();
+    const isPropertyInquiry = leadTemplateAllowed;
 
     const outcome = await this.dataSource.transaction(async (manager) => {
       const mailRepo = manager.getRepository(MailInboxItem);

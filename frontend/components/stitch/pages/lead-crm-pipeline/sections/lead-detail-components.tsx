@@ -204,6 +204,7 @@ export function LeadDetailsPanel({
   const leadNotes = getLeadNotes(lead.notes)
   const sourceLabel = displayText(lead.source)
   const historyQuery = useLeadHistory(lead.id)
+  const historyEntries = Array.isArray(historyQuery.data) ? historyQuery.data : []
   const agentInitials = displayText(lead.agent, "NA")
     .split(" ")
     .filter(Boolean)
@@ -317,7 +318,7 @@ export function LeadDetailsPanel({
 
               {historyQuery.isLoading ? <p className="text-xs text-[var(--ether-outline)]">Loading history...</p> : null}
               {historyQuery.error ? <p className="text-xs font-semibold text-[var(--ether-error)]">{historyQuery.error.message}</p> : null}
-              {historyQuery.data?.map((entry) => (
+              {historyEntries.map((entry) => (
                 <ActivityItem key={`${lead.id}-${entry.id}-${entry.createdAt}`} title={entry.title} description={entry.summary} date={entry.scheduledAt ?? entry.occurredAt ?? entry.createdAt} />
               ))}
               {leadNotes.map((note, index) => <ActivityItem key={`${lead.id}-note-${index}`} title={`Note ${index + 1}`} description={note} />)}

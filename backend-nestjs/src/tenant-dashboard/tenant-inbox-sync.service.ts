@@ -545,7 +545,18 @@ export class TenantInboxSyncService {
           })}`);
           return { ...this.emptyStats(), skipped: 1, reason };
         }
-        let lead = await this.findLead(client, input.channel, input.sender);
+        const key = createHash('sha256')
+          .update(`${input.providerKey}|${input.providerMessageId}`)
+          .digest('hex');
+        const storedLead = await client.query(
+          `SELECT to_jsonb(lead) AS value
+           FROM tenant_outreach_job mail
+           JOIN tenant_lead lead ON lead.id = mail.lead_id
+           WHERE mail.idempotency_key = $1
+           LIMIT 1`,
+          [key],
+        );
+        let lead = storedLead.rows[0]?.value ?? null;
         let parserResult: any = null;
         let created = false;
         if (!lead && input.channel === 'email' && input.autoCreateLeads === true) {
@@ -553,13 +564,14 @@ export class TenantInboxSyncService {
           lead = parsed?.lead ?? null;
           parserResult = parsed?.result ?? null;
           created = parsed?.created === true;
+          if (!lead) lead = await this.findLead(client, input.channel, input.sender);
         } else if (!lead && input.channel === 'email') {
           parserResult = this.parserFailure('Automatic lead creation is disabled.');
+          lead = await this.findLead(client, input.channel, input.sender);
+        } else if (!lead) {
+          lead = await this.findLead(client, input.channel, input.sender);
         }
         const channel = input.channel === 'email' ? 'Email' : 'SMS';
-        const key = createHash('sha256')
-          .update(`${input.providerKey}|${input.providerMessageId}`)
-          .digest('hex');
         const payload = {
           ...(input.payload ?? {}),
           mailbox: this.text(input.mailboxTag),
@@ -787,7 +799,6 @@ export class TenantInboxSyncService {
       };
     }
 
-    const allowedTemplateTags = this.stringList(input.leadTemplateTags).map((item) => item.toLowerCase());
     const templates = savedTemplates.rows
       .map((row: any) => {
       const saved = row.payload && typeof row.payload === 'object' ? row.payload : {};
@@ -812,22 +823,7 @@ export class TenantInboxSyncService {
         requiredFields: this.stringList(saved.requiredFields),
         confidenceThreshold: Number(saved.confidenceThreshold) || 0.82,
       };
-    })
-      .filter((template: any) => {
-        const tags = this.stringList(template.mailboxTags).map((item) => item.toLowerCase());
-        if (allowedTemplateTags.length && !tags.some((tag) => allowedTemplateTags.includes(tag))) return false;
-        const inboundTag = this.text(input.mailboxTag).toLowerCase();
-        return !tags.length || !inboundTag || tags.includes(inboundTag);
-      });
-    if (!templates.length) {
-      return {
-        lead: null,
-        created: false,
-        result: this.parserFailure(
-          'Active parsers were excluded by mailbox or lead-template tags.',
-        ),
-      };
-    }
+    });
 
     const emailInput = {
       fromAddress: this.text(input.sender).toLowerCase(),
@@ -852,23 +848,17 @@ export class TenantInboxSyncService {
         );
       }
     }
-    if (
-      !result.matched ||
-      result.confidence < result.threshold ||
-      result.missingRequiredFields.length > 0
-    ) {
+    if (!result.matched) {
       return { lead: null, created: false, result };
     }
 
     const values = result.values ?? {};
-    const name = this.text(values.name, this.text(values.email, this.text(values.phone)));
+    const name = this.text(
+      values.name,
+      this.text(values.email, this.text(values.phone, 'Inbound lead')),
+    );
     const email = this.text(values.email).toLowerCase();
     const phone = this.text(values.phone);
-    if (!name && !email && !phone) {
-      result.diagnostics.push('No usable name, email, or phone was extracted.');
-      return { lead: null, created: false, result };
-    }
-
     const existing = await this.findLeadFromParsedValues(
       client,
       email,
@@ -1002,7 +992,7 @@ export class TenantInboxSyncService {
        FROM tenant_lead
        WHERE ($1 <> '' AND lower(COALESCE(email, '')) = lower($1))
           OR ($2 <> '' AND regexp_replace(COALESCE(phone, ''), '[^0-9]', '', 'g') = regexp_replace($2, '[^0-9]', '', 'g'))
-          OR ($3 <> '' AND lower(COALESCE(payload->>'inboundReplyAddress', '')) = lower($3))
+          OR ($1 = '' AND $2 = '' AND $3 <> '' AND lower(COALESCE(payload->>'inboundReplyAddress', '')) = lower($3))
        ORDER BY id DESC
        LIMIT 1`,
       [email, phone, this.text(inboundReplyAddress).toLowerCase()],

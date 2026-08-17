@@ -156,7 +156,7 @@ export class TenantLegacyCompatibilityService {
       if (query?.slug) return items.find((item: any) => `${item.slug ?? ''}` === `${query.slug}`) ?? null;
       const filtered = this.filter(items, query);
       if (
-        ['realtors', 'users-agents', 'lead-assignment-rules', 'lead-outreach-templates', 'showing-feedback-properties'].includes(cleanResource)
+        ['realtors', 'users-agents', 'lead-assignment-rules', 'lead-outreach-templates', 'lead-history', 'showing-feedback-properties'].includes(cleanResource)
       ) return filtered;
       return this.paginate(filtered, query);
     });
