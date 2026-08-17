@@ -151,6 +151,7 @@ export class LeadOutreachBackgroundService {
   }
 
   async queueOutreach(lead: Lead, createdBy = 'Morning Outreach') {
+    if (!lead.property) return null;
     const kind = lead.email ? 'Email' : lead.phone ? 'Sms' : null;
     if (!kind) return null;
     const target = kind === 'Email' ? lead.email : lead.phone;

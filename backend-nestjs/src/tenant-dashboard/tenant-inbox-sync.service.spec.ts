@@ -38,6 +38,17 @@ describe('TenantInboxSyncService property matching', () => {
     await expect((service as any).matchParsedProperty(db, 'Listing #XYZ 6750 NW 8th Street')).resolves.toBe(1);
   });
 
+  test('finds a property whose address appears in the email subject', async () => {
+    const db = client([
+      { id: 1, title: '4041 NW 30th Ter Unit #3', payload: {} },
+    ]);
+    await expect((service as any).matchPropertyMentionedInEmail(db, {
+      textBody: 'A renter has requested an application for this property.',
+      htmlBody: '',
+      subject: 'Pending Applicant for 4041 NW 30th Ter Apt 3, Lauderdale Lakes, FL 33309',
+    })).resolves.toEqual({ id: 1, title: '4041 NW 30th Ter Unit #3' });
+  });
+
   test('finds a property whose address appears in the email body', async () => {
     const db = client([
       { id: 1, title: '2500 Parkview Dr Unit #1216', payload: { location: 'Hallandale Beach, FL' } },
@@ -57,6 +68,274 @@ describe('TenantInboxSyncService property matching', () => {
       textBody: 'Please call me back about availability in the area.',
       htmlBody: '',
     })).resolves.toBeNull();
+  });
+});
+
+describe('TenantInboxSyncService auto welcome send', () => {
+  function freshLeadRow(overrides: Record<string, any> = {}) {
+    return {
+      id: 7,
+      full_name: 'Matthew kutuk',
+      email: 'matthew@example.com',
+      phone: '+1 555 010 2233',
+      payload: { property: '2500 Parkview Dr Unit #1216' },
+      property_id: 3,
+      property_title: '2500 Parkview Dr Unit #1216',
+      property_payload: {
+        propertyDocuments: [
+          { name: 'Flyer', fileName: 'flyer.pdf', fileUrl: 'https://cdn.example.com/flyer.pdf' },
+          { name: 'App', fileName: 'app.pdf', fileUrl: 'https://cdn.example.com/app.pdf' },
+        ],
+      },
+      ...overrides,
+    };
+  }
+
+  function buildService(leadRows: any[], agency: any, enqueueResult: any) {
+    const query = jest.fn(async (sql: string) => {
+      if (sql.includes('FROM tenant_lead l')) {
+        return { rowCount: leadRows.length, rows: leadRows };
+      }
+      return { rowCount: 0, rows: [] };
+    });
+    const databases = {
+      withTenantClient: jest.fn((_database: string, callback: any) => callback({ query })),
+    };
+    const settings = {
+      getAgencySettings: jest.fn().mockResolvedValue(agency),
+    };
+    const enqueueWithClient = jest.fn().mockResolvedValue(enqueueResult);
+    const outreach = { enqueueWithClient };
+    const service = new TenantInboxSyncService(
+      {} as any,
+      databases as any,
+      settings as any,
+      outreach as any,
+    );
+    return { service, enqueueWithClient };
+  }
+
+  const agencySettings = {
+    profile: { agencyName: 'Sunshine Realty', contactName: 'Alex Agent' },
+    leadAutomation: { enabled: true, channels: ['Email', 'SMS'], directTemplateId: 'welcome' },
+    communicationTemplates: [
+      {
+        id: 'welcome',
+        name: 'Welcome',
+        subject: 'Hello {{client_name}}, welcome to {{agency_name}}',
+        body: 'Thank you for your interest in {{property_address}}.',
+        channels: ['Email', 'SMS'],
+        sequenceType: 'Direct',
+        audience: 'Lead',
+        isActive: true,
+        attachmentMode: 'property',
+        attachPropertyDocuments: true,
+      },
+    ],
+  };
+
+  test('schedules welcome Email and SMS with rendered tokens and property documents', async () => {
+    const { service, enqueueWithClient } = buildService(
+      [freshLeadRow()],
+      agencySettings,
+      [{ status: 'scheduled' }],
+    );
+    const result = await (service as any).autoSendWelcomeForLeads({
+      databaseName: 'tenant_1_demo',
+    } as any);
+    expect(result.enqueued).toBe(2);
+    expect(enqueueWithClient).toHaveBeenCalledTimes(2);
+    const [first, second] = enqueueWithClient.mock.calls.map((call: any[]) => call[1]);
+    const email = first.channels[0] === 'Email' ? first : second;
+    const sms = first.channels[0] === 'SMS' ? first : second;
+    expect(email.channels).toEqual(['Email']);
+    expect(email.recipientEmail).toBe('matthew@example.com');
+    expect(email.title).toBe('Hello Matthew kutuk, welcome to Sunshine Realty');
+    expect(email.body).toBe('Thank you for your interest in 2500 Parkview Dr Unit #1216.');
+    expect(email.mediaUrls).toEqual([
+      'https://cdn.example.com/flyer.pdf',
+      'https://cdn.example.com/app.pdf',
+    ]);
+    expect(sms.channels).toEqual(['SMS']);
+    expect(sms.recipientPhone).toBe('+1 555 010 2233');
+    expect(sms.idempotencyKey).toContain('lead-auto-welcome:7:');
+  });
+
+  test('skips the SMS channel when the lead has no phone', async () => {
+    const { service, enqueueWithClient } = buildService(
+      [freshLeadRow({ phone: null })],
+      agencySettings,
+      [{ status: 'scheduled' }],
+    );
+    const result = await (service as any).autoSendWelcomeForLeads({
+      databaseName: 'tenant_1_demo',
+    } as any);
+    expect(result.enqueued).toBe(1);
+    expect(enqueueWithClient).toHaveBeenCalledTimes(1);
+    expect(enqueueWithClient.mock.calls[0][1].channels).toEqual(['Email']);
+  });
+
+  test('does not schedule anything when automation is disabled', async () => {
+    const { service, enqueueWithClient } = buildService(
+      [freshLeadRow()],
+      {
+        ...agencySettings,
+        leadAutomation: { enabled: false, channels: ['Email'] },
+      },
+      [{ status: 'scheduled' }],
+    );
+    const result = await (service as any).autoSendWelcomeForLeads({
+      databaseName: 'tenant_1_demo',
+    } as any);
+    expect(result.enqueued).toBe(0);
+    expect(enqueueWithClient).not.toHaveBeenCalled();
+  });
+
+  test('does not attach documents when the template does not request them', async () => {
+    const { service, enqueueWithClient } = buildService(
+      [freshLeadRow()],
+      {
+        ...agencySettings,
+        communicationTemplates: [
+          {
+            ...agencySettings.communicationTemplates[0],
+            attachmentMode: 'none',
+            attachPropertyDocuments: false,
+          },
+        ],
+      },
+      [{ status: 'scheduled' }],
+    );
+    await (service as any).autoSendWelcomeForLeads({
+      databaseName: 'tenant_1_demo',
+    } as any);
+    const email = enqueueWithClient.mock.calls.find(
+      (call: any[]) => call[1].channels[0] === 'Email',
+    )[1];
+    expect(email.mediaUrls).toEqual([]);
+  });
+});
+
+describe('TenantInboxSyncService follow-up scheduling', () => {
+  const followUpLead = {
+    id: 7,
+    full_name: 'Matthew kutuk',
+    email: 'matthew@example.com',
+    phone: '+1 555 010 2233',
+    property_id: 3,
+    property_title: '2500 Parkview Dr Unit #1216',
+    property_payload: { propertyDocuments: [] },
+    sent_at: new Date('2026-08-17T12:00:00Z'),
+  };
+
+  const followUpAgency = {
+    profile: { agencyName: 'Sunshine Realty' },
+    leadAutomation: {
+      enabled: true,
+      channels: ['Email', 'SMS'],
+      followUpEnabled: true,
+    },
+    communicationTemplates: [
+      {
+        id: 'follow-up-1',
+        name: 'Follow-up 1',
+        subject: 'Following up about {{property_address}}',
+        body: 'Hi {{client_name}}, are you still interested?',
+        channels: ['Email', 'SMS'],
+        sequenceType: 'FollowUp1',
+        audience: 'Lead',
+        gapDays: 1,
+        isActive: true,
+      },
+      {
+        id: 'follow-up-2',
+        name: 'Follow-up 2',
+        subject: 'Last check',
+        body: 'Final follow-up {{client_name}}.',
+        channels: ['Email'],
+        sequenceType: 'FollowUp2',
+        audience: 'Lead',
+        gapDays: 3,
+        isActive: true,
+      },
+    ],
+  };
+
+  function buildFollowUpService(leadRows: any[], agency: any, enqueueResult: any) {
+    const query = jest.fn(async (sql: string) => {
+      if (sql.includes('FROM tenant_lead l')) {
+        return { rowCount: leadRows.length, rows: leadRows };
+      }
+      return { rowCount: 0, rows: [] };
+    });
+    const databases = {
+      withTenantClient: jest.fn((_database: string, callback: any) => callback({ query })),
+    };
+    const settings = {
+      getAgencySettings: jest.fn().mockResolvedValue(agency),
+    };
+    const enqueueWithClient = jest.fn().mockResolvedValue(enqueueResult);
+    const service = new TenantInboxSyncService(
+      {} as any,
+      databases as any,
+      settings as any,
+      { enqueueWithClient } as any,
+    );
+    return { service, enqueueWithClient };
+  }
+
+  test('schedules follow-ups after a sent welcome at cumulative gap days', async () => {
+    const { service, enqueueWithClient } = buildFollowUpService(
+      [followUpLead],
+      followUpAgency,
+      [{ status: 'scheduled' }],
+    );
+    const result = await (service as any).scheduleTenantFollowUps({
+      databaseName: 'tenant_1_demo',
+    } as any);
+    expect(result.enqueued).toBe(3);
+    expect(enqueueWithClient).toHaveBeenCalledTimes(3);
+    const calls = enqueueWithClient.mock.calls.map((call: any[]) => call[1]);
+    const fu1Email = calls.find(
+      (item: any) =>
+        item.channels[0] === 'Email' &&
+        item.idempotencyKey.includes('follow-up-1'),
+    );
+    const fu1Sms = calls.find(
+      (item: any) =>
+        item.channels[0] === 'SMS' &&
+        item.idempotencyKey.includes('follow-up-1'),
+    );
+    const fu2Email = calls.find(
+      (item: any) =>
+        item.channels[0] === 'Email' &&
+        item.idempotencyKey.includes('follow-up-2'),
+    );
+    expect(fu1Email.title).toBe('Following up about 2500 Parkview Dr Unit #1216');
+    expect(fu1Email.body).toBe('Hi Matthew kutuk, are you still interested?');
+    expect(fu1Email.scheduledAt.getTime()).toBe(
+      new Date('2026-08-17T12:00:00Z').getTime() + 86_400_000,
+    );
+    expect(fu1Sms.recipientPhone).toBe('+1 555 010 2233');
+    expect(fu2Email.scheduledAt.getTime()).toBe(
+      new Date('2026-08-17T12:00:00Z').getTime() + 4 * 86_400_000,
+    );
+  });
+
+  test('does not schedule follow-ups when follow-ups are disabled', async () => {
+    const { service, enqueueWithClient } = buildFollowUpService(
+      [followUpLead],
+      {
+        ...followUpAgency,
+        leadAutomation: { ...followUpAgency.leadAutomation, followUpEnabled: false },
+      },
+      [{ status: 'scheduled' }],
+    );
+    const result = await (service as any).scheduleTenantFollowUps({
+      databaseName: 'tenant_1_demo',
+    } as any);
+    expect(result.enqueued).toBe(0);
+    expect(enqueueWithClient).not.toHaveBeenCalled();
   });
 });
 

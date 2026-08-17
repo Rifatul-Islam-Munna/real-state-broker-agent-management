@@ -99,11 +99,20 @@ export class TenantLegacyCompatibilityService {
   }
 
   async deleteLead(tenant: SaasTenant, body: any) {
-    const id = this.id(body?.id);
+    const ids = Array.isArray(body?.ids)
+      ? body.ids.map((item: unknown) => Number(item)).filter((item: number) => Number.isInteger(item) && item > 0)
+      : [];
+    if (ids.length === 0) {
+      const id = this.id(body?.id);
+      ids.push(id);
+    }
     return this.databases.withTenantClient(this.databaseName(tenant), async (client) => {
-      const result = await client.query('DELETE FROM tenant_lead WHERE id = $1 RETURNING id', [id]);
+      const result = await client.query(
+        'DELETE FROM tenant_lead WHERE id = ANY($1::bigint[]) RETURNING id',
+        [ids],
+      );
       if (!result.rowCount) throw new NotFoundException('Lead not found');
-      return { id };
+      return { deleted: result.rows.map((row: any) => Number(row.id)) };
     });
   }
 
@@ -585,8 +594,19 @@ export class TenantLegacyCompatibilityService {
   private filter(items: any[], query: any) {
     const search = `${query?.search ?? query?.q ?? ''}`.trim().toLowerCase();
     const status = `${query?.status ?? ''}`.trim().toLowerCase();
+    const dateKey = `${query?.date ?? query?.createdDate ?? ''}`.trim();
+    const dateParts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateKey);
     return items.filter((item) => {
       if (status && `${item?.status ?? item?.stage ?? ''}`.toLowerCase() !== status) return false;
+      if (dateParts) {
+        const created = new Date(item?.createdAt ?? item?.created_at ?? NaN);
+        if (!Number.isFinite(created.getTime())) return false;
+        const sameDay =
+          created.getUTCFullYear() === Number(dateParts[1]) &&
+          created.getUTCMonth() === Number(dateParts[2]) - 1 &&
+          created.getUTCDate() === Number(dateParts[3]);
+        if (!sameDay) return false;
+      }
       if (!search) return true;
       return JSON.stringify(item).toLowerCase().includes(search);
     });

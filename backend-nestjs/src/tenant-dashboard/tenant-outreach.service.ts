@@ -354,6 +354,11 @@ export class TenantOutreachService {
       const leadId = this.positiveId(input?.leadId, 'Lead id');
       const lead = await this.leadSnapshot(client, leadId);
       const channel = this.channel(input?.kind);
+      if (channel !== 'Call' && !(await this.leadHasProperty(client, leadId))) {
+        throw new BadRequestException(
+          'This lead has no property selected. Email and SMS outreach are blocked until a property is selected for this lead.',
+        );
+      }
       const agency = await this.agencySettings(client);
       const template = input?.templateId
         ? agency.communicationTemplates.find(
@@ -669,12 +674,25 @@ export class TenantOutreachService {
       try {
         const result = await client.query<TenantOutreachJob>(
           `WITH due AS (
-             SELECT id
-             FROM tenant_outreach_job
-             WHERE status IN ('scheduled', 'retrying')
-               AND scheduled_at <= now()
-               AND next_attempt_at <= now()
-             ORDER BY next_attempt_at, scheduled_at, id
+             SELECT j.id
+             FROM tenant_outreach_job j
+             WHERE j.status IN ('scheduled', 'retrying')
+               AND j.scheduled_at <= now()
+               AND j.next_attempt_at <= now()
+               AND (
+                 j.channel = 'Call'
+                 OR j.lead_id IS NULL
+                 OR EXISTS (
+                   SELECT 1 FROM tenant_lead_property lp
+                   WHERE lp.lead_id = j.lead_id
+                 )
+                 OR EXISTS (
+                   SELECT 1 FROM tenant_lead l2
+                   WHERE l2.id = j.lead_id
+                     AND COALESCE(l2.payload->>'property', '') <> ''
+                 )
+               )
+             ORDER BY j.next_attempt_at, j.scheduled_at, j.id
              FOR UPDATE SKIP LOCKED
              LIMIT $1
            )
@@ -847,6 +865,20 @@ export class TenantOutreachService {
     );
     if (!result.rows[0]?.value) throw new NotFoundException('Tenant lead was not found.');
     return this.camelize(result.rows[0].value);
+  }
+
+  private async leadHasProperty(client: PoolClient, leadId: number) {
+    const linked = await client.query(
+      'SELECT 1 FROM tenant_lead_property WHERE lead_id = $1 LIMIT 1',
+      [leadId],
+    );
+    if (linked.rowCount) return true;
+    const lead = await client.query(
+      `SELECT COALESCE(payload->>'property', '') AS property
+       FROM tenant_lead WHERE id = $1`,
+      [leadId],
+    );
+    return this.text(lead.rows[0]?.property).length > 0;
   }
 
   private async resolveAudience(client: PoolClient, input: any) {
@@ -1231,8 +1263,12 @@ export class TenantOutreachService {
 
   private matchesPublicStatus(actual: string, requested?: string) {
     if (!requested) return true;
-    if (requested === 'Completed') return actual === 'Sent';
-    return actual === requested;
+    const normalizedRequested = requested.trim().toLowerCase();
+    const normalizedActual = `${actual ?? ''}`.trim().toLowerCase();
+    if (normalizedRequested === 'completed') {
+      return ['sent', 'completed'].includes(normalizedActual);
+    }
+    return normalizedActual === normalizedRequested;
   }
 
   private async listEntity(tenant: SaasTenant, entity: 'lead' | 'deal', query: any) {

@@ -768,10 +768,10 @@ export function useImportLeads() {
 export function useDeleteLead() {
   const invalidate = useInvalidate(["leads", "deals", "dashboard"])
 
-  return useCommonMutationApi<unknown, { id: string }>({
+  return useCommonMutationApi<{ deleted: number[] }, { id?: string; ids?: number[] }>({
     method: "DELETE",
     onSuccess: () => void invalidate(),
-    successMessage: "Lead deleted",
+    successMessage: "Lead(s) deleted",
     url: "/leads",
   })
 }

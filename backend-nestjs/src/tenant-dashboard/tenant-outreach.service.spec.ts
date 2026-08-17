@@ -151,6 +151,75 @@ describe('TenantOutreachService reliability', () => {
     },
   );
 
+  it('blocks email and SMS outreach for leads without a property', async () => {
+    const query = jest.fn(async (sql: string) => {
+      if (sql.includes('FROM tenant_lead_property')) {
+        return { rowCount: 0, rows: [] };
+      }
+      if (sql.includes("payload->>'property'")) {
+        return { rowCount: 1, rows: [{ property: '' }] };
+      }
+      if (sql.includes('SELECT to_jsonb(lead)')) {
+        return {
+          rowCount: 1,
+          rows: [{
+            value: { id: 9, full_name: 'Buyer', email: 'buyer@example.com' },
+          }],
+        };
+      }
+      return { rowCount: 0, rows: [] };
+    });
+    const { service } = createService(query);
+
+    await expect(service.queueOutreach(tenant, {
+      leadId: 9,
+      kind: 'Email',
+      message: 'Hi',
+    })).rejects.toThrow('no property selected');
+    await expect(service.queueOutreach(tenant, {
+      leadId: 9,
+      kind: 'Sms',
+      message: 'Hi',
+    })).rejects.toThrow('no property selected');
+  });
+
+  it('allows outreach for leads that have a linked property', async () => {
+    const query = jest.fn(async (sql: string) => {
+      if (sql.includes('FROM tenant_lead_property')) {
+        return { rowCount: 1, rows: [{ lead_id: 9 }] };
+      }
+      if (sql.includes('SELECT to_jsonb(lead)')) {
+        return {
+          rowCount: 1,
+          rows: [{
+            value: {
+              id: 9,
+              full_name: 'Buyer',
+              email: 'buyer@example.com',
+              payload: { property: '2500 Parkview Dr' },
+            },
+          }],
+        };
+      }
+      return { rowCount: 0, rows: [] };
+    });
+    const { service } = createService(query);
+    jest.spyOn(service as any, 'enqueueWithClient').mockResolvedValue([{
+      id: 99,
+      status: 'scheduled',
+      leadId: 9,
+      channel: 'Email',
+      recipientEmail: 'buyer@example.com',
+    }]);
+
+    await expect(service.queueOutreach(tenant, {
+      leadId: 9,
+      kind: 'Email',
+      title: 'Hello',
+      message: 'Hi',
+    })).resolves.toMatchObject({ id: 99, status: 'Scheduled' });
+  });
+
   it('stores inbound replies in the tenant database and cancels only that lead automation', async () => {
     const statements: string[] = [];
     const query = jest.fn(async (sql: string) => {

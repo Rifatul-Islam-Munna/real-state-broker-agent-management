@@ -287,6 +287,26 @@ describe('lead collection template parser', () => {
     expect(result.values.creditScore).toBe('720');
   });
 
+  it('prefers a labeled prospect email over the sender address', () => {
+    const result = parseLeadCollectionTemplate({
+      ...template,
+      mappings: [],
+      requiredFields: [],
+    }, {
+      fromAddress: 'leads@email.realtor.com',
+      subject: 'Pending Applicant',
+      textBody: [
+        'You can contact your new client at the following number:',
+        'Name: ROCIO CUBA',
+        'Phone: 7862526727',
+        'Email: norahsbec@gmail.com',
+        'Property: 1000 NE 14th Ave Apt 411, Hallandale Beach, FL 33009',
+      ].join('\n'),
+    });
+
+    expect(result.values.email).toBe('norahsbec@gmail.com');
+  });
+
   it('extracts name, email, and phone generically even when the template does not map them', () => {
     const result = parseLeadCollectionTemplate({
       ...template,

@@ -2,7 +2,9 @@
   BadRequestException,
   GoneException,
   Injectable,
+  Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import { SaasTenant } from '../saas-admin/entities/saas-tenant.entity';
@@ -10,6 +12,7 @@ import { sanitizePlainText } from '../security/input-sanitizer';
 import { PlatformDomainService } from '../platform-domain/platform-domain.service';
 import { TenantDatabaseService } from '../tenant-database/tenant-database.service';
 import { TenantOutreachService } from './tenant-outreach.service';
+import { TenantWorkspaceSettingsService } from './tenant-workspace-settings.service';
 
 type DeliveryChannel = 'Email' | 'SMS';
 
@@ -40,10 +43,13 @@ type ShowingFormField = {
 
 @Injectable()
 export class TenantRealtorWorkflowService {
+  private readonly logger = new Logger(TenantRealtorWorkflowService.name);
+
   constructor(
     private readonly databases: TenantDatabaseService,
     private readonly outreach: TenantOutreachService,
     private readonly platformDomain: PlatformDomainService,
+    @Optional() private readonly settings?: TenantWorkspaceSettingsService,
   ) {}
 
   async listOwnerReports(tenant: SaasTenant) {
@@ -560,6 +566,7 @@ export class TenantRealtorWorkflowService {
       );
     }
     const actorUserId = Number(user?.id ?? user?.sub ?? 0) || null;
+    let confirmationContext: any = null;
 
     await this.databases.withTenantClient(
       this.databaseName(tenant),
@@ -674,6 +681,19 @@ export class TenantRealtorWorkflowService {
               showingAt: showingAt.toISOString(),
             },
           );
+          confirmationContext = {
+            showingId,
+            propertyId,
+            propertyTitle: property.title,
+            leadId: request.leadId,
+            leadName: request.leadName,
+            recipientEmail: request.recipientEmail,
+            recipientPhone: request.recipientPhone,
+            realtorName,
+            realtorEmail,
+            realtorPhone,
+            showingAt,
+          };
           await client.query('COMMIT');
         } catch (error) {
           await client.query('ROLLBACK');
@@ -682,7 +702,182 @@ export class TenantRealtorWorkflowService {
       },
     );
 
+    if (confirmationContext) {
+      await this.autoSendShowingConfirmations(tenant, confirmationContext).catch(
+        (error) => {
+          this.logger.warn(
+            `Showing confirmation send failed for tenant ${tenant.id}: ${this.message(error)}`,
+          );
+        },
+      );
+    }
+
     return this.showingRequest(tenant, requestId);
+  }
+
+  /**
+   * Auto-sends the configured lead + realtor showing confirmations after a
+   * showing is approved, using the leadShowingTemplateId /
+   * realtorShowingTemplateId templates. Skips silently when automation is off
+   * or the templates are not configured.
+   */
+  private async autoSendShowingConfirmations(tenant: SaasTenant, ctx: any) {
+    if (!this.settings || !this.outreach) {
+      return { lead: 0, realtor: 0 };
+    }
+    const agency: any = await this.settings.getAgencySettings(tenant);
+    const automation = agency?.leadAutomation ?? {};
+    if (automation.enabled !== true) {
+      return { lead: 0, realtor: 0 };
+    }
+    const templates = Array.isArray(agency?.communicationTemplates)
+      ? agency.communicationTemplates
+      : [];
+    const findTemplate = (id: unknown, audiences: string[]) =>
+      templates.find(
+        (item: any) =>
+          `${item?.id}` === `${id ?? ''}` &&
+          item?.isActive !== false &&
+          audiences.includes(`${item?.audience ?? ''}`),
+      );
+    const leadTemplate = findTemplate(automation.leadShowingTemplateId, [
+      'Lead',
+      'LeadShowing',
+      '',
+    ]);
+    const realtorTemplate = findTemplate(automation.realtorShowingTemplateId, [
+      'Realtor',
+      '',
+    ]);
+    if (!leadTemplate && !realtorTemplate) {
+      return { lead: 0, realtor: 0 };
+    }
+    const showingTime = this.formatShowingTime(ctx.showingAt);
+    const tokens = {
+      clientName: this.clean(ctx.leadName, 200, 'Lead name'),
+      propertyAddress: this.clean(ctx.propertyTitle, 240, 'Property'),
+      showingTime,
+      agentName: this.clean(ctx.realtorName, 200, 'Realtor name'),
+      agencyName: this.clean(agency?.profile?.agencyName, 200),
+    };
+    return this.databases.withTenantClient(
+      this.databaseName(tenant),
+      async (client) => {
+        let lead = 0;
+        let realtor = 0;
+        const channels = this.channels(automation.channels);
+        const leadChannels = channels.filter((channel) =>
+          this.templateHasChannel(leadTemplate, channel),
+        );
+        for (const channel of leadChannels) {
+          const recipientEmail = channel === 'Email' ? this.clean(ctx.recipientEmail, 240) : '';
+          const recipientPhone = channel === 'SMS' ? this.clean(ctx.recipientPhone, 80) : '';
+          if (channel === 'Email' && !recipientEmail) continue;
+          if (channel === 'SMS' && !recipientPhone) continue;
+          const jobs = await this.outreach.enqueueWithClient(client, {
+            leadId: Number(ctx.leadId) > 0 ? Number(ctx.leadId) : null,
+            sourceType: 'showing-confirmation',
+            sourceId: ctx.showingId,
+            channels: [channel],
+            recipientName: tokens.clientName,
+            recipientEmail,
+            recipientPhone,
+            title: this.renderShowingTemplate(
+              this.clean(leadTemplate.subject, 500, 'Subject') || 'Showing confirmed',
+              tokens,
+            ),
+            body: this.renderShowingTemplate(
+              this.clean(leadTemplate.body, 4000, 'Body'),
+              tokens,
+            ),
+            createdBy: `showing-confirmation:${this.clean(leadTemplate.id, 120)}:lead`,
+            idempotencyKey: `showing-confirmation:${ctx.showingId}:${this.clean(leadTemplate.id, 120)}:lead:${channel.toLowerCase()}`,
+            payload: {
+              templateId: this.clean(leadTemplate.id, 120),
+              showingId: Number(ctx.showingId) || null,
+              audience: 'LeadShowing',
+              automatic: true,
+            },
+          });
+          if (jobs[0]?.status !== 'failed') lead += 1;
+        }
+        const realtorChannels = channels.filter((channel) =>
+          this.templateHasChannel(realtorTemplate, channel),
+        );
+        for (const channel of realtorChannels) {
+          const recipientEmail = channel === 'Email' ? this.clean(ctx.realtorEmail, 240) : '';
+          const recipientPhone = channel === 'SMS' ? this.clean(ctx.realtorPhone, 80) : '';
+          if (channel === 'Email' && !recipientEmail) continue;
+          if (channel === 'SMS' && !recipientPhone) continue;
+          const jobs = await this.outreach.enqueueWithClient(client, {
+            leadId: Number(ctx.leadId) > 0 ? Number(ctx.leadId) : null,
+            sourceType: 'showing-confirmation',
+            sourceId: ctx.showingId,
+            channels: [channel],
+            recipientName: tokens.agentName,
+            recipientEmail,
+            recipientPhone,
+            title: this.renderShowingTemplate(
+              this.clean(realtorTemplate.subject, 500, 'Subject') || 'Showing assigned',
+              tokens,
+            ),
+            body: this.renderShowingTemplate(
+              this.clean(realtorTemplate.body, 4000, 'Body'),
+              tokens,
+            ),
+            createdBy: `showing-confirmation:${this.clean(realtorTemplate.id, 120)}:realtor`,
+            idempotencyKey: `showing-confirmation:${ctx.showingId}:${this.clean(realtorTemplate.id, 120)}:realtor:${channel.toLowerCase()}`,
+            payload: {
+              templateId: this.clean(realtorTemplate.id, 120),
+              showingId: Number(ctx.showingId) || null,
+              audience: 'Realtor',
+              automatic: true,
+            },
+          });
+          if (jobs[0]?.status !== 'failed') realtor += 1;
+        }
+        return { lead, realtor };
+      },
+    );
+  }
+
+  private templateHasChannel(template: any, channel: DeliveryChannel) {
+    if (!template) return false;
+    const channels = Array.isArray(template.channels)
+      ? template.channels.map((item: any) => `${item}`.toLowerCase())
+      : [];
+    return channels.includes(channel.toLowerCase());
+  }
+
+  private renderShowingTemplate(text: string, tokens: Record<string, string>) {
+    const replacements: Record<string, string> = {
+      '{{client_name}}': tokens.clientName || 'the lead',
+      '{{property_address}}': tokens.propertyAddress || 'the property',
+      '{{showing_time}}': tokens.showingTime || 'the scheduled time',
+      '{{agent_name}}': tokens.agentName || 'your agent',
+      '{{agency_name}}': tokens.agencyName || 'our agency',
+    };
+    return Object.entries(replacements).reduce(
+      (current, [token, value]) => current.replaceAll(token, value),
+      this.clean(text, 4000),
+    );
+  }
+
+  private formatShowingTime(value: unknown) {
+    const date = this.date(value, 'Showing date and time');
+    if (!Number.isFinite(date.getTime())) return '';
+    return date.toLocaleString('en-US', {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+  }
+
+  private message(error: unknown) {
+    return error instanceof Error ? error.message : `${error ?? 'Unknown error'}`;
   }
 
   async rejectShowingRequest(

@@ -264,7 +264,10 @@ export function parseLeadCollectionTemplate(
     }
   }
   if (!values.email) {
-    const candidate = firstEmail(text);
+    const fromAddress = `${input.fromAddress ?? ''}`.toLowerCase();
+    const labeled = firstLabeledEmail(text);
+    const generic = firstEmail(text) ?? '';
+    const candidate = labeled || (generic && generic !== fromAddress ? generic : '');
     if (candidate) {
       values.email = candidate;
       diagnostics.push('email: generic email validation fallback');
@@ -549,9 +552,12 @@ export function extractLeadBasicsFromEmail(input: LeadCollectionEmailInput) {
   const hrefs = `${input.htmlBody ?? ''}`
     .match(/href\s*=\s*["'][^"']+["']/gi)
     ?.join(' ') ?? '';
+  const fromAddress = `${input.fromAddress ?? ''}`.toLowerCase();
+  const labeled = firstLabeledEmail(text);
+  const generic = firstEmail(text) ?? '';
   return {
     name: firstNameFromText(text),
-    email: firstEmail(text) ?? '',
+    email: labeled || (generic && generic !== fromAddress ? generic : ''),
     phone: firstPhone(text) || firstPhone(hrefs) || '',
   };
 }
@@ -574,6 +580,14 @@ function firstNameFromText(value: string) {
   )?.[1];
   if (possessive) return possessive;
   return '';
+}
+
+function firstLabeledEmail(value: string) {
+  const match = normalizeLeadCollectionText(value).match(
+    /(?:^|\n)\s*(?:email|e-mail|email address|contact email|renter email|client email)\s*[:|–—-]\s*([^\s,;]+@[^\s,;]+)/i,
+  );
+  if (!match) return '';
+  return match[1].replace(/[.,;]+$/, '').toLowerCase();
 }
 
 function firstEmail(value: string) {

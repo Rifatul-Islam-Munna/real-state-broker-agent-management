@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import { Cron } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -18,6 +18,7 @@ import {
 } from '../mail/linked-page-loader';
 import { SaasTenant } from '../saas-admin/entities/saas-tenant.entity';
 import { TenantDatabaseService } from '../tenant-database/tenant-database.service';
+import { TenantOutreachService } from './tenant-outreach.service';
 import { TenantWorkspaceSettingsService } from './tenant-workspace-settings.service';
 
 type InboxSyncStats = {
@@ -36,12 +37,14 @@ export class TenantInboxSyncService {
   private readonly logger = new Logger(TenantInboxSyncService.name);
   private running = false;
   private cleanupRunning = false;
+  private followUpRunning = false;
 
   constructor(
     @InjectRepository(SaasTenant)
     private readonly tenantRepository: Repository<SaasTenant>,
     private readonly databases: TenantDatabaseService,
     private readonly settings: TenantWorkspaceSettingsService,
+    @Optional() private readonly outreach?: TenantOutreachService,
   ) {}
 
   @Cron('20 * * * * *')
@@ -71,6 +74,38 @@ export class TenantInboxSyncService {
       );
     } finally {
       this.running = false;
+    }
+  }
+
+  @Cron('25 * * * * *')
+  async scheduleAllTenantFollowUps() {
+    if (process.env.TENANT_INBOX_SYNC_ENABLED === 'false' || this.followUpRunning) {
+      return;
+    }
+    this.followUpRunning = true;
+    try {
+      const tenants = await this.tenantRepository.find({
+        where: { databaseStatus: 'ready' } as any,
+        order: { id: 'ASC' },
+      });
+      const ready = tenants.filter(
+        (tenant) => tenant.databaseName && tenant.isActive && !tenant.isBlocked,
+      );
+      await this.withConcurrency(
+        ready,
+        this.clamp(process.env.TENANT_SYNC_TENANT_CONCURRENCY, 3, 1, 10),
+        async (tenant) => {
+          try {
+            await this.scheduleTenantFollowUps(tenant);
+          } catch (error) {
+            this.logger.error(
+              `Tenant follow-up scheduling failed for ${tenant.databaseName}: ${this.message(error)}`,
+            );
+          }
+        },
+      );
+    } finally {
+      this.followUpRunning = false;
     }
   }
 
@@ -122,11 +157,16 @@ export class TenantInboxSyncService {
     );
     const recovered = await this.recoverSkippedInboundEmails(tenant, config);
     const propertyLinked = await this.linkMissingLeadProperties(tenant);
+    const welcomeSent = await this.autoSendWelcomeForLeads(tenant);
+    await this.scheduleTenantFollowUps(tenant);
     const recoveredNote = recovered.converted
       ? `, ${recovered.converted} previously skipped ${recovered.converted === 1 ? 'email was' : 'emails were'} recovered.`
       : '';
     const propertyNote = propertyLinked.linked
       ? `, ${propertyLinked.linked} ${propertyLinked.linked === 1 ? 'lead was' : 'leads were'} linked to a matching property.`
+      : '';
+    const welcomeNote = welcomeSent.enqueued
+      ? `, ${welcomeSent.enqueued} welcome ${welcomeSent.enqueued === 1 ? 'message was' : 'messages were'} auto-scheduled.`
       : '';
     return {
       ...(await this.getStatus(tenant)),
@@ -137,7 +177,8 @@ export class TenantInboxSyncService {
       deletedLocalMessages,
       recoveredLeadCount: recovered.converted,
       linkedPropertyCount: propertyLinked.linked,
-      message: `Mailbox sync completed: ${stats.imported} imported, ${stats.created} leads created, ${stats.matched} matched, ${stats.skipped} skipped.${recoveredNote}${propertyNote}`,
+      autoWelcomeScheduledCount: welcomeSent.enqueued,
+      message: `Mailbox sync completed: ${stats.imported} imported, ${stats.created} leads created, ${stats.matched} matched, ${stats.skipped} skipped.${recoveredNote}${propertyNote}${welcomeNote}`,
     };
   }
 
@@ -836,7 +877,7 @@ export class TenantInboxSyncService {
     const databaseName = this.databaseName(tenant);
     return this.databases.withTenantClient(databaseName, async (client) => {
       const result = await client.query(
-        `SELECT j.id, j.lead_id, j.body, j.payload->>'htmlBody' AS html_body,
+        `SELECT j.id, j.lead_id, j.title, j.body, j.payload->>'htmlBody' AS html_body,
                 j.payload->>'extractedLead' AS extracted_lead
          FROM tenant_outreach_job j
          WHERE j.channel = 'Email'
@@ -857,6 +898,7 @@ export class TenantInboxSyncService {
             {
               textBody: this.text(row.body),
               htmlBody: this.text(row.html_body),
+              subject: this.text(row.title),
             },
             this.text(extracted?.property),
           );
@@ -897,6 +939,309 @@ export class TenantInboxSyncService {
       }
       return { scanned: result.rowCount ?? 0, linked };
     });
+  }
+
+  /**
+   * Auto-schedules the configured welcome Email/SMS for fresh inbound leads
+   * (one inbound message, no outgoing yet, property linked). Idempotent via
+   * the job idempotency key, so it is safe to run on every sync.
+   */
+  private async autoSendWelcomeForLeads(tenant: SaasTenant) {
+    if (!this.outreach) {
+      return { scanned: 0, enqueued: 0, skipped: 0 };
+    }
+    const databaseName = this.databaseName(tenant);
+    const outreach = this.outreach;
+    return this.databases.withTenantClient(databaseName, async (client) => {
+      const agency: any = await this.settings.getAgencySettings(tenant);
+      const automation = agency?.leadAutomation ?? {};
+      if (automation.enabled !== true) {
+        return { scanned: 0, enqueued: 0, skipped: 0 };
+      }
+      const directTemplates = (agency?.communicationTemplates ?? []).filter(
+        (item: any) =>
+          item?.isActive !== false &&
+          (item?.audience ?? 'Lead') === 'Lead' &&
+          (item?.sequenceType ?? 'Direct') === 'Direct',
+      );
+      const template =
+        directTemplates.find(
+          (item: any) => `${item.id}` === `${automation.directTemplateId}`,
+        ) ?? directTemplates[0];
+      if (!template) {
+        return { scanned: 0, enqueued: 0, skipped: 0 };
+      }
+      const channels = this.stringList(automation.channels).filter((channel) =>
+        this.stringList(template.channels).includes(channel),
+      );
+      if (!channels.length) {
+        return { scanned: 0, enqueued: 0, skipped: 0 };
+      }
+      const result = await client.query(
+        `SELECT l.id, l.full_name, l.email, l.phone, l.payload,
+                p.id AS property_id, p.title AS property_title, p.payload AS property_payload
+         FROM tenant_lead l
+         JOIN tenant_lead_property lp ON lp.lead_id = l.id
+         JOIN tenant_property p ON p.id = lp.property_id
+         WHERE (l.email IS NOT NULL OR l.phone IS NOT NULL)
+           AND (SELECT COUNT(*) FROM tenant_outreach_job inc
+                WHERE inc.lead_id = l.id
+                  AND inc.direction = 'Incoming'
+                  AND inc.source_type = 'mail-inbox') = 1
+           AND NOT EXISTS (
+             SELECT 1 FROM tenant_outreach_job out
+             WHERE out.lead_id = l.id AND out.direction <> 'Incoming'
+           )
+           AND NOT EXISTS (
+             SELECT 1 FROM tenant_outreach_job out2
+             WHERE out2.lead_id = l.id
+               AND out2.created_by LIKE 'lead-auto-welcome:%'
+           )
+         ORDER BY l.created_at ASC, l.id ASC
+         LIMIT 50`,
+      );
+      let enqueued = 0;
+      let skipped = 0;
+      for (const row of result.rows) {
+        try {
+          const lead = {
+            name: this.text(row.full_name, 'Client'),
+            email: this.text(row.email).toLowerCase(),
+            phone: this.text(row.phone),
+            property: this.text(row.property_title),
+          };
+          const propertyPayload = this.jsonObject(row.property_payload);
+          const mediaUrls = this.welcomeAttachmentUrls(template, propertyPayload);
+          const delayMinutes = Math.max(
+            0,
+            Number(
+              agency?.firstMessageAutomation?.leadDelayMinutes ??
+                agency?.firstMessageAutomation?.delayMinutes,
+            ) || 0,
+          );
+          const scheduledAt = new Date(Date.now() + delayMinutes * 60_000);
+          for (const channel of channels) {
+            const recipientMissing =
+              channel === 'Email' ? !lead.email : !lead.phone;
+            if (recipientMissing) {
+              skipped += 1;
+              continue;
+            }
+            const jobs = await outreach.enqueueWithClient(client, {
+              leadId: Number(row.id),
+              sourceType: 'lead-automation',
+              sourceId: this.text(template.id),
+              channels: [channel as 'Email' | 'SMS'],
+              recipientName: lead.name,
+              recipientEmail: lead.email,
+              recipientPhone: lead.phone,
+              title: this.renderWelcomeTemplate(
+                this.text(template.subject, 'Welcome'),
+                lead,
+                agency,
+              ),
+              body: this.renderWelcomeTemplate(
+                this.text(template.body, ''),
+                lead,
+                agency,
+              ),
+              mediaUrls,
+              scheduledAt,
+              createdBy: `lead-auto-welcome:${this.text(template.id)}:${channel.toLowerCase()}`,
+              idempotencyKey: `lead-auto-welcome:${Number(row.id)}:${this.text(template.id)}:${channel.toLowerCase()}`,
+              payload: {
+                templateId: this.text(template.id),
+                channel,
+                automatic: true,
+              },
+            });
+            if (jobs[0]?.status !== 'failed') enqueued += 1;
+            else skipped += 1;
+          }
+        } catch (error) {
+          skipped += 1;
+          this.logger.warn(`Auto welcome scheduling failed ${JSON.stringify({
+            databaseName,
+            leadId: Number(row.id),
+            error: this.message(error),
+          })}`);
+        }
+      }
+      if (result.rowCount) {
+        this.logger.log(`Auto welcome scheduling ${databaseName}: ${JSON.stringify({
+          scanned: result.rowCount,
+          enqueued,
+          skipped,
+        })}`);
+      }
+      return { scanned: result.rowCount ?? 0, enqueued, skipped };
+    });
+  }
+
+  /**
+   * Schedules the FollowUp1/2/3 templates after a welcome message has been
+   * sent, at their configured gap days, when follow-ups are enabled. Queued
+   * jobs wait until due and are auto-cancelled if the lead replies first.
+   */
+  private async scheduleTenantFollowUps(tenant: SaasTenant) {
+    if (!this.outreach) {
+      return { scanned: 0, enqueued: 0 };
+    }
+    const databaseName = this.databaseName(tenant);
+    const outreach = this.outreach;
+    return this.databases.withTenantClient(databaseName, async (client) => {
+      const agency: any = await this.settings.getAgencySettings(tenant);
+      const automation = agency?.leadAutomation ?? {};
+      if (
+        automation.enabled !== true ||
+        automation.followUpEnabled === false
+      ) {
+        return { scanned: 0, enqueued: 0 };
+      }
+      const order: Record<string, number> = {
+        FollowUp1: 0,
+        FollowUp2: 1,
+        FollowUp3: 2,
+      };
+      const followUpTemplates = (agency?.communicationTemplates ?? [])
+        .filter(
+          (item: any) =>
+            item?.isActive !== false &&
+            (item?.audience ?? 'Lead') === 'Lead' &&
+            Object.prototype.hasOwnProperty.call(order, item?.sequenceType),
+        )
+        .sort(
+          (a: any, b: any) =>
+            (order[a?.sequenceType] ?? 9) - (order[b?.sequenceType] ?? 9),
+        );
+      if (!followUpTemplates.length) {
+        return { scanned: 0, enqueued: 0 };
+      }
+      const result = await client.query(
+        `SELECT l.id, l.full_name, l.email, l.phone,
+                p.id AS property_id, p.title AS property_title, p.payload AS property_payload,
+                w.sent_at
+         FROM tenant_lead l
+         JOIN (
+           SELECT DISTINCT ON (lead_id) lead_id, completed_at AS sent_at
+           FROM tenant_outreach_job
+           WHERE created_by LIKE 'lead-auto-welcome:%'
+             AND status = 'sent'
+           ORDER BY lead_id, completed_at ASC
+         ) w ON w.lead_id = l.id
+         JOIN tenant_lead_property lp ON lp.lead_id = l.id
+         JOIN tenant_property p ON p.id = lp.property_id
+         ORDER BY l.id ASC
+         LIMIT 100`,
+      );
+      let enqueued = 0;
+      for (const row of result.rows) {
+        try {
+          const lead = {
+            name: this.text(row.full_name, 'Client'),
+            email: this.text(row.email).toLowerCase(),
+            phone: this.text(row.phone),
+            property: this.text(row.property_title),
+          };
+          const welcomeSentAt = row.sent_at ? new Date(row.sent_at).getTime() : Date.now();
+          const propertyPayload = this.jsonObject(row.property_payload);
+          let cumulativeDays = 0;
+          for (const template of followUpTemplates) {
+            cumulativeDays += Math.max(0, Number(template.gapDays) || 0);
+            const dueAt = new Date(welcomeSentAt + cumulativeDays * 86_400_000);
+            const channels = this.stringList(automation.channels).filter((channel) =>
+              this.stringList(template.channels).includes(channel),
+            );
+            for (const channel of channels) {
+              const createdBy = `lead-followup:${this.text(template.id)}:${channel.toLowerCase()}`;
+              const existing = await client.query(
+                `SELECT 1 FROM tenant_outreach_job
+                 WHERE lead_id = $1 AND created_by = $2
+                 LIMIT 1`,
+                [Number(row.id), createdBy.slice(0, 200)],
+              );
+              if (existing.rowCount) continue;
+              const recipientMissing =
+                channel === 'Email' ? !lead.email : !lead.phone;
+              if (recipientMissing) continue;
+              const jobs = await outreach.enqueueWithClient(client, {
+                leadId: Number(row.id),
+                sourceType: 'lead-followup',
+                sourceId: this.text(template.id),
+                channels: [channel as 'Email' | 'SMS'],
+                recipientName: lead.name,
+                recipientEmail: lead.email,
+                recipientPhone: lead.phone,
+                title: this.renderWelcomeTemplate(
+                  this.text(template.subject, 'Following up'),
+                  lead,
+                  agency,
+                ),
+                body: this.renderWelcomeTemplate(
+                  this.text(template.body, ''),
+                  lead,
+                  agency,
+                ),
+                mediaUrls: this.welcomeAttachmentUrls(template, propertyPayload),
+                scheduledAt: dueAt,
+                createdBy,
+                idempotencyKey: `lead-followup:${Number(row.id)}:${this.text(template.id)}:${channel.toLowerCase()}`,
+                payload: {
+                  templateId: this.text(template.id),
+                  channel,
+                  sequenceType: this.text(template.sequenceType),
+                  automatic: true,
+                },
+              });
+              if (jobs[0]?.status !== 'failed') enqueued += 1;
+            }
+          }
+        } catch (error) {
+          this.logger.warn(`Follow-up scheduling failed ${JSON.stringify({
+            databaseName,
+            leadId: Number(row.id),
+            error: this.message(error),
+          })}`);
+        }
+      }
+      if (result.rowCount) {
+        this.logger.log(`Follow-up scheduling ${databaseName}: ${JSON.stringify({
+          scanned: result.rowCount,
+          enqueued,
+        })}`);
+      }
+      return { scanned: result.rowCount ?? 0, enqueued };
+    });
+  }
+
+  private welcomeAttachmentUrls(template: any, propertyPayload: any): string[] {
+    const wantsDocuments =
+      template?.attachmentMode === 'property' ||
+      template?.attachPropertyDocuments === true;
+    if (!wantsDocuments) return [];
+    const documents = Array.isArray(propertyPayload?.propertyDocuments)
+      ? propertyPayload.propertyDocuments
+      : [];
+    return documents
+      .map((doc: any) => this.text(doc?.fileUrl))
+      .filter(Boolean)
+      .slice(0, 5);
+  }
+
+  private renderWelcomeTemplate(text: string, lead: any, agency: any) {
+    const replacements: Record<string, string> = {
+      '{{client_name}}': this.text(lead?.name, 'Client'),
+      '{{property_address}}': this.text(lead?.property, 'the property'),
+      '{{agent_name}}': this.text(
+        agency?.profile?.agentName ?? agency?.profile?.contactName,
+        'your agent',
+      ),
+      '{{agency_name}}': this.text(agency?.profile?.agencyName, 'our agency'),
+    };
+    return Object.entries(replacements).reduce(
+      (current, [token, value]) => current.replaceAll(token, value),
+      this.text(text),
+    );
   }
 
   private jsonObject(value: any): any {
@@ -1196,7 +1541,7 @@ export class TenantInboxSyncService {
 
   private async resolveLeadProperty(
     client: PoolClient,
-    emailInput: { textBody: string; htmlBody: string },
+    emailInput: { textBody: string; htmlBody: string; subject?: string },
     extractedProperty: string,
   ) {
     if (extractedProperty) {
@@ -1217,13 +1562,15 @@ export class TenantInboxSyncService {
 
   private async matchPropertyMentionedInEmail(
     client: PoolClient,
-    input: { textBody: string; htmlBody: string },
+    input: { textBody: string; htmlBody: string; subject?: string },
   ) {
     const candidates: string[] = [];
     const textBody = this.normalizePropertyMatch(input.textBody);
     if (textBody) candidates.push(textBody);
+    const subject = this.normalizePropertyMatch(input.subject);
+    if (subject && !candidates.includes(subject)) candidates.push(subject);
     const htmlText = this.normalizePropertyMatch(this.stripHtml(input.htmlBody));
-    if (htmlText && htmlText !== textBody) candidates.push(htmlText);
+    if (htmlText && !candidates.includes(htmlText)) candidates.push(htmlText);
     if (!candidates.length) return null;
 
     const result = await client.query(

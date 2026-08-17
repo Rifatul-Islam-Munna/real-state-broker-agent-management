@@ -13,6 +13,7 @@ import {
   useAgentUsers,
   useConvertLeadToDeal,
   useCreateLead,
+  useDeleteLead,
   useLeads,
   useProperties,
   useUpdateLead,
@@ -79,6 +80,7 @@ function buildLeadUpdatePayload(
 export function LeadCrmPipelinePage() {
   const [createDialogVersion, setCreateDialogVersion] = useState(0)
   const [searchTerm, setSearchTerm] = useState("")
+  const [dateFilter, setDateFilter] = useState("")
   const [page, setPage] = useState(1)
   const [localLeads, setLocalLeads] = useState<LeadItem[]>([])
   const deferredSearch = useDeferredValue(searchTerm)
@@ -92,6 +94,7 @@ export function LeadCrmPipelinePage() {
     page,
     pageSize: PAGE_SIZE,
     search: deferredSearch || undefined,
+    date: dateFilter || undefined,
   })
   const agentOptionsQuery = useAgentUsers()
   const propertyOptionsQuery = useProperties({
@@ -104,6 +107,7 @@ export function LeadCrmPipelinePage() {
   const dispatchLeadOutreachMutation = useDispatchLeadOutreach()
   const updateLeadMutation = useUpdateLead()
   const convertLeadToDealMutation = useConvertLeadToDeal()
+  const deleteLeadMutation = useDeleteLead()
   const displayedLeads =
     localLeads.length > 0 || (leadsQuery.data?.items?.length ?? 0) === 0
       ? localLeads
@@ -254,6 +258,21 @@ export function LeadCrmPipelinePage() {
     }
   }
 
+  async function handleDeleteLeads(ids: number[]) {
+    if (!ids.length) return null
+    const response = await deleteLeadMutation.mutateAsync({ ids })
+    if (response.error) return response.error.message
+    const deletedIds = new Set(
+      Array.isArray(response.data?.deleted)
+        ? response.data.deleted
+        : ids,
+    )
+    setLocalLeads((current) =>
+      current.filter((lead) => !deletedIds.has(lead.id))
+    )
+    return null
+  }
+
   async function handleConvertLeadToDeal(leadId: number) {
     const response = await convertLeadToDealMutation.mutateAsync({ leadId })
 
@@ -297,6 +316,7 @@ export function LeadCrmPipelinePage() {
         agentOptions={sortAgentOptions(agentOptionsQuery.data ?? [])}
         createDialogVersion={createDialogVersion}
         currentPage={page}
+        dateFilter={dateFilter}
         errorMessage={leadsQuery.error?.message ?? null}
         isLoading={isInitialLoading}
         isMutating={
@@ -306,6 +326,16 @@ export function LeadCrmPipelinePage() {
           convertLeadToDealMutation.isPending
         }
         leads={displayedLeads}
+        onDateFilterChange={(value) => {
+          setDateFilter(value)
+          setPage(1)
+        }}
+        onDeleteLeads={handleDeleteLeads}
+        onSearchChange={(value) => {
+          setSearchTerm(value)
+          setPage(1)
+        }}
+        searchTerm={searchTerm}
         onCancelLead={handleCancelLead}
         onCommunicate={handleCommunicate}
         onConvertLeadToDeal={handleConvertLeadToDeal}

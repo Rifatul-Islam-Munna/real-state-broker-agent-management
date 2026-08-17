@@ -90,6 +90,7 @@ type Section2SectionProps = {
   createDialogVersion: number
   currentPage: number
   agentOptions: AgentUserOption[]
+  dateFilter?: string
   errorMessage?: string | null
   isLoading: boolean
   isMutating: boolean
@@ -101,12 +102,16 @@ type Section2SectionProps = {
     values: LeadOutreachComposerValues,
   ) => Promise<string | null>
   onConvertLeadToDeal: (leadId: number) => Promise<string | null>
+  onDateFilterChange: (value: string) => void
+  onDeleteLeads: (ids: number[]) => Promise<string | null>
   onCreateLead: (values: LeadFormValues) => Promise<string | null>
   onPageChange: (page: number) => void
+  onSearchChange: (value: string) => void
   onSetLeadBoard: (leadId: number, inBoard: boolean) => Promise<void>
   onStageChange: (leadId: number, stage: LeadStage) => Promise<void>
   onUpdateLead: (leadId: number, values: LeadFormValues) => Promise<string | null>
   propertyOptions: PropertyItem[]
+  searchTerm?: string
   totalPages: number
   totalResults: number
 }
@@ -119,6 +124,7 @@ export function Section2Section({
   agentOptions,
   createDialogVersion,
   currentPage,
+  dateFilter,
   errorMessage,
   isLoading,
   isMutating,
@@ -126,12 +132,16 @@ export function Section2Section({
   onCancelLead,
   onCommunicate,
   onConvertLeadToDeal,
+  onDateFilterChange,
+  onDeleteLeads,
   onCreateLead,
   onPageChange,
+  onSearchChange,
   onSetLeadBoard,
   onStageChange,
   onUpdateLead,
   propertyOptions,
+  searchTerm,
   totalPages,
   totalResults,
 }: Section2SectionProps) {
@@ -140,6 +150,9 @@ export function Section2Section({
   const portalRoutes = getPortalRoutes(pathname)
 
   const [selectedLeadId, setSelectedLeadId] = useState<number | null>(null)
+  const [selectedIds, setSelectedIds] = useState<number[]>([])
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+  const [deleteMessage, setDeleteMessage] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<LeadView>("board")
   const [stageFilter, setStageFilter] = useState<LeadStage | "all">("all")
   const [dialogState, setDialogState] = useState<LeadDialogState>(null)
@@ -157,6 +170,11 @@ export function Section2Section({
   }, [createDialogVersion])
 
   useEffect(() => {
+    const existing = new Set(leads.map((lead) => lead.id))
+    setSelectedIds((current) => current.filter((id) => existing.has(id)))
+  }, [leads])
+
+  useEffect(() => {
     const rawLeadId = searchParams.get("leadId")
     const parsedLeadId = rawLeadId ? Number(rawLeadId) : Number.NaN
 
@@ -164,6 +182,35 @@ export function Section2Section({
 
     setSelectedLeadId(parsedLeadId)
   }, [searchParams])
+
+  function toggleSelect(id: number) {
+    setSelectedIds((current) =>
+      current.includes(id)
+        ? current.filter((item) => item !== id)
+        : [...current, id],
+    )
+  }
+
+  function toggleSelectPage() {
+    setSelectedIds((current) => {
+      const present = pageIds.filter((id) => current.includes(id))
+      if (present.length === pageIds.length && pageIds.length > 0) {
+        return current.filter((id) => !pageIds.includes(id))
+      }
+      return [...new Set([...current, ...pageIds])]
+    })
+  }
+
+  async function confirmDeleteLeads() {
+    const error = await onDeleteLeads(selectedIds)
+    if (error) {
+      setDeleteMessage(error)
+      return
+    }
+    setDeleteMessage(null)
+    setSelectedIds([])
+    setDeleteConfirmOpen(false)
+  }
 
   function downloadLeadSample() {
     const sample = "name,email,phone,property,budget,creditScore,combinedCreditScore,monthlyEarning,combinedMonthlyEarning,source,interest,timeline,summary\nBradley Weneck,bradley@example.com,754-223-9582,6750 Royal Palm Blvd #209E,$2500/mo,710,690,$6500,$11000,Zillow,Rent,Immediate,Interested in applying\n"
@@ -227,6 +274,13 @@ export function Section2Section({
         }),
     [leads, stageFilter],
   )
+
+  const pageIds = useMemo(
+    () => orderedLeads.map((lead) => lead.id),
+    [orderedLeads],
+  )
+  const allPageSelected =
+    pageIds.length > 0 && pageIds.every((id) => selectedIds.includes(id))
 
   const selectedLead = useMemo(
     () => leads.find((lead) => lead.id === selectedLeadId) ?? null,
@@ -299,6 +353,40 @@ export function Section2Section({
               <AppIcon className="text-lg" name="view_list" />
               List
             </button>
+          </div>
+          <div className="flex flex-1 flex-col gap-3 sm:flex-row sm:items-center lg:max-w-xl">
+            <div className="relative flex-1">
+              <AppIcon className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-base text-[var(--ether-outline)]" name="search" />
+              <Input
+                aria-label="Search leads"
+                className="h-10 w-full rounded-lg border-[var(--ether-outline-variant)] bg-white pl-9 text-sm shadow-[var(--shadow-surface-1)]"
+                onChange={(event) => onSearchChange(event.target.value)}
+                placeholder="Search name, email, phone, property…"
+                value={searchTerm ?? ""}
+              />
+            </div>
+            <div className="relative sm:w-48">
+              <AppIcon className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-base text-[var(--ether-outline)]" name="calendar_today" />
+              <Input
+                aria-label="Filter leads by created date"
+                className="h-10 w-full rounded-lg border-[var(--ether-outline-variant)] bg-white pl-9 text-sm shadow-[var(--shadow-surface-1)]"
+                max={new Date().toISOString().slice(0, 10)}
+                onChange={(event) => onDateFilterChange(event.target.value)}
+                title="Show only leads created on this day"
+                type="date"
+                value={dateFilter ?? ""}
+              />
+              {dateFilter ? (
+                <button
+                  aria-label="Clear date filter"
+                  className="absolute right-2 top-1/2 z-10 flex size-6 -translate-y-1/2 items-center justify-center rounded-full text-[var(--ether-outline)] transition hover:bg-[var(--ether-surface-container)] hover:text-[var(--ether-on-surface)]"
+                  onClick={() => onDateFilterChange("")}
+                  type="button"
+                >
+                  <AppIcon className="text-sm" name="close" />
+                </button>
+              ) : null}
+            </div>
           </div>
           <Button
             className="h-10 rounded-lg border-[var(--ether-secondary)] bg-transparent px-4 font-semibold text-[var(--ether-secondary)] hover:bg-[color-mix(in_srgb,var(--ether-secondary-container)_20%,white)]"
@@ -439,10 +527,47 @@ export function Section2Section({
               </Select>
             </div>
 
+            {selectedIds.length > 0 ? (
+              <div className="flex flex-wrap items-center justify-between gap-3 border-y border-[var(--ether-outline-variant)] bg-[var(--ether-primary-fixed)]/40 px-5 py-3 sm:px-6">
+                <p className="text-sm font-semibold text-[var(--ether-on-surface)]">
+                  {selectedIds.length} selected
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    className="h-9 rounded-lg border-[var(--ether-outline-variant)] bg-white px-4 text-sm font-semibold text-[var(--ether-on-surface-variant)]"
+                    onClick={() => setSelectedIds([])}
+                    type="button"
+                    variant="outline"
+                  >
+                    Clear
+                  </Button>
+                  <Button
+                    className="h-9 rounded-lg bg-[var(--ether-error)] px-4 text-sm font-semibold text-white hover:bg-[color-mix(in_srgb,var(--ether-error)_85%,black)]"
+                    onClick={() => {
+                      setDeleteMessage(null)
+                      setDeleteConfirmOpen(true)
+                    }}
+                    type="button"
+                  >
+                    <AppIcon className="text-base" name="delete" />
+                    Delete
+                  </Button>
+                </div>
+              </div>
+            ) : null}
             <div className="overflow-x-auto">
               <table className="w-full min-w-[1050px] text-left">
                 <thead className="bg-[color-mix(in_srgb,var(--ether-surface-container-low)_72%,white)]">
                   <tr>
+                    <th className="w-14 px-6 py-4">
+                      <input
+                        aria-label="Select all leads on this page"
+                        checked={allPageSelected}
+                        className="size-4 cursor-pointer accent-[var(--ether-primary)]"
+                        onChange={toggleSelectPage}
+                        type="checkbox"
+                      />
+                    </th>
                     <th className="px-6 py-4 ether-label-caps text-[var(--ether-on-surface-variant)]">Client Identity</th>
                     <th className="px-6 py-4 ether-label-caps text-[var(--ether-on-surface-variant)]">Property & Interest</th>
                     <th className="px-6 py-4 ether-label-caps text-[var(--ether-on-surface-variant)]">Stage</th>
@@ -453,8 +578,18 @@ export function Section2Section({
                   {orderedLeads.map((lead, index) => {
                     const initials = `${lead.name ?? ""}`.split(" ").filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase()
                     const avatarTone = index % 3 === 0 ? "bg-[var(--ether-primary-fixed)] text-[var(--ether-primary)]" : index % 3 === 1 ? "bg-[var(--ether-tertiary-fixed)] text-[var(--ether-tertiary)]" : "bg-[color-mix(in_srgb,var(--ether-secondary-container)_35%,white)] text-[var(--ether-secondary)]"
+                    const isSelected = selectedIds.includes(lead.id)
                     return (
-                      <tr className="group transition hover:bg-[var(--ether-surface-container-low)]" key={lead.id}>
+                      <tr className={`group transition hover:bg-[var(--ether-surface-container-low)] ${isSelected ? "bg-[var(--ether-primary-fixed)]/30" : ""}`} key={lead.id}>
+                        <td className="px-6 py-5">
+                          <input
+                            aria-label={`Select ${lead.name ?? "lead"}`}
+                            checked={isSelected}
+                            className="size-4 cursor-pointer accent-[var(--ether-primary)]"
+                            onChange={() => toggleSelect(lead.id)}
+                            type="checkbox"
+                          />
+                        </td>
                         <td className="px-6 py-5">
                           <div className="flex items-center gap-4">
                             <span className={cn("flex size-11 shrink-0 items-center justify-center rounded-full text-sm font-bold", avatarTone)}>{initials || "LD"}</span>
@@ -585,6 +720,38 @@ export function Section2Section({
         open={dialogState?.type === "create" || dialogState?.type === "edit"}
         propertyOptions={propertyOptions}
       />
+      <Dialog onOpenChange={setDeleteConfirmOpen} open={deleteConfirmOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{"Delete leads"}</DialogTitle>
+            <DialogDescription>
+              {`This permanently deletes ${selectedIds.length} selected lead${selectedIds.length === 1 ? "" : "s"} and their property links. Inbox messages are kept but unlinked. This cannot be undone.`}
+            </DialogDescription>
+          </DialogHeader>
+          {deleteMessage ? (
+            <Alert variant="destructive">
+              <AlertDescription>{deleteMessage}</AlertDescription>
+            </Alert>
+          ) : null}
+          <div className="flex justify-end gap-2">
+            <Button
+              className="rounded-lg border-[var(--ether-outline-variant)] bg-white font-semibold text-[var(--ether-on-surface-variant)]"
+              onClick={() => setDeleteConfirmOpen(false)}
+              type="button"
+              variant="outline"
+            >
+              {"Cancel"}
+            </Button>
+            <Button
+              className="rounded-lg bg-[var(--ether-error)] font-semibold text-white hover:bg-[color-mix(in_srgb,var(--ether-error)_85%,black)]"
+              onClick={() => void confirmDeleteLeads()}
+              type="button"
+            >
+              {"Delete permanently"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
       <Dialog onOpenChange={setImportOpen} open={importOpen}>
         <DialogContent className="max-w-3xl">
           <DialogHeader>

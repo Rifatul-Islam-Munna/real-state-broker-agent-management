@@ -22,6 +22,7 @@ import { TenantGmailOauthController } from './tenant-gmail-oauth.controller';
 import { TenantInboxController } from './tenant-inbox.controller';
 import { TenantInboxSyncService } from './tenant-inbox-sync.service';
 import { TenantMailInboxService } from './tenant-mail-inbox.service';
+import { TenantShowingFeedbackAutomationService } from './tenant-showing-feedback-automation.service';
 import { TenantSmsInboxController } from './tenant-sms-inbox.controller';
 import { TenantSmsInboxService } from './tenant-sms-inbox.service';
 import { TenantStaffPermissionGuard } from './tenant-staff-permission.guard';
@@ -53,6 +54,7 @@ import { TenantStaffController } from './tenant-staff.controller';
     TenantInboxSyncService,
     TenantMailInboxService,
     TenantSmsInboxService,
+    TenantShowingFeedbackAutomationService,
     AuthenticatedTenantGuard,
     TenantStaffPermissionGuard,
     TenantPlanPermissionGuard,

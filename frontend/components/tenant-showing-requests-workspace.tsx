@@ -61,6 +61,9 @@ type ShowingRequestsWorkspaceProps = {
 
 export function TenantShowingRequestsWorkspace({ leads, properties, templates, requests }: ShowingRequestsWorkspaceProps) {
   const [tab, setTab] = useState<"requests" | "templates">("requests")
+  const [queueFilter, setQueueFilter] = useState<"all" | string>("all")
+  const [queueSearch, setQueueSearch] = useState("")
+  const [copiedLinkId, setCopiedLinkId] = useState<number | null>(null)
   const [requestState, requestAction, requestPending] = useActionState(createTenantShowingRequestAction, initialState)
   const [templateState, templateAction, templatePending] = useActionState(createTenantShowingTemplateAction, initialState)
   const [selectedLeadId, setSelectedLeadId] = useState("")
@@ -107,6 +110,52 @@ export function TenantShowingRequestsWorkspace({ leads, properties, templates, r
   const serializedFields = JSON.stringify(
     fields.map((field) => ({ key: field.key, label: field.label, type: field.type, required: field.required, options: field.options, description: field.description, imageUrl: field.imageUrl })),
   )
+
+  const queueStatuses = [
+    "pending",
+    "submitted",
+    "approved",
+    "rejected",
+    "expired",
+    "sent",
+  ]
+  const filteredRequests = requests
+    .filter((request) => queueFilter === "all" || request.status === queueFilter)
+    .filter((request) => {
+      const needle = queueSearch.trim().toLowerCase()
+      if (!needle) return true
+      return [
+        request.leadName,
+        request.recipientEmail,
+        request.recipientPhone,
+        request.title,
+        request.requestedPropertyTitle ?? request.propertyTitle ?? "",
+      ]
+        .filter(Boolean)
+        .some((value) => `${value}`.toLowerCase().includes(needle))
+    })
+
+  async function copyPublicLink(request: TenantShowingRequest) {
+    if (!request.publicUrl) return
+    try {
+      await navigator.clipboard.writeText(request.publicUrl)
+      setCopiedLinkId(request.id)
+      window.setTimeout(() => setCopiedLinkId((current) => (current === request.id ? null : current)), 1600)
+    } catch {
+      window.prompt("Copy showing request link", request.publicUrl)
+    }
+  }
+
+  function expiryLabel(expiresAt: string) {
+    const ms = new Date(expiresAt).getTime() - Date.now()
+    if (!Number.isFinite(ms)) return ""
+    if (ms <= 0) {
+      const days = Math.max(1, Math.round(-ms / 86_400_000))
+      return `Expired ${days}d ago`
+    }
+    if (ms < 86_400_000) return `Expires in ${Math.max(1, Math.round(ms / 3_600_000))}h`
+    return `Expires in ${Math.round(ms / 86_400_000)}d`
+  }
 
   return (
     <main className="mx-auto max-w-[1500px] space-y-8 p-5 sm:p-8 lg:p-10">
@@ -156,8 +205,82 @@ export function TenantShowingRequestsWorkspace({ leads, properties, templates, r
           </article>
 
           <article className="overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-[0_16px_45px_rgba(15,23,42,0.06)]">
-            <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-6 py-5 sm:px-7"><div><h2 className="text-xl font-bold">Request queue</h2><p className="mt-1 text-sm text-slate-600">Submitted requests wait here for manual realtor assignment and approval.</p></div><UserRoundCheck className="size-5 text-[#946710]" /></div>
-            <div className="overflow-x-auto"><table className="w-full min-w-[850px] text-left text-sm"><thead className="bg-slate-50 text-[11px] font-bold uppercase tracking-[0.08em] text-slate-500"><tr><th className="px-6 py-4">Lead</th><th className="px-6 py-4">Property</th><th className="px-6 py-4">Status</th><th className="px-6 py-4">Preferred time</th><th className="px-6 py-4">Expires</th><th className="px-6 py-4"><span className="sr-only">Open</span></th></tr></thead><tbody>{requests.length ? requests.map((request) => <tr className="border-t border-slate-100 transition hover:bg-[#fffaf0]" key={request.id}><td className="px-6 py-5"><p className="font-bold">{request.leadName}</p><p className="mt-1 text-xs text-slate-500">{request.recipientEmail || request.recipientPhone || "No contact"}</p></td><td className="px-6 py-5"><p className="font-medium">{request.requestedPropertyTitle || request.propertyTitle || (request.propertyMode === "respondent" ? "Recipient will choose" : "Not selected")}</p><p className="mt-1 text-xs text-slate-500">{request.title}</p></td><td className="px-6 py-5"><span className={`rounded-full px-2.5 py-1 text-[11px] font-bold capitalize ring-1 ring-inset ${statusClass(request.status)}`}>{request.status}</span></td><td className="px-6 py-5 text-xs text-slate-600">{request.preferredShowingAt ? new Date(request.preferredShowingAt).toLocaleString() : "Waiting"}</td><td className="px-6 py-5 text-xs text-slate-600">{new Date(request.expiresAt).toLocaleString()}</td><td className="px-6 py-5"><Link aria-label={`Open request for ${request.leadName}`} className="inline-flex size-9 items-center justify-center rounded-xl border border-slate-200 text-slate-600 transition hover:border-[#946710] hover:text-[#946710]" href={`/dashboard/showing-requests/${request.id}`}><ArrowUpRight className="size-4" /></Link></td></tr>) : <tr><td className="px-6 py-16 text-center" colSpan={6}><CalendarClock className="mx-auto size-8 text-slate-300" /><p className="mt-3 font-semibold text-slate-700">No showing requests yet</p><p className="mt-1 text-sm text-slate-500">Create the first request from the form on the left.</p></td></tr>}</tbody></table></div>
+            <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-6 py-5 sm:px-7">
+              <div>
+                <h2 className="text-xl font-bold">Request queue</h2>
+                <p className="mt-1 text-sm text-slate-600">Submitted requests wait here for manual realtor assignment and approval.</p>
+              </div>
+              <UserRoundCheck className="size-5 text-[#946710]" />
+            </div>
+            <div className="flex flex-col gap-3 border-b border-slate-100 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-wrap gap-2">
+                <button className={`rounded-full px-3.5 py-1.5 text-xs font-bold capitalize transition ${queueFilter === "all" ? "bg-[#17213b] text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`} onClick={() => setQueueFilter("all")} type="button">All <span className="ml-1 opacity-60">{requests.length}</span></button>
+                {queueStatuses.map((status) => (
+                  <button className={`rounded-full px-3.5 py-1.5 text-xs font-bold capitalize transition ${queueFilter === status ? "bg-[#17213b] text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`} key={status} onClick={() => setQueueFilter(status)} type="button">{status} <span className="ml-1 opacity-60">{requests.filter((item) => item.status === status).length}</span></button>
+                ))}
+              </div>
+              <div className="relative sm:w-64">
+                <ClipboardList className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+                <input
+                  aria-label="Search showing requests"
+                  className="h-10 w-full rounded-xl border border-slate-300 bg-white pl-9 pr-3 text-sm outline-none focus:border-[#17213b]"
+                  onChange={(event) => setQueueSearch(event.target.value)}
+                  placeholder="Search lead, property, email…"
+                  value={queueSearch}
+                />
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[950px] text-left text-sm">
+                <thead className="bg-slate-50 text-[11px] font-bold uppercase tracking-[0.08em] text-slate-500">
+                  <tr>
+                    <th className="px-6 py-4">Lead</th>
+                    <th className="px-6 py-4">Property</th>
+                    <th className="px-6 py-4">Status</th>
+                    <th className="px-6 py-4">Preferred time</th>
+                    <th className="px-6 py-4">Expires</th>
+                    <th className="px-6 py-4"><span className="sr-only">Actions</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredRequests.length ? filteredRequests.map((request) => (
+                    <tr className="border-t border-slate-100 transition hover:bg-[#fffaf0]" key={request.id}>
+                      <td className="px-6 py-5">
+                        <p className="font-bold">{request.leadName}</p>
+                        <p className="mt-1 text-xs text-slate-500">{request.recipientEmail || request.recipientPhone || "No contact"}</p>
+                        {Array.isArray(request.deliveryChannels) && request.deliveryChannels.length ? <div className="mt-1.5 flex gap-1">{request.deliveryChannels.map((channel) => <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-500" key={channel}>{channel}</span>)}</div> : null}
+                      </td>
+                      <td className="px-6 py-5">
+                        <p className="font-medium">{request.requestedPropertyTitle || request.propertyTitle || (request.propertyMode === "respondent" ? "Recipient will choose" : "Not selected")}</p>
+                        <p className="mt-1 text-xs text-slate-500">{request.title}</p>
+                      </td>
+                      <td className="px-6 py-5"><span className={`rounded-full px-2.5 py-1 text-[11px] font-bold capitalize ring-1 ring-inset ${statusClass(request.status)}`}>{request.status}</span></td>
+                      <td className="px-6 py-5 text-xs text-slate-600">{request.preferredShowingAt ? new Date(request.preferredShowingAt).toLocaleString() : "Waiting"}</td>
+                      <td className="px-6 py-5">
+                        <p className="text-xs font-medium text-slate-600">{expiryLabel(request.expiresAt)}</p>
+                        <p className="mt-0.5 text-[11px] text-slate-400">{new Date(request.expiresAt).toLocaleDateString()}</p>
+                      </td>
+                      <td className="px-6 py-5">
+                        <div className="flex items-center justify-end gap-1.5">
+                          {request.publicUrl ? (
+                            <button className={`inline-flex h-9 items-center gap-1.5 rounded-xl border px-3 text-xs font-semibold transition ${copiedLinkId === request.id ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-slate-200 text-slate-600 hover:border-[#946710] hover:text-[#946710]"}`} onClick={() => void copyPublicLink(request)} title="Copy public link" type="button">{copiedLinkId === request.id ? <CheckCircle2 className="size-3.5" /> : <ClipboardList className="size-3.5" />}{copiedLinkId === request.id ? "Copied" : "Copy link"}</button>
+                          ) : null}
+                          <Link aria-label={`Open request for ${request.leadName}`} className="inline-flex size-9 items-center justify-center rounded-xl border border-slate-200 text-slate-600 transition hover:border-[#946710] hover:text-[#946710]" href={`/dashboard/showing-requests/${request.id}`}><ArrowUpRight className="size-4" /></Link>
+                        </div>
+                      </td>
+                    </tr>
+                  )) : (
+                    <tr>
+                      <td className="px-6 py-16 text-center" colSpan={6}>
+                        <CalendarClock className="mx-auto size-8 text-slate-300" />
+                        <p className="mt-3 font-semibold text-slate-700">{requests.length ? "No requests match this filter" : "No showing requests yet"}</p>
+                        <p className="mt-1 text-sm text-slate-500">{requests.length ? "Try a different status or search term." : "Create the first request from the form on the left."}</p>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </article>
         </section>
       ) : (
