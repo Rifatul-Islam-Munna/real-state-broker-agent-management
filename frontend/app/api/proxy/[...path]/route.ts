@@ -41,17 +41,20 @@ function tenantPath(path: string[]) {
   if (joined === "sms-inbox/send") return "tenant-sms-inbox/send"
   if (joined === "sms-inbox/sync") return "tenant-sms-inbox/sync"
   if (joined === "sms-inbox/sync-status") return "tenant-sms-inbox/sync-status"
-  if (joined === "lead-outreach/templates") return "tenant-outreach/templates"
-  if (joined === "lead-outreach/schedule") return "tenant-outreach/schedule"
-  if (joined === "lead-outreach/bulk") return "tenant-outreach/bulk"
+  if (joined === "lead-outreach/templates")
+    return "tenant-workspace/lead-outreach/templates"
+  if (joined === "lead-outreach/schedule")
+    return "tenant-workspace/lead-outreach/schedule"
+  if (joined === "lead-outreach/bulk") return "tenant-workspace/lead-outreach/bulk"
   if (joined === "lead-outreach/schedule-status")
-    return "tenant-outreach/schedule-status"
+    return "tenant-workspace/lead-outreach/schedule-status"
   if (joined === "lead-outreach/replies/read")
-    return "tenant-outreach/replies/read"
-  if (joined === "lead-outreach/monitor") return "tenant-outreach/monitor"
+    return "tenant-workspace/lead-outreach/replies/read"
+  if (joined === "lead-outreach/monitor")
+    return "tenant-workspace/lead-outreach/monitoring"
   if (joined.startsWith("lead-outreach/jobs/"))
-    return `tenant-outreach/${joined.slice("lead-outreach/".length)}`
-  if (joined === "lead-outreach") return "tenant-outreach"
+    return `tenant-workspace/lead-outreach/${joined.slice("lead-outreach/".length)}`
+  if (joined === "lead-outreach") return "tenant-workspace/lead-outreach"
   if (joined === "lead-collection-templates/prepare-source")
     return "tenant-legacy/lead-collection-prepare-source"
   if (joined === "lead-collection-templates/test")
