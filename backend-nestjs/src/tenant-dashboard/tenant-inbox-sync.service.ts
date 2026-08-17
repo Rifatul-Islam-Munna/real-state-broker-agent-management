@@ -153,9 +153,12 @@ export class TenantInboxSyncService {
       if (!due) return { imported: 0, skipped: true, message: 'Tenant inbox sync is not due.' };
     }
     const authType = this.text(config.authType).toLowerCase();
+    // Manual "Sync now" uses the full 14-day window for a catch-up scan;
+    // the scheduled cron run is incremental (last successful scan -> now).
+    const fullWindow = force === true;
     const stats = authType === 'gmail-oauth' || config.gmailRefreshToken
-      ? await this.syncGmail(databaseName, config, tenant)
-      : await this.syncImap(databaseName, config);
+      ? await this.syncGmail(databaseName, config, tenant, fullWindow)
+      : await this.syncImap(databaseName, config, fullWindow);
     const deletedLocalMessages = await this.cleanupLocalInbox(
       databaseName,
       this.retentionDays(config.localInboxRetentionDays),
@@ -300,6 +303,7 @@ export class TenantInboxSyncService {
     databaseName: string,
     config: any,
     tenant: SaasTenant,
+    fullWindow = false,
   ) {
     const providerKey = `gmail:${this.text(config.gmailEmail, config.username)}`;
     const stats = this.emptyStats();
@@ -307,12 +311,17 @@ export class TenantInboxSyncService {
     try {
       const accessToken = await this.gmailAccessToken(databaseName, config, tenant);
       const maxMessages = this.clamp(config.maxMessagesPerSync, 100, 5, 500);
+      const lastScan = fullWindow
+        ? 0
+        : await this.lastSuccessfulScan(databaseName);
       const selectedMessages = await this.gmailMessagesForConfiguredTags(
         accessToken,
         config.mailboxTag,
         maxMessages,
+        lastScan,
       );
 
+      let oldestProcessed = 0;
       for (const selected of [...selectedMessages].reverse()) {
         const id = selected.id;
         const message = await this.jsonRequest(
@@ -328,6 +337,10 @@ export class TenantInboxSyncService {
         const sender = this.extractAddress(headers.from);
         const recipient = this.extractAddress(headers.to);
         const bodies = this.gmailBodies(message.payload);
+        const received = message.internalDate ? Number(message.internalDate) : 0;
+        if (received > 0 && (!oldestProcessed || received < oldestProcessed)) {
+          oldestProcessed = received;
+        }
         this.addStats(stats, await this.storeInbound(databaseName, {
           channel: 'email',
           providerKey,
@@ -336,9 +349,7 @@ export class TenantInboxSyncService {
           recipient,
           subject: headers.subject ?? '',
           body: bodies.text,
-          receivedAt: message.internalDate
-            ? new Date(Number(message.internalDate))
-            : new Date(),
+          receivedAt: received ? new Date(received) : new Date(),
           isRead: !((message.labelIds ?? []) as string[]).includes('UNREAD'),
           autoCreateLeads: config.autoCreateLeads !== false,
           mailboxTag: selected.mailboxTag,
@@ -351,7 +362,16 @@ export class TenantInboxSyncService {
           },
         }));
       }
-      await this.markCompleted(databaseName, providerKey, selectedMessages[0]?.id ?? null, stats);
+      await this.markCompleted(
+        databaseName,
+        providerKey,
+        selectedMessages[0]?.id ?? null,
+        stats,
+        this.clamp(config.syncIntervalMinutes, 5, 1, 720) || 5,
+        selectedMessages.length >= maxMessages && oldestProcessed > 0
+          ? oldestProcessed
+          : null,
+      );
       this.logger.log(`Mailbox sync ${databaseName}: ${JSON.stringify(stats)}`);
       return stats;
     } catch (error) {
@@ -364,10 +384,17 @@ export class TenantInboxSyncService {
     accessToken: string,
     configuredTags: unknown,
     maxMessages: number,
+    lastScan = 0,
   ) {
     const requestedTags = this.syncTags(configuredTags, 'gmail');
     if (!requestedTags.length) {
-      return this.listGmailMessagesForLabel(accessToken, 'INBOX', 'gmail', maxMessages);
+      return this.listGmailMessagesForLabel(
+        accessToken,
+        'INBOX',
+        'gmail',
+        maxMessages,
+        lastScan,
+      );
     }
 
     const labelResponse = await this.jsonRequest(
@@ -395,6 +422,7 @@ export class TenantInboxSyncService {
         labelId,
         labelName,
         remaining,
+        lastScan,
       );
       for (const message of messages) {
         if (!selected.has(message.id)) selected.set(message.id, message);
@@ -409,6 +437,7 @@ export class TenantInboxSyncService {
     labelId: string,
     mailboxTag: string,
     maxMessages: number,
+    lastScan = 0,
   ) {
     const ids: Array<{ id: string; mailboxTag: string }> = [];
     let pageToken = '';
@@ -417,7 +446,12 @@ export class TenantInboxSyncService {
       url.searchParams.append('labelIds', 'INBOX');
       if (labelId !== 'INBOX') url.searchParams.append('labelIds', labelId);
       url.searchParams.set('maxResults', String(Math.min(100, maxMessages - ids.length)));
-      url.searchParams.set('q', 'newer_than:14d');
+      url.searchParams.set(
+        'q',
+        lastScan > 0
+          ? `after:${Math.floor(lastScan / 1000)}`
+          : 'newer_than:14d',
+      );
       if (pageToken) url.searchParams.set('pageToken', pageToken);
       const list = await this.jsonRequest(url.toString(), {
         headers: { Authorization: `Bearer ${accessToken}` },
@@ -432,7 +466,7 @@ export class TenantInboxSyncService {
     return ids;
   }
 
-  private async syncImap(databaseName: string, config: any) {
+  private async syncImap(databaseName: string, config: any, fullWindow = false) {
     const providerKey = `imap:${this.text(config.mailboxTag, config.imapUsername ?? config.username)}`;
     const stats = this.emptyStats();
     await this.markStarted(databaseName, providerKey);
@@ -454,14 +488,21 @@ export class TenantInboxSyncService {
       await connection.connect();
       const lock = await connection.getMailboxLock(this.text(config.imapFolder, 'INBOX'));
       try {
-        const since = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+        const lastScan = fullWindow
+          ? 0
+          : await this.lastSuccessfulScan(databaseName);
+        const since = lastScan > 0
+          ? new Date(lastScan)
+          : new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
         const syncTags = this.syncTags(config.mailboxTag, 'imap');
         const search: any = { since };
         if (syncTags.length) {
           search.or = syncTags.map((tag) => ({ keyword: tag }));
         }
         const uids: number[] = await connection.search(search, { uid: true });
-        const selected = uids.slice(-this.clamp(config.maxMessagesPerSync, 100, 5, 500));
+        const maxMessages = this.clamp(config.maxMessagesPerSync, 100, 5, 500);
+        const selected = uids.slice(-maxMessages);
+        let oldestProcessed = 0;
         if (selected.length > 0) {
           for await (const item of connection.fetch(selected.join(','), {
             uid: true,
@@ -475,6 +516,11 @@ export class TenantInboxSyncService {
             const recipient = this.text(parsed.to?.value?.[0]?.address);
             const uidValidity = `${connection.mailbox?.uidValidity ?? '0'}`;
             const mailboxTag = this.matchImapTag(item.flags, syncTags) || 'imap';
+            const received = item.internalDate ?? parsed.date ?? null;
+            const receivedAt = received ? new Date(received) : new Date();
+            if (received && (!oldestProcessed || receivedAt.getTime() < oldestProcessed)) {
+              oldestProcessed = receivedAt.getTime();
+            }
             this.addStats(stats, await this.storeInbound(databaseName, {
               channel: 'email',
               providerKey,
@@ -483,7 +529,7 @@ export class TenantInboxSyncService {
               recipient,
               subject: this.text(parsed.subject),
               body: this.text(parsed.text, this.stripHtml(parsed.html)),
-              receivedAt: item.internalDate ?? parsed.date ?? new Date(),
+              receivedAt,
               isRead: Boolean(item.flags?.has?.('\\Seen')),
               autoCreateLeads: config.autoCreateLeads !== false,
               mailboxTag,
@@ -502,6 +548,10 @@ export class TenantInboxSyncService {
           providerKey,
           selected.length ? `${selected[selected.length - 1]}` : null,
           stats,
+          this.clamp(config.syncIntervalMinutes, 5, 1, 720) || 5,
+          uids.length > maxMessages && oldestProcessed > 0
+            ? oldestProcessed
+            : null,
         );
         this.logger.log(`Mailbox sync ${databaseName}: ${JSON.stringify(stats)}`);
         return stats;
@@ -559,7 +609,13 @@ export class TenantInboxSyncService {
           payload: message,
         }));
       }
-      await this.markCompleted(databaseName, providerKey, messages[0]?.sid ?? null, stats);
+      await this.markCompleted(
+        databaseName,
+        providerKey,
+        messages[0]?.sid ?? null,
+        stats,
+        this.clamp(config.syncIntervalMinutes, 5, 1, 720) || 5,
+      );
       return stats;
     } catch (error) {
       await this.markFailed(databaseName, providerKey, error);
@@ -1949,7 +2005,10 @@ export class TenantInboxSyncService {
     providerKey: string,
     cursor: string | null,
     stats: InboxSyncStats,
+    intervalMinutes = 5,
+    scanWatermark: number | null = null,
   ) {
+    const interval = this.clamp(intervalMinutes, 1, 720, 5);
     await this.databases.withTenantClient(databaseName, (client) =>
       client.query(
         `INSERT INTO tenant_sync_state(
@@ -1957,13 +2016,16 @@ export class TenantInboxSyncService {
            next_run_at, locked_at, locked_by, last_error,
            imported_count, matched_count, created_count, skipped_count
          ) VALUES (
-           'mail-inbox', 'sent', $1::jsonb, now(), now(),
-           now() + interval '5 minutes', NULL, NULL, '', $2, $3, $4, $5
+           'mail-inbox', 'sent', $1::jsonb, now(),
+           CASE WHEN $7 IS NULL THEN now() ELSE to_timestamp($7 / 1000.0) END,
+           now() + make_interval(mins => $6), NULL, NULL, '', $2, $3, $4, $5
          )
          ON CONFLICT (sync_key) DO UPDATE
          SET status = 'sent', cursor = EXCLUDED.cursor,
-             last_completed_at = now(), last_succeeded_at = now(),
-             next_run_at = now() + interval '5 minutes',
+             last_completed_at = now(),
+             last_succeeded_at = CASE WHEN $7 IS NULL THEN now()
+               ELSE to_timestamp($7 / 1000.0) END,
+             next_run_at = now() + make_interval(mins => $6),
              locked_at = NULL, locked_by = NULL, last_error = '',
              imported_count = EXCLUDED.imported_count,
              matched_count = EXCLUDED.matched_count,
@@ -1976,6 +2038,8 @@ export class TenantInboxSyncService {
           stats.matched,
           stats.created,
           stats.skipped,
+          interval,
+          scanWatermark,
         ],
       ),
     );
@@ -2105,6 +2169,22 @@ export class TenantInboxSyncService {
          FROM tenant_sync_state WHERE sync_key = 'mail-inbox'`,
       );
       return result.rows[0]?.due !== false;
+    });
+  }
+
+  /**
+   * Returns the last successful scan time in ms (0 when the mailbox has never
+   * synced). Used as the incremental watermark: each run only fetches messages
+   * received after this point.
+   */
+  private async lastSuccessfulScan(databaseName: string) {
+    return this.databases.withTenantClient(databaseName, async (client) => {
+      const result = await client.query(
+        `SELECT last_succeeded_at
+         FROM tenant_sync_state WHERE sync_key = 'mail-inbox'`,
+      );
+      const value = result.rows?.[0]?.last_succeeded_at;
+      return value ? new Date(value).getTime() : 0;
     });
   }
 

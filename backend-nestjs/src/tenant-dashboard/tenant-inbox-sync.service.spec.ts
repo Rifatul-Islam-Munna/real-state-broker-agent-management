@@ -1054,6 +1054,82 @@ describe('TenantInboxSyncService active parser processing', () => {
     expect(payload.lastLeadRecoveryAttemptAt).toBeDefined();
   });
 
+  test('syncGmail uses the last successful scan as the incremental window', async () => {
+    const lastSucceededAt = new Date('2026-08-18T01:00:00Z');
+    const databases = {
+      withTenantClient: jest.fn(async (_db: string, callback: any) =>
+        callback({
+          query: jest.fn().mockResolvedValue({
+            rowCount: 1,
+            rows: [{ last_succeeded_at: lastSucceededAt }],
+          }),
+        }),
+      ),
+    };
+    const service = new TenantInboxSyncService(
+      {} as any,
+      databases as any,
+      {} as any,
+    );
+    jest.spyOn(service as any, 'gmailAccessToken').mockResolvedValue('token');
+    const list = jest
+      .spyOn(service as any, 'gmailMessagesForConfiguredTags')
+      .mockResolvedValue([]);
+    jest.spyOn(service as any, 'markStarted').mockResolvedValue(undefined);
+    jest.spyOn(service as any, 'markCompleted').mockResolvedValue(undefined);
+
+    await (service as any).syncGmail(
+      'tenant_1_demo',
+      {
+        gmailEmail: 'mailbox@example.com',
+        mailboxTag: 'Leads',
+        maxMessagesPerSync: 50,
+      },
+      { databaseName: 'tenant_1_demo' } as any,
+    );
+
+    expect(list).toHaveBeenCalledWith(
+      'token',
+      'Leads',
+      50,
+      lastSucceededAt.getTime(),
+    );
+  });
+
+  test('manual syncGmail uses the full 14-day window regardless of the watermark', async () => {
+    const databases = {
+      withTenantClient: jest.fn(async (_db: string, callback: any) =>
+        callback({
+          query: jest.fn().mockResolvedValue({
+            rowCount: 1,
+            rows: [{ last_succeeded_at: new Date('2026-08-18T01:00:00Z') }],
+          }),
+        }),
+      ),
+    };
+    const service = new TenantInboxSyncService(
+      {} as any,
+      databases as any,
+      {} as any,
+    );
+    jest.spyOn(service as any, 'gmailAccessToken').mockResolvedValue('token');
+    const list = jest
+      .spyOn(service as any, 'gmailMessagesForConfiguredTags')
+      .mockResolvedValue([]);
+    jest.spyOn(service as any, 'markStarted').mockResolvedValue(undefined);
+    jest.spyOn(service as any, 'markCompleted').mockResolvedValue(undefined);
+
+    await (service as any).syncGmail(
+      'tenant_1_demo',
+      { gmailEmail: 'mailbox@example.com', mailboxTag: 'Leads', maxMessagesPerSync: 50 },
+      { databaseName: 'tenant_1_demo' } as any,
+      true,
+    );
+
+    // fullWindow=true -> lastScan 0 -> the caller falls back to newer_than:14d
+    expect(list).toHaveBeenCalledWith('token', 'Leads', 50, 0);
+  });
+
   test('uses provider sender for dedupe only when parser extracted no contact', async () => {
     const query = jest.fn().mockResolvedValue({ rowCount: 0, rows: [] });
     const service = new TenantInboxSyncService({} as any, {} as any, {} as any);
