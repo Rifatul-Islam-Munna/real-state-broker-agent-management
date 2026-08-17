@@ -7,6 +7,16 @@ import PostalMime from "postal-mime"
 
 import type { MailInboxItem } from "@/@types/real-estate-api"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { AppIcon } from "@/components/ui/app-icon"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -23,6 +33,7 @@ import {
 import {
   useConvertMailInboxToLead,
   useCreateMailInboxItem,
+  useDeleteMailInboxItem,
   useDocumentRepository,
   useMailInbox,
   useMailInboxItem,
@@ -84,6 +95,7 @@ function ProfessionalMailWorkspace({ initialMailId }: { initialMailId?: number }
   const [pdfTemplateId, setPdfTemplateId] = useState("")
   const [attachmentDrawerOpen, setAttachmentDrawerOpen] = useState(false)
   const [showLeadDetails, setShowLeadDetails] = useState(true)
+  const [deleteOpen, setDeleteOpen] = useState(false)
   const [optimisticReplies, setOptimisticReplies] = useState<OptimisticReply[]>([])
   const threadBottomRef = useRef<HTMLDivElement | null>(null)
   const autoReadIdRef = useRef<number | null>(null)
@@ -105,6 +117,7 @@ function ProfessionalMailWorkspace({ initialMailId }: { initialMailId?: number }
   const sendMutation = useSendMailMessage()
   const createInboxMutation = useCreateMailInboxItem()
   const updateMailMutation = useUpdateMailInboxItem()
+  const deleteMailMutation = useDeleteMailInboxItem()
   const convertMutation = useConvertMailInboxToLead()
 
   const messages = useMemo(() => inboxQuery.data?.items ?? [], [inboxQuery.data?.items])
@@ -165,6 +178,22 @@ function ProfessionalMailWorkspace({ initialMailId }: { initialMailId?: number }
   function chooseMessage(id: number) {
     setSelectedId(id)
     window.history.replaceState(null, "", `/dashboard/mail/${id}`)
+  }
+
+  async function deleteSelectedMail() {
+    if (!selected) return
+    const deletingId = selected.id
+    const nextId = messages.find((item) => item.id !== deletingId)?.id ?? null
+    const response = await deleteMailMutation.mutateAsync({ id: deletingId })
+    if (response.error) return
+    setDeleteOpen(false)
+    setSelectedId(nextId)
+    autoReadIdRef.current = null
+    window.history.replaceState(
+      null,
+      "",
+      nextId ? `/dashboard/mail/${nextId}` : "/dashboard/mail",
+    )
   }
 
   async function sendReply() {
@@ -549,6 +578,17 @@ function ProfessionalMailWorkspace({ initialMailId }: { initialMailId?: number }
                       {selected.isRead === true ? "Mark unseen" : "Mark read"}
                     </Button>
                     <Button
+                      className="text-destructive"
+                      disabled={deleteMailMutation.isPending}
+                      onClick={() => setDeleteOpen(true)}
+                      size="sm"
+                      title="Remove this mail from the workspace only"
+                      variant="outline"
+                    >
+                      <AppIcon name="delete" />
+                      Delete
+                    </Button>
+                    <Button
                       render={
                         <Link
                           href={`/dashboard/lead-collection-templates/new?mailInboxId=${selected.id}`}
@@ -760,6 +800,27 @@ function ProfessionalMailWorkspace({ initialMailId }: { initialMailId?: number }
           )}
         </section>
       </div>
+
+      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this mail?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes only the synced copy from this workspace database. The original Gmail or IMAP message and any linked Lead stay unchanged.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteMailMutation.isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleteMailMutation.isPending}
+              onClick={() => void deleteSelectedMail()}
+            >
+              {deleteMailMutation.isPending ? "Deleting..." : "Delete locally"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Dialog
         open={compose.open}

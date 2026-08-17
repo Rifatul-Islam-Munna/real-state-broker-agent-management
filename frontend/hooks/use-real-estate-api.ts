@@ -1016,6 +1016,20 @@ export function useUpdateMailInboxItem() {
   })
 }
 
+export function useDeleteMailInboxItem() {
+  const invalidate = useInvalidate(["mail-inbox", "mail-inbox-item", "dashboard"])
+
+  return useCommonMutationApi<
+    { id: number; deleted: boolean; providerMessageDeleted: boolean },
+    { id: number }
+  >({
+    method: "DELETE",
+    onSuccess: () => void invalidate(),
+    successMessage: "Mail removed from workspace",
+    url: "/mail-inbox",
+  })
+}
+
 export function useConvertMailInboxToLead() {
   const invalidate = useInvalidate(["mail-inbox", "leads", "dashboard"])
 

@@ -506,6 +506,7 @@ export class TenantInboxSyncService {
           .digest('hex');
         const payload = {
           ...(input.payload ?? {}),
+          mailbox: this.text(input.mailboxTag),
           lead,
           ...(parserResult
             ? {
@@ -772,21 +773,106 @@ export class TenantInboxSyncService {
   }
 
   private async matchParsedProperty(client: PoolClient, propertyText: string) {
-    if (!propertyText) return null;
-    const value = propertyText.trim().toLowerCase();
+    const input = this.normalizePropertyMatch(propertyText);
+    if (!input) return null;
     const result = await client.query(
-      `SELECT id
+      `SELECT id, title, payload
        FROM tenant_property
-       WHERE lower(title) = $1
-          OR lower(COALESCE(payload->>'address', '')) = $1
-          OR lower(COALESCE(payload->>'location', '')) = $1
-          OR lower(title) LIKE '%' || $1 || '%'
-          OR $1 LIKE '%' || lower(title) || '%'
-       ORDER BY CASE WHEN lower(title) = $1 THEN 0 ELSE 1 END, id DESC
-       LIMIT 1`,
-      [value],
+       ORDER BY updated_at DESC, id DESC
+       LIMIT 1000`,
     );
-    return result.rowCount ? Number(result.rows[0].id) : null;
+    if (!result.rowCount) return null;
+
+    const inputNumber = this.propertyNumberToken(input);
+    const candidates = result.rows
+      .map((row: any) => this.scoreParsedProperty(row, input, inputNumber))
+      .filter((item: any) => item.score > 0)
+      .sort((left: any, right: any) => right.score - left.score || right.id - left.id);
+    if (!candidates.length) return null;
+
+    const best = candidates[0];
+    if (best.exact) return best.id;
+    if (inputNumber) {
+      const sameNumber = candidates.filter((item: any) => item.numberMatch);
+      if (sameNumber.length === 1 && sameNumber[0].score >= 0.7) return sameNumber[0].id;
+    }
+    if (best.score < 0.72) return null;
+    const second = candidates[1];
+    if (second && best.score - second.score < 0.12) return null;
+    return best.id;
+  }
+
+  private scoreParsedProperty(row: any, input: string, inputNumber: string) {
+    const payload = row?.payload && typeof row.payload === 'object' ? row.payload : {};
+    const fields = [
+      row?.title,
+      payload.address,
+      payload.propertyAddress,
+      payload.streetAddress,
+      payload.location,
+      payload.exactLocation,
+      payload.slug,
+    ]
+      .map((value) => this.normalizePropertyMatch(value))
+      .filter(Boolean);
+    let score = 0;
+    let exact = false;
+    let numberMatch = false;
+    const inputWords = this.propertyMeaningfulWords(input);
+
+    for (const field of fields) {
+      if (field === input) {
+        score = 1;
+        exact = true;
+        break;
+      }
+      if (field.length >= 4 && (field.includes(input) || input.includes(field))) {
+        score = Math.max(score, 0.92);
+      }
+      const fieldNumbers: string[] = field.match(/\b\d{3,6}\b/g) ?? [];
+      if (inputNumber && fieldNumbers.includes(inputNumber)) {
+        numberMatch = true;
+        score = Math.max(score, 0.7);
+      }
+      const fieldWords = this.propertyMeaningfulWords(field);
+      const overlap = inputWords.filter((word) => fieldWords.includes(word)).length;
+      if (overlap) {
+        const ratio = overlap / Math.max(1, Math.min(inputWords.length, fieldWords.length));
+        score = Math.max(score, numberMatch ? 0.78 + Math.min(0.18, ratio * 0.18) : ratio * 0.78);
+      }
+    }
+    return { id: Number(row.id), score, exact, numberMatch };
+  }
+
+  private normalizePropertyMatch(value: unknown) {
+    return this.text(value)
+      .toLowerCase()
+      .replace(/\b(north)\b/g, 'n')
+      .replace(/\b(south)\b/g, 's')
+      .replace(/\b(east)\b/g, 'e')
+      .replace(/\b(west)\b/g, 'w')
+      .replace(/\b(street)\b/g, 'st')
+      .replace(/\b(road)\b/g, 'rd')
+      .replace(/\b(avenue)\b/g, 'ave')
+      .replace(/\b(boulevard)\b/g, 'blvd')
+      .replace(/\b(drive)\b/g, 'dr')
+      .replace(/\b(lane)\b/g, 'ln')
+      .replace(/\b(court)\b/g, 'ct')
+      .replace(/[^a-z0-9]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  private propertyNumberToken(value: string) {
+    return (value.match(/\b\d{3,6}\b/g) ?? [])[0] ?? '';
+  }
+
+  private propertyMeaningfulWords(value: string) {
+    const ignored = new Set([
+      'property', 'listing', 'rental', 'rent', 'sale', 'home', 'house',
+      'apartment', 'apt', 'unit', 'sf', 'sqft', 'square', 'feet', 'for',
+    ]);
+    return [...new Set(value.split(' ').filter((word) => word.length >= 2 && !/^\d+$/.test(word) && !ignored.has(word)))];
   }
 
   private async findLead(

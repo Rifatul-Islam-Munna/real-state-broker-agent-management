@@ -1,6 +1,7 @@
 ﻿import {
   Body,
   Controller,
+  Delete,
   Get,
   Headers,
   Patch,
@@ -77,6 +78,11 @@ export class TenantInboxController {
   @Patch()
   update(@Req() req: any, @Body() body: any) {
     return this.mail.update(req.tenant, body);
+  }
+
+  @Delete()
+  delete(@Req() req: any, @Query('id') id?: string) {
+    return this.mail.delete(req.tenant, Number(id));
   }
 
   @Get('sync-status')

@@ -49,9 +49,26 @@ export class FileUploadService implements OnModuleInit {
       if (!exists) {
         await this.minioClient.makeBucket(this.bucketName, 'us-east-1');
       }
+      await this.ensurePublicReadPolicy();
     } catch (err) {
       console.error('Error connecting to MinIO', err);
     }
+  }
+
+  private async ensurePublicReadPolicy() {
+    const policy = {
+      Version: '2012-10-17',
+      Statement: [
+        {
+          Sid: 'PublicReadAllObjects',
+          Effect: 'Allow',
+          Principal: { AWS: ['*'] },
+          Action: ['s3:GetObject'],
+          Resource: [`arn:aws:s3:::${this.bucketName}/*`],
+        },
+      ],
+    };
+    await this.minioClient.setBucketPolicy(this.bucketName, JSON.stringify(policy));
   }
 
   async uploadFile(file: Express.Multer.File, folder: string = 'general', tenantId?: number) {

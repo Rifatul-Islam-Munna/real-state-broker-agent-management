@@ -8,6 +8,7 @@ import { SaasTenant } from '../saas-admin/entities/saas-tenant.entity';
 import { TenantDatabaseService } from '../tenant-database/tenant-database.service';
 import { TenantInboxSyncService } from './tenant-inbox-sync.service';
 import { TenantOutreachService } from './tenant-outreach.service';
+import { TenantWorkspaceSettingsService } from './tenant-workspace-settings.service';
 
 @Injectable()
 export class TenantMailInboxService {
@@ -15,6 +16,7 @@ export class TenantMailInboxService {
     private readonly databases: TenantDatabaseService,
     private readonly outreach: TenantOutreachService,
     private readonly inboxSync: TenantInboxSyncService,
+    private readonly settings: TenantWorkspaceSettingsService,
   ) {}
 
   async list(
@@ -32,11 +34,23 @@ export class TenantMailInboxService {
   ) {
     const page = this.int(query.page, 1, 1, 100_000);
     const pageSize = this.int(query.pageSize, 20, 1, 100);
+    const smtpConfig: any = await this.settings.getRawSmtp(tenant);
+    const configuredSyncTags = this.commaList(smtpConfig?.mailboxTag).map((tag) =>
+      tag.toLowerCase(),
+    );
     return this.databases.withTenantClient(
       this.databaseName(tenant),
       async (client) => {
         const values: unknown[] = [];
         const conditions = [`j.channel = 'Email'`];
+        if (configuredSyncTags.length) {
+          values.push(configuredSyncTags);
+          conditions.push(`(
+            j.direction <> 'Incoming'
+            OR (j.provider NOT LIKE 'gmail:%' AND j.provider NOT LIKE 'imap:%')
+            OR LOWER(COALESCE(j.payload->>'mailbox', '')) = ANY($${values.length}::text[])
+          )`);
+        }
         if (Number(query.id) > 0) {
           values.push(Number(query.id));
           conditions.push(`j.id = $${values.length}`);
@@ -233,6 +247,31 @@ export class TenantMailInboxService {
       },
     );
   }
+  async delete(tenant: SaasTenant, id: number) {
+    if (!Number.isInteger(id) || id <= 0) {
+      throw new BadRequestException('Mail item id is required.');
+    }
+    return this.databases.withTenantClient(
+      this.databaseName(tenant),
+      async (client) => {
+        const result = await client.query(
+          `DELETE FROM tenant_outreach_job
+           WHERE id = $1 AND channel = 'Email'
+           RETURNING id`,
+          [id],
+        );
+        if (!result.rowCount) {
+          throw new NotFoundException('Tenant mail item was not found.');
+        }
+        return {
+          id: Number(result.rows[0].id),
+          deleted: true,
+          providerMessageDeleted: false,
+        };
+      },
+    );
+  }
+
   async convertToLead(tenant: SaasTenant, mailInboxId: number) {
     if (!Number.isInteger(mailInboxId) || mailInboxId <= 0) {
       throw new BadRequestException('Mail item id is required.');
@@ -419,6 +458,18 @@ export class TenantMailInboxService {
           ),
         ]
       : [];
+  }
+
+  private commaList(value: unknown) {
+    if (Array.isArray(value)) return this.stringList(value);
+    return [
+      ...new Set(
+        `${value ?? ''}`
+          .split(',')
+          .map((item) => item.trim())
+          .filter(Boolean),
+      ),
+    ];
   }
 
   private htmlToText(value: string) {
