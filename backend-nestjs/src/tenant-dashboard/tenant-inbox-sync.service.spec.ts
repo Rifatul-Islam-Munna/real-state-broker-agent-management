@@ -573,7 +573,7 @@ describe('TenantInboxSyncService active parser processing', () => {
     const parsed = await (service as any).createOrMatchLeadFromTemplate({ query }, {
       sender: 'lead@example.com',
       subject: 'New inquiry',
-      body: 'Property: 123 Main St',
+      body: 'Property: 123 Main St\nPhone: 786-555-0101',
       receivedAt: new Date('2026-08-18T00:00:00Z'),
       mailboxTag: 'leads',
       leadTemplateTags: ['another-tag'],
@@ -1193,6 +1193,94 @@ describe('TenantInboxSyncService active parser processing', () => {
       50,
       lastSucceededAt.getTime(),
     );
+  });
+
+  test('a market-update email matching a template does not create a junk lead', async () => {
+    const query = jest.fn(async (sql: string) => {
+      if (sql.includes("resource = 'lead-collection-templates'")) {
+        return {
+          rowCount: 1,
+          rows: [{
+            id: 15,
+            payload: {
+              name: 'Untitled lead email template',
+              senderPatterns: ['*@mail.zillow.com'],
+              subjectPattern: 'New listing for rent',
+              subjectMatchMode: 'Contains',
+              sourceHtml: '<p>2851 W Prospect Rd Unit 704</p>',
+              sourceText: '',
+              mappings: [],
+              requiredFields: [],
+              confidenceThreshold: 0.5,
+            },
+          }],
+        };
+      }
+      return { rowCount: 0, rows: [] };
+    });
+    const service = new TenantInboxSyncService({} as any, {} as any, {} as any);
+
+    const parsed = await (service as any).createOrMatchLeadFromTemplate({ query }, {
+      sender: 'market-updates@mail.zillow.com',
+      subject: 'New listing for rent in Tamarac for $3,300/mo - 2851 W Prospect Rd Unit 704',
+      body: 'Typical home value $289,970\n98101 2006 2026',
+      receivedAt: new Date('2026-08-17T23:54:00Z'),
+      mailboxTag: 'leads',
+      leadTemplateTags: [],
+      payload: {},
+    });
+
+    expect(parsed).toMatchObject({ created: false, lead: null });
+    expect(parsed.result.missingRequiredFields).toEqual(
+      expect.arrayContaining(['name', 'email', 'phone']),
+    );
+    const insertCall = query.mock.calls.find(
+      (call: unknown[]) =>
+        String(call[0]).includes('INSERT INTO tenant_lead('),
+    );
+    expect(insertCall).toBeUndefined();
+  });
+
+  test('a failing message does not block newer emails from being processed', async () => {
+    const service = new TenantInboxSyncService(
+      {} as any,
+      { withTenantClient: jest.fn() } as any,
+      {} as any,
+    );
+    jest.spyOn(service as any, 'gmailAccessToken').mockResolvedValue('token');
+    jest.spyOn(service as any, 'gmailMessagesForConfiguredTags').mockResolvedValue([
+      { id: 'msg-2', mailboxTag: 'Leads' },
+      { id: 'msg-1', mailboxTag: 'Leads' },
+    ]);
+    jest.spyOn(service as any, 'markStarted').mockResolvedValue(undefined);
+    jest.spyOn(service as any, 'jsonRequest').mockResolvedValue({
+      payload: { headers: [{ name: 'From', value: 'lead@example.com' }] },
+      internalDate: 1786999000000,
+      labelIds: ['INBOX'],
+    });
+    jest
+      .spyOn(service as any, 'gmailBodies')
+      .mockResolvedValue({ text: 'Hello', html: '' });
+    const storeInbound = jest
+      .spyOn(service as any, 'storeInbound')
+      .mockRejectedValueOnce(new Error('boom'))
+      .mockResolvedValueOnce({
+        imported: 1, matched: 0, created: 1, skipped: 0, reason: '',
+      });
+    const markCompleted = jest
+      .spyOn(service as any, 'markCompleted')
+      .mockResolvedValue(undefined);
+
+    const stats = await (service as any).syncGmail(
+      'tenant_1_demo',
+      { gmailEmail: 'mailbox@example.com', mailboxTag: 'Leads', maxMessagesPerSync: 50 },
+      { databaseName: 'tenant_1_demo' } as any,
+    );
+
+    expect(storeInbound).toHaveBeenCalledTimes(2);
+    expect(stats.skipped).toBe(1);
+    expect(stats.imported).toBe(1);
+    expect(markCompleted).toHaveBeenCalled();
   });
 
   test('manual syncGmail uses the full 14-day window regardless of the watermark', async () => {

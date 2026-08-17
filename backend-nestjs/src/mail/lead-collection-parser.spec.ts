@@ -504,6 +504,28 @@ describe('lead collection template parser', () => {
     expect(result.values.email).toBe('starheights56@comcast.net');
   });
 
+  it('rejects newsletter noise as a phone number', () => {
+    const result = extractLeadBasicsFromEmail({
+      fromAddress: 'market-updates@mail.zillow.com',
+      subject: 'New listing for rent in Tamarac for $3,300/mo',
+      textBody: [
+        'Typical home value $289,970',
+        '98101 2006 2026',
+        '2851 W Prospect Rd Unit 704',
+      ].join('\n'),
+    });
+    expect(result.phone).toBe('');
+  });
+
+  it('keeps real phone numbers from the same kinds of emails', () => {
+    const result = extractLeadBasicsFromEmail({
+      fromAddress: 'leads@email.realtor.com',
+      subject: 'New realtor.com lead - Steve Francis',
+      textBody: 'Name Steve Francis\nPhone 786-548-5124',
+    });
+    expect(result.phone).toBe('786-548-5124');
+  });
+
   it('extracts a space-separated one-line Name (realtor.com sidebar layout)', () => {
     const result = parseLeadCollectionTemplate({
       ...template,

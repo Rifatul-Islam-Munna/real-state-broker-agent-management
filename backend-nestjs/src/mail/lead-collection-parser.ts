@@ -815,6 +815,16 @@ function validPhoneCandidate(candidate: string) {
   const digits = trimmed.replace(/\D/g, '');
   if (digits.length < 7 || digits.length > 15) return '';
   if (/^\d{4}\s*[-–—]\s*\d{4}$/.test(trimmed)) return '';
+  const groups = trimmed.split(/[^\d]+/).filter((group) => group.length > 0);
+  const sizes = groups.map((group) => group.length);
+  // Reject noise sequences like "98101 2006 2026" (a ZIP-like 5-digit group
+  // followed by year-like groups) that appear in newsletters and market
+  // updates but are never real phone numbers.
+  if (groups.length >= 3 && sizes[0] === 5) return '';
+  const yearGroups = groups.filter(
+    (group) => group.length === 4 && /^(19|20)\d{2}$/.test(group),
+  ).length;
+  if (yearGroups >= 2) return '';
   return trimmed;
 }
 

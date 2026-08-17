@@ -319,49 +319,59 @@ export class TenantInboxSyncService {
         config.mailboxTag,
         maxMessages,
         lastScan,
-      );
-
-      let oldestProcessed = 0;
+      );      let oldestProcessed = 0;
       for (const selected of [...selectedMessages].reverse()) {
-        const id = selected.id;
-        const message = await this.jsonRequest(
-          `https://gmail.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(id)}?format=full`,
-          { headers: { Authorization: `Bearer ${accessToken}` } },
-        );
-        const headers = Object.fromEntries(
-          (message.payload?.headers ?? []).map((item: any) => [
-            this.text(item.name).toLowerCase(),
-            this.text(item.value),
-          ]),
-        );
-        const sender = this.extractAddress(headers.from);
-        const recipient = this.extractAddress(headers.to);
-        const bodies = this.gmailBodies(message.payload);
-        const received = message.internalDate ? Number(message.internalDate) : 0;
-        if (received > 0 && (!oldestProcessed || received < oldestProcessed)) {
-          oldestProcessed = received;
+        try {
+          const id = selected.id;
+          const message = await this.jsonRequest(
+            `https://gmail.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(id)}?format=full`,
+            { headers: { Authorization: `Bearer ${accessToken}` } },
+          );
+          const headers = Object.fromEntries(
+            (message.payload?.headers ?? []).map((item: any) => [
+              this.text(item.name).toLowerCase(),
+              this.text(item.value),
+            ]),
+          );
+          const sender = this.extractAddress(headers.from);
+          const recipient = this.extractAddress(headers.to);
+          const bodies = this.gmailBodies(message.payload);
+          const received = message.internalDate ? Number(message.internalDate) : 0;
+          if (received > 0 && (!oldestProcessed || received < oldestProcessed)) {
+            oldestProcessed = received;
+          }
+          this.addStats(stats, await this.storeInbound(databaseName, {
+            channel: 'email',
+            providerKey,
+            providerMessageId: id,
+            sender,
+            recipient,
+            subject: headers.subject ?? '',
+            body: bodies.text,
+            receivedAt: received ? new Date(received) : new Date(),
+            isRead: !((message.labelIds ?? []) as string[]).includes('UNREAD'),
+            autoCreateLeads: config.autoCreateLeads !== false,
+            mailboxTag: selected.mailboxTag,
+            leadTemplateTags: this.stringList(config.leadTemplateTags),
+            payload: {
+              gmailThreadId: message.threadId,
+              gmailHistoryId: message.historyId,
+              headers,
+              htmlBody: bodies.html,
+            },
+          }));
+        } catch (error) {
+          // One failing message must never block newer emails from being
+          // processed on this or future runs.
+          stats.skipped += 1;
+          this.logger.warn(`Mailbox message skipped ${JSON.stringify({
+            databaseName,
+            providerMessageId: this.text(selected.id),
+            error: this.message(error),
+          })}`);
         }
-        this.addStats(stats, await this.storeInbound(databaseName, {
-          channel: 'email',
-          providerKey,
-          providerMessageId: id,
-          sender,
-          recipient,
-          subject: headers.subject ?? '',
-          body: bodies.text,
-          receivedAt: received ? new Date(received) : new Date(),
-          isRead: !((message.labelIds ?? []) as string[]).includes('UNREAD'),
-          autoCreateLeads: config.autoCreateLeads !== false,
-          mailboxTag: selected.mailboxTag,
-          leadTemplateTags: this.stringList(config.leadTemplateTags),
-          payload: {
-            gmailThreadId: message.threadId,
-            gmailHistoryId: message.historyId,
-            headers,
-            htmlBody: bodies.html,
-          },
-        }));
       }
+
       await this.markCompleted(
         databaseName,
         providerKey,
@@ -371,7 +381,12 @@ export class TenantInboxSyncService {
         selectedMessages.length >= maxMessages && oldestProcessed > 0
           ? oldestProcessed
           : null,
-      );
+      ).catch((error) => {
+        this.logger.warn(`Mailbox sync completion save failed ${JSON.stringify({
+          databaseName,
+          error: this.message(error),
+        })}`);
+      });
       this.logger.log(`Mailbox sync ${databaseName}: ${JSON.stringify(stats)}`);
       return stats;
     } catch (error) {
@@ -511,36 +526,45 @@ export class TenantInboxSyncService {
             internalDate: true,
             source: true,
           }, { uid: true })) {
-            const parsed = await simpleParser(item.source);
-            const sender = this.text(parsed.from?.value?.[0]?.address);
-            const recipient = this.text(parsed.to?.value?.[0]?.address);
-            const uidValidity = `${connection.mailbox?.uidValidity ?? '0'}`;
-            const mailboxTag = this.matchImapTag(item.flags, syncTags) || 'imap';
-            const received = item.internalDate ?? parsed.date ?? null;
-            const receivedAt = received ? new Date(received) : new Date();
-            if (received && (!oldestProcessed || receivedAt.getTime() < oldestProcessed)) {
-              oldestProcessed = receivedAt.getTime();
+            try {
+              const parsed = await simpleParser(item.source);
+              const sender = this.text(parsed.from?.value?.[0]?.address);
+              const recipient = this.text(parsed.to?.value?.[0]?.address);
+              const uidValidity = `${connection.mailbox?.uidValidity ?? '0'}`;
+              const mailboxTag = this.matchImapTag(item.flags, syncTags) || 'imap';
+              const received = item.internalDate ?? parsed.date ?? null;
+              const receivedAt = received ? new Date(received) : new Date();
+              if (received && (!oldestProcessed || receivedAt.getTime() < oldestProcessed)) {
+                oldestProcessed = receivedAt.getTime();
+              }
+              this.addStats(stats, await this.storeInbound(databaseName, {
+                channel: 'email',
+                providerKey,
+                providerMessageId: `${uidValidity}:${item.uid}`,
+                sender,
+                recipient,
+                subject: this.text(parsed.subject),
+                body: this.text(parsed.text, this.stripHtml(parsed.html)),
+                receivedAt,
+                isRead: Boolean(item.flags?.has?.('\\Seen')),
+                autoCreateLeads: config.autoCreateLeads !== false,
+                mailboxTag,
+                leadTemplateTags: this.stringList(config.leadTemplateTags),
+                payload: {
+                  messageId: parsed.messageId,
+                  uid: item.uid,
+                  uidValidity,
+                  htmlBody: this.text(parsed.html),
+                },
+              }));
+            } catch (error) {
+              stats.skipped += 1;
+              this.logger.warn(`Mailbox message skipped ${JSON.stringify({
+                databaseName,
+                providerMessageId: this.text(item.uid),
+                error: this.message(error),
+              })}`);
             }
-            this.addStats(stats, await this.storeInbound(databaseName, {
-              channel: 'email',
-              providerKey,
-              providerMessageId: `${uidValidity}:${item.uid}`,
-              sender,
-              recipient,
-              subject: this.text(parsed.subject),
-              body: this.text(parsed.text, this.stripHtml(parsed.html)),
-              receivedAt,
-              isRead: Boolean(item.flags?.has?.('\\Seen')),
-              autoCreateLeads: config.autoCreateLeads !== false,
-              mailboxTag,
-              leadTemplateTags: this.stringList(config.leadTemplateTags),
-              payload: {
-                messageId: parsed.messageId,
-                uid: item.uid,
-                uidValidity,
-                htmlBody: this.text(parsed.html),
-              },
-            }));
           }
         }
         await this.markCompleted(
@@ -552,7 +576,12 @@ export class TenantInboxSyncService {
           uids.length > maxMessages && oldestProcessed > 0
             ? oldestProcessed
             : null,
-        );
+        ).catch((error) => {
+          this.logger.warn(`Mailbox sync completion save failed ${JSON.stringify({
+            databaseName,
+            error: this.message(error),
+          })}`);
+        });
         this.logger.log(`Mailbox sync ${databaseName}: ${JSON.stringify(stats)}`);
         return stats;
       } finally {
@@ -597,17 +626,26 @@ export class TenantInboxSyncService {
       const messages = Array.isArray(result.messages) ? result.messages : [];
       for (const message of messages.reverse()) {
         if (!`${message.direction ?? ''}`.toLowerCase().includes('inbound')) continue;
-        this.addStats(stats, await this.storeInbound(databaseName, {
-          channel: 'sms',
-          providerKey,
-          providerMessageId: this.text(message.sid),
-          sender: this.text(message.from),
-          recipient: this.text(message.to),
-          subject: '',
-          body: this.text(message.body),
-          receivedAt: message.date_sent ? new Date(message.date_sent) : new Date(),
-          payload: message,
-        }));
+        try {
+          this.addStats(stats, await this.storeInbound(databaseName, {
+            channel: 'sms',
+            providerKey,
+            providerMessageId: this.text(message.sid),
+            sender: this.text(message.from),
+            recipient: this.text(message.to),
+            subject: '',
+            body: this.text(message.body),
+            receivedAt: message.date_sent ? new Date(message.date_sent) : new Date(),
+            payload: message,
+          }));
+        } catch (error) {
+          stats.skipped += 1;
+          this.logger.warn(`Mailbox message skipped ${JSON.stringify({
+            databaseName,
+            providerMessageId: this.text(message.sid),
+            error: this.message(error),
+          })}`);
+        }
       }
       await this.markCompleted(
         databaseName,
@@ -615,7 +653,12 @@ export class TenantInboxSyncService {
         messages[0]?.sid ?? null,
         stats,
         this.clamp(config.syncIntervalMinutes, 5, 1, 720) || 5,
-      );
+      ).catch((error) => {
+        this.logger.warn(`Mailbox sync completion save failed ${JSON.stringify({
+          databaseName,
+          error: this.message(error),
+        })}`);
+      });
       return stats;
     } catch (error) {
       await this.markFailed(databaseName, providerKey, error);
@@ -1575,6 +1618,20 @@ export class TenantInboxSyncService {
       }
     }
     name = name || 'Inbound lead';
+    // Never create a contact-less junk lead (e.g. a market-update newsletter
+    // that matched a template but carries no name, email, or phone).
+    if (name === 'Inbound lead' && !email && !phone) {
+      return {
+        lead: null,
+        created: false,
+        result: {
+          ...result,
+          missingRequiredFields: [
+            ...new Set([...(result.missingRequiredFields ?? []), 'name', 'email', 'phone']),
+          ],
+        },
+      };
+    }
     const existing = await this.findLeadFromParsedValues(
       client,
       email,
