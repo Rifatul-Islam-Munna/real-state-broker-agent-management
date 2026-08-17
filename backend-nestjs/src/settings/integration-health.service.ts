@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ImapFlow } from 'imapflow';
+import { AiJsonClientService } from './ai-json-client.service';
 import { SettingsService } from './settings.service';
 
 type CheckResult = {
@@ -10,7 +11,10 @@ type CheckResult = {
 
 @Injectable()
 export class IntegrationHealthService {
-  constructor(private readonly settings: SettingsService) {}
+  constructor(
+    private readonly settings: SettingsService,
+    private readonly aiJson: AiJsonClientService,
+  ) {}
 
   async testAll() {
     const [mail, inbox, sms, ai] = await Promise.all([
@@ -138,17 +142,17 @@ export class IntegrationHealthService {
 
   async testAi(): Promise<CheckResult> {
     const config = await this.settings.getAiProviderConfig();
-    if (!config?.providerName || !config?.baseUrl || !config?.model) {
+    if (!config?.providerName || !config?.model) {
       return this.result(false, false, 'AI provider is not configured.');
     }
     const provider = `${config.providerName}`.toLowerCase();
     if (provider !== 'ollama' && !config.apiKey) return this.result(true, false, 'AI API key is missing.');
     try {
-      const base = `${config.baseUrl}`.replace(/\/+$/, '');
-      const response = provider === 'ollama'
-        ? await this.request(`${base}/api/tags`)
-        : await this.request(`${base}/models`, { Authorization: `Bearer ${config.apiKey}` });
-      if (!response.ok) throw new Error(`Provider returned HTTP ${response.status}.`);
+      const response = await this.aiJson.call([
+        { role: 'system', content: 'Return JSON only.' },
+        { role: 'user', content: 'Return {\"ok\":true}.' },
+      ]);
+      if (response?.value?.ok !== true) throw new Error('AI provider returned an unexpected response.');
       return this.result(true, true, `${config.providerName} connection succeeded.`);
     } catch (error: any) {
       return this.result(true, false, this.message(error, `${config.providerName} connection failed.`));

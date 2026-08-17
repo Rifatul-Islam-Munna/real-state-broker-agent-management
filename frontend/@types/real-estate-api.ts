@@ -254,6 +254,11 @@ export type AgencyIntegrationStatus = {
   hasAiProviderConfig: boolean
   aiProviderUpdatedAt?: string | null
   aiProviderName?: string | null
+  aiProviderConfig?:
+    | (Partial<AiProviderIntegrationWriteInput> & {
+        hasApiKey?: boolean
+      })
+    | null
   hasSmtpConfig: boolean
   smtpUpdatedAt?: string | null
   smtpProviderName?: string | null

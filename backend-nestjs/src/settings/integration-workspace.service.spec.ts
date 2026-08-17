@@ -98,4 +98,17 @@ describe('IntegrationWorkspaceService', () => {
     expect(saved.imapUsername).toBe('agent@example.com');
     expect(saved.imapPassword).toBe('app-password');
   });
+  test('does not reuse an AI token after switching providers', async () => {
+    row.aiProviderPayload = JSON.stringify({
+      providerName: 'OpenAI',
+      baseUrl: 'https://api.openai.com/v1',
+      model: 'gpt-5.4',
+      apiKey: 'openai-secret',
+    });
+    await expect(service.update({ aiProvider: { providerName: 'Gemini', model: 'gemini-2.5-flash', apiKey: '' } })).rejects.toThrow('provider credentials');
+    const saved = JSON.parse(row.aiProviderPayload ?? '{}');
+    expect(saved.providerName).toBe('OpenAI');
+    expect(saved.apiKey).toBe('openai-secret');
+  });
+
 });

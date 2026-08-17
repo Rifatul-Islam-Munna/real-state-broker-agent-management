@@ -533,10 +533,8 @@ export class ShowingFeedbackService {
       .map((item) => item.replace(/\s+/g, ' ').trim())
       .join(' ')
       .slice(0, 700);
-    const config = await this.settingsService.getAiProviderConfig();
-    if (!config?.apiKey || !config?.model) return fallback;
     try {
-      const parsed = await this.callAiJson(config, [
+      const response = await this.aiJsonClient.call([
         {
           role: 'system',
           content:
@@ -544,7 +542,7 @@ export class ShowingFeedbackService {
         },
         { role: 'user', content: JSON.stringify(feedback) },
       ]);
-      return `${parsed?.summary ?? fallback}`.trim();
+      return `${response?.value?.summary ?? fallback}`.trim();
     } catch {
       return fallback;
     }
@@ -641,31 +639,6 @@ export class ShowingFeedbackService {
   private percent(value: unknown, fallback: number) {
     const parsed = Number(value);
     return Number.isFinite(parsed) ? Math.max(0, Math.min(1, parsed / 100)) : fallback / 100;
-  }
-
-  private async callAiJson(config: any, messages: any[]) {
-    const providerName = `${config.providerName ?? 'OpenAI'}`.toLowerCase();
-    const baseUrl = `${
-      config.baseUrl ??
-      (providerName.includes('openai') ? 'https://api.openai.com/v1' : '')
-    }`.replace(/\/+$/, '');
-    if (!baseUrl) throw new Error('AI base URL missing.');
-    const response = await fetch(`${baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${config.apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        messages,
-        model: config.model,
-        response_format: { type: 'json_object' },
-        temperature: 0,
-      }),
-    });
-    if (!response.ok) throw new Error('AI request failed.');
-    const data: any = await response.json();
-    return JSON.parse(data?.choices?.[0]?.message?.content ?? '{}');
   }
 
   private async sendEmail(to: string, subject: string, body: string) {

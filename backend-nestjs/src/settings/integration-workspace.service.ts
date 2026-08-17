@@ -111,12 +111,11 @@ export class IntegrationWorkspaceService {
       row.aiProviderPayload = null;
       row.aiProviderUpdatedAt = null;
     } else if (input?.aiProvider) {
-      const value = this.merge(this.parse(row.aiProviderPayload), input.aiProvider, [
-        'apiKey',
-      ]);
+      const existing = this.parse(row.aiProviderPayload);
+      const value = this.normalizeAiProvider(this.mergeAiProvider(existing, input.aiProvider));
       if (!this.aiValid(value)) {
         throw new BadRequestException(
-          'AI base URL, model, and provider credentials are required.',
+          'AI provider, model, and provider credentials are required.',
         );
       }
       row.aiProviderPayload = JSON.stringify(value);
@@ -184,8 +183,48 @@ export class IntegrationWorkspaceService {
   }
 
   private aiValid(value: any) {
-    if (!value?.providerName || !value?.baseUrl || !value?.model) return false;
-    return `${value.providerName}`.toLowerCase() === 'ollama' || !!value.apiKey;
+    if (!value?.providerName || !value?.model) return false;
+    const provider = this.aiProviderKey(value.providerName);
+    if (provider === 'custom' && !value?.baseUrl) return false;
+    return provider === 'ollama' || !!value.apiKey;
+  }
+
+  private mergeAiProvider(existing: any, incoming: any) {
+    const sameProvider = this.aiProviderKey(existing?.providerName) === this.aiProviderKey(incoming?.providerName);
+    const merged = { ...(existing ?? {}), ...(incoming ?? {}) };
+    if (!`${incoming?.apiKey ?? ''}`.trim()) {
+      merged.apiKey = sameProvider ? existing?.apiKey ?? '' : '';
+    }
+    return merged;
+  }
+
+  private normalizeAiProvider(value: any) {
+    const providerName = `${value?.providerName ?? ''}`.trim();
+    const provider = this.aiProviderKey(providerName);
+    const defaults: Record<string, string> = {
+      openai: 'https://api.openai.com/v1',
+      gemini: 'https://generativelanguage.googleapis.com/v1beta',
+      claude: 'https://api.anthropic.com/v1',
+      openrouter: 'https://openrouter.ai/api/v1',
+      ollama: 'http://localhost:11434',
+    };
+    return {
+      ...value,
+      providerName,
+      model: `${value?.model ?? ''}`.trim(),
+      baseUrl: `${value?.baseUrl ?? defaults[provider] ?? ''}`.trim().replace(/\/+$/, ''),
+      apiKey: `${value?.apiKey ?? ''}`.trim(),
+    };
+  }
+
+  private aiProviderKey(value: unknown) {
+    const provider = `${value ?? ''}`.trim().toLowerCase();
+    if (provider === 'google' || provider.includes('gemini')) return 'gemini';
+    if (provider === 'anthropic' || provider.includes('claude')) return 'claude';
+    if (provider.includes('openrouter')) return 'openrouter';
+    if (provider.includes('openai')) return 'openai';
+    if (provider.includes('ollama')) return 'ollama';
+    return 'custom';
   }
 
   private paymentValid(value: any) {

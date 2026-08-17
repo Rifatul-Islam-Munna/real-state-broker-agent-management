@@ -20,6 +20,10 @@
     "test:e2e": "jest --config ./test/jest-e2e.json"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^4.0.39",
+    "@ai-sdk/google": "^4.0.44",
+    "@ai-sdk/openai": "^4.0.42",
+    "@ai-sdk/openai-compatible": "^3.0.30",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.4",
     "@nestjs/core": "^11.0.1",
@@ -37,6 +41,8 @@
     "@types/bcrypt": "^6.0.0",
     "@types/multer": "^2.1.0",
     "@types/passport-jwt": "^4.0.1",
+    "ai": "^7.0.66",
+    "ai-sdk-ollama": "^4.1.0",
     "bcrypt": "^6.0.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",

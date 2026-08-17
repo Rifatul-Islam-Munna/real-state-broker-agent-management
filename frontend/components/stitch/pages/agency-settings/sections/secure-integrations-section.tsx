@@ -1,6 +1,6 @@
 "use client"
 
-import { type ReactNode, useState } from "react"
+import { type ReactNode, useEffect, useState } from "react"
 
 import type { UpdateAgencyIntegrationSettingsInput } from "@/@types/real-estate-api"
 import { AppIcon } from "@/components/ui/app-icon"
@@ -25,11 +25,23 @@ type CommunicationFormValues = {
   maxMessagesPerSync: string
 }
 
+type AiProviderName = "Claude" | "Custom" | "Gemini" | "Ollama" | "OpenAI" | "OpenRouter"
+
 type AiProviderFormValues = {
-  providerName: "Custom" | "Ollama" | "OpenAI"
+  providerName: AiProviderName
   baseUrl: string
   model: string
   apiKey: string
+  hasApiKey: boolean
+}
+
+const aiProviderPresets: Record<AiProviderName, { baseUrl: string; model: string; models: string[] }> = {
+  OpenAI: { baseUrl: "https://api.openai.com/v1", model: "gpt-5.4", models: ["gpt-5.4"] },
+  Gemini: { baseUrl: "https://generativelanguage.googleapis.com/v1beta", model: "gemini-2.5-flash", models: ["gemini-2.5-flash", "gemini-2.5-pro"] },
+  Claude: { baseUrl: "https://api.anthropic.com/v1", model: "claude-sonnet-4-6", models: ["claude-sonnet-4-6", "claude-opus-4-6", "claude-haiku-4-5"] },
+  OpenRouter: { baseUrl: "https://openrouter.ai/api/v1", model: "openai/gpt-5.4", models: ["openai/gpt-5.4", "anthropic/claude-sonnet-4.6", "google/gemini-2.5-flash"] },
+  Ollama: { baseUrl: "http://localhost:11434", model: "llama3.2", models: ["llama3.2", "qwen3", "gemma3"] },
+  Custom: { baseUrl: "", model: "", models: [] },
 }
 
 type SmtpFormValues = {
@@ -89,9 +101,10 @@ const blankCommunicationForm = (): CommunicationFormValues => ({
 
 const blankAiProviderForm = (): AiProviderFormValues => ({
   providerName: "OpenAI",
-  baseUrl: "",
-  model: "gpt-5.4",
+  baseUrl: aiProviderPresets.OpenAI.baseUrl,
+  model: aiProviderPresets.OpenAI.model,
   apiKey: "",
+  hasApiKey: false,
 })
 
 const blankSmtpForm = (): SmtpFormValues => ({
@@ -291,28 +304,16 @@ function applyAiProviderPreset(
   current: AiProviderFormValues,
   providerName: AiProviderFormValues["providerName"],
 ): AiProviderFormValues {
-  if (providerName === "Ollama") {
-    return {
-      ...current,
-      providerName,
-      apiKey: "",
-      baseUrl: "http://localhost:11434",
-      model: current.model || "llama3.2",
-    }
-  }
-
-  if (providerName === "OpenAI") {
-    return {
-      ...current,
-      providerName,
-      baseUrl: "https://api.openai.com/v1",
-      model: current.model || "gpt-5.4",
-    }
-  }
+  const preset = aiProviderPresets[providerName]
+  if (providerName === current.providerName) return current
 
   return {
     ...current,
     providerName,
+    baseUrl: preset.baseUrl,
+    model: preset.model,
+    apiKey: "",
+    hasApiKey: false,
   }
 }
 
@@ -423,6 +424,22 @@ export function SecureIntegrationsSection() {
   const status = integrationStatusQuery.data
   const isBusy = updateMutation.isPending
 
+  useEffect(() => {
+    const config = status?.aiProviderConfig
+    if (!config?.providerName) return
+    const providerName = Object.prototype.hasOwnProperty.call(aiProviderPresets, config.providerName)
+      ? config.providerName as AiProviderName
+      : "Custom"
+    const preset = aiProviderPresets[providerName]
+    setAiProviderValues({
+      providerName,
+      baseUrl: `${config.baseUrl ?? preset.baseUrl}`,
+      model: `${config.model ?? preset.model}`,
+      apiKey: "",
+      hasApiKey: config.hasApiKey === true,
+    })
+  }, [status?.aiProviderConfig])
+
   async function submitSection(
     section: SectionKey,
     payload: UpdateAgencyIntegrationSettingsInput,
@@ -461,11 +478,11 @@ export function SecureIntegrationsSection() {
     trimValue(communicationValues.fromNumber).length > 0 &&
     (communicationValues.providerName !== "Custom" || trimValue(communicationValues.baseUrl).length > 0)
 
-  const requiresAiKey = aiProviderValues.providerName === "OpenAI"
+  const requiresAiKey = aiProviderValues.providerName !== "Ollama"
   const canSaveAiProvider =
     trimValue(aiProviderValues.model).length > 0 &&
     (aiProviderValues.providerName !== "Custom" || trimValue(aiProviderValues.baseUrl).length > 0) &&
-    (!requiresAiKey || trimValue(aiProviderValues.apiKey).length > 0)
+    (!requiresAiKey || trimValue(aiProviderValues.apiKey).length > 0 || aiProviderValues.hasApiKey)
 
   const smtpPort = Number(smtpValues.port)
   const imapPort = Number(smtpValues.imapPort)
@@ -710,7 +727,7 @@ export function SecureIntegrationsSection() {
 
         <IntegrationCard
           configured={status?.hasAiProviderConfig ?? false}
-          description="Choose a hosted model provider or a local Ollama server, then save the model target you want the system to use."
+          description="Connect a hosted or local AI provider once, then use the selected model across AI workflows."
           iconContainerClassName="bg-violet-50"
           iconClassName="text-violet-600"
           iconName="auto_awesome"
@@ -723,7 +740,7 @@ export function SecureIntegrationsSection() {
           }
           providerLabel={status?.aiProviderName}
           saveDisabled={!canSaveAiProvider || isBusy}
-          subtitle="OpenAI, Ollama, or a custom endpoint with your own model name."
+          subtitle="OpenAI, Gemini, Claude, OpenRouter, Ollama, or any OpenAI-compatible endpoint."
           title="AI Provider"
           updatedAt={status?.aiProviderUpdatedAt}
         >
@@ -731,48 +748,63 @@ export function SecureIntegrationsSection() {
             <FieldLabel>{"Provider"}</FieldLabel>
             <NativeSelect
               disabled={isBusy}
-              onChange={(value) => setAiProviderValues((current) => applyAiProviderPreset(current, value as AiProviderFormValues["providerName"]))}
+              onChange={(value) => setAiProviderValues((current) => applyAiProviderPreset(current, value as AiProviderName))}
               options={[
                 { label: "OpenAI", value: "OpenAI" },
-                { label: "Ollama", value: "Ollama" },
-                { label: "Custom", value: "Custom" },
+                { label: "Google Gemini", value: "Gemini" },
+                { label: "Anthropic Claude", value: "Claude" },
+                { label: "OpenRouter", value: "OpenRouter" },
+                { label: "Ollama (local)", value: "Ollama" },
+                { label: "Custom compatible", value: "Custom" },
               ]}
               value={aiProviderValues.providerName}
             />
           </label>
-          <label className="flex flex-col gap-2">
-            <FieldLabel>{"Base URL"}</FieldLabel>
-            <Input
-              autoComplete="off"
-              className="rounded-xl border-slate-200 bg-slate-50"
-              disabled={isBusy}
-              onChange={(event) => setAiProviderValues((current) => ({ ...current, baseUrl: event.target.value }))}
-              placeholder={aiProviderValues.providerName === "Ollama" ? "http://localhost:11434" : "https://api.openai.com/v1"}
-              spellCheck={false}
-              type="url"
-              value={aiProviderValues.baseUrl}
-            />
-          </label>
+
           <label className="flex flex-col gap-2">
             <FieldLabel>{"Model"}</FieldLabel>
             <Input
               autoComplete="off"
               className="rounded-xl border-slate-200 bg-slate-50"
               disabled={isBusy}
+              list={`ai-models-${aiProviderValues.providerName}`}
               onChange={(event) => setAiProviderValues((current) => ({ ...current, model: event.target.value }))}
-              placeholder={aiProviderValues.providerName === "Ollama" ? "llama3.2" : "gpt-5.4"}
+              placeholder={aiProviderPresets[aiProviderValues.providerName].model || "provider/model-name"}
               spellCheck={false}
               value={aiProviderValues.model}
             />
+            <datalist id={`ai-models-${aiProviderValues.providerName}`}>
+              {aiProviderPresets[aiProviderValues.providerName].models.map((model) => (
+                <option key={model} value={model} />
+              ))}
+            </datalist>
+            <span className="text-xs text-slate-500">{"Pick a suggestion or type any model ID supported by your provider."}</span>
           </label>
+
+          {(aiProviderValues.providerName === "Custom" || aiProviderValues.providerName === "Ollama") ? (
+            <label className="flex flex-col gap-2">
+              <FieldLabel>{"Base URL"}</FieldLabel>
+              <Input
+                autoComplete="off"
+                className="rounded-xl border-slate-200 bg-slate-50"
+                disabled={isBusy}
+                onChange={(event) => setAiProviderValues((current) => ({ ...current, baseUrl: event.target.value }))}
+                placeholder={aiProviderValues.providerName === "Ollama" ? "http://localhost:11434" : "https://your-provider.example/v1"}
+                spellCheck={false}
+                type="url"
+                value={aiProviderValues.baseUrl}
+              />
+            </label>
+          ) : null}
+
           <label className="flex flex-col gap-2">
-            <FieldLabel>{aiProviderValues.providerName === "Ollama" ? "API Key (Optional)" : "API Key"}</FieldLabel>
+            <FieldLabel>{aiProviderValues.providerName === "Ollama" ? "Token (Optional)" : aiProviderValues.hasApiKey ? "Token / API Key (Saved)" : "Token / API Key"}</FieldLabel>
             <Input
               autoComplete="new-password"
               className="rounded-xl border-slate-200 bg-slate-50"
               disabled={isBusy}
               onChange={(event) => setAiProviderValues((current) => ({ ...current, apiKey: event.target.value }))}
-              placeholder={aiProviderValues.providerName === "Ollama" ? "Leave blank for local Ollama" : "Enter a provider API key"}
+              placeholder={aiProviderValues.providerName === "Ollama" ? "Leave blank for local Ollama" : aiProviderValues.hasApiKey ? "Leave blank to keep the saved token" : "Paste provider token"}
               spellCheck={false}
               type="password"
               value={aiProviderValues.apiKey}

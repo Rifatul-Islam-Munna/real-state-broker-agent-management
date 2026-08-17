@@ -9,6 +9,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { In, MoreThan, Repository } from 'typeorm';
 import { dateRangeInZone } from '../common/time-zone';
 import { Property } from '../properties/entities/property.entity';
+import { AiJsonClientService } from '../settings/ai-json-client.service';
 import { SchedulingSettingsService } from '../settings/scheduling-settings.service';
 import { SettingsService } from '../settings/settings.service';
 import { SmsService } from '../sms/sms.service';
@@ -23,6 +24,7 @@ export class ShowingFeedbackQueryService {
     private readonly propertyRepo: Repository<Property>,
     private readonly settingsService: SettingsService,
     private readonly schedulingSettingsService: SchedulingSettingsService,
+    private readonly aiJson: AiJsonClientService,
     @Inject(forwardRef(() => SmsService))
     private readonly smsService: SmsService,
   ) {}
@@ -486,66 +488,18 @@ export class ShowingFeedbackQueryService {
       .map((item) => item.replace(/\s+/g, ' ').trim())
       .join(' ')
       .slice(0, 700);
-    const config = await this.settingsService.getAiProviderConfig();
-    const provider = `${config?.providerName ?? ''}`.toLowerCase();
-    if (!config?.model || (!config?.apiKey && provider !== 'ollama'))
-      return fallback;
-
     try {
-      const parsed = await this.callAiJson(config, [
+      const response = await this.aiJson.call([
         {
           role: 'system',
           content: `Summarize only the ${sentiment} property showing feedback in 1 to 4 concise owner-facing lines. Do not invent details. Return JSON only with summary string.`,
         },
         { role: 'user', content: JSON.stringify(feedback) },
       ]);
-      return `${parsed?.summary ?? fallback}`.trim();
+      return `${response?.value?.summary ?? fallback}`.trim();
     } catch {
       return fallback;
     }
-  }
-
-  private async callAiJson(config: any, messages: any[]) {
-    const provider = `${config.providerName ?? 'OpenAI'}`.toLowerCase();
-    const base =
-      `${config.baseUrl ?? (provider.includes('openai') ? 'https://api.openai.com/v1' : '')}`.replace(
-        /\/+$/,
-        '',
-      );
-    if (!base) throw new Error('AI base URL missing.');
-
-    if (provider === 'ollama') {
-      const response = await fetch(`${base}/api/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: config.model,
-          messages,
-          format: 'json',
-          stream: false,
-        }),
-      });
-      if (!response.ok) throw new Error('Ollama request failed.');
-      const data: any = await response.json();
-      return JSON.parse(data?.message?.content ?? '{}');
-    }
-
-    const response = await fetch(`${base}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${config.apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        messages,
-        model: config.model,
-        response_format: { type: 'json_object' },
-        temperature: 0,
-      }),
-    });
-    if (!response.ok) throw new Error('AI request failed.');
-    const data: any = await response.json();
-    return JSON.parse(data?.choices?.[0]?.message?.content ?? '{}');
   }
 
   private async sendEmail(to: string, subject: string, body: string) {
