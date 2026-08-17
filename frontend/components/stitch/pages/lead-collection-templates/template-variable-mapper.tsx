@@ -43,14 +43,14 @@ export function TemplateVariableMapper({
   onAddMapping: () => void
   onSelectContactButton: (url: string, linkText: string) => void
 }) {
-  const sourceText = source === "linked" ? template.linkedPageSourceText : template.sourceText
-  const sourceHtml = source === "linked" ? template.linkedPageSourceHtml : template.sourceHtml
+  const sourceText = `${source === "linked" ? template.linkedPageSourceText ?? "" : template.sourceText ?? ""}`
+  const sourceHtml = `${source === "linked" ? template.linkedPageSourceHtml ?? "" : template.sourceHtml ?? ""}`
   const detected = mergeDetectedValues(
     detectTemplateValues(sourceText),
     source === "email" ? extractTemplateLinks(sourceHtml, sourceText) : [],
   )
   const selectedLink = source === "email"
-    ? findSelectedLink(template.sourceHtml, template.sourceText, selection.text)
+    ? findSelectedLink(`${template.sourceHtml ?? ""}`, `${template.sourceText ?? ""}`, selection.text)
     : null
 
   function captureVisibleSelection() {
@@ -220,7 +220,7 @@ function mergeDetectedValues(
   links: Array<{ text: string; url: string; host: string }>,
 ) {
   const merged = [...values]
-  const seen = new Set(values.map((item) => item.value.trim().toLowerCase()))
+  const seen = new Set(values.map((item) => normalizeTemplateText(item.value).toLowerCase()).filter(Boolean))
   for (const link of links) {
     const value = normalizeTemplateText(link.text)
     if (!value || seen.has(value.toLowerCase())) continue

@@ -35,6 +35,7 @@ describe('showing feedback automation settings', () => {
         channels: ['Email', 'SMS'],
         templateId: 'owner-feedback-summary',
         compressWithAi: false,
+        sentimentFilter: 'negative',
         maxFeedback: 12,
       },
     });
@@ -44,5 +45,6 @@ describe('showing feedback automation settings', () => {
     expect(result.showingFeedbackAutomation.deliveryState).toBeUndefined();
     expect(result.showingFeedbackAutomation.gapDays).toBe(5);
     expect(result.showingFeedbackAutomation.compressWithAi).toBe(false);
+    expect(result.showingFeedbackAutomation.sentimentFilter).toBe('negative');
   });
 });

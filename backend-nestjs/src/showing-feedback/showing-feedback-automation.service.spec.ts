@@ -142,6 +142,39 @@ describe('ShowingFeedbackAutomationService', () => {
     expect(dataSource.createQueryRunner).not.toHaveBeenCalled();
   });
 
+  test('uses only negative feedback when negative-only mode is enabled', async () => {
+    const qb: any = {
+      select: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      groupBy: jest.fn().mockReturnThis(),
+      getRawMany: jest.fn(async () => []),
+    };
+    const feedbackRepo: any = { createQueryBuilder: jest.fn(() => qb) };
+    const settings: any = {
+      getShowingFeedbackAutomation: jest.fn(async () => ({
+        enabled: true,
+        gapDays: 6,
+        sentimentFilter: 'negative',
+        deliveryState: {},
+      })),
+    };
+    const service = new ShowingFeedbackAutomationService(
+      feedbackRepo,
+      settings,
+      {} as any,
+      {} as any,
+      { getTimeZone: jest.fn(async () => 'UTC') } as any,
+    );
+
+    await service.processDueReports();
+
+    expect(qb.where).toHaveBeenCalledWith(
+      'feedback.sentiment IN (:...sentiments)',
+      { sentiments: ['negative'] },
+    );
+  });
+
   test('does not send the same property twice in one local week', async () => {
     const qb: any = {
       select: jest.fn().mockReturnThis(),

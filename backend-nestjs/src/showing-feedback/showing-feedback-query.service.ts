@@ -250,11 +250,14 @@ export class ShowingFeedbackQueryService {
     if (this.wasSentThisWeek(state.lastSentAt, this.weekKey(localDate), zone))
       return null;
 
+    const sentiments = payload?.sentimentFilter === 'negative'
+      ? ['negative']
+      : ['positive', 'negative'];
     const feedback = await this.feedbackRepo.find({
       where: {
         propertyId,
         id: MoreThan(afterFeedbackId),
-        sentiment: In(['positive', 'negative']),
+        sentiment: In(sentiments),
       },
       order: { id: 'ASC' },
       take: maxFeedback,

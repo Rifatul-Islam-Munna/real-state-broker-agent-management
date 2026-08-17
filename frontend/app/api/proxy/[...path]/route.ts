@@ -52,6 +52,10 @@ function tenantPath(path: string[]) {
   if (joined.startsWith("lead-outreach/jobs/"))
     return `tenant-outreach/${joined.slice("lead-outreach/".length)}`
   if (joined === "lead-outreach") return "tenant-outreach"
+  if (joined === "lead-collection-templates/prepare-source")
+    return "tenant-legacy/lead-collection-prepare-source"
+  if (joined === "lead-collection-templates/test")
+    return "tenant-legacy/lead-collection-test"
   if (joined === "lead-collection-templates/fields")
     return "tenant-legacy/lead-collection-fields"
   if (joined === "showing-feedback/properties")

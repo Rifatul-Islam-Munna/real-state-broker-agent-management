@@ -24,6 +24,7 @@ import {
   htmlToVisibleTemplateText,
   MappingSource,
   mergeMapping,
+  normalizeLeadTemplate,
   SelectedTemplateValue,
 } from "./editor-utils"
 
@@ -53,7 +54,7 @@ export function useConfigurableTemplateEditor({
   const updateMutation = useUpdateLeadCollectionTemplate()
 
   const [template, setTemplate] = useState<LeadCollectionTemplateSaveInput>(() => {
-    const empty = emptyLeadTemplate(initialMailInboxId)
+    const empty = normalizeLeadTemplate(emptyLeadTemplate(initialMailInboxId), initialMailInboxId)
     return initialPreset?.toLowerCase() === "zillow"
       ? applyZillowTemplatePreset(empty)
       : empty
@@ -73,7 +74,7 @@ export function useConfigurableTemplateEditor({
 
   useEffect(() => {
     if (!templateQuery.data) return
-    const item = templateQuery.data
+    const item = normalizeLeadTemplate(templateQuery.data)
     setTemplate({
       id: item.id,
       name: item.name,
@@ -128,7 +129,7 @@ export function useConfigurableTemplateEditor({
       return
     }
     const prepared = response.data
-    setTemplate((current) => ({
+    setTemplate((current) => normalizeLeadTemplate({
       ...current,
       sourceType: prepared.sourceType,
       sourceMailInboxId: prepared.sourceMailInboxId,
@@ -244,8 +245,8 @@ export function useConfigurableTemplateEditor({
 
   async function saveTemplate() {
     setError(null)
-    if (!template.sourceText.trim()) return setError("Prepare a sample email before saving.")
-    if (template.linkedPageConfig.enabled && !template.linkedPageSourceText.trim()) {
+    if (!`${template.sourceText ?? ""}`.trim()) return setError("Prepare a sample email before saving.")
+    if (template.linkedPageConfig?.enabled && !`${template.linkedPageSourceText ?? ""}`.trim()) {
       return setError(
         "Linked-page mode is enabled, but no detail page was loaded. Check the host and filters, then prepare again.",
       )

@@ -11,6 +11,7 @@ export type ShowingFeedbackAutomationSettings = {
   channels: Array<"Email" | "SMS">
   templateId: string
   compressWithAi: boolean
+  sentimentFilter: "all" | "negative"
   maxFeedback: number
   autoClassifyMinConfidence: number
   aiFallbackMinConfidence: number
@@ -69,6 +70,7 @@ export const defaultAgencySettings: AgencyWorkspaceSettings = {
     channels: ["Email"],
     templateId: "owner-feedback-summary",
     compressWithAi: true,
+    sentimentFilter: "all",
     maxFeedback: 10,
     autoClassifyMinConfidence: 72,
     aiFallbackMinConfidence: 0,
@@ -336,6 +338,7 @@ export function cloneAgencySettings(
       ),
       templateId: automation.templateId || "owner-feedback-summary",
       compressWithAi: automation.compressWithAi !== false,
+      sentimentFilter: automation.sentimentFilter === "negative" ? "negative" : "all",
       maxFeedback: Math.min(
         50,
         Math.max(1, Number(automation.maxFeedback ?? 10) || 10)

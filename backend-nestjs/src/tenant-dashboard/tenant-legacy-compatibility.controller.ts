@@ -74,6 +74,16 @@ export class TenantLegacyCompatibilityController {
     return this.legacy.leadCollectionFields();
   }
 
+  @Post('lead-collection-prepare-source')
+  leadCollectionPrepareSource(@Req() req: any, @Body() body: any) {
+    return this.legacy.leadCollectionPrepareSource(req.tenant, body);
+  }
+
+  @Post('lead-collection-test')
+  leadCollectionTest(@Req() req: any, @Body() body: any) {
+    return this.legacy.leadCollectionTest(req.tenant, body);
+  }
+
   @Get('sequence-summary')
   sequenceSummary() {
     return this.legacy.sequenceSummary();

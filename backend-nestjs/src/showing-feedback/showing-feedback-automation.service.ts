@@ -30,12 +30,13 @@ export class ShowingFeedbackAutomationService {
     const currentWeekKey = this.weekKey(localDate);
     if (this.weekday(localDate) !== this.reportDay(automation.gapDays)) return;
 
+    const sentiments = this.reportSentiments(automation.sentimentFilter);
     const rows = await this.feedbackRepo
       .createQueryBuilder('feedback')
       .select('feedback.property_id', 'propertyId')
       .addSelect('MAX(feedback.id)', 'latestFeedbackId')
       .where('feedback.sentiment IN (:...sentiments)', {
-        sentiments: ['positive', 'negative'],
+        sentiments,
       })
       .groupBy('feedback.property_id')
       .getRawMany();
@@ -87,11 +88,12 @@ export class ShowingFeedbackAutomationService {
         return;
       }
 
+      const sentiments = this.reportSentiments(automation.sentimentFilter);
       const feedback = await this.feedbackRepo.find({
         where: {
           propertyId,
           id: MoreThan(Number(state.lastFeedbackId ?? 0)),
-          sentiment: In(['positive', 'negative']),
+          sentiment: In(sentiments),
         },
         order: { id: 'ASC' },
         take: automation.maxFeedback,
@@ -116,6 +118,7 @@ export class ShowingFeedbackAutomationService {
             channels: automation.channels,
             templateId,
             compressWithAi: automation.compressWithAi,
+            sentimentFilter: automation.sentimentFilter,
           });
           if (!result) {
             await this.settings.saveShowingFeedbackDeliveryState(propertyId, {
@@ -187,6 +190,10 @@ export class ShowingFeedbackAutomationService {
       .filter(Boolean);
 
     return Array.from(new Set([primaryTemplateId, ...followUps].filter(Boolean)));
+  }
+
+  private reportSentiments(value: unknown) {
+    return value === 'negative' ? ['negative'] : ['positive', 'negative'];
   }
 
   private reportDay(value: unknown) {

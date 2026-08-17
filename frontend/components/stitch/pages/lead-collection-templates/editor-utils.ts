@@ -48,18 +48,62 @@ export function emptyLeadTemplate(mailInboxId?: number): LeadCollectionTemplateS
   }
 }
 
+export function normalizeLeadTemplate(
+  value?: Partial<LeadCollectionTemplateSaveInput> | null,
+  mailInboxId?: number,
+): LeadCollectionTemplateSaveInput {
+  const fallback = emptyLeadTemplate(mailInboxId)
+  const raw = value ?? {}
+  const linked = raw.linkedPageConfig ?? fallback.linkedPageConfig
+  return {
+    ...fallback,
+    ...raw,
+    name: `${raw.name ?? fallback.name}`,
+    providerName: `${raw.providerName ?? ""}`,
+    description: `${raw.description ?? ""}`,
+    sourceType: raw.sourceType ?? fallback.sourceType,
+    sourceMailInboxId: raw.sourceMailInboxId ?? fallback.sourceMailInboxId,
+    sampleFromAddress: `${raw.sampleFromAddress ?? ""}`,
+    sampleSubject: `${raw.sampleSubject ?? ""}`,
+    senderPatterns: stringArray(raw.senderPatterns),
+    mailboxTags: stringArray(raw.mailboxTags),
+    subjectPattern: `${raw.subjectPattern ?? ""}`,
+    subjectMatchMode: raw.subjectMatchMode ?? fallback.subjectMatchMode,
+    bodyFingerprint: stringArray(raw.bodyFingerprint),
+    sourceHtml: `${raw.sourceHtml ?? ""}`,
+    sourceText: `${raw.sourceText ?? ""}`,
+    linkedPageConfig: {
+      ...fallback.linkedPageConfig,
+      ...linked,
+      allowedHosts: stringArray(linked.allowedHosts),
+      urlIncludes: stringArray(linked.urlIncludes),
+      linkTextIncludes: stringArray(linked.linkTextIncludes),
+    },
+    linkedPageSampleUrl: `${raw.linkedPageSampleUrl ?? ""}`,
+    linkedPageSourceHtml: `${raw.linkedPageSourceHtml ?? ""}`,
+    linkedPageSourceText: `${raw.linkedPageSourceText ?? ""}`,
+    mappings: Array.isArray(raw.mappings) ? raw.mappings : [],
+    requiredFields: stringArray(raw.requiredFields),
+    confidenceThreshold: Number.isFinite(Number(raw.confidenceThreshold))
+      ? Number(raw.confidenceThreshold)
+      : fallback.confidenceThreshold,
+    isActive: raw.isActive !== false,
+  }
+}
+
 export function applyZillowTemplatePreset(
   current: LeadCollectionTemplateSaveInput,
 ): LeadCollectionTemplateSaveInput {
+  const normalized = normalizeLeadTemplate(current)
   return {
-    ...current,
+    ...normalized,
     name:
-      current.name === "Untitled lead email template"
+      normalized.name === "Untitled lead email template"
         ? "Zillow linked lead template"
-        : current.name,
+        : normalized.name,
     providerName: "Zillow",
     description:
-      current.description ||
+      normalized.description ||
       "Matches Zillow lead emails, opens the configured detail link, and extracts the contact information from that page.",
     linkedPageConfig: {
       enabled: true,
@@ -74,7 +118,7 @@ export function applyZillowTemplatePreset(
 }
 
 export function linkedPageConfigForUrl(url: string, linkText = "", openPage = false) {
-  const cleanUrl = url.trim()
+  const cleanUrl = `${url ?? ""}`.trim()
   return {
     enabled: Boolean(cleanUrl),
     selectedUrl: cleanUrl || undefined,
@@ -169,8 +213,13 @@ function decodeBasicEntities(value: string) {
     .replace(/&gt;/gi, ">")
 }
 
+function stringArray(value: unknown) {
+  if (typeof value === "string") value = value.split(",")
+  return [...new Set((Array.isArray(value) ? value : []).map((item) => `${item ?? ""}`.trim()).filter(Boolean))]
+}
+
 export function splitTemplateList(value: string) {
-  return [...new Set(value.split(",").map((item) => item.trim()).filter(Boolean))]
+  return stringArray(value)
 }
 
 export function normalizeTemplateText(value: string) {
@@ -256,7 +305,7 @@ export function mergeMapping(
 }
 
 export function htmlToVisibleTemplateText(html: string) {
-  return html
+  return `${html ?? ""}`
     .replace(/<style[\s\S]*?<\/style>/gi, " ")
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
     .replace(/<br\s*\/?>/gi, "\n")
@@ -273,7 +322,7 @@ export function htmlToVisibleTemplateText(html: string) {
 }
 
 export function sanitizeTemplateHtml(html: string) {
-  return html
+  return `${html ?? ""}`
     .replace(/<script[\s\S]*?<\/script>/gi, "")
     .replace(/\son\w+="[^"]*"/gi, "")
     .replace(/\son\w+='[^']*'/gi, "")

@@ -114,7 +114,7 @@ export function ConfigurableLeadCollectionTemplateEditor({
                   }))
                 }
                 placeholder="Mailbox tags, e.g. gmail, zillow"
-                value={editor.template.mailboxTags.join(", ")}
+                value={(editor.template.mailboxTags ?? []).join(", ")}
               />
               <Textarea
                 className="min-h-16"
@@ -198,7 +198,7 @@ export function ConfigurableLeadCollectionTemplateEditor({
                     }))
                   }
                   placeholder="Allowed senders, e.g. *@zillow.com"
-                  value={editor.template.senderPatterns.join(", ")}
+                  value={(editor.template.senderPatterns ?? []).join(", ")}
                 />
                 <Input
                   onChange={(event) =>

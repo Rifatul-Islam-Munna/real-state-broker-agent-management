@@ -1,4 +1,12 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  buildLeadCollectionFingerprint,
+  buildLeadCollectionMappings,
+  parseLeadCollectionTemplate,
+  prepareLeadCollectionSource,
+} from '../mail/lead-collection-parser';
+import { normalizeLinkedPageConfig } from '../mail/linked-page-config';
+import { enrichEmailWithLinkedPage, loadConfiguredLinkedPage } from '../mail/linked-page-loader';
 import { SaasTenant } from '../saas-admin/entities/saas-tenant.entity';
 import { TenantDatabaseService } from '../tenant-database/tenant-database.service';
 import { TenantDashboardService } from './tenant-dashboard.service';
@@ -232,7 +240,77 @@ export class TenantLegacyCompatibilityService {
   }
 
   leadCollectionFields() {
-    return [];
+    return [
+      { field: 'name', label: 'Name', dataType: 'text', writable: true, suggestedTransform: 'Text', requiredByDefault: true },
+      { field: 'email', label: 'Email', dataType: 'text', writable: true, suggestedTransform: 'Email', requiredByDefault: false },
+      { field: 'phone', label: 'Phone', dataType: 'text', writable: true, suggestedTransform: 'Phone', requiredByDefault: false },
+      { field: 'property', label: 'Property', dataType: 'text', writable: true, suggestedTransform: 'Text', requiredByDefault: false },
+      { field: 'budget', label: 'Budget', dataType: 'text', writable: true, suggestedTransform: 'Number', requiredByDefault: false },
+      { field: 'source', label: 'Source', dataType: 'text', writable: true, suggestedTransform: 'Text', requiredByDefault: false },
+      { field: 'interest', label: 'Interest', dataType: 'text', writable: true, suggestedTransform: 'Text', requiredByDefault: false },
+      { field: 'timeline', label: 'Timeline', dataType: 'text', writable: true, suggestedTransform: 'Text', requiredByDefault: false },
+      { field: 'summary', label: 'Summary', dataType: 'text', writable: true, suggestedTransform: 'Text', requiredByDefault: false },
+    ];
+  }
+
+  async leadCollectionPrepareSource(tenant: SaasTenant, dto: any) {
+    const source = await this.tenantLeadCollectionSource(tenant, dto);
+    const input = {
+      fromAddress: source.sampleFromAddress,
+      subject: source.sampleSubject,
+      htmlBody: source.sourceHtml,
+      textBody: source.sourceText,
+    };
+    const linkedPageConfig = normalizeLinkedPageConfig(dto?.linkedPageConfig);
+    const linked = linkedPageConfig.enabled
+      ? await loadConfiguredLinkedPage(input, linkedPageConfig).catch(() => null)
+      : null;
+    return {
+      ...source,
+      sourceText: prepareLeadCollectionSource({ htmlBody: source.sourceHtml, textBody: source.sourceText }),
+      senderPatterns: this.inferLeadSenderPatterns(source.sampleFromAddress),
+      subjectPattern: this.inferLeadSubjectPattern(source.sampleSubject),
+      subjectMatchMode: 'Contains',
+      bodyFingerprint: [],
+      linkedPageConfig,
+      linkedPageSampleUrl: linked?.url ?? '',
+      linkedPageSourceHtml: linked?.html ?? '',
+      linkedPageSourceText: linked?.text ?? '',
+      linkedPageStatus: linkedPageConfig.enabled ? (linked ? 'Loaded' : 'No matching public link could be loaded') : 'Disabled',
+    };
+  }
+
+  async leadCollectionTest(tenant: SaasTenant, dto: any) {
+    const prepared = await this.leadCollectionPrepareSource(tenant, dto);
+    const baseInput = {
+      fromAddress: `${dto?.testFromAddress ?? prepared.sampleFromAddress ?? ''}`,
+      subject: `${dto?.testSubject ?? prepared.sampleSubject ?? ''}`,
+      htmlBody: `${dto?.testHtml ?? prepared.sourceHtml ?? ''}`,
+      textBody: `${dto?.testText ?? prepared.sourceText ?? ''}`,
+    };
+    const input = prepared.linkedPageSourceText
+      ? enrichEmailWithLinkedPage(baseInput, {
+          url: prepared.linkedPageSampleUrl,
+          html: prepared.linkedPageSourceHtml,
+          text: prepared.linkedPageSourceText,
+        })
+      : baseInput;
+    const sourceText = prepareLeadCollectionSource({ htmlBody: input.htmlBody, textBody: input.textBody });
+    const mappings = buildLeadCollectionMappings(sourceText, Array.isArray(dto?.mappings) ? dto.mappings : []);
+    const senderPatterns = this.stringList(dto?.senderPatterns);
+    const template = {
+      id: Number(dto?.id) || undefined,
+      name: `${dto?.name ?? 'Draft template'}`.trim() || 'Draft template',
+      senderPatterns: senderPatterns.length ? senderPatterns : prepared.senderPatterns,
+      mailboxTags: this.stringList(dto?.mailboxTags),
+      subjectPattern: `${dto?.subjectPattern ?? prepared.subjectPattern ?? ''}`.trim(),
+      subjectMatchMode: `${dto?.subjectMatchMode ?? 'Contains'}`,
+      bodyFingerprint: buildLeadCollectionFingerprint(sourceText, mappings),
+      mappings,
+      requiredFields: this.stringList(dto?.requiredFields),
+      confidenceThreshold: Number(dto?.confidenceThreshold) || 0.82,
+    };
+    return parseLeadCollectionTemplate(template, input);
   }
 
   sequenceSummary() {
@@ -248,6 +326,69 @@ export class TenantLegacyCompatibilityService {
     const created: any[] = [];
     for (const item of source.slice(0, 1000)) created.push(await this.genericCreate(tenant, resource, item));
     return { imported: created.length, created: created.length, updated: 0, skipped: 0, errors: [] };
+  }
+
+  private async tenantLeadCollectionSource(tenant: SaasTenant, dto: any) {
+    const sourceMailInboxId = Number(dto?.sourceMailInboxId) || 0;
+    if (sourceMailInboxId > 0) {
+      return this.databases.withTenantClient(this.databaseName(tenant), async (client) => {
+        const result = await client.query(
+          `SELECT recipient_email, title, body, payload
+           FROM tenant_outreach_job
+           WHERE id = $1 AND channel = 'Email'`,
+          [sourceMailInboxId],
+        );
+        if (!result.rowCount) throw new NotFoundException('Source inbox email not found.');
+        const row = result.rows[0];
+        const payload = row.payload && typeof row.payload === 'object' ? row.payload : {};
+        return {
+          sourceType: 'InboxEmail',
+          sourceMailInboxId,
+          sourceHtml: `${payload.htmlBody ?? ''}`,
+          sourceText: `${row.body ?? ''}`,
+          sampleFromAddress: `${row.recipient_email ?? ''}`.trim().toLowerCase(),
+          sampleSubject: `${row.title ?? ''}`.trim(),
+        };
+      });
+    }
+    const sourceHtml = `${dto?.sourceHtml ?? ''}`;
+    const sourceText = `${dto?.sourceText ?? ''}`;
+    const requestedType = `${dto?.sourceType ?? ''}`;
+    const sourceType = ['PastedHtml', 'PastedText', 'UploadedHtml'].includes(requestedType)
+      ? requestedType
+      : sourceHtml
+        ? 'PastedHtml'
+        : 'PastedText';
+    return {
+      sourceType,
+      sourceMailInboxId: null,
+      sourceHtml,
+      sourceText,
+      sampleFromAddress: `${dto?.sampleFromAddress ?? ''}`.trim().toLowerCase(),
+      sampleSubject: `${dto?.sampleSubject ?? ''}`.trim(),
+    };
+  }
+
+  private inferLeadSenderPatterns(value: unknown) {
+    const address = `${value ?? ''}`.trim().toLowerCase();
+    if (!address) return [];
+    const domain = address.split('@')[1] ?? '';
+    const root = domain.split('.').slice(-2).join('.');
+    return [...new Set([address, domain ? `*@${domain}` : '', root && root !== domain ? `*@${root}` : ''].filter(Boolean))];
+  }
+
+  private inferLeadSubjectPattern(value: unknown) {
+    return prepareLeadCollectionSource({ textBody: `${value ?? ''}` })
+      .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '')
+      .replace(/\b\d[\d,.$-]*\b/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 160);
+  }
+
+  private stringList(value: unknown) {
+    if (typeof value === 'string') value = value.split(',');
+    return [...new Set((Array.isArray(value) ? value : []).map((item) => `${item ?? ''}`.trim()).filter(Boolean))];
   }
 
   private propertyItem(row: any) {

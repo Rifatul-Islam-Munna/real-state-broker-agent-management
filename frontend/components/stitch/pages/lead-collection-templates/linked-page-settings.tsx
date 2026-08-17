@@ -22,10 +22,18 @@ export function LinkedPageSettings({
   onPrepare: () => void
   preparing: boolean
 }) {
-  const config = template.linkedPageConfig
+  const config = template.linkedPageConfig ?? {
+    enabled: false,
+    allowedHosts: [],
+    urlIncludes: [],
+    linkTextIncludes: [],
+    maxLinks: 3,
+    openPage: true,
+    autoFillContactFields: true,
+  }
   const [manualUrl, setManualUrl] = useState(config.selectedUrl ?? "")
   const mode: ContactMode = !config.enabled ? "email" : config.openPage === false ? "url" : "page"
-  const loaded = Boolean(template.linkedPageSourceText.trim())
+  const loaded = Boolean(`${template.linkedPageSourceText ?? ""}`.trim())
 
   function setContactMode(nextMode: ContactMode) {
     onChange({

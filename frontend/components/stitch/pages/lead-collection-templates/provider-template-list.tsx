@@ -111,16 +111,16 @@ export function ProviderTemplateList() {
                 </div>
                 <p className="mt-3 text-sm leading-6 text-muted-foreground">
                   {item.linkedPageConfig?.enabled
-                    ? `Detail page: ${item.linkedPageConfig.allowedHosts.join(", ")}`
+                    ? `Detail page: ${(item.linkedPageConfig.allowedHosts ?? []).join(", ") || "Configured"}`
                     : "Email-only parser"}
                 </p>
                 <div className="mt-2 flex flex-wrap gap-1">
-                  {(item.mailboxTags.length ? item.mailboxTags : ["all tags"]).map((tag) => (
+                  {((item.mailboxTags ?? []).length ? (item.mailboxTags ?? []) : ["all tags"]).map((tag) => (
                     <Badge key={tag} variant="outline">{tag}</Badge>
                   ))}
                 </div>
                 <div className="mt-3 grid grid-cols-2 gap-2 rounded-lg bg-muted/30 p-3 text-xs">
-                  <span>Fields: {item.mappings.length}</span>
+                  <span>Fields: {(item.mappings ?? []).length}</span>
                   <span>Matches: {item.matchCount}</span>
                   <span>Success: {item.successCount}</span>
                   <span>AI fallback: {item.aiFallbackCount}</span>

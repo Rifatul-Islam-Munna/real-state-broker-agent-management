@@ -339,7 +339,7 @@ export function ShowingFeedbackAutomationPanel() {
           </h2>
           <div className="h-px flex-1 bg-[#c7c4d7]/60" />
         </div>
-        <div className="grid gap-6 lg:grid-cols-3">
+        <div className="grid gap-6 lg:grid-cols-4">
           <ChannelCard
             checked={automation.channels.includes("Email")}
             description="Rich HTML Reports"
@@ -364,6 +364,14 @@ export function ShowingFeedbackAutomationPanel() {
             onChange={(checked) => patch({ compressWithAi: checked })}
             status={automation.compressWithAi ? "OPTIMIZED" : "PAUSED"}
             teal
+          />
+          <ChannelCard
+            checked={automation.sentimentFilter === "negative"}
+            description="Off sends positive + negative"
+            icon="filter_alt"
+            label="Negative Only"
+            onChange={(checked) => patch({ sentimentFilter: checked ? "negative" : "all" })}
+            status={automation.sentimentFilter === "negative" ? "NEGATIVE ONLY" : "MIXED"}
           />
         </div>
       </div>
