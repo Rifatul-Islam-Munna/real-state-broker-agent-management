@@ -121,6 +121,12 @@ export function LeadKanbanCard({
             <AppIcon className="text-sm" name="location_on" />
             <span className="truncate">{displayText(lead.property, "No property selected")}</span>
           </p>
+          <p className="mt-1.5 flex items-center gap-1 text-xs text-[var(--ether-on-surface-variant)]">
+            <AppIcon className="text-sm text-[var(--ether-outline)]" name="calendar_today" />
+            {lead.createdAt
+              ? new Date(lead.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+              : "No date"}
+          </p>
           <div className="mt-3 flex items-center justify-between gap-3">
             <span className="rounded-md bg-[var(--ether-surface-container)] px-2 py-1 text-[10px] font-semibold text-[var(--ether-on-surface-variant)]">
               {lastActivityLabel}

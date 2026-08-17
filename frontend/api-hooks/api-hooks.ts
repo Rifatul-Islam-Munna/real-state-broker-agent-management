@@ -211,10 +211,11 @@ export const GetRequestNormal = async <T>(
 }
 
 export const DeleteRequestAxios = async <T>(
-  url: string
+  url: string,
+  payload?: unknown
 ): Promise<[T | null, ApiError | null]> => {
   try {
-    return [await request<T>("DELETE", url), null]
+    return [await request<T>("DELETE", url, payload), null]
   } catch (error) {
     return [null, toApiError(error)]
   }

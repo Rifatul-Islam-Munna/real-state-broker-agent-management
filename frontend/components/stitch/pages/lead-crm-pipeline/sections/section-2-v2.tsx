@@ -325,8 +325,9 @@ export function Section2Section({
   return (
     <main className="min-w-0 flex-1 bg-[var(--ether-surface)] p-4 pt-6 sm:p-6 sm:pt-7 lg:p-8 lg:pt-8">
       <div className="mx-auto max-w-[1600px] space-y-6">
-        <div className="flex flex-col gap-3 lg:-mt-[86px] lg:flex-row lg:items-center lg:justify-end">
-          <div className="inline-flex self-start rounded-lg bg-[var(--ether-surface-container)] p-1 lg:self-auto">
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:flex-1">
+            <div className="inline-flex self-start rounded-lg bg-[var(--ether-surface-container)] p-1">
             <button
               className={cn(
                 "inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold transition",
@@ -354,8 +355,7 @@ export function Section2Section({
               List
             </button>
           </div>
-          <div className="flex flex-1 flex-col gap-3 sm:flex-row sm:items-center lg:max-w-xl">
-            <div className="relative flex-1">
+            <div className="relative min-w-0 flex-1">
               <AppIcon className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-base text-[var(--ether-outline)]" name="search" />
               <Input
                 aria-label="Search leads"
@@ -365,7 +365,7 @@ export function Section2Section({
                 value={searchTerm ?? ""}
               />
             </div>
-            <div className="relative sm:w-48">
+            <div className="relative md:w-52">
               <AppIcon className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-base text-[var(--ether-outline)]" name="calendar_today" />
               <Input
                 aria-label="Filter leads by created date"
@@ -388,32 +388,34 @@ export function Section2Section({
               ) : null}
             </div>
           </div>
-          <Button
-            className="h-10 rounded-lg border-[var(--ether-secondary)] bg-transparent px-4 font-semibold text-[var(--ether-secondary)] hover:bg-[color-mix(in_srgb,var(--ether-secondary-container)_20%,white)]"
-            onClick={downloadLeadSample}
-            type="button"
-            variant="outline"
-          >
-            <AppIcon name="download" />
-            Sample CSV
-          </Button>
-          <Button
-            className="h-10 rounded-lg border-[var(--ether-outline-variant)] bg-white px-4 font-semibold text-[var(--ether-on-surface-variant)] shadow-[var(--shadow-surface-1)]"
-            onClick={() => setImportOpen(true)}
-            type="button"
-            variant="outline"
-          >
-            <AppIcon name="upload_file" />
-            Import CSV
-          </Button>
-          <Button
-            className="h-10 rounded-lg bg-[var(--ether-primary)] px-5 font-semibold text-white shadow-[0_10px_24px_rgba(67,67,213,0.22)] hover:bg-[var(--ether-primary-container)]"
-            onClick={() => setDialogState({ type: "create" })}
-            type="button"
-          >
-            <AppIcon name="person_add" />
-            Add lead
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              className="h-10 rounded-lg border-[var(--ether-secondary)] bg-transparent px-4 font-semibold text-[var(--ether-secondary)] hover:bg-[color-mix(in_srgb,var(--ether-secondary-container)_20%,white)]"
+              onClick={downloadLeadSample}
+              type="button"
+              variant="outline"
+            >
+              <AppIcon name="download" />
+              Sample CSV
+            </Button>
+            <Button
+              className="h-10 rounded-lg border-[var(--ether-outline-variant)] bg-white px-4 font-semibold text-[var(--ether-on-surface-variant)] shadow-[var(--shadow-surface-1)]"
+              onClick={() => setImportOpen(true)}
+              type="button"
+              variant="outline"
+            >
+              <AppIcon name="upload_file" />
+              Import CSV
+            </Button>
+            <Button
+              className="h-10 rounded-lg bg-[var(--ether-primary)] px-5 font-semibold text-white shadow-[0_10px_24px_rgba(67,67,213,0.22)] hover:bg-[var(--ether-primary-container)]"
+              onClick={() => setDialogState({ type: "create" })}
+              type="button"
+            >
+              <AppIcon name="person_add" />
+              Add lead
+            </Button>
+          </div>
         </div>
 
         <section className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4">
@@ -423,7 +425,7 @@ export function Section2Section({
                 <div>
                   <CardDescription className={cn("ether-label-caps", stat.label === "Overdue" ? "text-[var(--ether-error)]" : "text-[var(--ether-on-surface-variant)]")}>{stat.label}</CardDescription>
                   <CardTitle className="ether-numeric-lg mt-3 text-[var(--ether-on-surface)]">{stat.value}</CardTitle>
-                  <p className="mt-3 max-w-32 text-sm leading-5 text-[var(--ether-on-surface-variant)]">{stat.detail}</p>
+                  <p className="mt-3 max-w-44 pr-2 text-sm leading-5 text-[var(--ether-on-surface-variant)]">{stat.detail}</p>
                 </div>
                 <span className={cn("flex size-12 items-center justify-center rounded-2xl", stat.label === "On board" ? "bg-[color-mix(in_srgb,var(--ether-secondary-container)_24%,white)] text-[var(--ether-secondary)]" : stat.label === "Overdue" ? "bg-[var(--ether-error-container)] text-[var(--ether-error)]" : "bg-[var(--ether-primary-fixed)] text-[var(--ether-primary)]")}>
                   <AppIcon className="text-xl" name={stat.icon} />
@@ -600,6 +602,12 @@ export function Section2Section({
                                 {lead.inBoard ? <Badge className="rounded-full border-0 bg-[color-mix(in_srgb,var(--ether-secondary-container)_32%,white)] px-2.5 py-1 text-[10px] font-bold uppercase text-[var(--ether-secondary)]">On board</Badge> : null}
                                 {lead.isFollowUpOverdue ? <Badge className="rounded-full border-0 bg-[var(--ether-error-container)] px-2.5 py-1 text-[10px] font-bold uppercase text-[var(--ether-error)]">Overdue</Badge> : null}
                               </div>
+                              <p className="mt-2 flex items-center gap-1.5 text-xs font-medium text-[var(--ether-on-surface-variant)]">
+                                <AppIcon className="text-sm text-[var(--ether-outline)]" name="calendar_today" />
+                                {lead.createdAt
+                                  ? new Date(lead.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                                  : "No date"}
+                              </p>
                             </div>
                           </div>
                         </td>

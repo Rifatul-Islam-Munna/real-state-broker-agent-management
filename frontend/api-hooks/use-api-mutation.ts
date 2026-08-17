@@ -41,10 +41,23 @@ export function useCommonMutationApi<TData = unknown, TVariables = unknown>(
       return { data, error }
     }
 
-    const id =
+    const variableRecord =
       typeof variables === "string"
-        ? variables
-        : (variables as { id?: string | number } | null | undefined)?.id
+        ? null
+        : (variables as { id?: string | number; ids?: Array<string | number> } | null | undefined)
+
+    const ids = Array.isArray(variableRecord?.ids)
+      ? variableRecord.ids.filter(
+          (item) => item !== undefined && item !== null && `${item}`.trim().length > 0,
+        )
+      : []
+    if (ids.length > 0) {
+      const [data, error] = await DeleteRequestAxios<TData>(url, { ids })
+      return { data, error }
+    }
+
+    const id =
+      typeof variables === "string" ? variables : variableRecord?.id
 
     if (id === undefined || id === null || `${id}`.trim().length === 0) {
       return {
