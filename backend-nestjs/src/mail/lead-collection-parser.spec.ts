@@ -286,4 +286,25 @@ describe('lead collection template parser', () => {
     });
     expect(result.values.creditScore).toBe('720');
   });
+
+  it('extracts name, email, and phone generically even when the template does not map them', () => {
+    const result = parseLeadCollectionTemplate({
+      ...template,
+      mappings: [],
+      requiredFields: [],
+    }, {
+      fromAddress: '3sde1e8zrrpkri1h6w78p0vnurd@convo.zillow.com',
+      subject: 'New message',
+      textBody: [
+        'New message',
+        'Matthew kutuk says: I would like to schedule a tour.',
+        'Email: matthew@example.com',
+        'Phone: 561-502-3528',
+      ].join('\n'),
+    });
+
+    expect(result.values.name).toBe('Matthew kutuk');
+    expect(result.values.email).toBe('matthew@example.com');
+    expect(result.values.phone).toBe('561-502-3528');
+  });
 });

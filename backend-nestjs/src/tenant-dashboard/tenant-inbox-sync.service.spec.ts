@@ -37,6 +37,27 @@ describe('TenantInboxSyncService property matching', () => {
     ]);
     await expect((service as any).matchParsedProperty(db, 'Listing #XYZ 6750 NW 8th Street')).resolves.toBe(1);
   });
+
+  test('finds a property whose address appears in the email body', async () => {
+    const db = client([
+      { id: 1, title: '2500 Parkview Dr Unit #1216', payload: { location: 'Hallandale Beach, FL' } },
+      { id: 2, title: '930 NE 23rd Ct', payload: { location: 'Pompano Beach, FL' } },
+    ]);
+    await expect((service as any).matchPropertyMentionedInEmail(db, {
+      textBody: 'Matthew is requesting information about 2500 Parkview Dr #1216, Hallandale Beach, FL, 33009. Send application.',
+      htmlBody: '',
+    })).resolves.toEqual({ id: 1, title: '2500 Parkview Dr Unit #1216' });
+  });
+
+  test('does not guess a property when its address is not mentioned in the email', async () => {
+    const db = client([
+      { id: 1, title: '2500 Parkview Dr Unit #1216', payload: {} },
+    ]);
+    await expect((service as any).matchPropertyMentionedInEmail(db, {
+      textBody: 'Please call me back about availability in the area.',
+      htmlBody: '',
+    })).resolves.toBeNull();
+  });
 });
 
 describe('TenantInboxSyncService stored email conversion', () => {
@@ -189,6 +210,47 @@ describe('TenantInboxSyncService stored email recovery', () => {
       { autoCreateLeads: false },
     )).resolves.toEqual({ scanned: 0, converted: 0 });
   });
+
+  test('links a property to existing leads that have inbound mail', async () => {
+    const query = jest.fn(async (sql: string) => {
+      if (sql.includes('FROM tenant_property')) {
+        return {
+          rowCount: 1,
+          rows: [{ id: 21, title: '2500 Parkview Dr Unit #1216', payload: {} }],
+        };
+      }
+      return { rowCount: 0, rows: [] };
+    });
+    query.mockResolvedValueOnce({
+      rowCount: 1,
+      rows: [{
+        id: 55,
+        lead_id: 31,
+        body: 'Requesting info about 2500 Parkview Dr #1216, Hallandale Beach, FL',
+        html_body: '',
+        extracted_lead: JSON.stringify({ property: '' }),
+      }] as any[],
+    });
+    const databases = {
+      withTenantClient: jest.fn((_database: string, callback: any) => callback({ query })),
+    };
+    const service = new TenantInboxSyncService(
+      {} as any,
+      databases as any,
+      {} as any,
+    );
+
+    await expect((service as any).linkMissingLeadProperties(
+      { databaseName: 'tenant_1_demo' } as any,
+    )).resolves.toEqual({ scanned: 1, linked: 1 });
+    expect(query.mock.calls.some(([sql]) => sql.includes('INSERT INTO tenant_lead_property'))).toBe(true);
+    const updateCall = query.mock.calls.find(
+      ([sql]: [string]) => sql.includes('UPDATE tenant_lead'),
+    );
+    expect(updateCall).toBeDefined();
+    const params = (updateCall as unknown[])[1] as unknown[];
+    expect(JSON.parse(String(params[1])).property).toContain('2500 Parkview Dr');
+  });
 });
 
 describe('TenantInboxSyncService active parser processing', () => {
@@ -242,6 +304,53 @@ describe('TenantInboxSyncService active parser processing', () => {
     expect(parsed).toMatchObject({ created: true, lead: { id: 31 } });
     expect(parsed.result).toMatchObject({ matched: true, templateId: 8 });
     expect(query.mock.calls.some(([sql]) => sql.includes('INSERT INTO tenant_lead('))).toBe(true);
+  });
+
+  test('creates a lead from an email with contact details even when no template matches', async () => {
+    const query = jest.fn(async (sql: string) => {
+      if (sql.includes("resource = 'lead-collection-templates'")) {
+        return {
+          rowCount: 1,
+          rows: [{
+            id: 8,
+            payload: {
+              name: 'Zillow parser',
+              senderPatterns: ['*@other.com'],
+              mappings: [],
+              requiredFields: [],
+              confidenceThreshold: 0.82,
+            },
+          }],
+        };
+      }
+      if (sql.includes('INSERT INTO tenant_lead(')) {
+        return { rowCount: 1, rows: [{ id: 44, full_name: 'Matthew kutuk' }] };
+      }
+      return { rowCount: 0, rows: [] };
+    });
+    const service = new TenantInboxSyncService({} as any, {} as any, {} as any);
+
+    const parsed = await (service as any).createOrMatchLeadFromTemplate({ query }, {
+      sender: '3sde1e8zrrpkri1h6w78p0vnurd@convo.zillow.com',
+      subject: 'New message',
+      body: 'Matthew kutuk says: I would like to schedule a tour.\nPhone: 561-502-3528',
+      receivedAt: new Date('2026-08-18T00:00:00Z'),
+      mailboxTag: 'leads',
+      leadTemplateTags: [],
+      payload: {},
+    });
+
+    expect(parsed).toMatchObject({ created: true, lead: { id: 44 } });
+    expect(parsed.result.templateName).toBe('Generic email intake');
+    const insertCall = query.mock.calls.find(
+      (call: unknown[]) =>
+        String(call[0]).includes('INSERT INTO tenant_lead('),
+    );
+    expect(insertCall).toBeDefined();
+    const insertParams = (insertCall as unknown[])[1] as unknown[];
+    const payload = JSON.parse(String(insertParams[3]));
+    expect(payload.name).toBe('Matthew kutuk');
+    expect(payload.phone).toBe('561-502-3528');
   });
 
   test('records the parser skip reason when a stored email still cannot be converted', async () => {
@@ -301,7 +410,8 @@ describe('TenantInboxSyncService active parser processing', () => {
         String(call[0]).includes('SET lead_id = COALESCE($2, lead_id)'),
     );
     expect(updateCall).toBeDefined();
-    const payload = JSON.parse(String((updateCall as unknown[])[3]));
+    const params = (updateCall as unknown[])[1] as unknown[];
+    const payload = JSON.parse(String(params[3]));
     expect(payload.leadCreationStatus).toBe('Skipped');
     expect(payload.leadCreationSkipReason).toContain('No saved template matched');
     expect(payload.lastLeadRecoveryAttemptAt).toBeDefined();

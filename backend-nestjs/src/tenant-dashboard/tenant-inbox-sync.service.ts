@@ -6,6 +6,7 @@ import type { PoolClient } from 'pg';
 import { Repository } from 'typeorm';
 import {
   buildLeadCollectionFingerprint,
+  extractLeadBasicsFromEmail,
   parseLeadCollectionTemplate,
   parseLeadCollectionTemplates,
   prepareLeadCollectionSource,
@@ -120,8 +121,12 @@ export class TenantInboxSyncService {
       this.retentionDays(config.localInboxRetentionDays),
     );
     const recovered = await this.recoverSkippedInboundEmails(tenant, config);
+    const propertyLinked = await this.linkMissingLeadProperties(tenant);
     const recoveredNote = recovered.converted
       ? `, ${recovered.converted} previously skipped ${recovered.converted === 1 ? 'email was' : 'emails were'} recovered.`
+      : '';
+    const propertyNote = propertyLinked.linked
+      ? `, ${propertyLinked.linked} ${propertyLinked.linked === 1 ? 'lead was' : 'leads were'} linked to a matching property.`
       : '';
     return {
       ...(await this.getStatus(tenant)),
@@ -131,7 +136,8 @@ export class TenantInboxSyncService {
       skipped: stats.skipped,
       deletedLocalMessages,
       recoveredLeadCount: recovered.converted,
-      message: `Mailbox sync completed: ${stats.imported} imported, ${stats.created} leads created, ${stats.matched} matched, ${stats.skipped} skipped.${recoveredNote}`,
+      linkedPropertyCount: propertyLinked.linked,
+      message: `Mailbox sync completed: ${stats.imported} imported, ${stats.created} leads created, ${stats.matched} matched, ${stats.skipped} skipped.${recoveredNote}${propertyNote}`,
     };
   }
 
@@ -826,6 +832,83 @@ export class TenantInboxSyncService {
     });
   }
 
+  private async linkMissingLeadProperties(tenant: SaasTenant) {
+    const databaseName = this.databaseName(tenant);
+    return this.databases.withTenantClient(databaseName, async (client) => {
+      const result = await client.query(
+        `SELECT j.id, j.lead_id, j.body, j.payload->>'htmlBody' AS html_body,
+                j.payload->>'extractedLead' AS extracted_lead
+         FROM tenant_outreach_job j
+         WHERE j.channel = 'Email'
+           AND j.direction = 'Incoming'
+           AND j.lead_id IS NOT NULL
+           AND NOT EXISTS (
+             SELECT 1 FROM tenant_lead_property lp WHERE lp.lead_id = j.lead_id
+           )
+         ORDER BY COALESCE(j.occurred_at, j.created_at) DESC, j.id DESC
+         LIMIT 100`,
+      );
+      let linked = 0;
+      for (const row of result.rows) {
+        try {
+          const extracted = this.jsonObject(row.extracted_lead);
+          const match = await this.resolveLeadProperty(
+            client,
+            {
+              textBody: this.text(row.body),
+              htmlBody: this.text(row.html_body),
+            },
+            this.text(extracted?.property),
+          );
+          if (!match) continue;
+          await client.query(
+            `INSERT INTO tenant_lead_property(lead_id, property_id)
+             VALUES ($1, $2)
+             ON CONFLICT DO NOTHING`,
+            [Number(row.lead_id), match.id],
+          );
+          await client.query(
+            `UPDATE tenant_lead
+             SET payload = COALESCE(payload, '{}'::jsonb) || $2::jsonb,
+                 updated_at = now()
+             WHERE id = $1`,
+            [
+              Number(row.lead_id),
+              JSON.stringify({
+                property: match.title,
+                primaryPropertyId: match.id,
+              }),
+            ],
+          );
+          linked += 1;
+        } catch (error) {
+          this.logger.warn(`Lead property linking failed ${JSON.stringify({
+            databaseName,
+            mailInboxId: Number(row.id),
+            error: this.message(error),
+          })}`);
+        }
+      }
+      if (result.rowCount) {
+        this.logger.log(`Lead property linking ${databaseName}: ${JSON.stringify({
+          scanned: result.rowCount,
+          linked,
+        })}`);
+      }
+      return { scanned: result.rowCount ?? 0, linked };
+    });
+  }
+
+  private jsonObject(value: any): any {
+    if (!value) return null;
+    if (typeof value === 'object') return value;
+    try {
+      return JSON.parse(value);
+    } catch {
+      return null;
+    }
+  }
+
   private async createOrMatchLeadFromTemplate(
     client: PoolClient,
     input: {
@@ -889,17 +972,38 @@ export class TenantInboxSyncService {
     let result = parseLeadCollectionTemplates(templates, emailInput);
     let template = templates.find((item: any) => item.id === result.templateId);
     if (!template || !result.matched) {
-      return { lead: null, created: false, result };
-    }
-
-    const linkedConfig = normalizeLinkedPageConfig(template.linkedPageConfig);
-    if (linkedConfig.enabled) {
-      const linked = await loadConfiguredLinkedPage(emailInput, linkedConfig).catch(() => null);
-      if (linked) {
-        result = parseLeadCollectionTemplate(
-          template,
-          enrichEmailWithLinkedPage(emailInput, linked),
-        );
+      const basics = extractLeadBasicsFromEmail(emailInput);
+      if (!basics.name && !basics.phone) {
+        return { lead: null, created: false, result };
+      }
+      result = {
+        ...result,
+        matched: true,
+        templateId: null,
+        templateName: 'Generic email intake',
+        values: {
+          ...(result.values ?? {}),
+          name: basics.name,
+          email: basics.email,
+          phone: basics.phone,
+        },
+        missingRequiredFields: [],
+        diagnostics: [
+          ...(result.diagnostics ?? []),
+          'generic fallback: contact details extracted from the email body',
+        ],
+      };
+      template = null;
+    } else if (template) {
+      const linkedConfig = normalizeLinkedPageConfig(template.linkedPageConfig);
+      if (linkedConfig.enabled) {
+        const linked = await loadConfiguredLinkedPage(emailInput, linkedConfig).catch(() => null);
+        if (linked) {
+          result = parseLeadCollectionTemplate(
+            template,
+            enrichEmailWithLinkedPage(emailInput, linked),
+          );
+        }
       }
     }
     if (!result.matched) {
@@ -919,6 +1023,12 @@ export class TenantInboxSyncService {
       phone,
       input.sender,
     );
+    const propertyMatch = await this.resolveLeadProperty(
+      client,
+      emailInput,
+      this.text(values.property),
+    );
+    if (propertyMatch) values.property = propertyMatch.title;
     const leadPayload = {
       ...values,
       name: name || 'Inbound lead',
@@ -960,7 +1070,7 @@ export class TenantInboxSyncService {
       lead = inserted.rows[0];
     }
 
-    const propertyId = await this.matchParsedProperty(client, this.text(values.property));
+    const propertyId = propertyMatch?.id ?? null;
     if (propertyId && lead?.id) {
       await client.query(
         `INSERT INTO tenant_lead_property(lead_id, property_id)
@@ -1082,6 +1192,95 @@ export class TenantInboxSyncService {
     const second = candidates[1];
     if (second && best.score - second.score < 0.12) return null;
     return best.id;
+  }
+
+  private async resolveLeadProperty(
+    client: PoolClient,
+    emailInput: { textBody: string; htmlBody: string },
+    extractedProperty: string,
+  ) {
+    if (extractedProperty) {
+      const id = await this.matchParsedProperty(client, extractedProperty);
+      if (id) {
+        const row = await client.query(
+          'SELECT title FROM tenant_property WHERE id = $1',
+          [id],
+        );
+        return {
+          id,
+          title: this.text(row.rows[0]?.title, extractedProperty),
+        };
+      }
+    }
+    return this.matchPropertyMentionedInEmail(client, emailInput);
+  }
+
+  private async matchPropertyMentionedInEmail(
+    client: PoolClient,
+    input: { textBody: string; htmlBody: string },
+  ) {
+    const candidates: string[] = [];
+    const textBody = this.normalizePropertyMatch(input.textBody);
+    if (textBody) candidates.push(textBody);
+    const htmlText = this.normalizePropertyMatch(this.stripHtml(input.htmlBody));
+    if (htmlText && htmlText !== textBody) candidates.push(htmlText);
+    if (!candidates.length) return null;
+
+    const result = await client.query(
+      `SELECT id, title, payload
+       FROM tenant_property
+       ORDER BY updated_at DESC, id DESC
+       LIMIT 1000`,
+    );
+    if (!result.rowCount) return null;
+
+    const matches: Array<{ id: number; title: string; score: number }> = [];
+    for (const row of result.rows) {
+      const payload =
+        row?.payload && typeof row.payload === 'object' ? row.payload : {};
+      const fields = [
+        row?.title,
+        payload.address,
+        payload.propertyAddress,
+        payload.streetAddress,
+        payload.location,
+        payload.exactLocation,
+        payload.slug,
+      ]
+        .map((value) => this.normalizePropertyMatch(value))
+        .filter(Boolean);
+      let bestScore = 0;
+      for (const field of fields) {
+        bestScore = Math.max(bestScore, this.propertyMentionScore(field, candidates));
+      }
+      if (bestScore >= 0.85) {
+        matches.push({ id: Number(row.id), title: `${row?.title ?? ''}`, score: bestScore });
+      }
+    }
+    matches.sort((left, right) => right.score - left.score || right.id - left.id);
+    const best = matches[0];
+    return best ? { id: best.id, title: best.title } : null;
+  }
+
+  private propertyMentionScore(field: string, texts: string[]) {
+    const numbers = field.match(/\b\d{3,6}\b/g) ?? [];
+    const streetNumber = numbers[0] ?? '';
+    const words = this.propertyMeaningfulWords(field);
+    if (!words.length) return 0;
+    let best = 0;
+    for (const text of texts) {
+      if (streetNumber && !text.includes(streetNumber)) continue;
+      const present = words.filter((word) => text.includes(word)).length;
+      let score = present / words.length;
+      if (score >= 1) {
+        const extraNumbers = numbers.slice(1);
+        if (extraNumbers.length && extraNumbers.every((n) => text.includes(n))) {
+          score += 0.05;
+        }
+      }
+      best = Math.max(best, score);
+    }
+    return best;
   }
 
   private scoreParsedProperty(row: any, input: string, inputNumber: string) {

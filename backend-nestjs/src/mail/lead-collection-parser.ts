@@ -256,14 +256,21 @@ export function parseLeadCollectionTemplate(
     diagnostics.push(`${mapping.field}: ${result.reason}`);
   }
 
-  if (!values.email && fieldRequested(template, 'email')) {
+  if (!values.name) {
+    const candidate = firstNameFromText(text);
+    if (candidate) {
+      values.name = candidate;
+      diagnostics.push('name: person name fallback');
+    }
+  }
+  if (!values.email) {
     const candidate = firstEmail(text);
     if (candidate) {
       values.email = candidate;
       diagnostics.push('email: generic email validation fallback');
     }
   }
-  if (!values.phone && fieldRequested(template, 'phone')) {
+  if (!values.phone) {
     const candidate = firstPhone(text);
     if (candidate) {
       values.phone = candidate;
@@ -531,6 +538,41 @@ function genericTransformCandidate(text: string, transform: LeadCollectionFieldT
   if (transform === 'Email') return firstEmail(text) ?? '';
   if (transform === 'Phone') return firstPhone(text) ?? '';
   if (transform === 'CreditScore') return labeledCreditScore(text) ?? '';
+  return '';
+}
+
+export function extractLeadBasicsFromEmail(input: LeadCollectionEmailInput) {
+  const text = prepareLeadCollectionSource({
+    htmlBody: input.htmlBody,
+    textBody: input.textBody,
+  });
+  const hrefs = `${input.htmlBody ?? ''}`
+    .match(/href\s*=\s*["'][^"']+["']/gi)
+    ?.join(' ') ?? '';
+  return {
+    name: firstNameFromText(text),
+    email: firstEmail(text) ?? '',
+    phone: firstPhone(text) || firstPhone(hrefs) || '',
+  };
+}
+
+function firstNameFromText(value: string) {
+  const text = normalizeLeadCollectionText(value);
+  const nameWord = '[A-Z][a-z]+(?:\\s+[A-Za-z]+){0,2}';
+  const quoted = text.match(new RegExp(`["“](${nameWord})["”]`))?.[1];
+  if (quoted) return quoted;
+  const says = text.match(
+    new RegExp(`(${nameWord})\\s+(?:says|said)\\s*[:,]?`),
+  )?.[1];
+  if (says) return says;
+  const action = text.match(
+    new RegExp(`(${nameWord})\\s+(?:is requesting|requested an application|would like to|wants to|is interested in|has a question|is asking)`),
+  )?.[1];
+  if (action) return action;
+  const possessive = text.match(
+    /([A-Z][a-z]+)'s\s+(?:phone|contact|message|application)/,
+  )?.[1];
+  if (possessive) return possessive;
   return '';
 }
 
