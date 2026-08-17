@@ -38,6 +38,9 @@ export type LeadCollectionParseResult = {
   scopeMatched?: boolean;
 };
 
+const MIN_TEMPLATE_MATCH_SCORE = 0.6;
+const MIN_BODY_STRUCTURE_SCORE = 0.5;
+
 const BLOCK_TAGS = [
   'address',
   'article',
@@ -226,8 +229,11 @@ export function parseLeadCollectionTemplates(
     }))
     .sort((a, b) => b.score - a.score);
 
-  const best = ranked[0];
-  if (!best || best.score < 0.35) {
+  const best = ranked.find(({ template, score }) =>
+    score >= MIN_TEMPLATE_MATCH_SCORE &&
+    hasTemplateStructureMatch(template, input, text),
+  );
+  if (!best) {
     return emptyParseResult('No saved template matched this email.');
   }
   return parseLeadCollectionTemplate(best.template, input, text, best.score);
@@ -350,7 +356,9 @@ export function parseLeadCollectionTemplate(
   const threshold = clamp(template.confidenceThreshold, 0.5, 0.99, 0.82);
 
   return {
-    matched: matchScore >= 0.35,
+    matched:
+      matchScore >= MIN_TEMPLATE_MATCH_SCORE &&
+      hasTemplateStructureMatch(template, input, text),
     templateId: template.id ?? null,
     templateName: template.name,
     matchScore: roundScore(matchScore),
@@ -413,6 +421,31 @@ export function scoreLeadCollectionTemplate(
   return clamp01(
     parts.reduce((sum, part) => sum + part.score * part.weight, 0) / totalWeight,
   );
+}
+
+function hasTemplateStructureMatch(
+  template: LeadCollectionTemplateLike,
+  input: LeadCollectionEmailInput,
+  preparedText: string,
+) {
+  const fingerprint = (template.bodyFingerprint ?? [])
+    .map(normalizeMatchText)
+    .filter(Boolean);
+  const normalizedBody = normalizeMatchText(preparedText);
+  const bodyScore = fingerprint.length
+    ? fingerprint.filter((part) => normalizedBody.includes(part)).length / fingerprint.length
+    : 0;
+  const hasSubject = Boolean(`${template.subjectPattern ?? ''}`.trim());
+  const subjectScore = hasSubject
+    ? subjectPatternScore(
+        template.subjectPattern,
+        template.subjectMatchMode,
+        input.subject,
+      )
+    : 0;
+
+  if (fingerprint.length) return bodyScore >= MIN_BODY_STRUCTURE_SCORE;
+  return hasSubject && subjectScore === 1;
 }
 
 function extractMappedValue(text: string, mapping: LeadCollectionFieldMapping) {
@@ -801,19 +834,20 @@ function firstPhone(value: string) {
   const labeled = normalizeLeadCollectionText(value).match(
     /(?:^|\n)\s*(?:phone|phone number|telephone|mobile|cell|contact phone|lead phone|renter phone)\s*[:|–—-]\s*([^\n]{7,40})/i,
   )?.[1];
-  const labeledPhone = labeled ? validPhoneCandidate(labeled) : '';
+  const labeledPhone = labeled ? validPhoneCandidate(labeled, true) : '';
   if (labeledPhone) return labeledPhone;
 
   const candidates = value.match(/(?:\+?\d[\d\s().-]{6,}\d)/g) ?? [];
   return candidates
     .map((candidate) => candidate.trim())
-    .find(validPhoneCandidate);
+    .find((candidate) => validPhoneCandidate(candidate, false));
 }
 
-function validPhoneCandidate(candidate: string) {
+function validPhoneCandidate(candidate: string, labeled = false) {
   const trimmed = candidate.trim();
   const digits = trimmed.replace(/\D/g, '');
   if (digits.length < 7 || digits.length > 15) return '';
+  if (!labeled && digits.length > 11 && !trimmed.startsWith('+')) return '';
   if (/^\d{4}\s*[-–—]\s*\d{4}$/.test(trimmed)) return '';
   const groups = trimmed.split(/[^\d]+/).filter((group) => group.length > 0);
   const sizes = groups.map((group) => group.length);

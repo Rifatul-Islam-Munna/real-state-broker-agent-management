@@ -544,19 +544,37 @@ describe('TenantInboxSyncService active parser processing', () => {
               name: 'Generic provider parser',
               senderPatterns: ['*@example.com'],
               mailboxTags: ['different-mailbox'],
-              mappings: [{
-                field: 'property',
-                label: 'Property',
-                source: 'EmailBody',
-                sampleValue: '123 Main St',
-                selectionStart: 10,
-                selectionEnd: 21,
-                prefix: 'Property:',
-                suffix: '',
-                occurrence: 0,
-                required: false,
-                transform: 'Text',
-              }],
+              subjectPattern: 'New inquiry',
+              subjectMatchMode: 'Contains',
+              sourceText: 'Name: Taylor Morgan\nProperty: 123 Main St',
+              mappings: [
+                {
+                  field: 'name',
+                  label: 'Name',
+                  source: 'EmailBody',
+                  sampleValue: 'Taylor Morgan',
+                  selectionStart: 6,
+                  selectionEnd: 19,
+                  prefix: 'Name:',
+                  suffix: 'Property:',
+                  occurrence: 0,
+                  required: true,
+                  transform: 'Text',
+                },
+                {
+                  field: 'property',
+                  label: 'Property',
+                  source: 'EmailBody',
+                  sampleValue: '123 Main St',
+                  selectionStart: 30,
+                  selectionEnd: 41,
+                  prefix: 'Property:',
+                  suffix: '',
+                  occurrence: 0,
+                  required: false,
+                  transform: 'Text',
+                },
+              ],
               requiredFields: ['name'],
               confidenceThreshold: 0.99,
             },
@@ -573,7 +591,7 @@ describe('TenantInboxSyncService active parser processing', () => {
     const parsed = await (service as any).createOrMatchLeadFromTemplate({ query }, {
       sender: 'lead@example.com',
       subject: 'New inquiry',
-      body: 'Property: 123 Main St\nPhone: 786-555-0101',
+      body: 'Name: Taylor Morgan\nProperty: 123 Main St\nPhone: 786-555-0101',
       receivedAt: new Date('2026-08-18T00:00:00Z'),
       mailboxTag: 'leads',
       leadTemplateTags: ['another-tag'],
@@ -585,7 +603,7 @@ describe('TenantInboxSyncService active parser processing', () => {
     expect(query.mock.calls.some(([sql]) => sql.includes('INSERT INTO tenant_lead('))).toBe(true);
   });
 
-  test('creates a lead from an email with contact details even when no template matches', async () => {
+  test('does not create a lead when no active template matches', async () => {
     const query = jest.fn(async (sql: string) => {
       if (sql.includes("resource = 'lead-collection-templates'")) {
         return {
@@ -602,9 +620,6 @@ describe('TenantInboxSyncService active parser processing', () => {
           }],
         };
       }
-      if (sql.includes('INSERT INTO tenant_lead(')) {
-        return { rowCount: 1, rows: [{ id: 44, full_name: 'Matthew kutuk' }] };
-      }
       return { rowCount: 0, rows: [] };
     });
     const service = new TenantInboxSyncService({} as any, {} as any, {} as any);
@@ -619,17 +634,13 @@ describe('TenantInboxSyncService active parser processing', () => {
       payload: {},
     });
 
-    expect(parsed).toMatchObject({ created: true, lead: { id: 44 } });
-    expect(parsed.result.templateName).toBe('Generic email intake');
+    expect(parsed).toMatchObject({ created: false, lead: null });
+    expect(parsed.result.matched).toBe(false);
     const insertCall = query.mock.calls.find(
       (call: unknown[]) =>
         String(call[0]).includes('INSERT INTO tenant_lead('),
     );
-    expect(insertCall).toBeDefined();
-    const insertParams = (insertCall as unknown[])[1] as unknown[];
-    const payload = JSON.parse(String(insertParams[3]));
-    expect(payload.name).toBe('Matthew kutuk');
-    expect(payload.phone).toBe('+15615023528');
+    expect(insertCall).toBeUndefined();
   });
 
   test('normalizes the extracted phone with the tenant default country', async () => {
@@ -642,11 +653,17 @@ describe('TenantInboxSyncService active parser processing', () => {
             payload: {
               name: 'Realtor parser',
               senderPatterns: ['*@email.realtor.com'],
+              subjectPattern: 'New realtor.com lead',
+              subjectMatchMode: 'Contains',
+              sourceText: 'Name: Johny Tobon\nPhone: 3058792145',
               mappings: [{
                 field: 'phone',
                 label: 'Phone',
                 source: 'EmailBody',
-                prefix: '',
+                sampleValue: '3058792145',
+                selectionStart: 25,
+                selectionEnd: 35,
+                prefix: 'Phone:',
                 suffix: '',
                 occurrence: 0,
                 required: false,
@@ -869,10 +886,16 @@ describe('TenantInboxSyncService active parser processing', () => {
             payload: {
               name: 'Realtor parser',
               senderPatterns: ['*@realtor.com'],
+              subjectPattern: 'Apply Now',
+              subjectMatchMode: 'Contains',
+              sourceText: 'Apply Now to schedule a tour.\nJean Melo Cordova requested an application.\nPhone: 954-630-6208',
               mappings: [{
                 field: 'name',
                 label: 'Name',
                 source: 'EmailBody',
+                sampleValue: 'Apply Now',
+                selectionStart: 0,
+                selectionEnd: 9,
                 prefix: '',
                 suffix: ' to schedule',
                 occurrence: 0,
@@ -925,7 +948,22 @@ describe('TenantInboxSyncService active parser processing', () => {
             payload: {
               name: 'Generic parser',
               senderPatterns: ['*@realtor.com'],
-              mappings: [],
+              subjectPattern: 'New lead',
+              subjectMatchMode: 'Contains',
+              sourceText: 'Phone: 981-012-0026\nProperty: 1401 Grant St Unit#3',
+              mappings: [{
+                field: 'phone',
+                label: 'Phone',
+                source: 'EmailBody',
+                sampleValue: '981-012-0026',
+                selectionStart: 7,
+                selectionEnd: 19,
+                prefix: 'Phone:',
+                suffix: 'Property:',
+                occurrence: 0,
+                required: false,
+                transform: 'Phone',
+              }],
               requiredFields: [],
               confidenceThreshold: 0.82,
             },
@@ -968,7 +1006,22 @@ describe('TenantInboxSyncService active parser processing', () => {
             payload: {
               name: 'Generic parser',
               senderPatterns: ['*@realtor.com'],
-              mappings: [],
+              subjectPattern: 'New lead',
+              subjectMatchMode: 'Contains',
+              sourceText: 'Email: norah.bec@gmail.com\nPhone: 786-252-6727',
+              mappings: [{
+                field: 'email',
+                label: 'Email',
+                source: 'EmailBody',
+                sampleValue: 'norah.bec@gmail.com',
+                selectionStart: 7,
+                selectionEnd: 26,
+                prefix: 'Email:',
+                suffix: 'Phone:',
+                occurrence: 0,
+                required: false,
+                transform: 'Email',
+              }],
               requiredFields: [],
               confidenceThreshold: 0.82,
             },
@@ -1231,14 +1284,34 @@ describe('TenantInboxSyncService active parser processing', () => {
     });
 
     expect(parsed).toMatchObject({ created: false, lead: null });
-    expect(parsed.result.missingRequiredFields).toEqual(
-      expect.arrayContaining(['name', 'email', 'phone']),
-    );
+    expect(parsed.result.matched).toBe(false);
     const insertCall = query.mock.calls.find(
       (call: unknown[]) =>
         String(call[0]).includes('INSERT INTO tenant_lead('),
     );
     expect(insertCall).toBeUndefined();
+  });
+
+  test('removes only invalid low-confidence placeholder leads', async () => {
+    const query = jest.fn().mockResolvedValue({ rowCount: 1, rows: [{ id: 77 }] });
+    const databases = {
+      withTenantClient: jest.fn((_database: string, callback: any) => callback({ query })),
+    };
+    const service = new TenantInboxSyncService({} as any, databases as any, {} as any);
+
+    await expect((service as any).removeInvalidAutoCreatedLeads({
+      databaseName: 'tenant_1_demo',
+    })).resolves.toEqual({ removed: 1 });
+
+    expect(query).toHaveBeenCalledWith(expect.stringContaining(
+      "lower(trim(COALESCE(l.full_name, ''))) = 'inbound lead'",
+    ));
+    expect(query).toHaveBeenCalledWith(expect.stringContaining(
+      "leadCollectionConfidence', '')::numeric, 0) < 0.6",
+    ));
+    expect(query).toHaveBeenCalledWith(expect.stringContaining(
+      "outgoing.direction <> 'Incoming'",
+    ));
   });
 
   test('a failing message does not block newer emails from being processed', async () => {
@@ -1315,6 +1388,24 @@ describe('TenantInboxSyncService active parser processing', () => {
 
     // fullWindow=true -> lastScan 0 -> the caller falls back to newer_than:14d
     expect(list).toHaveBeenCalledWith('token', 'Leads', 50, 0);
+  });
+
+  test('custom Gmail label sync includes archived messages outside INBOX', async () => {
+    const service = new TenantInboxSyncService({} as any, {} as any, {} as any);
+    const request = jest.spyOn(service as any, 'jsonRequest').mockResolvedValue({
+      messages: [{ id: 'archived-realtor-lead' }],
+    });
+
+    await expect((service as any).listGmailMessagesForLabel(
+      'token',
+      'Label_Leads',
+      'Leads',
+      50,
+      0,
+    )).resolves.toEqual([{ id: 'archived-realtor-lead', mailboxTag: 'Leads' }]);
+
+    const requestedUrl = new URL(String(request.mock.calls[0][0]));
+    expect(requestedUrl.searchParams.getAll('labelIds')).toEqual(['Label_Leads']);
   });
 
   test('uses provider sender for dedupe only when parser extracted no contact', async () => {

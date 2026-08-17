@@ -163,6 +163,7 @@ export class TenantInboxSyncService {
       databaseName,
       this.retentionDays(config.localInboxRetentionDays),
     );
+    const junkRemoved = await this.removeInvalidAutoCreatedLeads(tenant);
     const recovered = await this.recoverSkippedInboundEmails(tenant, config);
     const propertyLinked = await this.linkMissingLeadProperties(tenant);
     const welcomeSent = await this.autoSendWelcomeForLeads(tenant);
@@ -191,6 +192,7 @@ export class TenantInboxSyncService {
       linkedPropertyCount: propertyLinked.linked,
       autoWelcomeScheduledCount: welcomeSent.enqueued,
       correctedLeadNameCount: namesFixed.fixed,
+      removedInvalidLeadCount: junkRemoved.removed,
       message: `Mailbox sync completed: ${stats.imported} imported, ${stats.created} leads created, ${stats.matched} matched, ${stats.skipped} skipped.${recoveredNote}${propertyNote}${welcomeNote}${nameNote}`,
     };
   }
@@ -458,8 +460,7 @@ export class TenantInboxSyncService {
     let pageToken = '';
     while (ids.length < maxMessages) {
       const url = new URL('https://gmail.googleapis.com/gmail/v1/users/me/messages');
-      url.searchParams.append('labelIds', 'INBOX');
-      if (labelId !== 'INBOX') url.searchParams.append('labelIds', labelId);
+      url.searchParams.append('labelIds', labelId);
       url.searchParams.set('maxResults', String(Math.min(100, maxMessages - ids.length)));
       url.searchParams.set(
         'q',
@@ -979,6 +980,58 @@ export class TenantInboxSyncService {
         })}`);
       }
       return { scanned: result.rowCount ?? 0, converted };
+    });
+  }
+
+  private async removeInvalidAutoCreatedLeads(tenant: SaasTenant) {
+    const databaseName = this.databaseName(tenant);
+    return this.databases.withTenantClient(databaseName, async (client) => {
+      const result = await client.query(
+        `WITH candidate AS MATERIALIZED (
+           SELECT l.id
+           FROM tenant_lead l
+           WHERE lower(trim(COALESCE(l.full_name, ''))) = 'inbound lead'
+             AND COALESCE(l.email, '') = ''
+             AND COALESCE(l.payload->>'leadCollectionTemplateId', '') <> ''
+             AND COALESCE(NULLIF(l.payload->>'leadCollectionConfidence', '')::numeric, 0) < 0.6
+             AND (
+               COALESCE(l.phone, '') = ''
+               OR (
+                 l.phone NOT LIKE '+%'
+                 AND length(regexp_replace(l.phone, '[^0-9]', '', 'g')) NOT BETWEEN 10 AND 11
+               )
+             )
+             AND NOT EXISTS (
+               SELECT 1 FROM tenant_outreach_job outgoing
+               WHERE outgoing.lead_id = l.id AND outgoing.direction <> 'Incoming'
+             )
+           ORDER BY l.id ASC
+           LIMIT 100
+         ), detached AS (
+           UPDATE tenant_outreach_job mail
+           SET lead_id = NULL,
+               payload = COALESCE(mail.payload, '{}'::jsonb) || jsonb_build_object(
+                 'leadCreationStatus', 'Skipped',
+                 'leadCreationSkipReason', 'Removed invalid low-confidence automatic lead.'
+               ),
+               updated_at = now()
+           FROM candidate
+           WHERE mail.lead_id = candidate.id
+           RETURNING mail.id
+         )
+         DELETE FROM tenant_lead lead
+         USING candidate
+         WHERE lead.id = candidate.id
+         RETURNING lead.id`,
+      );
+      const removed = result.rowCount ?? 0;
+      if (removed) {
+        this.logger.warn(`Invalid automatic leads removed ${JSON.stringify({
+          databaseName,
+          removed,
+        })}`);
+      }
+      return { removed };
     });
   }
 
@@ -1553,29 +1606,8 @@ export class TenantInboxSyncService {
     let result = parseLeadCollectionTemplates(templates, emailInput);
     let template = templates.find((item: any) => item.id === result.templateId);
     if (!template || !result.matched) {
-      const basics = extractLeadBasicsFromEmail(emailInput);
-      if (!basics.name && !basics.phone) {
-        return { lead: null, created: false, result };
-      }
-      result = {
-        ...result,
-        matched: true,
-        templateId: null,
-        templateName: 'Generic email intake',
-        values: {
-          ...(result.values ?? {}),
-          name: basics.name,
-          email: basics.email,
-          phone: basics.phone,
-        },
-        missingRequiredFields: [],
-        diagnostics: [
-          ...(result.diagnostics ?? []),
-          'generic fallback: contact details extracted from the email body',
-        ],
-      };
-      template = null;
-    } else if (template) {
+      return { lead: null, created: false, result };
+    } else {
       const linkedConfig = normalizeLinkedPageConfig(template.linkedPageConfig);
       if (linkedConfig.enabled) {
         const linked = await loadConfiguredLinkedPage(emailInput, linkedConfig).catch(() => null);
@@ -1587,7 +1619,11 @@ export class TenantInboxSyncService {
         }
       }
     }
-    if (!result.matched) {
+    if (
+      !result.matched ||
+      result.missingRequiredFields.length > 0 ||
+      result.confidence < result.threshold
+    ) {
       return { lead: null, created: false, result };
     }
 

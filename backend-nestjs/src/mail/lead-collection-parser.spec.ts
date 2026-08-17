@@ -492,7 +492,7 @@ describe('lead collection template parser', () => {
       subject: 'New realtor.com lead - Steve Francis',
       textBody: liveEmail,
     });
-    expect(score).toBeGreaterThanOrEqual(0.35);
+    expect(score).toBeGreaterThanOrEqual(0.6);
 
     const result = parseLeadCollectionTemplate(template, {
       fromAddress: 'leads@email.realtor.com',
@@ -513,6 +513,15 @@ describe('lead collection template parser', () => {
         '98101 2006 2026',
         '2851 W Prospect Rd Unit 704',
       ].join('\n'),
+    });
+    expect(result.phone).toBe('');
+  });
+
+  it('rejects compact tracking digits as a phone number', () => {
+    const result = extractLeadBasicsFromEmail({
+      fromAddress: 'market-updates@mail.zillow.com',
+      subject: 'New listing for rent in Tamarac for $3,300/mo',
+      textBody: 'Typical home value $289,970\n9810120062026',
     });
     expect(result.phone).toBe('');
   });
