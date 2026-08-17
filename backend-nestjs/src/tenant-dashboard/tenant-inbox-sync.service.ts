@@ -1479,13 +1479,12 @@ export class TenantInboxSyncService {
         htmlBody: this.text(saved.sourceHtml),
         textBody: this.text(saved.sourceText),
       });
-      // Rebuild full mapping anchors (prefix/suffix/occurrence/selection) from
-      // the saved sample exactly like the template Test button does, so live
-      // sync extraction matches what the user sees when testing.
+      // Rebuild full mapping anchors (prefix/suffix/occurrence/selection) and
+      // the body fingerprint from the saved sample exactly like the template
+      // Test button does, so live sync matching/extraction matches what the
+      // user sees when testing.
       const mappings = buildLeadCollectionMappings(sourceText, rawMappings);
-      const bodyFingerprint = Array.isArray(saved.bodyFingerprint) && saved.bodyFingerprint.length
-        ? saved.bodyFingerprint
-        : buildLeadCollectionFingerprint(sourceText, rawMappings);
+      const bodyFingerprint = buildLeadCollectionFingerprint(sourceText, mappings);
       return {
         ...saved,
         id: Number(row.id),
@@ -2017,14 +2016,15 @@ export class TenantInboxSyncService {
            imported_count, matched_count, created_count, skipped_count
          ) VALUES (
            'mail-inbox', 'sent', $1::jsonb, now(),
-           CASE WHEN $7 IS NULL THEN now() ELSE to_timestamp($7 / 1000.0) END,
+           CASE WHEN $7::numeric IS NULL THEN now()
+             ELSE to_timestamp(($7::numeric) / 1000.0) END,
            now() + make_interval(mins => $6), NULL, NULL, '', $2, $3, $4, $5
          )
          ON CONFLICT (sync_key) DO UPDATE
          SET status = 'sent', cursor = EXCLUDED.cursor,
              last_completed_at = now(),
-             last_succeeded_at = CASE WHEN $7 IS NULL THEN now()
-               ELSE to_timestamp($7 / 1000.0) END,
+             last_succeeded_at = CASE WHEN $7::numeric IS NULL THEN now()
+               ELSE to_timestamp(($7::numeric) / 1000.0) END,
              next_run_at = now() + make_interval(mins => $6),
              locked_at = NULL, locked_by = NULL, last_error = '',
              imported_count = EXCLUDED.imported_count,

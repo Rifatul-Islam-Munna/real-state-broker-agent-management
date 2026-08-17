@@ -7,6 +7,7 @@ import {
   parseLeadCollectionTemplate,
   parseLeadCollectionTemplates,
   sanitizeLeadName,
+  scoreLeadCollectionTemplate,
   subjectNameFromSubject,
 } from './lead-collection-parser';
 
@@ -393,6 +394,133 @@ describe('lead collection template parser', () => {
       ].join('\n'),
     });
     expect(result.values.name).toBe('Norah Bec');
+  });
+
+  it('keeps the fingerprint free of dates, times, and stripped-value fragments', () => {
+    const sample = [
+      'New lead from realtor.com',
+      'August 13, 2026 5:08 pm',
+      '"I am interested in 10545 W 32nd Ln Unit 0, Hialeah, FL 33018."',
+      'Name',
+      'Lianet Santana',
+      'Phone',
+      '786-548-5124',
+      'Email',
+      'lianet.santana698@gmail.com',
+    ].join('\n');
+    const selections = [
+      { field: 'name', sampleValue: 'Lianet Santana', required: false, transform: 'Text' as const },
+      { field: 'phone', sampleValue: '786-548-5124', required: false, transform: 'Phone' as const },
+      { field: 'email', sampleValue: 'lianet.santana698@gmail.com', required: false, transform: 'Email' as const },
+      { field: 'property', sampleValue: '10545 W 32nd Ln Unit 0, Hialeah, FL 33018', required: false, transform: 'Text' as const },
+    ].map((mapping) => {
+      const selectionStart = sample.indexOf(mapping.sampleValue);
+      return {
+        ...mapping,
+        label: mapping.field,
+        selectionStart,
+        selectionEnd: selectionStart + mapping.sampleValue.length,
+        occurrence: 0,
+      };
+    });
+    const fingerprint = buildLeadCollectionFingerprint(
+      sample,
+      buildLeadCollectionMappings(sample, selections),
+    );
+    expect(fingerprint.some((line) => line.includes('august'))).toBe(false);
+    expect(fingerprint.some((line) => line.includes('5:08'))).toBe(false);
+    expect(fingerprint.some((line) => line.includes('interested in .'))).toBe(false);
+    expect(fingerprint).toContain('name');
+    expect(fingerprint).toContain('phone');
+    expect(fingerprint).toContain('email');
+    expect(fingerprint).toContain('new lead from realtor.com');
+  });
+
+  it('still matches a live email whose date, quote, and details differ from the sample', () => {
+    const sample = [
+      'New lead from realtor.com',
+      'August 13, 2026 5:08 pm',
+      '"I am interested in 10545 W 32nd Ln Unit 0, Hialeah, FL 33018."',
+      'Name',
+      'Lianet Santana',
+      'Phone',
+      '786-548-5124',
+      'Email',
+      'lianet.santana698@gmail.com',
+    ].join('\n');
+    const selections = [
+      { field: 'name', sampleValue: 'Lianet Santana', required: false, transform: 'Text' as const },
+      { field: 'phone', sampleValue: '786-548-5124', required: false, transform: 'Phone' as const },
+      { field: 'email', sampleValue: 'lianet.santana698@gmail.com', required: false, transform: 'Email' as const },
+      { field: 'property', sampleValue: '10545 W 32nd Ln Unit 0, Hialeah, FL 33018', required: false, transform: 'Text' as const },
+    ].map((mapping) => {
+      const selectionStart = sample.indexOf(mapping.sampleValue);
+      return {
+        ...mapping,
+        label: mapping.field,
+        selectionStart,
+        selectionEnd: selectionStart + mapping.sampleValue.length,
+        occurrence: 0,
+      };
+    });
+    const mappings = buildLeadCollectionMappings(sample, selections);
+    const template = {
+      id: 91,
+      name: 'Realtor live',
+      senderPatterns: ['*@email.realtor.com'],
+      subjectPattern: 'Pending Applicant for 10545 W 32nd Ln Unit 0',
+      subjectMatchMode: 'Contains',
+      bodyFingerprint: buildLeadCollectionFingerprint(sample, mappings),
+      mappings,
+      requiredFields: ['name', 'email', 'phone', 'property'],
+      confidenceThreshold: 0.75,
+    };
+
+    const liveEmail = [
+      'New lead from realtor.com',
+      'August 17, 2026 3:54 pm',
+      '"I am interested in 6750 Royal Palm Blvd Unit 209E."',
+      'Name',
+      'Steve Francis',
+      'Phone',
+      '786-419-5269',
+      'Email',
+      'starheights56@comcast.net',
+    ].join('\n');
+    const score = scoreLeadCollectionTemplate(template, {
+      fromAddress: 'leads@email.realtor.com',
+      subject: 'New realtor.com lead - Steve Francis',
+      textBody: liveEmail,
+    });
+    expect(score).toBeGreaterThanOrEqual(0.35);
+
+    const result = parseLeadCollectionTemplate(template, {
+      fromAddress: 'leads@email.realtor.com',
+      subject: 'New realtor.com lead - Steve Francis',
+      textBody: liveEmail,
+    });
+    expect(result.values.name).toBe('Steve Francis');
+    expect(result.values.phone).toBe('786-419-5269');
+    expect(result.values.email).toBe('starheights56@comcast.net');
+  });
+
+  it('extracts a space-separated one-line Name (realtor.com sidebar layout)', () => {
+    const result = parseLeadCollectionTemplate({
+      ...template,
+      mappings: [],
+      requiredFields: [],
+    }, {
+      fromAddress: 'leads@email.realtor.com',
+      subject: 'New realtor.com lead - Steve Francis',
+      textBody: [
+        'Name Steve Francis',
+        'Phone 786-419-5269',
+        'Email starheights56@comcast.net',
+      ].join('\n'),
+    });
+    expect(result.values.name).toBe('Steve Francis');
+    expect(result.values.phone).toBe('786-419-5269');
+    expect(result.values.email).toBe('starheights56@comcast.net');
   });
 
   it('extracts a From-header name', () => {

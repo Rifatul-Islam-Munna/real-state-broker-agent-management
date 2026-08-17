@@ -200,7 +200,11 @@ export function buildLeadCollectionFingerprint(
     .map((line) => normalizeMatchText(line))
     .filter((line) => line.length >= 3 && line.length <= 120)
     .filter((line) => /[a-z0-9]/i.test(line))
-    .filter((line) => !looksMostlyDynamic(line));
+    .filter((line) => !looksMostlyDynamic(line))
+    // Lines that became fragments after the mapped values were stripped
+    // (e.g. "i am interested in .") never match a live email, so drop them.
+    .filter((line) => !/["“”]/.test(line))
+    .filter((line) => !/[.,;:]$/.test(line));
 
   return [...new Set(lines)]
     .sort((a, b) => fingerprintWeight(b) - fingerprintWeight(a))
@@ -690,7 +694,7 @@ function firstNameFromText(value: string) {
   )?.[1];
   if (possessive) return possessive;
   const labeled = text.match(
-    /(?:^|\n)\s*(?:name|full name|client name|lead name|applicant name|buyer name|tenant name|prospect name|renter name|contact name)\s*(?:[:|–—-]\s*|\n)\s*([A-Z][A-Za-z' -]{1,60})(?:\n|$)/i,
+    /(?:^|\n)\s*(?:name|full name|client name|lead name|applicant name|buyer name|tenant name|prospect name|renter name|contact name)(?:[:|–—-]+\s*|\n\s*|\s+)([A-Z][A-Za-z' -]{1,60})(?:\n|$)/i,
   )?.[1];
   if (labeled) return labeled.trim();
   const fromHeader = text.match(
@@ -973,7 +977,19 @@ function hasFlexibleText(value: string, search: string) {
 
 function looksMostlyDynamic(value: string) {
   const digits = (value.match(/\d/g) ?? []).length;
-  return digits > value.length * 0.55 || /@/.test(value) || /^https?:/i.test(value);
+  if (digits > value.length * 0.55 || /@/.test(value) || /^https?:/i.test(value)) {
+    return true;
+  }
+  // Date/time lines differ on every live email, so they must never become
+  // fingerprint anchors: "August 13, 2026 5:08 pm", "08/13/2026", "5:08 pm",
+  // "Monday"...
+  return (
+    /\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2},?\s+\d{2,4}\b/i.test(value) ||
+    /\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/.test(value) ||
+    /\b\d{1,2}:\d{2}(?:\s*[ap]m)?\b/i.test(value) ||
+    /\b(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i.test(value) ||
+    /\b(?:am|pm)\b/i.test(value)
+  );
 }
 
 function fingerprintWeight(value: string) {

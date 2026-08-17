@@ -692,6 +692,105 @@ describe('TenantInboxSyncService active parser processing', () => {
     expect(payload.phone).toBe('+13058792145');
   });
 
+  test('creates a complete lead from a live realtor.com email (name/email/phone/property)', async () => {
+    const query = jest.fn(async (sql: string) => {
+      if (sql.includes("resource = 'lead-collection-templates'")) {
+        return {
+          rowCount: 1,
+          rows: [{
+            id: 14,
+            payload: {
+              name: 'Realtor parser',
+              senderPatterns: ['*@email.realtor.com'],
+              subjectPattern: 'New realtor.com lead',
+              subjectMatchMode: 'Contains',
+              sourceHtml: [
+                '<table><tr><td>Name</td><td>Steve Francis</td></tr>',
+                '<tr><td>Phone</td><td>786-419-5269</td></tr>',
+                '<tr><td>Email</td><td>starheights56@comcast.net</td></tr>',
+                '<tr><td>Property</td><td>6750 Royal Palm Blvd Unit 209E</td></tr>',
+                '</table>',
+              ].join(''),
+              sourceText: '',
+              mappings: [{
+                field: 'name',
+                label: 'Name',
+                source: 'EmailBody',
+                sampleValue: 'Steve Francis',
+                selectionStart: -1,
+                selectionEnd: -1,
+                prefix: 'Name:',
+                suffix: '',
+                occurrence: 0,
+                required: true,
+                transform: 'Text',
+              }, {
+                field: 'email',
+                label: 'Email',
+                source: 'EmailBody',
+                sampleValue: 'starheights56@comcast.net',
+                selectionStart: -1,
+                selectionEnd: -1,
+                prefix: 'Email:',
+                suffix: '',
+                occurrence: 0,
+                required: true,
+                transform: 'Email',
+              }, {
+                field: 'phone',
+                label: 'Phone',
+                source: 'EmailBody',
+                sampleValue: '786-419-5269',
+                selectionStart: -1,
+                selectionEnd: -1,
+                prefix: 'Phone:',
+                suffix: '',
+                occurrence: 0,
+                required: true,
+                transform: 'Phone',
+              }],
+              requiredFields: ['name', 'email', 'phone', 'property'],
+              confidenceThreshold: 0.82,
+            },
+          }],
+        };
+      }
+      if (sql.includes('INSERT INTO tenant_lead(')) {
+        return { rowCount: 1, rows: [{ id: 50, full_name: 'Steve Francis' }] };
+      }
+      return { rowCount: 0, rows: [] };
+    });
+    const service = new TenantInboxSyncService({} as any, {} as any, {} as any);
+
+    const parsed = await (service as any).createOrMatchLeadFromTemplate({ query }, {
+      sender: 'leads@email.realtor.com',
+      subject: 'New realtor.com lead - Steve Francis',
+      body: [
+        '"I am interested in 6750 Royal Palm Blvd Unit 209E."',
+        'Name Steve Francis',
+        'Phone 786-419-5269',
+        'Email starheights56@comcast.net',
+      ].join('\n'),
+      receivedAt: new Date('2026-08-18T01:54:00Z'),
+      mailboxTag: 'leads',
+      leadTemplateTags: [],
+      payload: {},
+    });
+
+    expect(parsed).toMatchObject({ created: true, lead: { id: 50 } });
+    const insertCall = query.mock.calls.find(
+      (call: unknown[]) =>
+        String(call[0]).includes('INSERT INTO tenant_lead('),
+    );
+    expect(insertCall).toBeDefined();
+    const insertParams = (insertCall as unknown[])[1] as unknown[];
+    expect(insertParams[0]).toBe('Steve Francis');
+    expect(insertParams[1]).toBe('starheights56@comcast.net');
+    expect(insertParams[2]).toBe('+17864195269');
+    const payload = JSON.parse(String(insertParams[3]));
+    expect(payload.property).toContain('6750 Royal Palm Blvd');
+  });
+
   test('sync extraction matches the template Test button via rebuilt mappings', async () => {
     const query = jest.fn(async (sql: string) => {
       if (sql.includes("resource = 'lead-collection-templates'")) {
