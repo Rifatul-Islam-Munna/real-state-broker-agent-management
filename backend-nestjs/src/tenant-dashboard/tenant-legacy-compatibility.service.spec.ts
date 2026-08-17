@@ -16,6 +16,10 @@ describe('TenantLegacyCompatibilityService lead collection compatibility', () =>
     expect(fields.some((field) => field.field === 'name')).toBe(true);
     expect(fields.some((field) => field.field === 'email')).toBe(true);
     expect(fields.some((field) => field.field === 'phone')).toBe(true);
+    expect(fields.some((field) => field.field === 'creditScore')).toBe(true);
+    expect(fields.some((field) => field.field === 'combinedCreditScore')).toBe(true);
+    expect(fields.some((field) => field.field === 'monthlyEarning')).toBe(true);
+    expect(fields.some((field) => field.field === 'combinedMonthlyEarning')).toBe(true);
   });
 
   test('prepares pasted email with a complete response shape', async () => {

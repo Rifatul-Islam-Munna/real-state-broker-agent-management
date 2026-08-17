@@ -86,7 +86,8 @@ export class TenantLegacyCompatibilityService {
     return this.databases.withTenantClient(this.databaseName(tenant), async (client) => {
       const current = await client.query('SELECT payload FROM tenant_lead WHERE id = $1', [id]);
       if (!current.rowCount) throw new NotFoundException('Lead not found');
-      const payload = { ...(current.rows[0].payload ?? {}), ...(body ?? {}) };
+      const normalizedBody = this.normalizeLeadPayload(body);
+      const payload = { ...(current.rows[0].payload ?? {}), ...normalizedBody };
       const result = await client.query(
         `UPDATE tenant_lead SET full_name = $2, email = NULLIF($3, ''), phone = NULLIF($4, ''),
          status = $5, payload = $6::jsonb, updated_at = now() WHERE id = $1
@@ -246,6 +247,10 @@ export class TenantLegacyCompatibilityService {
       { field: 'phone', label: 'Phone', dataType: 'text', writable: true, suggestedTransform: 'Phone', requiredByDefault: false },
       { field: 'property', label: 'Property', dataType: 'text', writable: true, suggestedTransform: 'Text', requiredByDefault: false },
       { field: 'budget', label: 'Budget', dataType: 'text', writable: true, suggestedTransform: 'Number', requiredByDefault: false },
+      { field: 'creditScore', label: 'Credit Score', dataType: 'text', writable: true, suggestedTransform: 'CreditScore', requiredByDefault: false },
+      { field: 'combinedCreditScore', label: 'Combined Credit Score', dataType: 'text', writable: true, suggestedTransform: 'CreditScore', requiredByDefault: false },
+      { field: 'monthlyEarning', label: 'Monthly Earning', dataType: 'text', writable: true, suggestedTransform: 'Number', requiredByDefault: false },
+      { field: 'combinedMonthlyEarning', label: 'Combined Monthly Earning', dataType: 'text', writable: true, suggestedTransform: 'Number', requiredByDefault: false },
       { field: 'source', label: 'Source', dataType: 'text', writable: true, suggestedTransform: 'Text', requiredByDefault: false },
       { field: 'interest', label: 'Interest', dataType: 'text', writable: true, suggestedTransform: 'Text', requiredByDefault: false },
       { field: 'timeline', label: 'Timeline', dataType: 'text', writable: true, suggestedTransform: 'Text', requiredByDefault: false },
@@ -464,9 +469,28 @@ export class TenantLegacyCompatibilityService {
         `UPDATE tenant_lead
          SET payload = COALESCE(payload, '{}'::jsonb) || $2::jsonb, updated_at = now()
          WHERE id = $1`,
-        [leadId, JSON.stringify(body ?? {})],
+        [leadId, JSON.stringify(this.normalizeLeadPayload(body))],
       );
     });
+  }
+
+  private normalizeLeadPayload(input: any) {
+    const payload = { ...(input ?? {}) };
+    if (Object.prototype.hasOwnProperty.call(payload, 'creditScore')) {
+      payload.creditScore = this.normalizeCreditScore(payload.creditScore);
+    }
+    if (Object.prototype.hasOwnProperty.call(payload, 'combinedCreditScore')) {
+      payload.combinedCreditScore = this.normalizeCreditScore(payload.combinedCreditScore);
+    }
+    return payload;
+  }
+
+  private normalizeCreditScore(value: unknown) {
+    const candidates = `${value ?? ''}`.match(/\b\d{3}\b/g) ?? [];
+    return candidates.find((candidate) => {
+      const score = Number(candidate);
+      return score >= 300 && score <= 850;
+    }) ?? '';
   }
 
   private async getLeadRow(tenant: SaasTenant, leadId: number) {

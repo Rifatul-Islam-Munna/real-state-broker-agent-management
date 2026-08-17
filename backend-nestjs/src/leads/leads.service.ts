@@ -92,7 +92,9 @@ export class LeadsService {
         const dto = {
           budget: this.cell(row, mapping.budget),
           combinedCreditScore: this.cell(row, mapping.combinedCreditScore),
+          combinedMonthlyEarning: this.cell(row, mapping.combinedMonthlyEarning),
           creditScore: this.cell(row, mapping.creditScore),
+          monthlyEarning: this.cell(row, mapping.monthlyEarning),
           email: this.cell(row, mapping.email),
           interest: this.cell(row, mapping.interest),
           name: this.cell(row, mapping.name),
@@ -163,8 +165,10 @@ export class LeadsService {
       property: `${dto.property ?? ''}`,
       propertyId: dto.propertyId ? Number(dto.propertyId) : null,
       budget: `${dto.budget ?? ''}`,
-      creditScore: `${dto.creditScore ?? ''}`.trim(),
-      combinedCreditScore: `${dto.combinedCreditScore ?? ''}`.trim(),
+      creditScore: this.normalizeCreditScore(dto.creditScore),
+      combinedCreditScore: this.normalizeCreditScore(dto.combinedCreditScore),
+      monthlyEarning: `${dto.monthlyEarning ?? ''}`.trim(),
+      combinedMonthlyEarning: `${dto.combinedMonthlyEarning ?? ''}`.trim(),
       agent: `${dto.agent ?? ''}`.trim(),
       source: `${dto.source ?? ''}`.trim(),
       interest: `${dto.interest ?? ''}`,
@@ -185,6 +189,7 @@ export class LeadsService {
       id: lead.id, name: lead.name, email: lead.email, phone: lead.phone, summary: lead.summary,
       property: lead.property, propertyId: lead.propertyId ?? null, budget: lead.budget,
       creditScore: lead.creditScore, combinedCreditScore: lead.combinedCreditScore,
+      monthlyEarning: lead.monthlyEarning, combinedMonthlyEarning: lead.combinedMonthlyEarning,
       stage: lead.stage, priority: lead.priority,
       agent: lead.agent, agentId: lead.agentId ?? null,
       assignedAgentName: lead.assignedAgent ? `${lead.assignedAgent.firstName ?? ''} ${lead.assignedAgent.lastName ?? ''}`.trim() : null,
@@ -195,6 +200,14 @@ export class LeadsService {
       isFollowUpOverdue: overdue, notes: lead.notes ?? [], createdAt: lead.createdAt, updatedAt: lead.updatedAt,
       lastActivityAt: lead.lastActivityAt, linkedDealId: linkedDeal?.id ?? null, linkedDealTitle: linkedDeal?.title ?? null,
     };
+  }
+
+  private normalizeCreditScore(value: unknown) {
+    const candidates = `${value ?? ''}`.match(/\b\d{3}\b/g) ?? [];
+    return candidates.find((candidate) => {
+      const score = Number(candidate);
+      return score >= 300 && score <= 850;
+    }) ?? '';
   }
 
   private cleanRecord(input: any) {

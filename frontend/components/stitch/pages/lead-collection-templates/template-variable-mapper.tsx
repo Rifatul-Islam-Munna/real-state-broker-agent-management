@@ -273,7 +273,7 @@ export function MappedLeadFields({
                 }
                 value={mapping.transform || "Text"}
               >
-                {(["Text", "Email", "Phone", "Number", "Date"] as const).map(
+                {(["Text", "Email", "Phone", "Number", "CreditScore", "Date"] as const).map(
                   (transform) => (
                     <option key={transform} value={transform}>{transform}</option>
                   ),

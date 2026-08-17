@@ -36,6 +36,10 @@ const SAFE_WRITABLE_LEAD_FIELDS = new Set([
   'summary',
   'property',
   'budget',
+  'creditScore',
+  'combinedCreditScore',
+  'monthlyEarning',
+  'combinedMonthlyEarning',
   'source',
   'interest',
   'timeline',
@@ -756,8 +760,11 @@ export class LeadCollectionTemplateService {
   }
 
   private suggestedTransform(field: string, dataType: string) {
-    if (field.toLowerCase().includes('email')) return 'Email';
-    if (field.toLowerCase().includes('phone')) return 'Phone';
+    const normalizedField = field.toLowerCase();
+    if (normalizedField.includes('email')) return 'Email';
+    if (normalizedField.includes('phone')) return 'Phone';
+    if (normalizedField.includes('creditscore') || normalizedField.includes('credit_score')) return 'CreditScore';
+    if (normalizedField.includes('earning')) return 'Number';
     if (dataType === 'number') return 'Number';
     if (dataType === 'date') return 'Date';
     return 'Text';

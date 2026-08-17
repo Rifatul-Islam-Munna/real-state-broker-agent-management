@@ -79,6 +79,12 @@ export class Lead {
   @Column({ name: 'combined_credit_score', default: '' })
   combinedCreditScore: string;
 
+  @Column({ name: 'monthly_earning', default: '' })
+  monthlyEarning: string;
+
+  @Column({ name: 'combined_monthly_earning', default: '' })
+  combinedMonthlyEarning: string;
+
   @Column({ type: 'int', transformer: numericEnumTransformer(leadStages, LeadStage.New) })
   stage: LeadStage = LeadStage.New;
 

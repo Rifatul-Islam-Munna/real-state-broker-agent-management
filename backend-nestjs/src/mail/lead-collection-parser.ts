@@ -518,6 +518,7 @@ function transformMappedValue(value: string, transform: LeadCollectionFieldTrans
   if (!clean) return '';
   if (transform === 'Email') return firstEmail(normalized) ?? '';
   if (transform === 'Phone') return firstPhone(normalized) ?? '';
+  if (transform === 'CreditScore') return firstCreditScore(normalized) ?? '';
   if (transform === 'Number') {
     const match = normalized.match(/[-+]?\d[\d,.]*(?:\s*[a-z%]+)?/i);
     return match?.[0]?.trim() ?? '';
@@ -529,6 +530,7 @@ function transformMappedValue(value: string, transform: LeadCollectionFieldTrans
 function genericTransformCandidate(text: string, transform: LeadCollectionFieldTransform) {
   if (transform === 'Email') return firstEmail(text) ?? '';
   if (transform === 'Phone') return firstPhone(text) ?? '';
+  if (transform === 'CreditScore') return labeledCreditScore(text) ?? '';
   return '';
 }
 
@@ -557,14 +559,30 @@ function validPhoneCandidate(candidate: string) {
   return trimmed;
 }
 
+function firstCreditScore(value: string) {
+  const matches = normalizeLeadCollectionText(value).match(/\b\d{3}\b/g) ?? [];
+  return matches.find((candidate) => {
+    const score = Number(candidate);
+    return score >= 300 && score <= 850;
+  });
+}
+
+function labeledCreditScore(value: string) {
+  const labeled = normalizeLeadCollectionText(value).match(
+    /(?:^|\n)\s*(?:combined\s+)?credit\s*score\s*[:|–—-]?\s*([^\n]{1,80})/i,
+  )?.[1];
+  return labeled ? firstCreditScore(labeled) : undefined;
+}
+
 function normalizeTransform(value: unknown, field: string): LeadCollectionFieldTransform {
-  const allowed: LeadCollectionFieldTransform[] = ['Text', 'Email', 'Phone', 'Number', 'Date'];
+  const allowed: LeadCollectionFieldTransform[] = ['Text', 'Email', 'Phone', 'Number', 'CreditScore', 'Date'];
   if (allowed.includes(value as LeadCollectionFieldTransform)) {
     return value as LeadCollectionFieldTransform;
   }
   if (field.toLowerCase().includes('email')) return 'Email';
   if (field.toLowerCase().includes('phone')) return 'Phone';
-  if (field.toLowerCase().includes('budget')) return 'Number';
+  if (field.toLowerCase().includes('creditscore') || field.toLowerCase().includes('credit_score')) return 'CreditScore';
+  if (field.toLowerCase().includes('budget') || field.toLowerCase().includes('earning')) return 'Number';
   if (field.toLowerCase().includes('date')) return 'Date';
   return 'Text';
 }

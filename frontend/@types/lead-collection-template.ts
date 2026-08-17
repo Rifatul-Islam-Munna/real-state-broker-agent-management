@@ -7,7 +7,7 @@ export type LeadCollectionTemplateSourceType =
   | "UploadedHtml"
 
 export type LeadCollectionSubjectMatchMode = "Contains" | "Exact" | "Regex"
-export type LeadCollectionFieldTransform = "Text" | "Email" | "Phone" | "Number" | "Date"
+export type LeadCollectionFieldTransform = "Text" | "Email" | "Phone" | "Number" | "CreditScore" | "Date"
 export type LeadCollectionFieldSource = "EmailBody" | "LinkedPage"
 
 export type LeadCollectionExternalPageConfig = {

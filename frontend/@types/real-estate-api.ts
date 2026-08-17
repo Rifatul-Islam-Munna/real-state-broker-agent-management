@@ -809,6 +809,8 @@ export type LeadItem = {
   budget: string
   creditScore?: string
   combinedCreditScore?: string
+  monthlyEarning?: string
+  combinedMonthlyEarning?: string
   stage: LeadStage
   priority: LeadPriority
   agent: string
@@ -848,6 +850,8 @@ export type LeadImportInput = {
     budget: string
     creditScore: string
     combinedCreditScore: string
+    monthlyEarning: string
+    combinedMonthlyEarning: string
     source: string
     interest: string
     timeline: string

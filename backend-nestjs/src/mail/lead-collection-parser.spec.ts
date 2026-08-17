@@ -269,4 +269,21 @@ describe('lead collection template parser', () => {
     expect(result.values.property).toBe(sampleValue);
     expect(result.missingRequiredFields).not.toContain('property');
   });
+
+  it('normalizes a credit-score range to the first valid score', () => {
+    const emailText = 'Credit score: 720 to 850';
+    const [creditMapping] = buildLeadCollectionMappings(emailText, [{
+      field: 'creditScore', label: 'Credit Score', source: 'EmailBody',
+      sampleValue: '720 to 850', selectionStart: emailText.indexOf('720'),
+      selectionEnd: emailText.length, prefix: 'Credit score:', required: false,
+      transform: 'CreditScore',
+    }]);
+    const result = parseLeadCollectionTemplate({
+      ...template, senderPatterns: [], subjectPattern: '', mappings: [creditMapping],
+      requiredFields: [], bodyFingerprint: [],
+    }, {
+      fromAddress: 'test@example.com', subject: 'Applicant details', textBody: emailText,
+    });
+    expect(result.values.creditScore).toBe('720');
+  });
 });

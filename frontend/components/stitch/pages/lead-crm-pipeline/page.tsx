@@ -18,10 +18,15 @@ import {
   useUpdateLead,
 } from "@/hooks/use-real-estate-api"
 import { useDispatchLeadOutreach } from "@/hooks/use-lead-outreach-api"
-import { getPortalRoutes } from "@/lib/portal-routes"
+import { getPortalRoutes } from "@/lib/portal-routes"
+
 import type { DocumentType } from "@/@types/real-estate-api"
 
-import { type LeadFormValues, Section1Section, Section2Section } from "./sections"
+import {
+  type LeadFormValues,
+  Section1Section,
+  Section2Section,
+} from "./sections"
 import type {
   LeadOutreachComposerValues,
   LeadOutreachMode,
@@ -36,6 +41,8 @@ function buildLeadWriteFields(values: LeadFormValues) {
     budget: values.budget?.trim() ?? "",
     creditScore: values.creditScore?.trim() ?? "",
     combinedCreditScore: values.combinedCreditScore?.trim() ?? "",
+    monthlyEarning: values.monthlyEarning?.trim() ?? "",
+    combinedMonthlyEarning: values.combinedMonthlyEarning?.trim() ?? "",
     email: values.email?.trim() ?? "",
     inBoard: values.inBoard,
     interest: values.interest?.trim() ?? "",
@@ -59,7 +66,10 @@ function buildLeadWriteFields(values: LeadFormValues) {
   }
 }
 
-function buildLeadUpdatePayload(values: LeadFormValues, lead: LeadItem): LeadItem {
+function buildLeadUpdatePayload(
+  values: LeadFormValues,
+  lead: LeadItem
+): LeadItem {
   return {
     ...lead,
     ...buildLeadWriteFields(values),
@@ -97,7 +107,7 @@ export function LeadCrmPipelinePage() {
   const displayedLeads =
     localLeads.length > 0 || (leadsQuery.data?.items?.length ?? 0) === 0
       ? localLeads
-      : leadsQuery.data?.items ?? []
+      : (leadsQuery.data?.items ?? [])
   const isInitialLoading =
     !leadsQuery.data && (leadsQuery.isLoading || leadsQuery.isFetching)
 
@@ -106,7 +116,9 @@ export function LeadCrmPipelinePage() {
   }, [leadsQuery.data?.items])
 
   async function handleCreateLead(values: LeadFormValues) {
-    const response = await createLeadMutation.mutateAsync(buildLeadWriteFields(values))
+    const response = await createLeadMutation.mutateAsync(
+      buildLeadWriteFields(values)
+    )
 
     if (response.error) return response.error.message
 
@@ -124,7 +136,7 @@ export function LeadCrmPipelinePage() {
     if (!existingLead) return "Lead not found."
 
     const response = await updateLeadMutation.mutateAsync(
-      buildLeadUpdatePayload(values, existingLead),
+      buildLeadUpdatePayload(values, existingLead)
     )
 
     if (response.error) return response.error.message
@@ -132,7 +144,7 @@ export function LeadCrmPipelinePage() {
     const updatedLead = response.data
     if (updatedLead) {
       setLocalLeads((current) =>
-        current.map((lead) => (lead.id === updatedLead.id ? updatedLead : lead)),
+        current.map((lead) => (lead.id === updatedLead.id ? updatedLead : lead))
       )
     }
 
@@ -147,7 +159,8 @@ export function LeadCrmPipelinePage() {
     return handleUpdateLead(leadId, {
       ...mapLeadToFormValues(existingLead),
       inBoard: false,
-      notes: `${(existingLead.notes ?? []).join("\n")}\nCanceled: ${reason ?? ""}`.trim(),
+      notes:
+        `${(existingLead.notes ?? []).join("\n")}\nCanceled: ${reason ?? ""}`.trim(),
       stage: "Canceled",
     })
   }
@@ -155,7 +168,7 @@ export function LeadCrmPipelinePage() {
   async function handleCommunicate(
     leadId: number,
     mode: LeadOutreachMode,
-    values: LeadOutreachComposerValues,
+    values: LeadOutreachComposerValues
   ) {
     if (!localLeads.some((lead) => lead.id === leadId)) return "Lead not found."
 
@@ -165,7 +178,9 @@ export function LeadCrmPipelinePage() {
       title: values.title.trim(),
       message: values.message.trim(),
       attachmentDocumentCategory: values.attachmentDocumentCategory,
-      attachmentDocumentType: (values.attachmentDocumentType ?? "") as DocumentType | "",
+      attachmentDocumentType: (values.attachmentDocumentType ?? "") as
+        | DocumentType
+        | "",
       attachmentMode: values.attachmentMode,
       attachPropertyDocuments: values.attachPropertyDocuments !== false,
       mediaUrls: values.mediaUrls,
@@ -184,7 +199,7 @@ export function LeadCrmPipelinePage() {
     if (!existingLead) return
 
     setLocalLeads((current) =>
-      current.map((lead) => (lead.id === leadId ? { ...lead, inBoard } : lead)),
+      current.map((lead) => (lead.id === leadId ? { ...lead, inBoard } : lead))
     )
 
     const response = await updateLeadMutation.mutateAsync({
@@ -194,7 +209,7 @@ export function LeadCrmPipelinePage() {
 
     if (response.error) {
       setLocalLeads((current) =>
-        current.map((lead) => (lead.id === leadId ? existingLead : lead)),
+        current.map((lead) => (lead.id === leadId ? existingLead : lead))
       )
       return
     }
@@ -202,7 +217,7 @@ export function LeadCrmPipelinePage() {
     const updatedLead = response.data
     if (updatedLead) {
       setLocalLeads((current) =>
-        current.map((lead) => (lead.id === updatedLead.id ? updatedLead : lead)),
+        current.map((lead) => (lead.id === updatedLead.id ? updatedLead : lead))
       )
     }
   }
@@ -214,8 +229,8 @@ export function LeadCrmPipelinePage() {
 
     setLocalLeads((current) =>
       current.map((lead) =>
-        lead.id === leadId ? { ...lead, inBoard: true, stage } : lead,
-      ),
+        lead.id === leadId ? { ...lead, inBoard: true, stage } : lead
+      )
     )
 
     const response = await updateLeadMutation.mutateAsync({
@@ -226,7 +241,7 @@ export function LeadCrmPipelinePage() {
 
     if (response.error) {
       setLocalLeads((current) =>
-        current.map((lead) => (lead.id === leadId ? existingLead : lead)),
+        current.map((lead) => (lead.id === leadId ? existingLead : lead))
       )
       return
     }
@@ -234,7 +249,7 @@ export function LeadCrmPipelinePage() {
     const updatedLead = response.data
     if (updatedLead) {
       setLocalLeads((current) =>
-        current.map((lead) => (lead.id === updatedLead.id ? updatedLead : lead)),
+        current.map((lead) => (lead.id === updatedLead.id ? updatedLead : lead))
       )
     }
   }
@@ -257,8 +272,8 @@ export function LeadCrmPipelinePage() {
               linkedDealTitle: convertedDeal.title,
               stage: "Deal",
             }
-          : lead,
-      ),
+          : lead
+      )
     )
 
     router.push(`${portalRoutes.deals}?dealId=${convertedDeal.id}`)
@@ -317,6 +332,8 @@ function mapLeadToFormValues(lead: LeadItem): LeadFormValues {
     budget: lead.budget ?? "",
     creditScore: lead.creditScore ?? "",
     combinedCreditScore: lead.combinedCreditScore ?? "",
+    monthlyEarning: lead.monthlyEarning ?? "",
+    combinedMonthlyEarning: lead.combinedMonthlyEarning ?? "",
     stage: lead.stage ?? "New",
     priority: lead.priority ?? "Warm",
     agent: lead.agent ?? "",
@@ -333,5 +350,7 @@ function mapLeadToFormValues(lead: LeadItem): LeadFormValues {
 }
 
 function sortAgentOptions(items: AgentUserOption[]) {
-  return [...items].sort((left, right) => left.fullName.localeCompare(right.fullName))
+  return [...items].sort((left, right) =>
+    left.fullName.localeCompare(right.fullName)
+  )
 }

@@ -57,7 +57,9 @@ type LeadDialogState =
 const emptyLeadMapping: LeadImportInput["mapping"] = {
   budget: "",
   combinedCreditScore: "",
+  combinedMonthlyEarning: "",
   creditScore: "",
+  monthlyEarning: "",
   email: "",
   interest: "",
   name: "",
@@ -76,6 +78,8 @@ const leadCsvFields: Array<{ aliases: string[]; key: LeadMappingKey; label: stri
   { key: "budget", label: "Budget", aliases: ["budget", "price"] },
   { key: "creditScore", label: "Credit score", aliases: ["credit score", "credit"] },
   { key: "combinedCreditScore", label: "Combined credit score", aliases: ["combined credit", "combined score"] },
+  { key: "monthlyEarning", label: "Monthly earning", aliases: ["monthly earning", "monthly income", "income"] },
+  { key: "combinedMonthlyEarning", label: "Combined monthly earning", aliases: ["combined monthly earning", "combined monthly income", "household income"] },
   { key: "source", label: "Source", aliases: ["source"] },
   { key: "interest", label: "Interest", aliases: ["interest"] },
   { key: "timeline", label: "Timeline", aliases: ["timeline"] },
@@ -162,7 +166,7 @@ export function Section2Section({
   }, [searchParams])
 
   function downloadLeadSample() {
-    const sample = "name,email,phone,property,budget,creditScore,combinedCreditScore,source,interest,timeline,summary\nBradley Weneck,bradley@example.com,754-223-9582,6750 Royal Palm Blvd #209E,$2500/mo,710,690,Zillow,Rent,Immediate,Interested in applying\n"
+    const sample = "name,email,phone,property,budget,creditScore,combinedCreditScore,monthlyEarning,combinedMonthlyEarning,source,interest,timeline,summary\nBradley Weneck,bradley@example.com,754-223-9582,6750 Royal Palm Blvd #209E,$2500/mo,710,690,$6500,$11000,Zillow,Rent,Immediate,Interested in applying\n"
     const url = URL.createObjectURL(new Blob([sample], { type: "text/csv" }))
     const link = document.createElement("a")
     link.href = url

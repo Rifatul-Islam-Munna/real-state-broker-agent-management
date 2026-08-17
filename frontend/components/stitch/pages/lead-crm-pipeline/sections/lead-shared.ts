@@ -15,6 +15,8 @@ export type LeadFormValues = {
   budget: string
   creditScore: string
   combinedCreditScore: string
+  monthlyEarning: string
+  combinedMonthlyEarning: string
   stage: LeadStage
   priority: LeadPriority
   agent: string
@@ -81,6 +83,8 @@ export function defaultLeadFormValues(): LeadFormValues {
     budget: "",
     creditScore: "",
     combinedCreditScore: "",
+    monthlyEarning: "",
+    combinedMonthlyEarning: "",
     stage: "New",
     priority: "Warm",
     agent: "",
@@ -106,6 +110,8 @@ export function mapLeadToFormValues(lead: LeadItem): LeadFormValues {
     budget: lead.budget ?? "",
     creditScore: lead.creditScore ?? "",
     combinedCreditScore: lead.combinedCreditScore ?? "",
+    monthlyEarning: lead.monthlyEarning ?? "",
+    combinedMonthlyEarning: lead.combinedMonthlyEarning ?? "",
     stage: lead.stage ?? "New",
     priority: lead.priority ?? "Warm",
     agent: lead.agent ?? "",

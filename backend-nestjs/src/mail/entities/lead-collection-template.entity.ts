@@ -25,6 +25,7 @@ export type LeadCollectionFieldTransform =
   | 'Email'
   | 'Phone'
   | 'Number'
+  | 'CreditScore'
   | 'Date';
 
 export type LeadCollectionFieldSource = 'EmailBody' | 'LinkedPage';
