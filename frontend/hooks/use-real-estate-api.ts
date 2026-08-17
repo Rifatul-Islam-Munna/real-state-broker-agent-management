@@ -1028,7 +1028,7 @@ export function useConvertMailInboxToLead() {
 }
 
 export function useGmailConnectUrl() {
-  return useCommonMutationApi<{ url: string }, { returnTo?: string; mailboxTag?: string; leadTemplateTags?: string[] }>({
+  return useCommonMutationApi<{ url: string }, { returnTo?: string; mailboxTag?: string; leadTemplateTags?: string[]; localInboxRetentionDays?: number }>({
     method: "POST",
     successMessage: "Opening Gmail connection",
     url: "/settings/integrations/gmail/connect-url",

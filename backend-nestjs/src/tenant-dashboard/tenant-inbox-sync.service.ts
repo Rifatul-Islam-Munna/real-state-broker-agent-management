@@ -4,6 +4,17 @@ import { Cron } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { PoolClient } from 'pg';
 import { Repository } from 'typeorm';
+import {
+  buildLeadCollectionFingerprint,
+  parseLeadCollectionTemplate,
+  parseLeadCollectionTemplates,
+  prepareLeadCollectionSource,
+} from '../mail/lead-collection-parser';
+import { normalizeLinkedPageConfig } from '../mail/linked-page-config';
+import {
+  enrichEmailWithLinkedPage,
+  loadConfiguredLinkedPage,
+} from '../mail/linked-page-loader';
 import { SaasTenant } from '../saas-admin/entities/saas-tenant.entity';
 import { TenantDatabaseService } from '../tenant-database/tenant-database.service';
 import { TenantWorkspaceSettingsService } from './tenant-workspace-settings.service';
@@ -12,6 +23,7 @@ import { TenantWorkspaceSettingsService } from './tenant-workspace-settings.serv
 export class TenantInboxSyncService {
   private readonly logger = new Logger(TenantInboxSyncService.name);
   private running = false;
+  private cleanupRunning = false;
 
   constructor(
     @InjectRepository(SaasTenant)
@@ -50,6 +62,34 @@ export class TenantInboxSyncService {
     }
   }
 
+  @Cron('37 3 * * *')
+  async cleanupAllTenantLocalInboxes() {
+    if (this.cleanupRunning) return;
+    this.cleanupRunning = true;
+    try {
+      const tenants = await this.tenantRepository.find({
+        where: { databaseStatus: 'ready' } as any,
+        order: { id: 'ASC' },
+      });
+      const ready = tenants.filter(
+        (tenant) => tenant.databaseName && tenant.isActive && !tenant.isBlocked,
+      );
+      await this.withConcurrency(
+        ready,
+        this.clamp(process.env.TENANT_SYNC_TENANT_CONCURRENCY, 3, 1, 10),
+        async (tenant) => {
+          const config: any = await this.settings.getRawSmtp(tenant);
+          await this.cleanupLocalInbox(
+            this.databaseName(tenant),
+            this.retentionDays(config?.localInboxRetentionDays),
+          );
+        },
+      );
+    } finally {
+      this.cleanupRunning = false;
+    }
+  }
+
   async syncTenant(tenant: SaasTenant, force = true) {
     const databaseName = this.databaseName(tenant);
     const config: any = await this.settings.getRawSmtp(tenant);
@@ -66,7 +106,16 @@ export class TenantInboxSyncService {
     } else {
       await this.syncImap(databaseName, config);
     }
-    return { imported: 0, skipped: false, message: 'Tenant inbox sync completed.' };
+    const deletedLocalMessages = await this.cleanupLocalInbox(
+      databaseName,
+      this.retentionDays(config.localInboxRetentionDays),
+    );
+    return {
+      imported: 0,
+      skipped: false,
+      deletedLocalMessages,
+      message: 'Tenant inbox sync completed.',
+    };
   }
 
   async getStatus(tenant: SaasTenant) {
@@ -83,6 +132,7 @@ export class TenantInboxSyncService {
         isConfigured: Boolean(config?.imapHost || config?.gmailRefreshToken),
         syncEnabled: config?.enableInboxSync === true,
         syncIntervalMinutes: Number(config?.syncIntervalMinutes) || 5,
+        localInboxRetentionDays: this.retentionDays(config?.localInboxRetentionDays),
         status: row.status ?? 'scheduled',
         isRunning: row.status === 'processing',
         lastStartedAt: row.last_started_at ?? null,
@@ -167,23 +217,14 @@ export class TenantInboxSyncService {
     try {
       const accessToken = await this.gmailAccessToken(databaseName, config, tenant);
       const maxMessages = this.clamp(config.maxMessagesPerSync, 100, 5, 500);
-      const ids: string[] = [];
-      let pageToken = '';
-      while (ids.length < maxMessages) {
-        const url = new URL('https://gmail.googleapis.com/gmail/v1/users/me/messages');
-        url.searchParams.set('labelIds', 'INBOX');
-        url.searchParams.set('maxResults', String(Math.min(100, maxMessages - ids.length)));
-        url.searchParams.set('q', 'newer_than:14d');
-        if (pageToken) url.searchParams.set('pageToken', pageToken);
-        const list = await this.jsonRequest(url.toString(), {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        });
-        ids.push(...(Array.isArray(list.messages) ? list.messages.map((item: any) => item.id) : []));
-        pageToken = this.text(list.nextPageToken);
-        if (!pageToken) break;
-      }
+      const selectedMessages = await this.gmailMessagesForConfiguredTags(
+        accessToken,
+        config.mailboxTag,
+        maxMessages,
+      );
 
-      for (const id of ids.slice(0, maxMessages).reverse()) {
+      for (const selected of [...selectedMessages].reverse()) {
+        const id = selected.id;
         const message = await this.jsonRequest(
           `https://gmail.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(id)}?format=full`,
           { headers: { Authorization: `Bearer ${accessToken}` } },
@@ -209,6 +250,9 @@ export class TenantInboxSyncService {
             ? new Date(Number(message.internalDate))
             : new Date(),
           isRead: !((message.labelIds ?? []) as string[]).includes('UNREAD'),
+          autoCreateLeads: config.autoCreateLeads !== false,
+          mailboxTag: selected.mailboxTag,
+          leadTemplateTags: this.stringList(config.leadTemplateTags),
           payload: {
             gmailThreadId: message.threadId,
             gmailHistoryId: message.historyId,
@@ -217,11 +261,83 @@ export class TenantInboxSyncService {
           },
         });
       }
-      await this.markCompleted(databaseName, providerKey, ids[0] ?? null);
+      await this.markCompleted(databaseName, providerKey, selectedMessages[0]?.id ?? null);
     } catch (error) {
       await this.markFailed(databaseName, providerKey, error);
       throw error;
     }
+  }
+
+  private async gmailMessagesForConfiguredTags(
+    accessToken: string,
+    configuredTags: unknown,
+    maxMessages: number,
+  ) {
+    const requestedTags = this.syncTags(configuredTags, 'gmail');
+    if (!requestedTags.length) {
+      return this.listGmailMessagesForLabel(accessToken, 'INBOX', 'gmail', maxMessages);
+    }
+
+    const labelResponse = await this.jsonRequest(
+      'https://gmail.googleapis.com/gmail/v1/users/me/labels',
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+    );
+    const labels = Array.isArray(labelResponse.labels) ? labelResponse.labels : [];
+    const resolved = requestedTags
+      .map((tag) => labels.find((label: any) => {
+        const name = this.text(label?.name).toLowerCase();
+        const id = this.text(label?.id).toLowerCase();
+        return name === tag.toLowerCase() || id === tag.toLowerCase();
+      }))
+      .filter(Boolean);
+    if (!resolved.length) return [];
+
+    const selected = new Map<string, { id: string; mailboxTag: string }>();
+    for (const label of resolved) {
+      const labelId = this.text(label.id);
+      const labelName = this.text(label.name, labelId);
+      const remaining = maxMessages - selected.size;
+      if (remaining <= 0) break;
+      const messages = await this.listGmailMessagesForLabel(
+        accessToken,
+        labelId,
+        labelName,
+        remaining,
+      );
+      for (const message of messages) {
+        if (!selected.has(message.id)) selected.set(message.id, message);
+        if (selected.size >= maxMessages) break;
+      }
+    }
+    return [...selected.values()];
+  }
+
+  private async listGmailMessagesForLabel(
+    accessToken: string,
+    labelId: string,
+    mailboxTag: string,
+    maxMessages: number,
+  ) {
+    const ids: Array<{ id: string; mailboxTag: string }> = [];
+    let pageToken = '';
+    while (ids.length < maxMessages) {
+      const url = new URL('https://gmail.googleapis.com/gmail/v1/users/me/messages');
+      url.searchParams.append('labelIds', 'INBOX');
+      if (labelId !== 'INBOX') url.searchParams.append('labelIds', labelId);
+      url.searchParams.set('maxResults', String(Math.min(100, maxMessages - ids.length)));
+      url.searchParams.set('q', 'newer_than:14d');
+      if (pageToken) url.searchParams.set('pageToken', pageToken);
+      const list = await this.jsonRequest(url.toString(), {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      for (const item of Array.isArray(list.messages) ? list.messages : []) {
+        const id = this.text(item?.id);
+        if (id) ids.push({ id, mailboxTag });
+      }
+      pageToken = this.text(list.nextPageToken);
+      if (!pageToken) break;
+    }
+    return ids;
   }
 
   private async syncImap(databaseName: string, config: any) {
@@ -248,7 +364,12 @@ export class TenantInboxSyncService {
       const lock = await connection.getMailboxLock(this.text(config.imapFolder, 'INBOX'));
       try {
         const since = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
-        const uids: number[] = await connection.search({ since }, { uid: true });
+        const syncTags = this.syncTags(config.mailboxTag, 'imap');
+        const search: any = { since };
+        if (syncTags.length) {
+          search.or = syncTags.map((tag) => ({ keyword: tag }));
+        }
+        const uids: number[] = await connection.search(search, { uid: true });
         const selected = uids.slice(-this.clamp(config.maxMessagesPerSync, 100, 5, 500));
         if (selected.length > 0) {
           for await (const item of connection.fetch(selected.join(','), {
@@ -262,6 +383,7 @@ export class TenantInboxSyncService {
             const sender = this.text(parsed.from?.value?.[0]?.address);
             const recipient = this.text(parsed.to?.value?.[0]?.address);
             const uidValidity = `${connection.mailbox?.uidValidity ?? '0'}`;
+            const mailboxTag = this.matchImapTag(item.flags, syncTags) || 'imap';
             await this.storeInbound(databaseName, {
               channel: 'email',
               providerKey,
@@ -272,10 +394,14 @@ export class TenantInboxSyncService {
               body: this.text(parsed.text, this.stripHtml(parsed.html)),
               receivedAt: item.internalDate ?? parsed.date ?? new Date(),
               isRead: Boolean(item.flags?.has?.('\\Seen')),
+              autoCreateLeads: config.autoCreateLeads !== false,
+              mailboxTag,
+              leadTemplateTags: this.stringList(config.leadTemplateTags),
               payload: {
                 messageId: parsed.messageId,
                 uid: item.uid,
                 uidValidity,
+                htmlBody: this.text(parsed.html),
               },
             });
           }
@@ -357,6 +483,9 @@ export class TenantInboxSyncService {
       body: string;
       receivedAt: Date;
       isRead?: boolean;
+      autoCreateLeads?: boolean;
+      mailboxTag?: string;
+      leadTemplateTags?: string[];
       payload: any;
     },
   ) {
@@ -364,12 +493,31 @@ export class TenantInboxSyncService {
     await this.databases.withTenantClient(databaseName, async (client) => {
       await client.query('BEGIN');
       try {
-        const lead = await this.findLead(client, input.channel, input.sender);
+        let lead = await this.findLead(client, input.channel, input.sender);
+        let parserResult: any = null;
+        if (!lead && input.channel === 'email' && input.autoCreateLeads === true) {
+          const parsed = await this.createOrMatchLeadFromTemplate(client, input);
+          lead = parsed?.lead ?? null;
+          parserResult = parsed?.result ?? null;
+        }
         const channel = input.channel === 'email' ? 'Email' : 'SMS';
         const key = createHash('sha256')
           .update(`${input.providerKey}|${input.providerMessageId}`)
           .digest('hex');
-        const payload = { ...(input.payload ?? {}), lead };
+        const payload = {
+          ...(input.payload ?? {}),
+          lead,
+          ...(parserResult
+            ? {
+                leadCollection: {
+                  templateId: parserResult.templateId,
+                  templateName: parserResult.templateName,
+                  confidence: parserResult.confidence,
+                  extractedFields: parserResult.extractedFields,
+                },
+              }
+            : {}),
+        };
         const inserted = await client.query(
           `INSERT INTO tenant_outreach_job(
              idempotency_key, lead_id, source_type, source_id, channel,
@@ -385,7 +533,13 @@ export class TenantInboxSyncService {
              $15, $16::jsonb, $14, $14
            )
            ON CONFLICT (idempotency_key) DO UPDATE
-           SET body = EXCLUDED.body,
+           SET lead_id = COALESCE(tenant_outreach_job.lead_id, EXCLUDED.lead_id),
+               recipient_name = CASE
+                 WHEN tenant_outreach_job.lead_id IS NULL AND EXCLUDED.lead_id IS NOT NULL
+                   THEN EXCLUDED.recipient_name
+                 ELSE tenant_outreach_job.recipient_name
+               END,
+               body = EXCLUDED.body,
                title = EXCLUDED.title,
                payload = tenant_outreach_job.payload || EXCLUDED.payload,
                is_read = EXCLUDED.is_read,
@@ -449,6 +603,192 @@ export class TenantInboxSyncService {
     });
   }
 
+  private async createOrMatchLeadFromTemplate(
+    client: PoolClient,
+    input: {
+      sender: string;
+      subject: string;
+      body: string;
+      receivedAt: Date;
+      mailboxTag?: string;
+      leadTemplateTags?: string[];
+      payload: any;
+    },
+  ) {
+    const savedTemplates = await client.query(
+      `SELECT id, payload
+       FROM tenant_legacy_resource
+       WHERE resource = 'lead-collection-templates'
+         AND COALESCE(payload->>'isActive', 'false') = 'true'
+       ORDER BY updated_at DESC, id DESC`,
+    );
+    if (!savedTemplates.rowCount) return null;
+
+    const allowedTemplateTags = this.stringList(input.leadTemplateTags).map((item) => item.toLowerCase());
+    const templates = savedTemplates.rows
+      .map((row: any) => {
+      const saved = row.payload && typeof row.payload === 'object' ? row.payload : {};
+      const mappings = Array.isArray(saved.mappings) ? saved.mappings : [];
+      const sourceText = prepareLeadCollectionSource({
+        htmlBody: this.text(saved.sourceHtml),
+        textBody: this.text(saved.sourceText),
+      });
+      const bodyFingerprint = Array.isArray(saved.bodyFingerprint) && saved.bodyFingerprint.length
+        ? saved.bodyFingerprint
+        : buildLeadCollectionFingerprint(sourceText, mappings);
+      return {
+        ...saved,
+        id: Number(row.id),
+        name: this.text(saved.name, `Lead parser ${row.id}`),
+        senderPatterns: this.stringList(saved.senderPatterns),
+        mailboxTags: this.stringList(saved.mailboxTags),
+        subjectPattern: this.text(saved.subjectPattern),
+        subjectMatchMode: this.text(saved.subjectMatchMode, 'Contains'),
+        bodyFingerprint,
+        mappings,
+        requiredFields: this.stringList(saved.requiredFields),
+        confidenceThreshold: Number(saved.confidenceThreshold) || 0.82,
+      };
+    })
+      .filter((template: any) => {
+        const tags = this.stringList(template.mailboxTags).map((item) => item.toLowerCase());
+        if (allowedTemplateTags.length && !tags.some((tag) => allowedTemplateTags.includes(tag))) return false;
+        const inboundTag = this.text(input.mailboxTag).toLowerCase();
+        return !tags.length || !inboundTag || tags.includes(inboundTag);
+      });
+    if (!templates.length) return null;
+
+    const emailInput = {
+      fromAddress: this.text(input.sender).toLowerCase(),
+      subject: this.text(input.subject),
+      htmlBody: this.text(input.payload?.htmlBody),
+      textBody: this.text(input.body),
+      mailboxTag: this.text(input.mailboxTag),
+    };
+    let result = parseLeadCollectionTemplates(templates, emailInput);
+    let template = templates.find((item: any) => item.id === result.templateId);
+    if (!template || !result.matched) return null;
+
+    const linkedConfig = normalizeLinkedPageConfig(template.linkedPageConfig);
+    if (linkedConfig.enabled) {
+      const linked = await loadConfiguredLinkedPage(emailInput, linkedConfig).catch(() => null);
+      if (linked) {
+        result = parseLeadCollectionTemplate(
+          template,
+          enrichEmailWithLinkedPage(emailInput, linked),
+        );
+      }
+    }
+    if (
+      !result.matched ||
+      result.confidence < result.threshold ||
+      result.missingRequiredFields.length > 0
+    ) {
+      return { lead: null, result };
+    }
+
+    const values = result.values ?? {};
+    const name = this.text(values.name, this.text(values.email, this.text(values.phone)));
+    const email = this.text(values.email).toLowerCase();
+    const phone = this.text(values.phone);
+    if (!name && !email && !phone) return { lead: null, result };
+
+    const existing = await this.findLeadFromParsedValues(
+      client,
+      email,
+      phone,
+      input.sender,
+    );
+    const leadPayload = {
+      ...values,
+      name: name || 'Inbound lead',
+      stage: this.text(values.stage, 'New'),
+      source: this.text(values.source, result.templateName || 'Inbound email'),
+      priority: this.text(values.priority, 'Warm'),
+      followUpStatus: this.text(values.followUpStatus, 'Open'),
+      inboundReplyAddress: this.text(input.sender).toLowerCase(),
+      leadCollectionTemplateId: result.templateId,
+      leadCollectionTemplateName: result.templateName,
+      leadCollectionConfidence: result.confidence,
+      latestEmailSubject: input.subject,
+      latestEmailBody: input.body,
+      latestEmailAt: input.receivedAt.toISOString(),
+      lastActivityAt: input.receivedAt.toISOString(),
+    };
+
+    let lead: any;
+    if (existing) {
+      const updated = await client.query(
+        `UPDATE tenant_lead
+         SET full_name = COALESCE(NULLIF($2, ''), full_name),
+             email = COALESCE(NULLIF($3, ''), email),
+             phone = COALESCE(NULLIF($4, ''), phone),
+             payload = COALESCE(payload, '{}'::jsonb) || $5::jsonb,
+             updated_at = now()
+         WHERE id = $1
+         RETURNING *`,
+        [existing.id, name, email, phone, JSON.stringify(leadPayload)],
+      );
+      lead = updated.rows[0];
+    } else {
+      const inserted = await client.query(
+        `INSERT INTO tenant_lead(full_name, email, phone, status, payload)
+         VALUES ($1, NULLIF($2, ''), NULLIF($3, ''), 'new', $4::jsonb)
+         RETURNING *`,
+        [name || 'Inbound lead', email, phone, JSON.stringify(leadPayload)],
+      );
+      lead = inserted.rows[0];
+    }
+
+    const propertyId = await this.matchParsedProperty(client, this.text(values.property));
+    if (propertyId && lead?.id) {
+      await client.query(
+        `INSERT INTO tenant_lead_property(lead_id, property_id)
+         VALUES ($1, $2)
+         ON CONFLICT DO NOTHING`,
+        [lead.id, propertyId],
+      );
+    }
+    return { lead, result };
+  }
+
+  private async findLeadFromParsedValues(
+    client: PoolClient,
+    email: string,
+    phone: string,
+    inboundReplyAddress: string,
+  ) {
+    const result = await client.query(
+      `SELECT *
+       FROM tenant_lead
+       WHERE ($1 <> '' AND lower(COALESCE(email, '')) = lower($1))
+          OR ($2 <> '' AND regexp_replace(COALESCE(phone, ''), '[^0-9]', '', 'g') = regexp_replace($2, '[^0-9]', '', 'g'))
+          OR ($3 <> '' AND lower(COALESCE(payload->>'inboundReplyAddress', '')) = lower($3))
+       ORDER BY id DESC
+       LIMIT 1`,
+      [email, phone, this.text(inboundReplyAddress).toLowerCase()],
+    );
+    return result.rows[0] ?? null;
+  }
+
+  private async matchParsedProperty(client: PoolClient, propertyText: string) {
+    if (!propertyText) return null;
+    const value = propertyText.trim().toLowerCase();
+    const result = await client.query(
+      `SELECT id
+       FROM tenant_property
+       WHERE lower(title) = $1
+          OR lower(COALESCE(payload->>'address', '')) = $1
+          OR lower(COALESCE(payload->>'location', '')) = $1
+          OR lower(title) LIKE '%' || $1 || '%'
+          OR $1 LIKE '%' || lower(title) || '%'
+       ORDER BY CASE WHEN lower(title) = $1 THEN 0 ELSE 1 END, id DESC
+       LIMIT 1`,
+      [value],
+    );
+    return result.rowCount ? Number(result.rows[0].id) : null;
+  }
+
   private async findLead(
     client: PoolClient,
     channel: 'email' | 'sms',
@@ -460,6 +800,7 @@ export class TenantInboxSyncService {
             `SELECT to_jsonb(lead) AS value
              FROM tenant_lead lead
              WHERE lower(COALESCE(to_jsonb(lead)->>'email', '')) = lower($1)
+                OR lower(COALESCE(lead.payload->>'inboundReplyAddress', '')) = lower($1)
              ORDER BY lead.id DESC LIMIT 1`,
             [sender],
           )
@@ -685,6 +1026,40 @@ export class TenantInboxSyncService {
     return tenant.databaseName;
   }
 
+  private async cleanupLocalInbox(databaseName: string, retentionDays: number) {
+    if (retentionDays <= 0) return 0;
+    return this.databases.withTenantClient(databaseName, async (client) => {
+      const result = await client.query(
+        `DELETE FROM tenant_outreach_job
+         WHERE direction = 'Incoming'
+           AND source_type = 'mail-inbox'
+           AND occurred_at < now() - ($1::text || ' days')::interval
+         RETURNING id`,
+        [retentionDays],
+      );
+      return result.rowCount ?? 0;
+    });
+  }
+
+  private syncTags(value: unknown, fallback: string) {
+    const raw = this.stringList(value);
+    if (!raw.length) return [];
+    return [...new Set(raw.map((item) => item.trim()).filter(Boolean))];
+  }
+
+  private matchImapTag(flags: any, requestedTags: string[]) {
+    const values = flags instanceof Set ? [...flags] : Array.isArray(flags) ? flags : [];
+    return requestedTags.find((tag) =>
+      values.some((flag) => this.text(flag).toLowerCase() === tag.toLowerCase()),
+    ) ?? '';
+  }
+
+  private retentionDays(value: unknown) {
+    const parsed = Number.parseInt(`${value ?? ''}`, 10);
+    if (!Number.isFinite(parsed) || parsed <= 0) return 0;
+    return Math.min(3650, Math.max(7, parsed));
+  }
+
   private message(error: unknown) {
     return error instanceof Error ? error.message : `${error ?? 'Unknown sync error'}`;
   }
@@ -692,6 +1067,16 @@ export class TenantInboxSyncService {
   private clamp(value: any, fallback: number, min: number, max: number) {
     const parsed = Number.parseInt(`${value ?? ''}`, 10);
     return Number.isFinite(parsed) ? Math.min(max, Math.max(min, parsed)) : fallback;
+  }
+
+  private stringList(value: any) {
+    if (Array.isArray(value)) {
+      return [...new Set(value.map((item) => this.text(item)).filter(Boolean))];
+    }
+    return this.text(value)
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean);
   }
 
   private text(value: any, fallback = '') {

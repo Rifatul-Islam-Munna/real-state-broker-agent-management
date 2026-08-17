@@ -49,6 +49,7 @@ type Values = {
   syncIntervalMinutes: string
   maxMessagesPerSync: string
   markAsReadAfterSync: boolean
+  localInboxRetentionDays: string
   lastSuccessfulScanAt: string
   hasPassword: boolean
   hasImapPassword: boolean
@@ -79,6 +80,7 @@ const emptyValues = (): Values => ({
   syncIntervalMinutes: "10",
   maxMessagesPerSync: "25",
   markAsReadAfterSync: false,
+  localInboxRetentionDays: "0",
   lastSuccessfulScanAt: "",
   hasPassword: false,
   hasImapPassword: false,
@@ -123,6 +125,7 @@ export function IntegrationMailSheet({
       syncIntervalMinutes: String(config?.syncIntervalMinutes ?? defaults.syncIntervalMinutes),
       maxMessagesPerSync: String(config?.maxMessagesPerSync ?? defaults.maxMessagesPerSync),
       markAsReadAfterSync: config?.markAsReadAfterSync === true,
+      localInboxRetentionDays: String(config?.localInboxRetentionDays ?? defaults.localInboxRetentionDays),
       lastSuccessfulScanAt: String(config?.lastSuccessfulScanAt ?? defaults.lastSuccessfulScanAt),
     })
     setError(null)
@@ -197,6 +200,7 @@ export function IntegrationMailSheet({
         syncIntervalMinutes: Math.max(1, Number(values.syncIntervalMinutes) || 10),
         maxMessagesPerSync: Math.max(5, Number(values.maxMessagesPerSync) || 25),
         markAsReadAfterSync: values.markAsReadAfterSync,
+        localInboxRetentionDays: Math.max(0, Number(values.localInboxRetentionDays) || 0),
         lastSuccessfulScanAt: values.lastSuccessfulScanAt || null,
       },
     })
@@ -221,8 +225,9 @@ export function IntegrationMailSheet({
     setError(null)
     const response = await gmailConnect.mutateAsync({
       returnTo: "/dashboard/settings",
-      mailboxTag: safeText(values.mailboxTag) || "gmail",
+      mailboxTag: safeText(values.mailboxTag),
       leadTemplateTags: splitTags(values.leadTemplateTags),
+      localInboxRetentionDays: Math.max(0, Number(values.localInboxRetentionDays) || 0),
     })
     if (response.error || !response.data?.url) {
       setError(response.error?.message ?? "Could not start Gmail connection.")
@@ -255,8 +260,14 @@ export function IntegrationMailSheet({
               </Button>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Mailbox tag"><Input onChange={(event) => patch({ mailboxTag: event.target.value })} placeholder="gmail, zillow, realtor" value={values.mailboxTag} /></Field>
-              <Field label="Lead template tags"><Input onChange={(event) => patch({ leadTemplateTags: event.target.value })} placeholder="zillow, realtor, contact" value={values.leadTemplateTags} /></Field>
+              <Field label="Sync labels / tags">
+                <Input onChange={(event) => patch({ mailboxTag: event.target.value })} placeholder="Leads, Zillow" value={values.mailboxTag} />
+                <p className="text-xs leading-5 text-muted-foreground">{"Comma-separated. Only Gmail labels / IMAP keywords listed here are imported. Leave blank to sync the normal inbox."}</p>
+              </Field>
+              <Field label="Lead template tags">
+                <Input onChange={(event) => patch({ leadTemplateTags: event.target.value })} placeholder="zillow, realtor, contact" value={values.leadTemplateTags} />
+                <p className="text-xs leading-5 text-muted-foreground">{"Optional. Limits auto-parsing to active lead templates carrying one of these tags."}</p>
+              </Field>
             </div>
           </div>
           <Field label="Provider">
@@ -299,6 +310,19 @@ export function IntegrationMailSheet({
                 <Field label="Sync interval"><Input min={1} onChange={(event) => patch({ syncIntervalMinutes: event.target.value })} type="number" value={values.syncIntervalMinutes} /></Field>
                 <Field label="Messages per sync"><Input min={5} onChange={(event) => patch({ maxMessagesPerSync: event.target.value })} type="number" value={values.maxMessagesPerSync} /></Field>
               </div>
+              <Field label="Local inbox retention">
+                <Select onValueChange={(value) => patch({ localInboxRetentionDays: value })} value={values.localInboxRetentionDays}>
+                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0">{"Keep forever"}</SelectItem>
+                    <SelectItem value="30">{"1 month"}</SelectItem>
+                    <SelectItem value="90">{"3 months"}</SelectItem>
+                    <SelectItem value="150">{"5 months"}</SelectItem>
+                    <SelectItem value="365">{"1 year"}</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs leading-5 text-muted-foreground">{"Cleanup deletes only synced email copies from this workspace database. It never deletes or trashes the original Gmail / IMAP message."}</p>
+              </Field>
               {values.authType !== "gmail-oauth" ? (
                 <Toggle checked={values.imapUseSsl} label="Secure IMAP" onChange={(checked) => patch({ imapUseSsl: checked })} />
               ) : null}

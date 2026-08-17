@@ -172,6 +172,9 @@ export class TenantWorkspaceSettingsService {
         value.imapUsername = value.username;
       if (value.enableInboxSync && !value.imapPassword)
         value.imapPassword = value.password;
+      value.localInboxRetentionDays = this.retentionDays(value.localInboxRetentionDays);
+      value.leadTemplateTags = this.stringList(value.leadTemplateTags).slice(0, 25);
+      value.mailboxTag = this.text(value.mailboxTag).slice(0, 500);
       if (!this.smtpValid(value))
         throw new BadRequestException(
           'SMTP host, username, password, and from email are required.',
@@ -259,8 +262,9 @@ export class TenantWorkspaceSettingsService {
         input?.returnOrigin,
         input?.requestTenantHost,
       ),
-      mailboxTag: this.text(input?.mailboxTag) || 'gmail',
+      mailboxTag: this.text(input?.mailboxTag),
       leadTemplateTags: this.stringList(input?.leadTemplateTags).slice(0, 25),
+      localInboxRetentionDays: this.retentionDays(input?.localInboxRetentionDays),
       expiresAt: Date.now() + 10 * 60_000,
       nonce: randomBytes(16).toString('hex'),
     });
@@ -366,7 +370,7 @@ export class TenantWorkspaceSettingsService {
       imapPassword: '',
       imapUseSsl: true,
       imapFolder: 'INBOX',
-      mailboxTag: payload.mailboxTag || 'gmail',
+      mailboxTag: this.text(payload.mailboxTag),
       leadTemplateTags: this.stringList(payload.leadTemplateTags),
       duplicatePolicy: 'skip-exact-message',
       autoCreateLeads: existing?.autoCreateLeads !== false,
@@ -377,6 +381,9 @@ export class TenantWorkspaceSettingsService {
         120,
       ),
       maxMessagesPerSync: this.number(existing?.maxMessagesPerSync, 50, 5, 250),
+      localInboxRetentionDays: this.retentionDays(
+        payload.localInboxRetentionDays ?? existing?.localInboxRetentionDays,
+      ),
       gmailEmail: email,
       gmailAccessToken: accessToken,
       gmailRefreshToken: refreshToken,
@@ -652,6 +659,12 @@ export class TenantWorkspaceSettingsService {
     return Number.isFinite(parsed)
       ? Math.min(max, Math.max(min, parsed))
       : fallback;
+  }
+
+  private retentionDays(value: unknown) {
+    const parsed = Number.parseInt(`${value ?? ''}`, 10);
+    if (!Number.isFinite(parsed) || parsed <= 0) return 0;
+    return Math.min(3650, Math.max(7, parsed));
   }
 
   private object(value: any): Record<string, any> {

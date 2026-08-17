@@ -323,6 +323,7 @@ export type SmtpIntegrationWriteInput = {
   syncIntervalMinutes?: number
   maxMessagesPerSync?: number
   markAsReadAfterSync?: boolean
+  localInboxRetentionDays?: number
   lastSuccessfulScanAt?: string | null
 }
 
