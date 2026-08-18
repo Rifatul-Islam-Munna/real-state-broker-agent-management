@@ -11,7 +11,7 @@ type LeadDecision = {
   text: string;
 };
 
-const weakStages = new Set([LeadStage.New, LeadStage.Pending, LeadStage.Contacted, LeadStage.Canceled]);
+const weakStages = new Set([LeadStage.New, LeadStage.Pending, LeadStage.Contacted, LeadStage.FollowUp, LeadStage.Canceled]);
 const strongStages = new Set([LeadStage.Qualified, LeadStage.Visit, LeadStage.Negotiation, LeadStage.Deal]);
 
 @Injectable()

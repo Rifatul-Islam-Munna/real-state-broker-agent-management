@@ -395,8 +395,34 @@ export class TenantOutreachService {
         createdBy: this.text(input?.createdBy, 'Tenant workspace'),
         scheduledAt,
         idempotencyKey: this.text(input?.idempotencyKey) || undefined,
-        payload: { templateId: input?.templateId ?? null, lead },
+        payload: {
+          templateId: input?.templateId ?? null,
+          sequenceType: template?.sequenceType ?? 'Direct',
+          lead,
+        },
       });
+      if (jobs[0]?.status !== 'failed') {
+        const currentStage = this.text(
+          lead?.payload?.stage ?? lead?.stage ?? lead?.status,
+          'New',
+        );
+        const followUp = this.text(template?.sequenceType).startsWith('FollowUp');
+        const nextStage = followUp
+          ? !['Deal', 'Canceled'].includes(currentStage) ? 'FollowUp' : currentStage
+          : currentStage.toLowerCase() === 'new' ? 'Contacted' : currentStage;
+        await client.query(
+          `UPDATE tenant_lead
+           SET payload = COALESCE(payload, '{}'::jsonb) || $2::jsonb,
+               updated_at = now()
+           WHERE id = $1`,
+          [leadId, JSON.stringify({
+            stage: nextStage,
+            inBoard: !['Deal', 'Canceled'].includes(nextStage),
+            lastActivityAt: new Date().toISOString(),
+            ...(followUp ? { followUpStatus: 'Scheduled' } : {}),
+          })],
+        );
+      }
       return this.mapJob(jobs[0]);
     });
   }
@@ -1009,10 +1035,18 @@ export class TenantOutreachService {
           await client.query(
             `UPDATE tenant_lead
              SET payload = COALESCE(payload, '{}'::jsonb) ||
-                 jsonb_build_object('followUpStatus', 'Completed'),
+                 jsonb_build_object(
+                   'stage', CASE
+                     WHEN COALESCE(payload->>'stage', '') IN ('Deal', 'Canceled') THEN payload->>'stage'
+                     ELSE 'Replied'
+                   END,
+                   'followUpStatus', 'Completed',
+                   'lastActivityAt', $2::text,
+                   'inBoard', true
+                 ),
                  updated_at = now()
              WHERE id = $1`,
-            [Number(lead.id)],
+            [Number(lead.id), input.receivedAt.toISOString()],
           );
         }
         await client.query('COMMIT');
@@ -1147,6 +1181,31 @@ export class TenantOutreachService {
            WHERE id = $1`,
           [attemptId, job.provider, providerMessageId],
         );
+        if (Number(job.lead_id) > 0) {
+          const payload = this.object(job.payload) ?? {};
+          const isFollowUp = job.source_type === 'lead-followup' ||
+            this.text(payload.sequenceType).startsWith('FollowUp');
+          await client.query(
+            `UPDATE tenant_lead
+             SET payload = COALESCE(payload, '{}'::jsonb) ||
+                 jsonb_build_object(
+                   'lastActivityAt', now()::text,
+                   'stage', CASE
+                     WHEN COALESCE(payload->>'stage', '') IN ('Deal', 'Canceled') THEN payload->>'stage'
+                     WHEN $2::boolean THEN 'FollowUp'
+                     WHEN LOWER(COALESCE(payload->>'stage', 'new')) = 'new' THEN 'Contacted'
+                     ELSE payload->>'stage'
+                   END,
+                   'inBoard', CASE
+                     WHEN COALESCE(payload->>'stage', '') IN ('Deal', 'Canceled') THEN COALESCE((payload->>'inBoard')::boolean, false)
+                     ELSE true
+                   END
+                 ),
+                 updated_at = now()
+             WHERE id = $1`,
+            [Number(job.lead_id), isFollowUp],
+          );
+        }
         await client.query('COMMIT');
       } catch (error) {
         await client.query('ROLLBACK');

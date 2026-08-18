@@ -397,6 +397,7 @@ export class MailInboxSyncBackgroundService {
       if (lead) {
         matchedLead = true;
         lead.lastActivityAt = inbound.receivedAt;
+        if (!['Deal', 'Canceled'].includes(String(lead.stage))) lead.stage = LeadStage.Replied;
         if (extracted.name && (!lead.name || lead.name === 'Unknown')) lead.name = extracted.name;
         if (extracted.phone && (!lead.phone || lead.phone === 'Not provided')) lead.phone = extracted.phone;
         if (extracted.budget && !lead.budget) lead.budget = extracted.budget;
@@ -492,6 +493,7 @@ export class MailInboxSyncBackgroundService {
         await this.cancelScheduledLeadAutomation(historyRepo, lead.id, inbound.receivedAt);
         await leadRepo.update(lead.id, {
           followUpStatus: LeadFollowUpStatus.Completed,
+          ...(createdLead || ['Deal', 'Canceled'].includes(String(lead.stage)) ? {} : { stage: LeadStage.Replied }),
           lastActivityAt: inbound.receivedAt,
           updatedAt: inbound.receivedAt,
         });

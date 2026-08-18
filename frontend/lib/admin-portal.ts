@@ -20,6 +20,8 @@ import {
 export const leadStageOrder: LeadStage[] = [
   "New",
   "Contacted",
+  "FollowUp",
+  "Replied",
   "Pending",
   "Qualified",
   "Visit",
@@ -48,6 +50,8 @@ export const leadStageMeta: Record<
 > = {
   New: { label: "New Lead", dotClassName: "bg-sky-500" },
   Contacted: { label: "Contacted", dotClassName: "bg-orange-500" },
+  FollowUp: { label: "Follow-up", dotClassName: "bg-amber-500" },
+  Replied: { label: "Replied", dotClassName: "bg-emerald-500" },
   Pending: { label: "Pending", dotClassName: "bg-slate-500" },
   Qualified: { label: "Qualified", dotClassName: "bg-violet-500" },
   Visit: { label: "Property Visit", dotClassName: "bg-amber-500" },

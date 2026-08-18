@@ -94,6 +94,19 @@ export class TenantLegacyCompatibilityService {
          RETURNING id, full_name, email, phone, status, payload, created_at, updated_at`,
         [id, `${body?.name ?? body?.fullName ?? ''}`.trim(), `${body?.email ?? ''}`.trim(), `${body?.phone ?? ''}`.trim(), `${body?.stage ?? body?.status ?? 'new'}`, JSON.stringify(payload)],
       );
+      if (`${body?.stage ?? body?.status ?? ''}`.toLowerCase() === 'canceled') {
+        await client.query(
+          `UPDATE tenant_outreach_job
+           SET status = 'cancelled',
+               last_error = 'Cancelled because this lead was canceled.',
+               completed_at = now(), locked_at = NULL, locked_by = NULL,
+               updated_at = now()
+           WHERE lead_id = $1
+             AND direction <> 'Incoming'
+             AND status IN ('scheduled', 'retrying', 'paused')`,
+          [id],
+        );
+      }
       return this.leadItem(result.rows[0]);
     });
   }
@@ -599,12 +612,14 @@ export class TenantLegacyCompatibilityService {
     return items.filter((item) => {
       if (status && `${item?.status ?? item?.stage ?? ''}`.toLowerCase() !== status) return false;
       if (dateParts) {
-        const created = new Date(item?.createdAt ?? item?.created_at ?? NaN);
-        if (!Number.isFinite(created.getTime())) return false;
+        const mailActivity = new Date(
+          item?.lastActivityAt ?? item?.last_activity_at ?? item?.createdAt ?? item?.created_at ?? NaN,
+        );
+        if (!Number.isFinite(mailActivity.getTime())) return false;
         const sameDay =
-          created.getUTCFullYear() === Number(dateParts[1]) &&
-          created.getUTCMonth() === Number(dateParts[2]) - 1 &&
-          created.getUTCDate() === Number(dateParts[3]);
+          mailActivity.getUTCFullYear() === Number(dateParts[1]) &&
+          mailActivity.getUTCMonth() === Number(dateParts[2]) - 1 &&
+          mailActivity.getUTCDate() === Number(dateParts[3]);
         if (!sameDay) return false;
       }
       if (!search) return true;

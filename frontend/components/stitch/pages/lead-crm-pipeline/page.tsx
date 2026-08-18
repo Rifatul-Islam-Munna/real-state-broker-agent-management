@@ -176,25 +176,42 @@ export function LeadCrmPipelinePage() {
   ) {
     if (!localLeads.some((lead) => lead.id === leadId)) return "Lead not found."
 
-    const response = await dispatchLeadOutreachMutation.mutateAsync({
-      leadId,
-      kind: mode === "email" ? "Email" : mode === "message" ? "Sms" : "Call",
-      title: values.title.trim(),
-      message: values.message.trim(),
-      attachmentDocumentCategory: values.attachmentDocumentCategory,
-      attachmentDocumentType: (values.attachmentDocumentType ?? "") as
-        | DocumentType
-        | "",
-      attachmentMode: values.attachmentMode,
-      attachPropertyDocuments: values.attachPropertyDocuments !== false,
-      mediaUrls: values.mediaUrls,
-      templateId: values.templateId,
-      pdfTemplateId: values.pdfTemplateId,
-      scheduledAt: values.scheduledAt || undefined,
-      createdBy: portalRoutes.kind === "agent" ? "Agent" : "Admin",
-    })
+    const deliveryModes: LeadOutreachMode[] = mode === "both" ? ["email", "message"] : [mode]
+    for (const deliveryMode of deliveryModes) {
+      const response = await dispatchLeadOutreachMutation.mutateAsync({
+        leadId,
+        kind: deliveryMode === "email" ? "Email" : deliveryMode === "message" ? "Sms" : "Call",
+        title: values.title.trim(),
+        message: values.message.trim(),
+        attachmentDocumentCategory: values.attachmentDocumentCategory,
+        attachmentDocumentType: (values.attachmentDocumentType ?? "") as
+          | DocumentType
+          | "",
+        attachmentMode: values.attachmentMode,
+        attachPropertyDocuments: values.attachPropertyDocuments !== false,
+        mediaUrls: values.mediaUrls,
+        templateId: values.templateId,
+        pdfTemplateId: values.pdfTemplateId,
+        scheduledAt: values.scheduledAt || undefined,
+        createdBy: portalRoutes.kind === "agent" ? "Agent" : "Admin",
+      })
 
-    return response.error?.message ?? null
+      if (response.error) return response.error.message
+      if (response.data?.status === "Failed") return response.data.summary || `${deliveryMode} could not be sent.`
+    }
+
+    setLocalLeads((current) => current.map((lead) => {
+      if (lead.id !== leadId || lead.stage === "Deal" || lead.stage === "Canceled") return lead
+      const isFollowUp = values.sequenceType?.startsWith("FollowUp") === true
+      return {
+        ...lead,
+        inBoard: true,
+        stage: isFollowUp ? "FollowUp" : lead.stage === "New" ? "Contacted" : lead.stage,
+        lastActivityAt: values.scheduledAt ? lead.lastActivityAt : new Date().toISOString(),
+      }
+    }))
+
+    return null
   }
 
   async function handleSetLeadBoard(leadId: number, inBoard: boolean) {

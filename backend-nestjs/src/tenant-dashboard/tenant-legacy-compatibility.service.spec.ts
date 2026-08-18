@@ -24,15 +24,15 @@ describe('TenantLegacyCompatibilityService response defaults', () => {
     });
   });
 
-  test('filters list items by the created date', () => {
+  test('filters leads by mail activity date instead of created date', () => {
     const service = new TenantLegacyCompatibilityService(
       {} as any,
       {} as any,
       {} as any,
     );
     const items = [
-      { id: 1, name: 'Today lead', createdAt: new Date('2026-08-18T10:00:00Z') },
-      { id: 2, name: 'Older lead', createdAt: new Date('2026-08-17T10:00:00Z') },
+      { id: 1, name: 'Today mail', createdAt: new Date('2026-08-17T10:00:00Z'), lastActivityAt: new Date('2026-08-18T10:00:00Z') },
+      { id: 2, name: 'Older mail', createdAt: new Date('2026-08-18T10:00:00Z'), lastActivityAt: new Date('2026-08-17T10:00:00Z') },
     ];
     expect((service as any).filter(items, { date: '2026-08-18' })).toEqual([items[0]]);
   });

@@ -699,7 +699,7 @@ export function useLeads(params?: QueryParams) {
   return useQueryWrapper<PaginatedResult<LeadItem>>(
     ["leads", params],
     `/leads${buildQuery(params)}`,
-    defaultQueryOptions,
+    { ...defaultQueryOptions, refetchInterval: 10_000 },
     0,
     "leads",
   )

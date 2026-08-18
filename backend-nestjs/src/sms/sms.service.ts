@@ -2,7 +2,7 @@ import { BadRequestException, forwardRef, Inject, Injectable, Logger } from '@ne
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { SmsMessage } from './entities/sms-message.entity';
-import { Lead, LeadFollowUpStatus } from '../leads/entities/lead.entity';
+import { Lead, LeadFollowUpStatus, LeadStage } from '../leads/entities/lead.entity';
 import { LeadHistoryEntry, leadHistoryKindDb, leadHistoryStatusDb } from '../leads/entities/lead-history.entity';
 import { SettingsService } from '../settings/settings.service';
 import { paginated, toInt } from '../common/api-contract';
@@ -175,7 +175,11 @@ export class SmsService {
         createdBy: saved.fromNumber,
         occurredAt: saved.occurredAt ?? new Date(),
       } as any));
-      await this.cancelScheduledLeadAutomation(input.lead.id, saved.occurredAt ?? new Date());
+      await this.cancelScheduledLeadAutomation(
+        input.lead.id,
+        saved.occurredAt ?? new Date(),
+        ['Deal', 'Canceled'].includes(String(input.lead.stage)),
+      );
       await this.showingFeedbackService.processInbound({
         channel: 'Sms',
         leadId: input.lead.id,
@@ -221,7 +225,7 @@ export class SmsService {
     });
   }
 
-  private async cancelScheduledLeadAutomation(leadId: number, repliedAt: Date) {
+  private async cancelScheduledLeadAutomation(leadId: number, repliedAt: Date, preserveStage = false) {
     await this.historyRepo.createQueryBuilder()
       .update(LeadHistoryEntry)
       .set({
@@ -235,6 +239,7 @@ export class SmsService {
       .execute();
     await this.leadRepo.update(leadId, {
       followUpStatus: LeadFollowUpStatus.Completed,
+      ...(preserveStage ? {} : { stage: LeadStage.Replied }),
       lastActivityAt: repliedAt,
       updatedAt: repliedAt,
     });

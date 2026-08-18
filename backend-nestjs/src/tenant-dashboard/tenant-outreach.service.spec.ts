@@ -280,5 +280,6 @@ describe('TenantOutreachService reliability', () => {
       'WHERE lead_id = $1\n               AND id <> $2',
     );
     expect(statements.join('\n')).toContain("followUpStatus', 'Completed'");
+    expect(statements.join('\n')).toContain("ELSE 'Replied'");
   });
 });

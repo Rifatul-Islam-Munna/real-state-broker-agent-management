@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
   SelectTrigger,
 } from "@/components/ui/select"
@@ -49,7 +50,7 @@ export function LeadOutreachDialog({
   lead: LeadItem | null
   mode: LeadOutreachMode | null
   onOpenChange: (open: boolean) => void
-  onSubmit: (values: LeadOutreachComposerValues) => Promise<string | null>
+  onSubmit: (values: LeadOutreachComposerValues, deliveryMode: LeadOutreachMode) => Promise<string | null>
   open: boolean
 }) {
   const currentUserQuery = usePortalCurrentUser()
@@ -62,6 +63,7 @@ export function LeadOutreachDialog({
   const [documentSearch, setDocumentSearch] = useState("")
   const [documentCategory, setDocumentCategory] = useState("all")
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<number[]>([])
+  const [deliveryMode, setDeliveryMode] = useState<LeadOutreachMode>("both")
   const [values, setValues] = useState<LeadOutreachComposerValues>({
     title: "",
     message: "",
@@ -80,6 +82,7 @@ export function LeadOutreachDialog({
     setDocumentSearch("")
     setDocumentCategory("all")
     setSelectedDocumentIds([])
+    setDeliveryMode(mode ?? "both")
     setValues({ title: "", message: "", scheduledAt: "" })
     setError(null)
   }, [lead?.id, mode, open])
@@ -92,17 +95,21 @@ export function LeadOutreachDialog({
         return false
       }
 
-      if (mode === "email") {
+      if (deliveryMode === "email") {
         return template.channels.includes("Email")
       }
 
-      if (mode === "message") {
+      if (deliveryMode === "message") {
         return template.channels.includes("SMS")
+      }
+
+      if (deliveryMode === "both") {
+        return template.channels.includes("Email") && template.channels.includes("SMS")
       }
 
       return false
     }).sort((left, right) => (sequenceRank[left.sequenceType ?? "Direct"] ?? 99) - (sequenceRank[right.sequenceType ?? "Direct"] ?? 99))
-  }, [mode, templatesQuery.data])
+  }, [deliveryMode, templatesQuery.data])
 
   const pdfTemplates = useMemo(() => {
     const search = pdfSearch.trim().toLowerCase()
@@ -135,8 +142,12 @@ export function LeadOutreachDialog({
     return null
   }
 
-  const recipientLabel = mode === "email" ? lead.email ?? "No email" : lead.phone ?? "No phone"
-  const title = mode === "email" ? "Send Email" : mode === "call" ? "Call Lead" : "Send Message"
+  const recipientLabel = deliveryMode === "both"
+    ? `${lead.email || "No email"} + ${lead.phone || "No phone"}`
+    : deliveryMode === "email"
+      ? lead.email ?? "No email"
+      : lead.phone ?? "No phone"
+  const title = deliveryMode === "both" ? "Send Email + SMS" : deliveryMode === "email" ? "Send Email" : deliveryMode === "call" ? "Call Lead" : "Send SMS"
   const selectedDocuments = allDocuments.filter((doc) => selectedDocumentIds.includes(doc.id))
   const selectedTemplateLabel = templateId === emptyTemplateValue
     ? "No template"
@@ -162,8 +173,18 @@ export function LeadOutreachDialog({
   }
 
   async function handleSubmit() {
-    if (mode !== "message" && values.title.trim().length < 3) {
-      setError(mode === "email" ? "Subject must be at least 3 characters." : "Title must be at least 3 characters.")
+    if ((deliveryMode === "email" || deliveryMode === "both") && !lead.email?.trim()) {
+      setError("Lead has no email address.")
+      return
+    }
+
+    if ((deliveryMode === "message" || deliveryMode === "both") && !lead.phone?.trim()) {
+      setError("Lead has no phone number.")
+      return
+    }
+
+    if (deliveryMode !== "message" && values.title.trim().length < 3) {
+      setError(deliveryMode === "email" || deliveryMode === "both" ? "Subject must be at least 3 characters." : "Title must be at least 3 characters.")
       return
     }
 
@@ -182,8 +203,9 @@ export function LeadOutreachDialog({
       attachPropertyDocuments: values.attachPropertyDocuments !== false,
       mediaUrls: selectedDocumentUrls,
       templateId: templateId === emptyTemplateValue ? undefined : templateId,
+      sequenceType: filteredTemplates.find((template) => template.id === templateId)?.sequenceType,
       pdfTemplateId: pdfTemplateId === emptyTemplateValue ? values.pdfTemplateId : pdfTemplateId,
-    })
+    }, deliveryMode)
 
     if (responseError) {
       setError(responseError)
@@ -203,12 +225,14 @@ export function LeadOutreachDialog({
       ? "Saving..."
       : "Sending..."
     : values.scheduledAt
-      ? mode === "call"
+      ? deliveryMode === "call"
         ? "Schedule Call"
-        : mode === "email"
+        : deliveryMode === "email"
           ? "Schedule Email"
-          : "Schedule SMS"
-      : mode === "call"
+          : deliveryMode === "both"
+            ? "Schedule Email + SMS"
+            : "Schedule SMS"
+      : deliveryMode === "call"
         ? "Call Now"
         : title
 
@@ -235,11 +259,37 @@ export function LeadOutreachDialog({
 
         <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
           <section className="custom-scrollbar min-h-0 flex-1 space-y-5 overflow-y-auto p-5 sm:p-6 lg:border-r lg:border-[var(--ether-outline-variant)]">
+            {mode !== "call" ? (
+              <label className="flex flex-col gap-2">
+                <span className="ether-label-caps text-[10px] text-[var(--ether-on-surface-variant)]">Send Via</span>
+                <Select
+                  modal={false}
+                  onValueChange={(nextValue) => {
+                    setDeliveryMode((nextValue ?? "both") as LeadOutreachMode)
+                    setTemplateId(emptyTemplateValue)
+                    setError(null)
+                  }}
+                  value={deliveryMode}
+                >
+                  <SelectTrigger className="h-11 rounded-lg border-[var(--ether-outline-variant)] bg-white">
+                    <span>{deliveryMode === "both" ? "Email + SMS" : deliveryMode === "email" ? "Email only" : "SMS only"}</span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      <SelectItem value="both">Email + SMS</SelectItem>
+                      <SelectItem value="email">Email only</SelectItem>
+                      <SelectItem value="message">SMS only</SelectItem>
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </label>
+            ) : null}
+
             <div className="grid gap-4 md:grid-cols-2">
               <label className="space-y-2">
-                <span className="ether-label-caps text-[10px] text-[var(--ether-on-surface-variant)]">{mode === "email" ? "To" : mode === "message" ? "Phone" : "Contact"}</span>
+                <span className="ether-label-caps text-[10px] text-[var(--ether-on-surface-variant)]">{deliveryMode === "both" ? "Recipients" : deliveryMode === "email" ? "To" : deliveryMode === "message" ? "Phone" : "Contact"}</span>
                 <div className="relative">
-                  <AppIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--ether-on-surface-variant)]" name={mode === "email" ? "alternate_email" : "call"} />
+                  <AppIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--ether-on-surface-variant)]" name={deliveryMode === "email" || deliveryMode === "both" ? "alternate_email" : "call"} />
                   <Input className="h-11 rounded-lg border-[var(--ether-outline-variant)] bg-white pl-10 shadow-none" readOnly value={recipientLabel} />
                 </div>
               </label>
@@ -261,9 +311,9 @@ export function LeadOutreachDialog({
               </label>
             </div>
 
-            {mode !== "call" ? (
+            {deliveryMode !== "call" ? (
               <label className="block space-y-2">
-                <span className="ether-label-caps text-[10px] text-[var(--ether-on-surface-variant)]">{mode === "email" ? "Email Template" : "SMS Template"}</span>
+                <span className="ether-label-caps text-[10px] text-[var(--ether-on-surface-variant)]">{deliveryMode === "both" ? "Email + SMS Template" : deliveryMode === "email" ? "Email Template" : "SMS Template"}</span>
                 <Select
                   modal={false}
                   onValueChange={(nextValue) => {
@@ -273,7 +323,7 @@ export function LeadOutreachDialog({
                     const selectedTemplate = filteredTemplates.find((item) => item.id === nextValue)
                     if (!selectedTemplate) return
                     const agentName = currentUserQuery.data?.fullName ?? null
-                    const nextTitle = mode === "email"
+                    const nextTitle = deliveryMode === "email" || deliveryMode === "both"
                       ? resolveTemplateTokens(selectedTemplate.subject, lead, agentName)
                       : selectedTemplate.name
                     setValues((current) => ({
@@ -305,22 +355,22 @@ export function LeadOutreachDialog({
               </label>
             ) : null}
 
-            {mode !== "message" ? (
+            {deliveryMode !== "message" ? (
               <label className="block space-y-2">
-                <span className="ether-label-caps text-[10px] text-[var(--ether-on-surface-variant)]">{mode === "email" ? "Subject Line" : "Call Title"}</span>
+                <span className="ether-label-caps text-[10px] text-[var(--ether-on-surface-variant)]">{deliveryMode === "email" || deliveryMode === "both" ? "Subject Line" : "Call Title"}</span>
                 <Input
                   className="h-11 rounded-lg border-[var(--ether-outline-variant)] bg-white shadow-none"
                   onChange={(event) => {
                     setValues((current) => ({ ...current, title: event.target.value }))
                     setError(null)
                   }}
-                  placeholder={mode === "email" ? "e.g. Weekly property performance update" : "Call follow-up title"}
+                  placeholder={deliveryMode === "email" || deliveryMode === "both" ? "e.g. Weekly property performance update" : "Call follow-up title"}
                   value={values.title}
                 />
               </label>
             ) : null}
 
-            {mode !== "call" ? (
+            {deliveryMode !== "call" ? (
               <div>
                 <div className="flex items-center justify-between gap-3">
                   <span className="ether-label-caps text-[10px] text-[var(--ether-on-surface-variant)]">Fillable Variables</span>
@@ -343,9 +393,9 @@ export function LeadOutreachDialog({
             ) : null}
 
             <label className="block space-y-2">
-              <span className="ether-label-caps text-[10px] text-[var(--ether-on-surface-variant)]">{mode === "call" ? "Call Notes" : "Message"}</span>
+              <span className="ether-label-caps text-[10px] text-[var(--ether-on-surface-variant)]">{deliveryMode === "call" ? "Call Notes" : "Message"}</span>
               <div className="overflow-hidden rounded-lg border border-[var(--ether-outline-variant)] bg-white">
-                {mode !== "call" ? (
+                {deliveryMode !== "call" ? (
                   <div className="flex items-center gap-1 border-b border-[var(--ether-outline-variant)] bg-[var(--ether-surface-container-low)] px-2 py-2 text-[var(--ether-on-surface-variant)]">
                     {['format_bold','format_italic','format_list_bulleted','link'].map((icon) => (
                       <button className="flex size-8 items-center justify-center rounded transition hover:bg-white hover:text-[var(--ether-primary)]" key={icon} type="button"><AppIcon name={icon} /></button>
@@ -359,7 +409,7 @@ export function LeadOutreachDialog({
                     setValues((current) => ({ ...current, message: event.target.value }))
                     setError(null)
                   }}
-                  placeholder={mode === "call" ? "What should the reminder call say?" : `Write the ${mode} message here...`}
+                  placeholder={deliveryMode === "call" ? "What should the reminder call say?" : `Write the ${deliveryMode === "both" ? "email and SMS" : deliveryMode === "message" ? "SMS" : deliveryMode} message here...`}
                   value={values.message}
                 />
               </div>
@@ -368,7 +418,7 @@ export function LeadOutreachDialog({
             {error ? <p className="rounded-lg bg-[var(--ether-error-container)] px-4 py-3 text-sm font-semibold text-[var(--ether-error)]">{error}</p> : null}
           </section>
 
-          {mode !== "call" ? (
+          {deliveryMode !== "call" ? (
             <aside className="flex min-h-0 w-full flex-col bg-[color-mix(in_srgb,var(--ether-surface-container-low)_45%,white)] p-4 lg:w-[340px]">
               <div className="flex items-center justify-between">
                 <h3 className="ether-label-caps text-[10px] text-[var(--ether-on-surface-variant)]">Attachments</h3>
@@ -455,7 +505,7 @@ export function LeadOutreachDialog({
               onClick={() => void handleSubmit()}
               type="button"
             >
-              <AppIcon name={mode === "call" ? "call" : "send"} />
+              <AppIcon name={deliveryMode === "call" ? "call" : "send"} />
               {submitLabel}
             </button>
           </div>

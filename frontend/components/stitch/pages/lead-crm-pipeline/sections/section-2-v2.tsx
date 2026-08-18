@@ -18,6 +18,13 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -213,6 +220,72 @@ export function Section2Section({
     setDeleteConfirmOpen(false)
   }
 
+  function downloadLeadsCsv(rows: LeadItem[], fileName: string) {
+    const headers = [
+      "Name",
+      "Email",
+      "Phone",
+      "Property",
+      "Stage",
+      "Priority",
+      "Source",
+      "Interest",
+      "Budget",
+      "Credit Score",
+      "Monthly Earning",
+      "Timeline",
+      "Created At",
+      "Last Activity",
+      "Notes",
+    ]
+    const escapeCell = (value: unknown) => {
+      const text = `${value ?? ""}`
+      return `"${text.replace(/"/g, "\"\"")}"`
+    }
+    const lines = [headers.map(escapeCell).join(",")]
+    for (const lead of rows) {
+      lines.push(
+        [
+          lead.name,
+          lead.email,
+          lead.phone,
+          lead.property,
+          lead.stage,
+          lead.priority,
+          lead.source,
+          lead.interest,
+          lead.budget,
+          lead.creditScore,
+          lead.monthlyEarning,
+          lead.timeline,
+          lead.createdAt ? new Date(lead.createdAt).toLocaleString() : "",
+          lead.lastActivityAt ? new Date(lead.lastActivityAt).toLocaleString() : "",
+          (lead.notes ?? []).join(" | "),
+        ].map(escapeCell).join(","),
+      )
+    }
+    const url = URL.createObjectURL(new Blob(["\uFEFF" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" }))
+    const link = document.createElement("a")
+    link.href = url
+    link.download = fileName
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
+  function exportSelectedLeadsCsv() {
+    const selected = leads.filter((lead) => selectedIds.includes(lead.id))
+    if (!selected.length) {
+      setCsvMessage("Select at least one lead to export.")
+      return
+    }
+    downloadLeadsCsv(selected, `selected-leads-${new Date().toISOString().slice(0, 10)}.csv`)
+    setCsvMessage(`Exported ${selected.length} selected lead${selected.length === 1 ? "" : "s"} to CSV.`)
+  }
+
+  async function setSelectedBoard(inBoard: boolean) {
+    await Promise.all(selectedIds.map((leadId) => onSetLeadBoard(leadId, inBoard)))
+  }
+
   async function exportLeadsCsv() {
     setExporting(true)
     try {
@@ -239,61 +312,9 @@ export function Section2Section({
         setCsvMessage("No leads match the current filters to export.")
         return
       }
-      const headers = [
-        "Name",
-        "Email",
-        "Phone",
-        "Property",
-        "Stage",
-        "Priority",
-        "Source",
-        "Interest",
-        "Budget",
-        "Credit Score",
-        "Monthly Earning",
-        "Timeline",
-        "Created At",
-        "Last Activity",
-        "Notes",
-      ]
-      const escapeCell = (value: unknown) => {
-        const text = `${value ?? ""}`
-        return `"${text.replace(/"/g, "\"\"")}"`
-      }
-      const lines = [headers.map(escapeCell).join(",")]
-      for (const lead of rows) {
-        lines.push(
-          [
-            lead.name,
-            lead.email,
-            lead.phone,
-            lead.property,
-            lead.stage,
-            lead.priority,
-            lead.source,
-            lead.interest,
-            lead.budget,
-            lead.creditScore,
-            lead.monthlyEarning,
-            lead.timeline,
-            lead.createdAt ? new Date(lead.createdAt).toLocaleString() : "",
-            lead.lastActivityAt ? new Date(lead.lastActivityAt).toLocaleString() : "",
-            (lead.notes ?? []).join(" | "),
-          ]
-            .map(escapeCell)
-            .join(","),
-        )
-      }
-      const csv = "\uFEFF" + lines.join("\r\n")
-      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" })
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement("a")
-      link.href = url
-      link.download = dateFilter
+      downloadLeadsCsv(rows, dateFilter
         ? `leads-${dateFilter}.csv`
-        : `leads-export-${new Date().toISOString().slice(0, 10)}.csv`
-      link.click()
-      URL.revokeObjectURL(url)
+        : `leads-export-${new Date().toISOString().slice(0, 10)}.csv`)
       setCsvMessage(`Exported ${rows.length} lead${rows.length === 1 ? "" : "s"} to CSV.`)
     } catch (error) {
       setCsvMessage(error instanceof Error ? error.message : "Export failed.")
@@ -455,27 +476,19 @@ export function Section2Section({
                 value={searchTerm ?? ""}
               />
             </div>
-            <div className="relative md:w-52">
-              <AppIcon className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-base text-[var(--ether-outline)]" name="calendar_today" />
+            <div className="flex items-center gap-2 md:w-auto">
+              <Label className="shrink-0 text-xs font-bold text-[var(--ether-on-surface-variant)]" htmlFor="lead-mail-date-filter">Mail date</Label>
               <Input
-                aria-label="Filter leads by created date"
-                className="h-10 w-full rounded-lg border-[var(--ether-outline-variant)] bg-white pl-9 text-sm shadow-[var(--shadow-surface-1)]"
+                aria-label="Filter leads by mail date"
+                className="h-10 w-full rounded-lg border-[var(--ether-outline-variant)] bg-white text-sm shadow-[var(--shadow-surface-1)] md:w-44"
+                id="lead-mail-date-filter"
                 max={new Date().toISOString().slice(0, 10)}
                 onChange={(event) => onDateFilterChange(event.target.value)}
-                title="Show only leads created on this day"
+                title="Show leads whose latest mail activity happened on this day"
                 type="date"
                 value={dateFilter ?? ""}
               />
-              {dateFilter ? (
-                <button
-                  aria-label="Clear date filter"
-                  className="absolute right-2 top-1/2 z-10 flex size-6 -translate-y-1/2 items-center justify-center rounded-full text-[var(--ether-outline)] transition hover:bg-[var(--ether-surface-container)] hover:text-[var(--ether-on-surface)]"
-                  onClick={() => onDateFilterChange("")}
-                  type="button"
-                >
-                  <AppIcon className="text-sm" name="close" />
-                </button>
-              ) : null}
+              {dateFilter ? <Button onClick={() => onDateFilterChange("")} size="sm" type="button" variant="ghost">Clear</Button> : null}
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -639,6 +652,9 @@ export function Section2Section({
                   {selectedIds.length} selected
                 </p>
                 <div className="flex items-center gap-2">
+                  <Button disabled={isMutating} onClick={() => void setSelectedBoard(true)} size="sm" type="button">Add to board</Button>
+                  <Button disabled={isMutating} onClick={() => void setSelectedBoard(false)} size="sm" type="button" variant="outline">Remove from board</Button>
+                  <Button onClick={exportSelectedLeadsCsv} size="sm" type="button" variant="outline">Export selected CSV</Button>
                   <Button
                     className="h-9 rounded-lg border-[var(--ether-outline-variant)] bg-white px-4 text-sm font-semibold text-[var(--ether-on-surface-variant)]"
                     onClick={() => setSelectedIds([])}
@@ -685,6 +701,7 @@ export function Section2Section({
                     const initials = `${lead.name ?? ""}`.split(" ").filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase()
                     const avatarTone = index % 3 === 0 ? "bg-[var(--ether-primary-fixed)] text-[var(--ether-primary)]" : index % 3 === 1 ? "bg-[var(--ether-tertiary-fixed)] text-[var(--ether-tertiary)]" : "bg-[color-mix(in_srgb,var(--ether-secondary-container)_35%,white)] text-[var(--ether-secondary)]"
                     const isSelected = selectedIds.includes(lead.id)
+                    const stageMeta = leadStageMeta[lead.stage] ?? { label: lead.stage, dotClassName: "bg-slate-400" }
                     return (
                       <tr className={`group transition hover:bg-[var(--ether-surface-container-low)] ${isSelected ? "bg-[var(--ether-primary-fixed)]/30" : ""}`} key={lead.id}>
                         <td className="px-6 py-5">
@@ -706,10 +723,10 @@ export function Section2Section({
                                 {lead.inBoard ? <Badge className="rounded-full border-0 bg-[color-mix(in_srgb,var(--ether-secondary-container)_32%,white)] px-2.5 py-1 text-[10px] font-bold uppercase text-[var(--ether-secondary)]">On board</Badge> : null}
                                 {lead.isFollowUpOverdue ? <Badge className="rounded-full border-0 bg-[var(--ether-error-container)] px-2.5 py-1 text-[10px] font-bold uppercase text-[var(--ether-error)]">Overdue</Badge> : null}
                               </div>
-                              <p className="mt-2 flex items-center gap-1.5 text-xs font-medium text-[var(--ether-on-surface-variant)]">
-                                <AppIcon className="text-sm text-[var(--ether-outline)]" name="calendar_today" />
-                                {lead.createdAt
-                                  ? new Date(lead.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                              <p className="mt-2 flex items-center gap-1.5 text-xs font-medium text-[var(--ether-on-surface-variant)]" title="Latest mail date">
+                                <AppIcon className="text-sm text-[var(--ether-outline)]" name="mail" />
+                                {lead.lastActivityAt ?? lead.createdAt
+                                  ? new Date(lead.lastActivityAt ?? lead.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })
                                   : "No date"}
                               </p>
                             </div>
@@ -719,16 +736,39 @@ export function Section2Section({
                           <p className="max-w-64 font-semibold text-[var(--ether-on-surface)]">{lead.property || "No property selected"}</p>
                           <p className="mt-1 text-sm text-[var(--ether-on-surface-variant)]">{lead.interest || "General interest"} ? {lead.budget || "Budget not set"}</p>
                         </td>
-                        <td className="px-6 py-5"><span className="rounded-lg bg-[var(--ether-primary-fixed)] px-3 py-1.5 text-sm font-bold text-[var(--ether-primary)]">{leadStageMeta[lead.stage].label}</span></td>
                         <td className="px-6 py-5">
-                          <div className="flex items-center gap-1">
-                            <button className="flex size-9 items-center justify-center rounded-lg text-[var(--ether-on-surface-variant)] hover:bg-[var(--ether-primary-fixed)] hover:text-[var(--ether-primary)]" onClick={() => setSelectedLeadId(lead.id)} title="View details" type="button"><AppIcon name="visibility" /></button>
-                            <button className="flex size-9 items-center justify-center rounded-lg text-[var(--ether-on-surface-variant)] hover:bg-[var(--ether-primary-fixed)] hover:text-[var(--ether-primary)]" onClick={() => void onConvertLeadToDeal(lead.id)} title={lead.linkedDealId ? "Open deal" : "Create deal"} type="button"><AppIcon name="handshake" /></button>
-                            <Link className="flex size-9 items-center justify-center rounded-lg text-[var(--ether-on-surface-variant)] hover:bg-[var(--ether-primary-fixed)] hover:text-[var(--ether-primary)]" href={buildHistoryHref(portalRoutes.leadHistory, lead.id)} title="History"><AppIcon name="history" /></Link>
-                            <span className="mx-2 h-5 w-px bg-[color-mix(in_srgb,var(--ether-outline-variant)_40%,transparent)]" />
-                            <button className="flex size-9 items-center justify-center rounded-lg text-[var(--ether-on-surface-variant)] hover:bg-[color-mix(in_srgb,var(--ether-secondary-container)_25%,white)] hover:text-[var(--ether-secondary)]" onClick={() => setDialogState({ type: "email", leadId: lead.id })} title="Email" type="button"><AppIcon name="mail" /></button>
-                            <button className="flex size-9 items-center justify-center rounded-lg text-[var(--ether-on-surface-variant)] hover:bg-[color-mix(in_srgb,var(--ether-secondary-container)_25%,white)] hover:text-[var(--ether-secondary)]" onClick={() => setDialogState({ type: "message", leadId: lead.id })} title="Message" type="button"><AppIcon name="chat" /></button>
-                            <button className="flex size-9 items-center justify-center rounded-lg text-[var(--ether-on-surface-variant)] hover:bg-[color-mix(in_srgb,var(--ether-secondary-container)_25%,white)] hover:text-[var(--ether-secondary)]" onClick={() => setDialogState({ type: "call", leadId: lead.id })} title="Call" type="button"><AppIcon name="call" /></button>
+                          <Badge className="gap-2 rounded-lg px-3 py-1.5 text-sm font-bold" variant="outline">
+                            <span className={cn("size-2 rounded-full", stageMeta.dotClassName)} />
+                            {stageMeta.label}
+                          </Badge>
+                        </td>
+                        <td className="px-6 py-5">
+                          <div className="flex items-center gap-2">
+                            <Button
+                              aria-pressed={lead.inBoard}
+                              disabled={isMutating}
+                              onClick={() => void onSetLeadBoard(lead.id, !lead.inBoard)}
+                              size="sm"
+                              type="button"
+                              variant={lead.inBoard ? "secondary" : "default"}
+                            >
+                              {lead.inBoard ? "Remove from board" : "Add to board"}
+                            </Button>
+                            <Button onClick={() => setDialogState({ type: "both", leadId: lead.id })} size="sm" type="button" variant="outline">Send</Button>
+                            <Button onClick={() => setSelectedLeadId(lead.id)} size="sm" type="button" variant="outline">View</Button>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger render={<Button aria-label={`More actions for ${lead.name}`} size="sm" type="button" variant="ghost">More</Button>} />
+                              <DropdownMenuContent align="end" className="min-w-44">
+                                <DropdownMenuGroup>
+                                  <DropdownMenuItem onClick={() => void onConvertLeadToDeal(lead.id)}>{lead.linkedDealId ? "Open deal" : "Create deal"}</DropdownMenuItem>
+                                  <DropdownMenuItem render={<Link href={buildHistoryHref(portalRoutes.leadHistory, lead.id)} />}>View history</DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => setDialogState({ type: "email", leadId: lead.id })}>Send email</DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => setDialogState({ type: "message", leadId: lead.id })}>Send message</DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => setDialogState({ type: "call", leadId: lead.id })}>Log call</DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => setDialogState({ type: "cancel", leadId: lead.id })} variant="destructive">Cancel lead</DropdownMenuItem>
+                                </DropdownMenuGroup>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </div>
                         </td>
                       </tr>
@@ -784,6 +824,7 @@ export function Section2Section({
         isSubmitting={isMutating}
         lead={dialogLead}
         mode={
+          dialogState?.type === "both" ||
           dialogState?.type === "email" ||
           dialogState?.type === "message" ||
           dialogState?.type === "call"
@@ -791,15 +832,17 @@ export function Section2Section({
             : null
         }
         onOpenChange={(open) => setDialogState(open ? dialogState : null)}
-        onSubmit={(values) =>
+        onSubmit={(values, deliveryMode) =>
           dialogLead &&
-          (dialogState?.type === "email" ||
-            dialogState?.type === "message" ||
-            dialogState?.type === "call")
-            ? onCommunicate(dialogLead.id, dialogState.type, values)
+          (deliveryMode === "both" ||
+            deliveryMode === "email" ||
+            deliveryMode === "message" ||
+            deliveryMode === "call")
+            ? onCommunicate(dialogLead.id, deliveryMode, values)
             : Promise.resolve("Lead not found.")
         }
         open={
+          dialogState?.type === "both" ||
           dialogState?.type === "email" ||
           dialogState?.type === "message" ||
           dialogState?.type === "call"

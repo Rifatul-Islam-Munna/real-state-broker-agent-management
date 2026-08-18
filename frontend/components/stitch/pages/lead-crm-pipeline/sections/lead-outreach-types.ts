@@ -1,4 +1,4 @@
-export type LeadOutreachMode = "email" | "message" | "call"
+export type LeadOutreachMode = "both" | "email" | "message" | "call"
 
 export type LeadOutreachComposerValues = {
   attachPropertyDocuments?: boolean
@@ -9,6 +9,7 @@ export type LeadOutreachComposerValues = {
   message: string
   scheduledAt: string
   templateId?: string
+  sequenceType?: "Direct" | "FollowUp1" | "FollowUp2" | "FollowUp3"
   pdfTemplateId?: string
   mediaUrls?: string[]
 }

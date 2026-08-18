@@ -27,11 +27,17 @@ export class LeadsService {
     private leadIntelligence: LeadIntelligenceService,
   ) {}
 
-  async findAll(page = 1, pageSize = 20, search?: string, stage?: string): Promise<any> {
+  async findAll(page = 1, pageSize = 20, search?: string, stage?: string, date?: string): Promise<any> {
     page = toInt(page, 1); pageSize = toInt(pageSize, 20);
     const qb = this.leadsRepository.createQueryBuilder('lead').leftJoinAndSelect('lead.assignedAgent', 'assignedAgent').leftJoinAndSelect('lead.deals', 'deals');
     if (search) qb.andWhere('(lead.name ILIKE :search OR lead.email ILIKE :search OR lead.property_name ILIKE :search OR lead.source ILIKE :search OR lead.agent ILIKE :search)', { search: `%${search}%` });
     if (stage) qb.andWhere('lead.stage = :stage', { stage: numericEnumValue(leadStages, stage) });
+    if (/^\d{4}-\d{2}-\d{2}$/.test(`${date ?? ''}`)) {
+      const start = new Date(`${date}T00:00:00.000Z`);
+      const end = new Date(start);
+      end.setUTCDate(end.getUTCDate() + 1);
+      qb.andWhere('lead.lastActivityAt >= :dateStart AND lead.lastActivityAt < :dateEnd', { dateStart: start, dateEnd: end });
+    }
     const [rows, total] = await qb.orderBy('lead.lastActivityAt', 'DESC').skip((page - 1) * pageSize).take(pageSize).getManyAndCount();
     return paginated(rows.map((lead) => this.mapLead(lead)), total, page, pageSize);
   }

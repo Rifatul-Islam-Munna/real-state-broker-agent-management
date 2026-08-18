@@ -805,6 +805,13 @@ export class TenantInboxSyncService {
                 latestEmailAt: input.channel === 'email' ? input.receivedAt.toISOString() : undefined,
                 latestMailInboxId: input.channel === 'email' ? Number(inserted.rows[0].id) : undefined,
                 lastActivityAt: input.receivedAt.toISOString(),
+                ...(!created ? {
+                  stage: ['Deal', 'Canceled'].includes(`${lead?.payload?.stage ?? ''}`)
+                    ? lead.payload.stage
+                    : 'Replied',
+                  followUpStatus: 'Completed',
+                  inBoard: true,
+                } : {}),
               }),
             ],
           );

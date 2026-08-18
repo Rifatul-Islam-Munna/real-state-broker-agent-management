@@ -785,6 +785,8 @@ export type PropertySaveInput = {
 export type LeadStage =
   | "New"
   | "Contacted"
+  | "FollowUp"
+  | "Replied"
   | "Pending"
   | "Qualified"
   | "Visit"

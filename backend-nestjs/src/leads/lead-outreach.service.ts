@@ -174,7 +174,13 @@ export class LeadOutreachService {
     if (['Sent', 'Completed'].includes(status)) {
       lead.lastActivityAt = now;
       lead.updatedAt = now;
-      if (lead.stage === 'New') {
+      const selectedTemplate = dto.templateId
+        ? (await this.getTemplates()).find((item: any) => `${item.id}` === `${dto.templateId}`)
+        : null;
+      if (`${selectedTemplate?.sequenceType ?? ''}`.startsWith('FollowUp') && !['Deal', 'Canceled'].includes(String(lead.stage))) {
+        lead.stage = 'FollowUp' as any;
+        lead.inBoard = true;
+      } else if (lead.stage === 'New') {
         lead.stage = 'Contacted' as any;
         lead.inBoard = true;
       }

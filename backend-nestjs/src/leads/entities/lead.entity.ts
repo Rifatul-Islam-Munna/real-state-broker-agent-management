@@ -24,6 +24,8 @@ export enum LeadStage {
   Negotiation = 'Negotiation',
   Deal = 'Deal',
   Canceled = 'Canceled',
+  FollowUp = 'FollowUp',
+  Replied = 'Replied',
 }
 
 export enum LeadPriority {

@@ -16,9 +16,9 @@ export class LeadsController {
   @Get()
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Get leads' })
-  async find(@Query('id') id?: number, @Query('page') page: number = 1, @Query('pageSize') pageSize: number = 20, @Query('search') search?: string, @Query('stage') stage?: string) {
+  async find(@Query('id') id?: number, @Query('page') page: number = 1, @Query('pageSize') pageSize: number = 20, @Query('search') search?: string, @Query('stage') stage?: string, @Query('date') date?: string) {
     if (id) return this.leadsService.findOne(id);
-    return this.leadsService.findAll(page, pageSize, search, stage);
+    return this.leadsService.findAll(page, pageSize, search, stage, date);
   }
 
   @Post()
