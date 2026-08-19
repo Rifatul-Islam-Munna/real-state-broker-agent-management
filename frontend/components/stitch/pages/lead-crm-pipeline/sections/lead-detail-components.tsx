@@ -91,10 +91,12 @@ export function LeadKanbanCard({
   isActive,
   lead,
   onOpen,
+  onRemove,
 }: {
   isActive: boolean
   lead: LeadItem
   onOpen: (leadId: number) => void
+  onRemove: (leadId: number) => Promise<void>
 }) {
   const [isExpanded, setIsExpanded] = useState(false)
   const lastActivityLabel = formatRelativeTimeLabel(
@@ -138,13 +140,24 @@ export function LeadKanbanCard({
           </div>
         </button>
 
-        <button
-          aria-label="Drag lead card"
-          className="drag-handle flex size-8 shrink-0 cursor-grab items-center justify-center rounded-lg text-[var(--ether-outline)] transition hover:bg-[var(--ether-surface-container-low)] hover:text-[var(--ether-on-surface)] active:cursor-grabbing"
-          type="button"
-        >
-          <AppIcon className="text-lg" name="drag_indicator" />
-        </button>
+        <div className="flex shrink-0 items-center gap-1">
+          <button
+            aria-label={`Remove ${lead.name} from board`}
+            className="flex size-8 items-center justify-center rounded-lg text-[var(--ether-outline)] transition hover:bg-[var(--ether-error-container)] hover:text-[var(--ether-error)]"
+            onClick={() => void onRemove(lead.id)}
+            title="Remove from board"
+            type="button"
+          >
+            <AppIcon className="text-lg" name="remove_from_queue" />
+          </button>
+          <button
+            aria-label="Drag lead card"
+            className="drag-handle flex size-8 cursor-grab items-center justify-center rounded-lg text-[var(--ether-outline)] transition hover:bg-[var(--ether-surface-container-low)] hover:text-[var(--ether-on-surface)] active:cursor-grabbing"
+            type="button"
+          >
+            <AppIcon className="text-lg" name="drag_indicator" />
+          </button>
+        </div>
       </div>
 
       {isExpanded ? (

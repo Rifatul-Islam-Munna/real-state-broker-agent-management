@@ -65,7 +65,8 @@ import {
 
 type ComposerAudienceType = "SingleLead" | "LeadStage" | "DealStage"
 type OutreachKind = "Email" | "Sms" | "Call"
-type FollowUpFilter = "" | "Direct" | "FollowUp"
+type ActivityType = "Incoming" | "Direct" | "FollowUp"
+type FollowUpFilter = "" | ActivityType
 
 type ComposerState = {
   audienceType: ComposerAudienceType
@@ -124,24 +125,35 @@ function resolveTemplateTokens(
   )
 }
 
-function isFollowUpScheduleEntry(entry: {
+function scheduleEntryActivityType(entry: {
   body?: string | null
   createdBy?: string | null
+  direction?: string | null
   provider?: string | null
+  status?: string | null
   summary?: string | null
   title?: string | null
-}) {
-  return [
+}): ActivityType {
+  if (entry.direction === "Incoming" || entry.status === "Received") {
+    return "Incoming"
+  }
+  const isFollowUp = [
     entry.title,
     entry.summary,
     entry.body,
     entry.provider,
     entry.createdBy,
   ].some((value) => /follow[-\s]?up/i.test(`${value ?? ""}`))
+  return isFollowUp ? "FollowUp" : "Direct"
+}
+
+function activityTypeLabel(type: ActivityType) {
+  if (type === "Incoming") return "Received Message"
+  return type === "FollowUp" ? "Automated Follow-up" : "Direct Outreach"
 }
 
 function formatKindLabel(kind: string) {
-  if (kind === "MailInbox") return "Email reply"
+  if (kind === "MailInbox") return "Email"
   return kind === "Sms" ? "SMS" : kind
 }
 
@@ -275,10 +287,9 @@ export function LeadOutreachSchedulePage() {
     const term = searchTerm.trim().toLowerCase()
     const rows = Array.isArray(scheduleQuery.data) ? scheduleQuery.data : []
     return rows.filter((entry) => {
-      const isFollowUp = isFollowUpScheduleEntry(entry)
+      const activityType = scheduleEntryActivityType(entry)
 
-      if (followUpFilter === "FollowUp" && !isFollowUp) return false
-      if (followUpFilter === "Direct" && isFollowUp) return false
+      if (followUpFilter && followUpFilter !== activityType) return false
       if (stageFilter && entry.leadStage !== stageFilter) return false
       if (!term) return true
 
@@ -666,11 +677,16 @@ export function LeadOutreachSchedulePage() {
               value={followUpFilter || "all"}
             >
               <SelectTrigger className="h-12 w-full rounded-xl border-[var(--ether-outline-variant)] bg-white px-4 xl:w-40">
-                <span>{followUpFilter || "Follow-up"}</span>
+                <span>
+                  {followUpFilter
+                    ? activityTypeLabel(followUpFilter)
+                    : "Activity"}
+                </span>
               </SelectTrigger>
               <SelectContent>
                 <SelectGroup>
-                  <SelectItem value="all">All follow-up</SelectItem>
+                  <SelectItem value="all">All activity</SelectItem>
+                  <SelectItem value="Incoming">Received messages</SelectItem>
                   <SelectItem value="Direct">Direct only</SelectItem>
                   <SelectItem value="FollowUp">Follow-up only</SelectItem>
                 </SelectGroup>
@@ -705,7 +721,7 @@ export function LeadOutreachSchedulePage() {
                       State
                     </TableHead>
                     <TableHead className="ether-label-caps text-[var(--ether-on-surface-variant)]">
-                      Follow-up
+                      Activity
                     </TableHead>
                     <TableHead className="ether-label-caps text-[var(--ether-on-surface-variant)]">
                       When
@@ -717,7 +733,7 @@ export function LeadOutreachSchedulePage() {
                 </TableHeader>
                 <TableBody>
                   {paginatedSchedule.map((entry, index) => {
-                    const isFollowUp = isFollowUpScheduleEntry(entry)
+                    const activityType = scheduleEntryActivityType(entry)
                     const initials = displayText(
                       entry.leadName,
                       `Lead #${entry.leadId}`
@@ -802,9 +818,7 @@ export function LeadOutreachSchedulePage() {
                           </Badge>
                         </TableCell>
                         <TableCell className="text-sm text-[var(--ether-on-surface-variant)] italic">
-                          {isFollowUp
-                            ? "Automated Follow-up"
-                            : "Direct Outreach"}
+                          {activityTypeLabel(activityType)}
                         </TableCell>
                         <TableCell className="min-w-48">
                           <p className="font-semibold text-[var(--ether-on-surface)]">
@@ -1264,11 +1278,9 @@ export function LeadOutreachSchedulePage() {
                   />
                   <DetailPill
                     label="Type"
-                    value={
-                      isFollowUpScheduleEntry(selectedDetail)
-                        ? "Follow-up"
-                        : "Direct / reply"
-                    }
+                    value={activityTypeLabel(
+                      scheduleEntryActivityType(selectedDetail)
+                    )}
                   />
                 </div>
                 <div className="rounded-[24px] bg-white p-5 shadow-[var(--shadow-surface-1)]">

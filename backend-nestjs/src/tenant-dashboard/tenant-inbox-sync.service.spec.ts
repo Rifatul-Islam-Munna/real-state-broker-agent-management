@@ -667,7 +667,9 @@ describe('TenantInboxSyncService active parser processing', () => {
 
     expect(parsed).toMatchObject({ created: true, lead: { id: 31 } });
     expect(parsed.result).toMatchObject({ matched: true, templateId: 8 });
-    expect(query.mock.calls.some(([sql]) => sql.includes('INSERT INTO tenant_lead('))).toBe(true);
+    const insertCall = query.mock.calls.find(([sql]) => sql.includes('INSERT INTO tenant_lead('));
+    expect(insertCall).toBeDefined();
+    expect(JSON.parse(insertCall?.[1]?.[3] as string)).toMatchObject({ inBoard: false });
   });
 
   test('does not create a lead when no active template matches', async () => {

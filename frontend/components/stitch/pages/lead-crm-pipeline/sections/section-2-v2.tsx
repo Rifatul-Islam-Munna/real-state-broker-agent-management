@@ -53,6 +53,13 @@ import {
 } from "./lead-shared"
 
 type LeadView = "board" | "list"
+const BOARD_PAGE_SIZE = 8
+const paginatedBoardStages = new Set<LeadStage>([
+  "New",
+  "Contacted",
+  "FollowUp",
+  "Replied",
+])
 type LeadMappingKey = keyof LeadImportInput["mapping"]
 type LeadDialogState =
   | {
@@ -101,6 +108,7 @@ type Section2SectionProps = {
   errorMessage?: string | null
   isLoading: boolean
   isMutating: boolean
+  boardLeads: LeadItem[]
   leads: LeadItem[]
   onCancelLead: (leadId: number, reason: string) => Promise<string | null>
   onCommunicate: (
@@ -135,6 +143,7 @@ export function Section2Section({
   errorMessage,
   isLoading,
   isMutating,
+  boardLeads,
   leads,
   onCancelLead,
   onCommunicate,
@@ -161,6 +170,7 @@ export function Section2Section({
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [deleteMessage, setDeleteMessage] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<LeadView>("board")
+  const [boardStagePages, setBoardStagePages] = useState<Partial<Record<LeadStage, number>>>({})
   const [stageFilter, setStageFilter] = useState<LeadStage | "all">("all")
   const [dialogState, setDialogState] = useState<LeadDialogState>(null)
   const [importOpen, setImportOpen] = useState(false)
@@ -367,11 +377,26 @@ export function Section2Section({
   const boardColumns = useMemo(
     () =>
       boardLeadStages.reduce((columns, stage) => {
-        columns[stage] = leads.filter((lead) => lead.inBoard && lead.stage === stage)
+        columns[stage] = boardLeads.filter((lead) => lead.inBoard && lead.stage === stage)
         return columns
       }, {} as Record<LeadStage, LeadItem[]>),
-    [leads],
+    [boardLeads],
   )
+
+  const availableLeads = useMemo(() => {
+    const byId = new Map<number, LeadItem>()
+    boardLeads.forEach((lead) => byId.set(lead.id, lead))
+    leads.forEach((lead) => byId.set(lead.id, lead))
+    return [...byId.values()]
+  }, [boardLeads, leads])
+
+  function removeLeadFromBoard(leadId: number) {
+    return onSetLeadBoard(leadId, false)
+  }
+
+  function setBoardStagePage(stage: LeadStage, page: number) {
+    setBoardStagePages((current) => ({ ...current, [stage]: Math.max(1, page) }))
+  }
 
   const orderedLeads = useMemo(
     () =>
@@ -394,13 +419,13 @@ export function Section2Section({
     pageIds.length > 0 && pageIds.every((id) => selectedIds.includes(id))
 
   const selectedLead = useMemo(
-    () => leads.find((lead) => lead.id === selectedLeadId) ?? null,
-    [leads, selectedLeadId],
+    () => availableLeads.find((lead) => lead.id === selectedLeadId) ?? null,
+    [availableLeads, selectedLeadId],
   )
 
   const dialogLead = useMemo(
-    () => leads.find((lead) => lead.id === dialogState?.leadId) ?? null,
-    [dialogState?.leadId, leads],
+    () => availableLeads.find((lead) => lead.id === dialogState?.leadId) ?? null,
+    [availableLeads, dialogState?.leadId],
   )
 
   const stats = useMemo(
@@ -413,7 +438,7 @@ export function Section2Section({
       },
       {
         label: "On board",
-        value: `${leads.filter((lead) => lead.inBoard && lead.stage !== "Canceled").length}`,
+        value: `${boardLeads.filter((lead) => lead.inBoard && lead.stage !== "Canceled").length}`,
         detail: "Active follow-up board",
         icon: "view_kanban",
       },
@@ -430,7 +455,7 @@ export function Section2Section({
         icon: "notification_important",
       },
     ],
-    [leads, totalResults],
+    [boardLeads, leads, totalResults],
   )
 
   return (
@@ -562,9 +587,25 @@ export function Section2Section({
           </Alert>
         ) : viewMode === "board" ? (
           <div className="kanban-scroll overflow-x-auto pb-3">
-            {leads.some((lead) => lead.inBoard && lead.stage !== "Canceled") ? (
+            {boardLeads.some((lead) => lead.inBoard && lead.stage !== "Canceled") ? (
               <div className="flex min-h-[35rem] min-w-max gap-4">
-                {boardLeadStages.map((stage) => (
+                {boardLeadStages.map((stage) => {
+                  const stageLeads = boardColumns[stage]
+                  const isPaginated = paginatedBoardStages.has(stage)
+                  const totalStagePages = isPaginated
+                    ? Math.max(1, Math.ceil(stageLeads.length / BOARD_PAGE_SIZE))
+                    : 1
+                  const stagePage = Math.min(
+                    boardStagePages[stage] ?? 1,
+                    totalStagePages,
+                  )
+                  const visibleStageLeads = isPaginated
+                    ? stageLeads.slice(
+                        (stagePage - 1) * BOARD_PAGE_SIZE,
+                        stagePage * BOARD_PAGE_SIZE,
+                      )
+                    : stageLeads
+                  return (
                   <Card className="w-[300px] shrink-0 gap-0 overflow-hidden rounded-2xl border-0 bg-[color-mix(in_srgb,var(--ether-surface-container)_32%,white)] py-0 shadow-none" key={stage}>
                     <CardHeader className="border-0 bg-transparent px-4 pb-2 pt-4">
                       <div className="flex items-center justify-between gap-3">
@@ -586,7 +627,7 @@ export function Section2Section({
                       ghostClass="opacity-40"
                       group="lead-board"
                       handle=".drag-handle"
-                      list={boardColumns[stage]}
+                      list={visibleStageLeads}
                       setList={(newList) => {
                         newList
                           .filter((lead) => lead.stage !== stage || !lead.inBoard)
@@ -595,22 +636,49 @@ export function Section2Section({
                           })
                       }}
                     >
-                      {boardColumns[stage].length === 0 ? (
+                      {stageLeads.length === 0 ? (
                         <div className="flex min-h-[470px] flex-col items-center justify-center rounded-xl border-2 border-dashed border-[color-mix(in_srgb,var(--ether-outline-variant)_35%,transparent)] bg-white/30 px-6 text-center opacity-70">
                           <AppIcon className="text-4xl text-[var(--ether-outline-variant)]" name="move_to_inbox" />
                           <p className="mt-3 text-xs font-semibold text-[var(--ether-on-surface-variant)]">Ready for {leadStageMeta[stage].label.toLowerCase()}</p>
                         </div>
-                      ) : boardColumns[stage].map((lead) => (
+                      ) : visibleStageLeads.map((lead) => (
                         <LeadKanbanCard
                           isActive={selectedLeadId === lead.id}
                           key={lead.id}
                           lead={lead}
                           onOpen={setSelectedLeadId}
+                          onRemove={removeLeadFromBoard}
                         />
                       ))}
                     </ReactSortable>
+                    {isPaginated && totalStagePages > 1 ? (
+                      <div className="flex items-center justify-between gap-2 border-t border-[var(--ether-outline-variant)] bg-white/70 px-4 py-3">
+                        <Button
+                          disabled={stagePage === 1}
+                          onClick={() => setBoardStagePage(stage, stagePage - 1)}
+                          size="sm"
+                          type="button"
+                          variant="ghost"
+                        >
+                          Previous
+                        </Button>
+                        <span className="text-[10px] font-bold text-[var(--ether-outline)]">
+                          {stagePage} / {totalStagePages}
+                        </span>
+                        <Button
+                          disabled={stagePage === totalStagePages}
+                          onClick={() => setBoardStagePage(stage, stagePage + 1)}
+                          size="sm"
+                          type="button"
+                          variant="ghost"
+                        >
+                          {stagePage === 1 ? "Show more" : "Next"}
+                        </Button>
+                      </div>
+                    ) : null}
                   </Card>
-                ))}
+                  )
+                })}
               </div>
             ) : (
               <div className="rounded-[24px] bg-white p-10 text-center shadow-[var(--shadow-surface-1)]">

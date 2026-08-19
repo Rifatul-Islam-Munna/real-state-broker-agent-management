@@ -1740,6 +1740,7 @@ export class TenantInboxSyncService {
       latestEmailBody: input.body,
       latestEmailAt: input.receivedAt.toISOString(),
       lastActivityAt: input.receivedAt.toISOString(),
+      inBoard: existing?.payload?.inBoard === true,
     };
 
     let lead: any;
@@ -1757,11 +1758,12 @@ export class TenantInboxSyncService {
       );
       lead = updated.rows[0];
     } else {
+      const newLeadPayload = { ...leadPayload, inBoard: false };
       const inserted = await client.query(
         `INSERT INTO tenant_lead(full_name, email, phone, status, payload)
          VALUES ($1, NULLIF($2, ''), NULLIF($3, ''), 'new', $4::jsonb)
          RETURNING *`,
-        [name || 'Inbound lead', email, phone, JSON.stringify(leadPayload)],
+        [name || 'Inbound lead', email, phone, JSON.stringify(newLeadPayload)],
       );
       lead = inserted.rows[0];
     }

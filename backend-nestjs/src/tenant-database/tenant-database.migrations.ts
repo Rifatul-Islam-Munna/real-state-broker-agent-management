@@ -374,4 +374,20 @@ export const TENANT_DATABASE_MIGRATIONS: TenantDatabaseMigration[] = [
          )`,
     ],
   },
+  {
+    version: 8,
+    name: 'remove_automatic_new_leads_from_board',
+    statements: [
+      `UPDATE tenant_lead
+       SET payload = COALESCE(payload, '{}'::jsonb) || jsonb_build_object('inBoard', false),
+           updated_at = now()
+       WHERE COALESCE(payload->>'stage', 'New') = 'New'
+         AND COALESCE((payload->>'inBoard')::boolean, false) = true
+         AND (
+           payload ? 'leadCollectionTemplateId'
+           OR payload ? 'latestEmailAt'
+           OR lower(COALESCE(payload->>'source', '')) LIKE '%inbound%'
+         )`,
+    ],
+  },
 ];

@@ -83,6 +83,7 @@ export function LeadCrmPipelinePage() {
   const [dateFilter, setDateFilter] = useState("")
   const [page, setPage] = useState(1)
   const [localLeads, setLocalLeads] = useState<LeadItem[]>([])
+  const [localBoardLeads, setLocalBoardLeads] = useState<LeadItem[]>([])
   const deferredSearch = useDeferredValue(searchTerm)
   const pathname = usePathname()
   const router = useRouter()
@@ -93,6 +94,12 @@ export function LeadCrmPipelinePage() {
   const leadsQuery = useLeads({
     page,
     pageSize: PAGE_SIZE,
+    search: deferredSearch || undefined,
+    date: dateFilter || undefined,
+  })
+  const boardLeadsQuery = useLeads({
+    page: 1,
+    pageSize: 500,
     search: deferredSearch || undefined,
     date: dateFilter || undefined,
   })
@@ -112,12 +119,29 @@ export function LeadCrmPipelinePage() {
     localLeads.length > 0 || (leadsQuery.data?.items?.length ?? 0) === 0
       ? localLeads
       : (leadsQuery.data?.items ?? [])
+  const displayedBoardLeads =
+    localBoardLeads.length > 0 || (boardLeadsQuery.data?.items?.length ?? 0) === 0
+      ? localBoardLeads
+      : (boardLeadsQuery.data?.items ?? [])
   const isInitialLoading =
-    !leadsQuery.data && (leadsQuery.isLoading || leadsQuery.isFetching)
+    (!leadsQuery.data && (leadsQuery.isLoading || leadsQuery.isFetching)) ||
+    (!boardLeadsQuery.data &&
+      (boardLeadsQuery.isLoading || boardLeadsQuery.isFetching))
 
   useEffect(() => {
     setLocalLeads(leadsQuery.data?.items ?? [])
   }, [leadsQuery.data?.items])
+
+  useEffect(() => {
+    setLocalBoardLeads(boardLeadsQuery.data?.items ?? [])
+  }, [boardLeadsQuery.data?.items])
+
+  function updateLeadCollections(
+    update: (current: LeadItem[]) => LeadItem[]
+  ) {
+    setLocalLeads(update)
+    setLocalBoardLeads(update)
+  }
 
   async function handleCreateLead(values: LeadFormValues) {
     const response = await createLeadMutation.mutateAsync(
@@ -128,14 +152,16 @@ export function LeadCrmPipelinePage() {
 
     const createdLead = response.data
     if (createdLead) {
-      setLocalLeads((current) => [createdLead, ...current])
+      updateLeadCollections((current) => [createdLead, ...current])
     }
 
     return null
   }
 
   async function handleUpdateLead(leadId: number, values: LeadFormValues) {
-    const existingLead = localLeads.find((lead) => lead.id === leadId)
+    const existingLead =
+      localLeads.find((lead) => lead.id === leadId) ??
+      localBoardLeads.find((lead) => lead.id === leadId)
 
     if (!existingLead) return "Lead not found."
 
@@ -147,7 +173,7 @@ export function LeadCrmPipelinePage() {
 
     const updatedLead = response.data
     if (updatedLead) {
-      setLocalLeads((current) =>
+      updateLeadCollections((current) =>
         current.map((lead) => (lead.id === updatedLead.id ? updatedLead : lead))
       )
     }
@@ -156,7 +182,9 @@ export function LeadCrmPipelinePage() {
   }
 
   async function handleCancelLead(leadId: number, reason: string) {
-    const existingLead = localLeads.find((lead) => lead.id === leadId)
+    const existingLead =
+      localLeads.find((lead) => lead.id === leadId) ??
+      localBoardLeads.find((lead) => lead.id === leadId)
 
     if (!existingLead) return "Lead not found."
 
@@ -174,7 +202,10 @@ export function LeadCrmPipelinePage() {
     mode: LeadOutreachMode,
     values: LeadOutreachComposerValues
   ) {
-    if (!localLeads.some((lead) => lead.id === leadId)) return "Lead not found."
+    if (
+      !localLeads.some((lead) => lead.id === leadId) &&
+      !localBoardLeads.some((lead) => lead.id === leadId)
+    ) return "Lead not found."
 
     const deliveryModes: LeadOutreachMode[] = mode === "both" ? ["email", "message"] : [mode]
     for (const deliveryMode of deliveryModes) {
@@ -200,7 +231,7 @@ export function LeadCrmPipelinePage() {
       if (response.data?.status === "Failed") return response.data.summary || `${deliveryMode} could not be sent.`
     }
 
-    setLocalLeads((current) => current.map((lead) => {
+    updateLeadCollections((current) => current.map((lead) => {
       if (lead.id !== leadId || lead.stage === "Deal" || lead.stage === "Canceled") return lead
       const isFollowUp = values.sequenceType?.startsWith("FollowUp") === true
       return {
@@ -215,11 +246,13 @@ export function LeadCrmPipelinePage() {
   }
 
   async function handleSetLeadBoard(leadId: number, inBoard: boolean) {
-    const existingLead = localLeads.find((lead) => lead.id === leadId)
+    const existingLead =
+      localLeads.find((lead) => lead.id === leadId) ??
+      localBoardLeads.find((lead) => lead.id === leadId)
 
     if (!existingLead) return
 
-    setLocalLeads((current) =>
+    updateLeadCollections((current) =>
       current.map((lead) => (lead.id === leadId ? { ...lead, inBoard } : lead))
     )
 
@@ -229,7 +262,7 @@ export function LeadCrmPipelinePage() {
     })
 
     if (response.error) {
-      setLocalLeads((current) =>
+      updateLeadCollections((current) =>
         current.map((lead) => (lead.id === leadId ? existingLead : lead))
       )
       return
@@ -237,18 +270,20 @@ export function LeadCrmPipelinePage() {
 
     const updatedLead = response.data
     if (updatedLead) {
-      setLocalLeads((current) =>
+      updateLeadCollections((current) =>
         current.map((lead) => (lead.id === updatedLead.id ? updatedLead : lead))
       )
     }
   }
 
   async function handleStageChange(leadId: number, stage: LeadStage) {
-    const existingLead = localLeads.find((lead) => lead.id === leadId)
+    const existingLead =
+      localLeads.find((lead) => lead.id === leadId) ??
+      localBoardLeads.find((lead) => lead.id === leadId)
 
     if (!existingLead) return
 
-    setLocalLeads((current) =>
+    updateLeadCollections((current) =>
       current.map((lead) =>
         lead.id === leadId ? { ...lead, inBoard: true, stage } : lead
       )
@@ -261,7 +296,7 @@ export function LeadCrmPipelinePage() {
     })
 
     if (response.error) {
-      setLocalLeads((current) =>
+      updateLeadCollections((current) =>
         current.map((lead) => (lead.id === leadId ? existingLead : lead))
       )
       return
@@ -269,7 +304,7 @@ export function LeadCrmPipelinePage() {
 
     const updatedLead = response.data
     if (updatedLead) {
-      setLocalLeads((current) =>
+      updateLeadCollections((current) =>
         current.map((lead) => (lead.id === updatedLead.id ? updatedLead : lead))
       )
     }
@@ -284,7 +319,7 @@ export function LeadCrmPipelinePage() {
         ? response.data.deleted
         : ids,
     )
-    setLocalLeads((current) =>
+    updateLeadCollections((current) =>
       current.filter((lead) => !deletedIds.has(lead.id))
     )
     return null
@@ -298,7 +333,7 @@ export function LeadCrmPipelinePage() {
     const convertedDeal = response.data
     if (!convertedDeal) return "The deal was not returned by the server."
 
-    setLocalLeads((current) =>
+    updateLeadCollections((current) =>
       current.map((lead) =>
         lead.id === leadId
           ? {
@@ -331,10 +366,13 @@ export function LeadCrmPipelinePage() {
       />
       <Section2Section
         agentOptions={sortAgentOptions(agentOptionsQuery.data ?? [])}
+        boardLeads={displayedBoardLeads}
         createDialogVersion={createDialogVersion}
         currentPage={page}
         dateFilter={dateFilter}
-        errorMessage={leadsQuery.error?.message ?? null}
+        errorMessage={
+          leadsQuery.error?.message ?? boardLeadsQuery.error?.message ?? null
+        }
         isLoading={isInitialLoading}
         isMutating={
           createLeadMutation.isPending ||
