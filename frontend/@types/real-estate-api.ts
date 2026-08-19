@@ -1056,7 +1056,7 @@ export type TenantOutreachMonitor = {
   outstanding: number
   failedAttemptsLast24Hours: number
   oldestOutstandingAt?: string | null
-  sync: Record<
+  sync?: Record<
     "mail-inbox" | "sms-inbox" | string,
     {
       status:

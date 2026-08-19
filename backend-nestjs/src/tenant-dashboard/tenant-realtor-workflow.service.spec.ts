@@ -114,6 +114,10 @@ describe('TenantRealtorWorkflowService', () => {
       expect.stringContaining('INSERT INTO tenant_showing('),
       expect.arrayContaining([21, 9, 12, 'Buyer One', 'Assigned Agent']),
     );
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining("'stage', 'Visit'"),
+      [9, expect.any(String)],
+    );
     expect(query).toHaveBeenCalledWith('COMMIT');
   });
 

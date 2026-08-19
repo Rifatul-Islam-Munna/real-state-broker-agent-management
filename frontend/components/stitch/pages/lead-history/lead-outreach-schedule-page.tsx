@@ -563,11 +563,11 @@ export function LeadOutreachSchedulePage() {
             <div className="mt-4 grid gap-3 md:grid-cols-2">
               <SyncMetric
                 label="Email inbox sync"
-                state={tenantMonitorQuery.data.sync["mail-inbox"]}
+                state={tenantMonitorQuery.data.sync?.["mail-inbox"]}
               />
               <SyncMetric
                 label="SMS inbox sync"
-                state={tenantMonitorQuery.data.sync["sms-inbox"]}
+                state={tenantMonitorQuery.data.sync?.["sms-inbox"]}
               />
             </div>
           </section>
@@ -1472,7 +1472,7 @@ function SyncMetric({
   state,
 }: {
   label: string
-  state?: TenantOutreachMonitor["sync"][string]
+  state?: NonNullable<TenantOutreachMonitor["sync"]>[string]
 }) {
   const status = state?.status ?? "scheduled"
   const danger = status === "failed" || status === "dead_letter"

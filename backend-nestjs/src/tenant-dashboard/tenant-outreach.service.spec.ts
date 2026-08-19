@@ -233,6 +233,9 @@ describe('TenantOutreachService reliability', () => {
       if (sql.includes('INSERT INTO tenant_outreach_job')) {
         return { rowCount: 1, rows: [{ id: 71 }] };
       }
+      if (sql.includes("AND status = 'sent'")) {
+        return { rowCount: 1, rows: [{ exists: 1 }] };
+      }
       if (sql.includes('WHERE j.id = $1')) {
         return {
           rowCount: 1,
@@ -281,5 +284,76 @@ describe('TenantOutreachService reliability', () => {
     );
     expect(statements.join('\n')).toContain("followUpStatus', 'Completed'");
     expect(statements.join('\n')).toContain("ELSE 'Replied'");
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining("AND channel = $2"),
+      [9, 'Email', expect.any(Date), 'buyer@example.com'],
+    );
+  });
+
+  it('does not mark inbound mail as a reply before same-channel outreach was sent', async () => {
+    const statements: string[] = [];
+    const query = jest.fn(async (sql: string) => {
+      statements.push(sql);
+      if (sql.includes('FROM tenant_lead WHERE LOWER(email)')) {
+        return { rowCount: 1, rows: [{ id: 9, fullName: 'Buyer', email: 'buyer@example.com' }] };
+      }
+      if (sql.includes('INSERT INTO tenant_outreach_job')) {
+        return { rowCount: 1, rows: [{ id: 72 }] };
+      }
+      if (sql.includes('WHERE j.id = $1')) {
+        return {
+          rowCount: 1,
+          rows: [{
+            id: 72,
+            lead_id: 9,
+            channel: 'Email',
+            direction: 'Incoming',
+            status: 'received',
+            media_urls: [],
+            payload: {},
+          }],
+        };
+      }
+      if (sql.includes("AND status = 'sent'")) return { rowCount: 0, rows: [] };
+      return { rowCount: 1, rows: [] };
+    });
+    const { service } = createService(query);
+
+    await service.recordInboundEmail(tenant, {
+      senderEmail: 'buyer@example.com',
+      subject: 'New inquiry',
+      body: 'Is this available?',
+      messageId: '<message-before-outreach>',
+      provider: 'Gmail',
+    });
+
+    expect(statements.some((sql) => sql.includes("SET status = 'cancelled'"))).toBe(false);
+    expect(statements.some((sql) => sql.includes("ELSE 'Replied'"))).toBe(false);
+  });
+
+  it('records sent post-visit follow-up for automatic board cleanup', async () => {
+    const query = jest.fn().mockResolvedValue({ rowCount: 1, rows: [] });
+    const { service } = createService(query);
+
+    await (service as any).finishAttemptSuccess(
+      'tenant_11_alpha',
+      {
+        id: 81,
+        lead_id: 9,
+        source_type: 'lead-outreach',
+        provider: 'SMTP',
+        payload: {
+          sequenceType: 'FollowUp1',
+          lead: { payload: { stage: 'Visit' } },
+        },
+      },
+      91,
+      'provider-message-81',
+    );
+
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining("'postVisitFollowUpSentAt'"),
+      [9, true, true],
+    );
   });
 });

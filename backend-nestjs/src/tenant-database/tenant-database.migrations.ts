@@ -314,4 +314,64 @@ export const TENANT_DATABASE_MIGRATIONS: TenantDatabaseMigration[] = [
         ON tenant_mail_deletion_tombstone(deleted_at DESC)`,
     ],
   },
+  {
+    version: 7,
+    name: 'repair_false_lead_reply_stages',
+    statements: [
+      `UPDATE tenant_lead lead
+       SET payload = COALESCE(lead.payload, '{}'::jsonb) || jsonb_build_object(
+         'stage', CASE
+           WHEN EXISTS (
+             SELECT 1 FROM tenant_outreach_job sent
+             WHERE sent.lead_id = lead.id
+               AND sent.direction <> 'Incoming'
+               AND sent.status = 'sent'
+           ) THEN 'Contacted'
+           ELSE 'New'
+         END,
+         'followUpStatus', CASE
+           WHEN EXISTS (
+             SELECT 1 FROM tenant_outreach_job pending
+             WHERE pending.lead_id = lead.id
+               AND pending.direction <> 'Incoming'
+               AND pending.status IN ('scheduled', 'retrying')
+           ) THEN 'Scheduled'
+           ELSE 'Open'
+         END
+       ),
+       updated_at = now()
+       WHERE COALESCE(lead.payload->>'stage', '') = 'Replied'
+         AND NOT EXISTS (
+           SELECT 1
+           FROM tenant_outreach_job incoming
+           JOIN tenant_outreach_job sent
+             ON sent.lead_id = incoming.lead_id
+            AND sent.channel = incoming.channel
+            AND sent.direction <> 'Incoming'
+            AND sent.status = 'sent'
+            AND COALESCE(sent.occurred_at, sent.completed_at, sent.updated_at, sent.created_at)
+                <= COALESCE(incoming.occurred_at, incoming.created_at)
+            AND (
+              (sent.channel = 'Email'
+               AND lower(COALESCE(sent.recipient_email, '')) = lower(COALESCE(incoming.recipient_email, '')))
+              OR
+              (sent.channel = 'SMS'
+               AND regexp_replace(COALESCE(sent.recipient_phone, ''), '[^0-9]', '', 'g') =
+                   regexp_replace(COALESCE(incoming.recipient_phone, ''), '[^0-9]', '', 'g'))
+            )
+           WHERE incoming.lead_id = lead.id
+             AND incoming.direction = 'Incoming'
+             AND (
+               (incoming.channel = 'Email'
+                AND lower(COALESCE(incoming.recipient_email, '')) = lower(COALESCE(lead.email, ''))
+                AND COALESCE(lead.email, '') <> '')
+               OR
+               (incoming.channel = 'SMS'
+                AND regexp_replace(COALESCE(incoming.recipient_phone, ''), '[^0-9]', '', 'g') =
+                    regexp_replace(COALESCE(lead.phone, ''), '[^0-9]', '', 'g')
+                AND regexp_replace(COALESCE(lead.phone, ''), '[^0-9]', '', 'g') <> '')
+             )
+         )`,
+    ],
+  },
 ];

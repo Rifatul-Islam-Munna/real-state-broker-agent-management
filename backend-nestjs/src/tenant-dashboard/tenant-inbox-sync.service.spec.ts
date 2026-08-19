@@ -432,6 +432,73 @@ describe('TenantInboxSyncService deleted mail protection', () => {
   });
 });
 
+describe('TenantInboxSyncService reply matching', () => {
+  test('matches email only against lead email, not stored proxy sender', async () => {
+    const query = jest.fn().mockResolvedValue({ rowCount: 0, rows: [] });
+    const service = new TenantInboxSyncService({} as any, {} as any, {} as any);
+
+    await (service as any).findLead({ query }, 'email', 'other@example.com');
+
+    const sql = query.mock.calls[0][0];
+    expect(sql).toContain("to_jsonb(lead)->>'email'");
+    expect(sql).not.toContain('inboundReplyAddress');
+  });
+
+  test.each(['Email', 'SMS'] as const)(
+    'requires prior sent %s outreach before treating inbound message as reply',
+    async (channel) => {
+      const query = jest.fn().mockResolvedValue({ rowCount: 0, rows: [] });
+      const service = new TenantInboxSyncService({} as any, {} as any, {} as any);
+      const receivedAt = new Date('2026-08-18T00:00:00Z');
+
+      await expect(
+        (service as any).hasPriorSentOutreach(
+          { query },
+          9,
+          channel,
+          receivedAt,
+          channel === 'Email' ? 'buyer@example.com' : '+1 555 010 2233',
+        ),
+      ).resolves.toBe(false);
+      expect(query).toHaveBeenCalledWith(
+        expect.stringContaining("AND status = 'sent'"),
+        [
+          9,
+          channel,
+          receivedAt,
+          channel === 'Email' ? 'buyer@example.com' : '+1 555 010 2233',
+        ],
+      );
+    },
+  );
+});
+
+describe('TenantInboxSyncService post-visit board cleanup', () => {
+  test('removes unreplied post-visit follow-up after two days', async () => {
+    const query = jest.fn().mockResolvedValue({ rowCount: 1, rows: [{ id: 9 }] });
+    const databases = {
+      withTenantClient: jest.fn((_database: string, callback: any) => callback({ query })),
+    };
+    const service = new TenantInboxSyncService(
+      {} as any,
+      databases as any,
+      {} as any,
+    );
+
+    await expect(
+      (service as any).removeStalePostVisitFollowUps({ databaseName: 'tenant_1_demo' }),
+    ).resolves.toEqual({ removed: 1 });
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining("payload->>'postVisitFollowUpSentAt'"),
+      [2],
+    );
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining("'inBoard', false"),
+      [2],
+    );
+  });
+});
+
 describe('TenantInboxSyncService connection compatibility', () => {
   test('infers Gmail IMAP settings from existing SMTP config', () => {
     const service = new TenantInboxSyncService({} as any, {} as any, {} as any);

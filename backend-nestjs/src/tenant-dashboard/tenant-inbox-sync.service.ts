@@ -102,6 +102,7 @@ export class TenantInboxSyncService {
         async (tenant) => {
           try {
             await this.scheduleTenantFollowUps(tenant);
+            await this.removeStalePostVisitFollowUps(tenant);
           } catch (error) {
             this.logger.error(
               `Tenant follow-up scheduling failed for ${tenant.databaseName}: ${this.message(error)}`,
@@ -168,6 +169,7 @@ export class TenantInboxSyncService {
     const propertyLinked = await this.linkMissingLeadProperties(tenant);
     const welcomeSent = await this.autoSendWelcomeForLeads(tenant);
     await this.scheduleTenantFollowUps(tenant);
+    await this.removeStalePostVisitFollowUps(tenant);
     const namesFixed = await this.fixMissingLeadNames(tenant);
     const recoveredNote = recovered.converted
       ? `, ${recovered.converted} previously skipped ${recovered.converted === 1 ? 'email was' : 'emails were'} recovered.`
@@ -791,6 +793,15 @@ export class TenantInboxSyncService {
             JSON.stringify(payload),
           ],
         );
+        const isReply = inserted.rows[0]?.was_inserted && lead?.id && !created
+          ? await this.hasPriorSentOutreach(
+              client,
+              Number(lead.id),
+              channel,
+              input.receivedAt,
+              input.sender,
+            )
+          : false;
         if (inserted.rows[0]?.was_inserted && lead?.id) {
           await client.query(
             `UPDATE tenant_lead
@@ -805,7 +816,7 @@ export class TenantInboxSyncService {
                 latestEmailAt: input.channel === 'email' ? input.receivedAt.toISOString() : undefined,
                 latestMailInboxId: input.channel === 'email' ? Number(inserted.rows[0].id) : undefined,
                 lastActivityAt: input.receivedAt.toISOString(),
-                ...(!created ? {
+                ...(isReply ? {
                   stage: ['Deal', 'Canceled'].includes(`${lead?.payload?.stage ?? ''}`)
                     ? lead.payload.stage
                     : 'Replied',
@@ -815,18 +826,20 @@ export class TenantInboxSyncService {
               }),
             ],
           );
-          await client.query(
-            `UPDATE tenant_outreach_job
-             SET status = 'cancelled',
-                 last_error = 'Cancelled because this lead replied.',
-                 completed_at = now(), locked_at = NULL, locked_by = NULL,
-                 updated_at = now()
-             WHERE lead_id = $1
-               AND id <> $2
-               AND direction <> 'Incoming'
-               AND status IN ('scheduled', 'retrying')`,
-            [lead.id, inserted.rows[0].id],
-          );
+          if (isReply) {
+            await client.query(
+              `UPDATE tenant_outreach_job
+               SET status = 'cancelled',
+                   last_error = 'Cancelled because this lead replied.',
+                   completed_at = now(), locked_at = NULL, locked_by = NULL,
+                   updated_at = now()
+               WHERE lead_id = $1
+                 AND id <> $2
+                 AND direction <> 'Incoming'
+                 AND status IN ('scheduled', 'retrying')`,
+              [lead.id, inserted.rows[0].id],
+            );
+          }
         }
         await client.query('COMMIT');
         const imported = inserted.rows[0]?.was_inserted === true ? 1 : 0;
@@ -1507,6 +1520,31 @@ export class TenantInboxSyncService {
     });
   }
 
+  private async removeStalePostVisitFollowUps(tenant: SaasTenant) {
+    const days = this.clamp(process.env.TENANT_POST_VISIT_BOARD_DAYS, 2, 1, 30);
+    return this.databases.withTenantClient(
+      this.databaseName(tenant),
+      async (client) => {
+        const result = await client.query(
+          `UPDATE tenant_lead
+           SET payload = COALESCE(payload, '{}'::jsonb) || jsonb_build_object(
+             'inBoard', false,
+             'followUpStatus', 'Completed',
+             'boardRemovedAt', now()::text
+           ),
+           updated_at = now()
+           WHERE COALESCE((payload->>'inBoard')::boolean, false) = true
+             AND COALESCE(payload->>'stage', '') = 'FollowUp'
+             AND NULLIF(payload->>'postVisitFollowUpSentAt', '')::timestamptz
+                 <= now() - ($1::int * interval '1 day')
+           RETURNING id`,
+          [days],
+        );
+        return { removed: result.rowCount ?? 0 };
+      },
+    );
+  }
+
   private welcomeAttachmentUrls(template: any, propertyPayload: any): string[] {
     const wantsDocuments =
       template?.attachmentMode === 'property' ||
@@ -2027,7 +2065,6 @@ export class TenantInboxSyncService {
             `SELECT to_jsonb(lead) AS value
              FROM tenant_lead lead
              WHERE lower(COALESCE(to_jsonb(lead)->>'email', '')) = lower($1)
-                OR lower(COALESCE(lead.payload->>'inboundReplyAddress', '')) = lower($1)
              ORDER BY lead.id DESC LIMIT 1`,
             [sender],
           )
@@ -2040,6 +2077,33 @@ export class TenantInboxSyncService {
             [sender],
           );
     return result.rows[0]?.value ?? null;
+  }
+
+  private async hasPriorSentOutreach(
+    client: PoolClient,
+    leadId: number,
+    channel: 'Email' | 'SMS',
+    receivedAt: Date,
+    sender: string,
+  ) {
+    const result = await client.query(
+      `SELECT 1
+       FROM tenant_outreach_job
+       WHERE lead_id = $1
+         AND channel = $2
+         AND direction <> 'Incoming'
+         AND status = 'sent'
+         AND COALESCE(occurred_at, completed_at, updated_at, created_at) <= $3
+         AND (
+           ($2 = 'Email' AND lower(COALESCE(recipient_email, '')) = lower($4))
+           OR
+           ($2 = 'SMS' AND regexp_replace(COALESCE(recipient_phone, ''), '[^0-9]', '', 'g') =
+                           regexp_replace($4, '[^0-9]', '', 'g'))
+         )
+       LIMIT 1`,
+      [leadId, channel, receivedAt, sender],
+    );
+    return Boolean(result.rowCount);
   }
 
   private async gmailAccessToken(

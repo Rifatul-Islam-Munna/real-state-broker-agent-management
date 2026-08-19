@@ -1017,7 +1017,16 @@ export class TenantOutreachService {
           );
           row = complete.rows[0] ?? row;
         }
-        if (row && Number(lead?.id) > 0) {
+        const isReply = row && Number(lead?.id) > 0
+          ? await this.hasPriorSentOutreach(
+              client,
+              Number(lead.id),
+              input.channel,
+              input.receivedAt,
+              input.sender,
+            )
+          : false;
+        if (row && isReply) {
           await client.query(
             `UPDATE tenant_outreach_job
              SET status = 'cancelled',
@@ -1079,6 +1088,33 @@ export class TenantOutreachService {
           [sender],
         );
     return result.rows[0] ?? null;
+  }
+
+  private async hasPriorSentOutreach(
+    client: PoolClient,
+    leadId: number,
+    channel: 'Email' | 'SMS',
+    receivedAt: Date,
+    sender: string,
+  ) {
+    const result = await client.query(
+      `SELECT 1
+       FROM tenant_outreach_job
+       WHERE lead_id = $1
+         AND channel = $2
+         AND direction <> 'Incoming'
+         AND status = 'sent'
+         AND COALESCE(occurred_at, completed_at, updated_at, created_at) <= $3
+         AND (
+           ($2 = 'Email' AND lower(COALESCE(recipient_email, '')) = lower($4))
+           OR
+           ($2 = 'SMS' AND regexp_replace(COALESCE(recipient_phone, ''), '[^0-9]', '', 'g') =
+                           regexp_replace($4, '[^0-9]', '', 'g'))
+         )
+       LIMIT 1`,
+      [leadId, channel, receivedAt, sender],
+    );
+    return Boolean(result.rowCount);
   }
 
   private normalizeClaimedJob(job: any): TenantOutreachJob {
@@ -1185,6 +1221,10 @@ export class TenantOutreachService {
           const payload = this.object(job.payload) ?? {};
           const isFollowUp = job.source_type === 'lead-followup' ||
             this.text(payload.sequenceType).startsWith('FollowUp');
+          const leadSnapshot = this.object(payload.lead) ?? {};
+          const leadSnapshotPayload = this.object(leadSnapshot.payload) ?? {};
+          const isPostVisitFollowUp = isFollowUp &&
+            this.text(leadSnapshotPayload.stage ?? leadSnapshot.stage) === 'Visit';
           await client.query(
             `UPDATE tenant_lead
              SET payload = COALESCE(payload, '{}'::jsonb) ||
@@ -1200,10 +1240,13 @@ export class TenantOutreachService {
                      WHEN COALESCE(payload->>'stage', '') IN ('Deal', 'Canceled') THEN COALESCE((payload->>'inBoard')::boolean, false)
                      ELSE true
                    END
-                 ),
+                 ) || CASE
+                   WHEN $3::boolean THEN jsonb_build_object('postVisitFollowUpSentAt', now()::text)
+                   ELSE '{}'::jsonb
+                 END,
                  updated_at = now()
              WHERE id = $1`,
-            [Number(job.lead_id), isFollowUp],
+            [Number(job.lead_id), isFollowUp, isPostVisitFollowUp],
           );
         }
         await client.query('COMMIT');

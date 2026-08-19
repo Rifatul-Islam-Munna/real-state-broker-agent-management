@@ -668,6 +668,19 @@ export class TenantRealtorWorkflowService {
            ON CONFLICT DO NOTHING`,
             [request.leadId, propertyId],
           );
+          await client.query(
+            `UPDATE tenant_lead
+             SET payload = COALESCE(payload, '{}'::jsonb) || jsonb_build_object(
+               'stage', 'Visit',
+               'inBoard', true,
+               'propertyVisitAt', $2::text,
+               'lastActivityAt', now()::text
+             ),
+             updated_at = now()
+             WHERE id = $1
+               AND COALESCE(payload->>'stage', '') NOT IN ('Deal', 'Canceled')`,
+            [request.leadId, showingAt.toISOString()],
+          );
           await this.audit(
             client,
             'showing-request.approved',
