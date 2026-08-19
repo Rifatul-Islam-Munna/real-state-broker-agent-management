@@ -403,10 +403,13 @@ export function Section2Section({
       [...leads]
         .filter((lead) => stageFilter === "all" || lead.stage === stageFilter)
         .sort((left, right) => {
-          const stageDelta =
-            leadStageOrder.indexOf(left.stage) - leadStageOrder.indexOf(right.stage)
-          if (stageDelta !== 0) return stageDelta
-          return Number(right.inBoard) - Number(left.inBoard)
+          const leftDate = new Date(left.lastActivityAt ?? left.createdAt ?? 0).getTime()
+          const rightDate = new Date(right.lastActivityAt ?? right.createdAt ?? 0).getTime()
+          const dateDelta =
+            (Number.isFinite(rightDate) ? rightDate : 0) -
+            (Number.isFinite(leftDate) ? leftDate : 0)
+          if (dateDelta !== 0) return dateDelta
+          return right.id - left.id
         }),
     [leads, stageFilter],
   )
