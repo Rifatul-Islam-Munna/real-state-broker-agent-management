@@ -924,6 +924,9 @@ export class TenantLegacyCompatibilityService {
 
   private normalizeLeadPayload(input: any) {
     const payload = { ...(input ?? {}) };
+    const stage = `${payload.stage ?? payload.status ?? ''}`.trim().toLowerCase();
+    if (stage === 'contacted') payload.inBoard = true;
+    if (stage === 'deal' || stage === 'canceled') payload.inBoard = false;
     if (Object.prototype.hasOwnProperty.call(payload, 'creditScore')) {
       payload.creditScore = this.normalizeCreditScore(payload.creditScore);
     }
@@ -972,11 +975,18 @@ export class TenantLegacyCompatibilityService {
 
   private filter(items: any[], query: any) {
     const search = `${query?.search ?? query?.q ?? ''}`.trim().toLowerCase();
-    const status = `${query?.status ?? ''}`.trim().toLowerCase();
+    const status = `${query?.status ?? query?.stage ?? ''}`.trim().toLowerCase();
+    const propertyListingStatus = `${query?.propertyListingStatus ?? query?.listingStatus ?? ''}`
+      .trim()
+      .toLowerCase();
     const dateKey = `${query?.date ?? query?.createdDate ?? ''}`.trim();
     const dateParts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateKey);
     return items.filter((item) => {
-      if (status && `${item?.status ?? item?.stage ?? ''}`.toLowerCase() !== status) return false;
+      if (status && `${item?.stage ?? item?.status ?? ''}`.toLowerCase() !== status) return false;
+      if (
+        propertyListingStatus &&
+        `${item?.propertyListingStatus ?? ''}`.toLowerCase() !== propertyListingStatus
+      ) return false;
       if (dateParts) {
         const mailActivity = new Date(
           item?.lastActivityAt ?? item?.last_activity_at ?? item?.createdAt ?? item?.created_at ?? NaN,

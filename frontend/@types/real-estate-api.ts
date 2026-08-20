@@ -280,6 +280,7 @@ export type AgencyIntegrationStatus = {
 export type CommunicationProviderWriteInput = {
   providerName: string
   accountId: string
+  clientSecret?: string
   authToken: string
   fromNumber: string
   baseUrl?: string | null

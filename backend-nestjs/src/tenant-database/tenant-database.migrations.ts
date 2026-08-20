@@ -407,7 +407,18 @@ export const TENANT_DATABASE_MIGRATIONS: TenantDatabaseMigration[] = [
       `CREATE INDEX IF NOT EXISTS idx_tenant_showing_request_link_request
        ON tenant_showing_request_link(showing_request_id, created_at DESC)`,
       `CREATE INDEX IF NOT EXISTS idx_tenant_showing_request_link_expiry
-       ON tenant_showing_request_link(expires_at)`,
+        ON tenant_showing_request_link(expires_at)`,
+    ],
+  },
+  {
+    version: 10,
+    name: 'place_contacted_leads_on_board',
+    statements: [
+      `UPDATE tenant_lead
+       SET payload = COALESCE(payload, '{}'::jsonb) || jsonb_build_object('inBoard', true),
+           updated_at = now()
+       WHERE lower(COALESCE(payload->>'stage', status, '')) = 'contacted'
+         AND COALESCE(lower(payload->>'inBoard') = 'true', false) = false`,
     ],
   },
 ];

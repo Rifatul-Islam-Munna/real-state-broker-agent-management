@@ -34,6 +34,7 @@ export type LeadFormValues = {
 export type LeadFormErrors = Partial<Record<keyof LeadFormValues | "form", string>>
 
 export type OutreachType = "email" | "message"
+export type LeadListFilter = LeadStage | "all" | "not-listed"
 
 export const boardLeadStages = leadStageOrder.filter((stage) => stage !== "Canceled")
 export { leadStageOrder }
@@ -51,12 +52,16 @@ export const leadFormSelectOptions = {
   nextActionTypes: ["First response", "Call", "Email", "SMS", "Showing", "Document request", "Deal update"] as const,
 }
 
-export function validateLeadForm(values: LeadFormValues) {
+export function validateLeadForm(
+  values: LeadFormValues,
+  options: { requireEmail?: boolean } = {}
+) {
   const errors: LeadFormErrors = {}
+  const requireEmail = options.requireEmail ?? true
 
   if (!values.name.trim()) errors.name = "Lead name is required."
-  if (!values.email.trim()) errors.email = "Email is required."
-  else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email.trim())) {
+  if (requireEmail && !values.email.trim()) errors.email = "Email is required."
+  else if (values.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email.trim())) {
     errors.email = "Enter a valid email address."
   }
   if (!values.phone.trim()) errors.phone = "Phone is required."

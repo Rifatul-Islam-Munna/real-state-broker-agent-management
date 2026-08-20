@@ -316,6 +316,7 @@ export class TenantInboxSyncService {
   ) {
     const providerKey = `gmail:${this.text(config.gmailEmail, config.username)}`;
     const stats = this.emptyStats();
+    const scanStartedAt = Date.now();
     await this.markStarted(databaseName, providerKey);
     try {
       const accessToken = await this.gmailAccessToken(databaseName, config, tenant);
@@ -328,7 +329,8 @@ export class TenantInboxSyncService {
         config.mailboxTag,
         maxMessages,
         lastScan,
-      );      let oldestProcessed = 0;
+      );
+      let processingError: unknown = null;
       for (const selected of [...selectedMessages].reverse()) {
         try {
           const id = selected.id;
@@ -346,9 +348,6 @@ export class TenantInboxSyncService {
           const recipient = this.extractAddress(headers.to);
           const bodies = this.gmailBodies(message.payload);
           const received = message.internalDate ? Number(message.internalDate) : 0;
-          if (received > 0 && (!oldestProcessed || received < oldestProcessed)) {
-            oldestProcessed = received;
-          }
           this.addStats(stats, await this.storeInbound(databaseName, {
             channel: 'email',
             providerKey,
@@ -370,8 +369,8 @@ export class TenantInboxSyncService {
             },
           }));
         } catch (error) {
-          // One failing message must never block newer emails from being
-          // processed on this or future runs.
+          // Finish remaining messages, then fail run so cursor cannot skip this one.
+          processingError ??= error;
           stats.skipped += 1;
           this.logger.warn(`Mailbox message skipped ${JSON.stringify({
             databaseName,
@@ -380,16 +379,15 @@ export class TenantInboxSyncService {
           })}`);
         }
       }
-
       await this.markCompleted(
         databaseName,
         providerKey,
         selectedMessages[0]?.id ?? null,
         stats,
         this.clamp(config.syncIntervalMinutes, 5, 1, 720) || 5,
-        selectedMessages.length >= maxMessages && oldestProcessed > 0
-          ? oldestProcessed
-          : null,
+        processingError
+          ? lastScan || scanStartedAt - 14 * 24 * 60 * 60_000
+          : scanStartedAt - 60_000,
       ).catch((error) => {
         this.logger.warn(`Mailbox sync completion save failed ${JSON.stringify({
           databaseName,
@@ -407,17 +405,19 @@ export class TenantInboxSyncService {
   private async gmailMessagesForConfiguredTags(
     accessToken: string,
     configuredTags: unknown,
-    maxMessages: number,
+    pageSize: number,
     lastScan = 0,
   ) {
+    const scanStartedAt = Date.now();
     const requestedTags = this.syncTags(configuredTags, 'gmail');
     if (!requestedTags.length) {
       return this.listGmailMessagesForLabel(
         accessToken,
         'INBOX',
         'gmail',
-        maxMessages,
+        pageSize,
         lastScan,
+        scanStartedAt,
       );
     }
 
@@ -439,18 +439,16 @@ export class TenantInboxSyncService {
     for (const label of resolved) {
       const labelId = this.text(label.id);
       const labelName = this.text(label.name, labelId);
-      const remaining = maxMessages - selected.size;
-      if (remaining <= 0) break;
       const messages = await this.listGmailMessagesForLabel(
         accessToken,
         labelId,
         labelName,
-        remaining,
+        pageSize,
         lastScan,
+        scanStartedAt,
       );
       for (const message of messages) {
         if (!selected.has(message.id)) selected.set(message.id, message);
-        if (selected.size >= maxMessages) break;
       }
     }
     return [...selected.values()];
@@ -460,20 +458,19 @@ export class TenantInboxSyncService {
     accessToken: string,
     labelId: string,
     mailboxTag: string,
-    maxMessages: number,
+    pageSize: number,
     lastScan = 0,
+    scanStartedAt = Date.now(),
   ) {
     const ids: Array<{ id: string; mailboxTag: string }> = [];
     let pageToken = '';
-    while (ids.length < maxMessages) {
+    while (true) {
       const url = new URL('https://gmail.googleapis.com/gmail/v1/users/me/messages');
       url.searchParams.append('labelIds', labelId);
-      url.searchParams.set('maxResults', String(Math.min(100, maxMessages - ids.length)));
+      url.searchParams.set('maxResults', String(Math.min(100, pageSize)));
       url.searchParams.set(
         'q',
-        lastScan > 0
-          ? `after:${Math.floor(lastScan / 1000)}`
-          : 'newer_than:14d',
+        `${lastScan > 0 ? `after:${Math.floor(lastScan / 1000)}` : 'newer_than:14d'} before:${Math.floor(scanStartedAt / 1000) + 1}`,
       );
       if (pageToken) url.searchParams.set('pageToken', pageToken);
       const list = await this.jsonRequest(url.toString(), {
@@ -492,6 +489,7 @@ export class TenantInboxSyncService {
   private async syncImap(databaseName: string, config: any, fullWindow = false) {
     const providerKey = `imap:${this.text(config.mailboxTag, config.imapUsername ?? config.username)}`;
     const stats = this.emptyStats();
+    const scanStartedAt = Date.now();
     await this.markStarted(databaseName, providerKey);
     let connection: any;
     try {
@@ -524,10 +522,11 @@ export class TenantInboxSyncService {
         }
         const uids: number[] = await connection.search(search, { uid: true });
         const maxMessages = this.clamp(config.maxMessagesPerSync, 100, 5, 500);
-        const selected = uids.slice(-maxMessages);
-        let oldestProcessed = 0;
-        if (selected.length > 0) {
-          for await (const item of connection.fetch(selected.join(','), {
+        const selected = uids;
+        let processingError: unknown = null;
+        for (let offset = 0; offset < selected.length; offset += maxMessages) {
+          const batch = selected.slice(offset, offset + maxMessages);
+          for await (const item of connection.fetch(batch.join(','), {
             uid: true,
             envelope: true,
             flags: true,
@@ -542,9 +541,6 @@ export class TenantInboxSyncService {
               const mailboxTag = this.matchImapTag(item.flags, syncTags) || 'imap';
               const received = item.internalDate ?? parsed.date ?? null;
               const receivedAt = received ? new Date(received) : new Date();
-              if (received && (!oldestProcessed || receivedAt.getTime() < oldestProcessed)) {
-                oldestProcessed = receivedAt.getTime();
-              }
               this.addStats(stats, await this.storeInbound(databaseName, {
                 channel: 'email',
                 providerKey,
@@ -566,6 +562,7 @@ export class TenantInboxSyncService {
                 },
               }));
             } catch (error) {
+              processingError ??= error;
               stats.skipped += 1;
               this.logger.warn(`Mailbox message skipped ${JSON.stringify({
                 databaseName,
@@ -581,9 +578,9 @@ export class TenantInboxSyncService {
           selected.length ? `${selected[selected.length - 1]}` : null,
           stats,
           this.clamp(config.syncIntervalMinutes, 5, 1, 720) || 5,
-          uids.length > maxMessages && oldestProcessed > 0
-            ? oldestProcessed
-            : null,
+          processingError
+            ? lastScan || scanStartedAt - 14 * 24 * 60 * 60_000
+            : scanStartedAt - 60_000,
         ).catch((error) => {
           this.logger.warn(`Mailbox sync completion save failed ${JSON.stringify({
             databaseName,

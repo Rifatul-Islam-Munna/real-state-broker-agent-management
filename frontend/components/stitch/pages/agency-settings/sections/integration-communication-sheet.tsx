@@ -27,6 +27,7 @@ import { useUpdateAgencyIntegrationSettings } from "@/hooks/use-real-estate-api"
 type Values = {
   providerName: "Twilio" | "Plivo" | "RingCentral" | "Custom"
   accountId: string
+  clientSecret: string
   authToken: string
   fromNumber: string
   baseUrl: string
@@ -38,11 +39,13 @@ type Values = {
   syncIntervalMinutes: string
   maxMessagesPerSync: string
   hasAuthToken: boolean
+  hasClientSecret: boolean
 }
 
 const emptyValues = (): Values => ({
   providerName: "Twilio",
   accountId: "",
+  clientSecret: "",
   authToken: "",
   fromNumber: "",
   baseUrl: "https://api.twilio.com",
@@ -54,6 +57,7 @@ const emptyValues = (): Values => ({
   syncIntervalMinutes: "5",
   maxMessagesPerSync: "25",
   hasAuthToken: false,
+  hasClientSecret: false,
 })
 
 export function IntegrationCommunicationSheet({
@@ -76,6 +80,7 @@ export function IntegrationCommunicationSheet({
       ...defaults,
       ...config,
       authToken: "",
+      clientSecret: "",
       syncIntervalMinutes: String(config?.syncIntervalMinutes ?? defaults.syncIntervalMinutes),
       maxMessagesPerSync: String(config?.maxMessagesPerSync ?? defaults.maxMessagesPerSync),
     })
@@ -91,7 +96,7 @@ export function IntegrationCommunicationSheet({
       providerName === "Plivo"
         ? { baseUrl: "https://api.plivo.com", smsWebhookUrl: "/api/sms-webhooks/plivo" }
         : providerName === "RingCentral"
-          ? { baseUrl: "https://platform.ringcentral.com", smsWebhookUrl: "/api/sms-webhooks/ringcentral" }
+          ? { baseUrl: "https://platform.ringcentral.com", smsWebhookUrl: "", voiceWebhookUrl: "", supportsSms: true, supportsVoice: false, enableSmsSync: true }
           : providerName === "Twilio"
             ? { baseUrl: "https://api.twilio.com", smsWebhookUrl: "/api/sms-webhooks/twilio" }
             : {}
@@ -100,18 +105,24 @@ export function IntegrationCommunicationSheet({
 
   async function save() {
     setError(null)
+    const isRingCentral = values.providerName === "RingCentral"
     if (!values.accountId.trim() || !values.fromNumber.trim()) {
-      setError("Account ID and from number are required.")
+      setError(`${isRingCentral ? "Client ID" : "Account ID"} and from number are required.`)
+      return
+    }
+    if (isRingCentral && !values.clientSecret.trim() && !values.hasClientSecret) {
+      setError("RingCentral client secret is required for a new connection.")
       return
     }
     if (!values.authToken.trim() && !values.hasAuthToken) {
-      setError("Auth token is required for a new connection.")
+      setError(`${isRingCentral ? "RingCentral JWT" : "Auth token"} is required for a new connection.`)
       return
     }
     const response = await mutation.mutateAsync({
       communication: {
         providerName: values.providerName,
         accountId: values.accountId.trim(),
+        clientSecret: values.clientSecret.trim(),
         authToken: values.authToken.trim(),
         fromNumber: values.fromNumber.trim(),
         baseUrl: values.baseUrl.trim() || null,
@@ -163,23 +174,34 @@ export function IntegrationCommunicationSheet({
               </SelectContent>
             </Select>
           </Field>
+          {values.providerName === "RingCentral" ? (
+            <Alert>
+              <AlertDescription>
+                Paste RC_CLIENT_ID, RC_CLIENT_SECRET, RC_JWT, RC_FROM_NUMBER, and RC_SERVER_URL below. SDK exchanges saved JWT for an access token on each sync or send. Automatic polling needs no webhook and does not mark RingCentral messages read.
+              </AlertDescription>
+            </Alert>
+          ) : null}
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Account / client ID"><Input onChange={(event) => patch({ accountId: event.target.value })} value={values.accountId} /></Field>
-            <Field label={values.hasAuthToken ? "Auth token (saved)" : "Auth token"}><Input autoComplete="new-password" onChange={(event) => patch({ authToken: event.target.value })} placeholder={values.hasAuthToken ? "Leave blank to keep saved token" : "Enter token"} type="password" value={values.authToken} /></Field>
-            <Field label="From number"><Input onChange={(event) => patch({ fromNumber: event.target.value })} value={values.fromNumber} /></Field>
-            <Field label="Base URL"><Input onChange={(event) => patch({ baseUrl: event.target.value })} value={values.baseUrl} /></Field>
+            <Field label={values.providerName === "RingCentral" ? "Client ID (RC_CLIENT_ID)" : "Account / client ID"}><Input autoComplete="off" onChange={(event) => patch({ accountId: event.target.value })} value={values.accountId} /></Field>
+            {values.providerName === "RingCentral" ? <Field label={values.hasClientSecret ? "Client secret (saved)" : "Client secret (RC_CLIENT_SECRET)"}><Input autoComplete="new-password" onChange={(event) => patch({ clientSecret: event.target.value })} placeholder={values.hasClientSecret ? "Leave blank to keep saved secret" : "Paste RC_CLIENT_SECRET"} type="password" value={values.clientSecret} /></Field> : null}
+            <Field label={values.providerName === "RingCentral" ? (values.hasAuthToken ? "JWT (saved)" : "JWT (RC_JWT)") : (values.hasAuthToken ? "Auth token (saved)" : "Auth token")}><Input autoComplete="new-password" onChange={(event) => patch({ authToken: event.target.value })} placeholder={values.hasAuthToken ? "Leave blank to keep saved value" : values.providerName === "RingCentral" ? "Paste RC_JWT" : "Enter token"} type="password" value={values.authToken} /></Field>
+            <Field label={values.providerName === "RingCentral" ? "From number (RC_FROM_NUMBER)" : "From number"}><Input onChange={(event) => patch({ fromNumber: event.target.value })} placeholder="+15551234567 (include +1)" value={values.fromNumber} /></Field>
+            <Field label={values.providerName === "RingCentral" ? "Server URL (RC_SERVER_URL)" : "Base URL"}><Input onChange={(event) => patch({ baseUrl: event.target.value })} value={values.baseUrl} /></Field>
           </div>
-          <Field label="SMS webhook path"><Input onChange={(event) => patch({ smsWebhookUrl: event.target.value })} value={values.smsWebhookUrl} /></Field>
-          <Field label="Voice webhook URL"><Input onChange={(event) => patch({ voiceWebhookUrl: event.target.value })} value={values.voiceWebhookUrl} /></Field>
+          {values.providerName !== "RingCentral" ? <Field label="Inbound SMS webhook URL (optional)"><Input onChange={(event) => patch({ smsWebhookUrl: event.target.value })} value={values.smsWebhookUrl} /></Field> : null}
+          {values.providerName !== "RingCentral" ? <Field label="Voice webhook URL (optional)"><Input onChange={(event) => patch({ voiceWebhookUrl: event.target.value })} value={values.voiceWebhookUrl} /></Field> : null}
           <div className="grid gap-3 sm:grid-cols-2">
             <Toggle checked={values.supportsSms} label="SMS enabled" onChange={(checked) => patch({ supportsSms: checked })} />
-            <Toggle checked={values.supportsVoice} label="Voice enabled" onChange={(checked) => patch({ supportsVoice: checked })} />
+            {values.providerName !== "RingCentral" ? <Toggle checked={values.supportsVoice} label="Voice enabled" onChange={(checked) => patch({ supportsVoice: checked })} /> : null}
           </div>
           <Toggle checked={values.enableSmsSync} label="Automatic inbound SMS sync" onChange={(checked) => patch({ enableSmsSync: checked })} />
           {values.enableSmsSync ? (
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Sync interval (minutes)"><Input min={1} onChange={(event) => patch({ syncIntervalMinutes: event.target.value })} type="number" value={values.syncIntervalMinutes} /></Field>
-              <Field label="Messages per sync"><Input min={5} onChange={(event) => patch({ maxMessagesPerSync: event.target.value })} type="number" value={values.maxMessagesPerSync} /></Field>
+            <div className="space-y-2">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Sync interval (minutes)"><Input min={1} onChange={(event) => patch({ syncIntervalMinutes: event.target.value })} type="number" value={values.syncIntervalMinutes} /></Field>
+                <Field label={values.providerName === "RingCentral" ? "Messages per request" : "Messages per sync"}><Input min={5} onChange={(event) => patch({ maxMessagesPerSync: event.target.value })} type="number" value={values.maxMessagesPerSync} /></Field>
+              </div>
+              {values.providerName === "RingCentral" ? <p className="text-xs leading-5 text-muted-foreground">First sync scans previous 24 hours. Later syncs scan from last successful run with 10-minute overlap. Every page is fetched; request size does not drop remaining SMS.</p> : null}
             </div>
           ) : null}
         </div>

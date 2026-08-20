@@ -318,7 +318,7 @@ export function LeadFormDialog({
   const fieldLabelClassName = "text-xs font-semibold text-[var(--ether-on-surface-variant)]"
 
   async function handleSave() {
-    const nextErrors = validateLeadForm(formValues)
+    const nextErrors = validateLeadForm(formValues, { requireEmail: mode === "create" })
     if (Object.keys(nextErrors).length > 0) {
       setErrors(nextErrors)
       return
@@ -368,7 +368,7 @@ export function LeadFormDialog({
               <div className="mb-4 flex items-center gap-2"><span className="h-5 w-1 rounded-full bg-[var(--ether-primary)]" /><h3 className="ether-label-caps text-[var(--ether-on-surface-variant)]">Client Information</h3></div>
               <div className="grid gap-5 md:grid-cols-2">
                 <label className="space-y-2"><span className={fieldLabelClassName}>Full Name</span><Input className={inputClassName} onChange={(e) => updateField("name", e.target.value)} placeholder="Enter name" value={formValues.name} /><FieldError error={errors.name} /></label>
-                <label className="space-y-2"><span className={fieldLabelClassName}>Email Address</span><Input className={inputClassName} onChange={(e) => updateField("email", e.target.value)} placeholder="email@example.com" type="email" value={formValues.email} /><FieldError error={errors.email} /></label>
+                <label className="space-y-2"><span className={fieldLabelClassName}>Email Address {mode === "edit" ? <span className="font-normal">(optional)</span> : null}</span><Input className={inputClassName} onChange={(e) => updateField("email", e.target.value)} placeholder="email@example.com" type="email" value={formValues.email} /><FieldError error={errors.email} /></label>
                 <label className="space-y-2"><span className={fieldLabelClassName}>Phone Number</span><Input className={inputClassName} onChange={(e) => updateField("phone", e.target.value)} placeholder="+1 (555) 000-0000" value={formValues.phone} /><FieldError error={errors.phone} /></label>
                 <label className="space-y-2"><span className={fieldLabelClassName}>Property Interest</span>
                   <Select modal={false} onValueChange={(value) => updateField("property", !value || value === emptySelectValue ? "" : value)} value={formValues.property || emptySelectValue}>
@@ -401,7 +401,7 @@ export function LeadFormDialog({
                 <label className="space-y-2"><span className={fieldLabelClassName}>Next Action Date</span><Input className={inputClassName} onChange={(e) => updateField("nextActionDate", e.target.value)} type="datetime-local" value={formValues.nextActionDate} /><FieldError error={errors.nextActionDate} /></label>
                 <label className="space-y-2"><span className={fieldLabelClassName}>Action Type</span><Select modal={false} onValueChange={(value) => updateField("nextActionType", !value || value === emptySelectValue ? "" : value)} value={formValues.nextActionType || emptySelectValue}><SelectTrigger className={formSelectClassName}><span>{formValues.nextActionType || "Select action"}</span></SelectTrigger><SelectContent><SelectItem value={emptySelectValue}>Select action</SelectItem>{leadFormSelectOptions.nextActionTypes.map((type) => <SelectItem key={type} value={type}>{type}</SelectItem>)}</SelectContent></Select><FieldError error={errors.nextActionType} /></label>
                 <label className="space-y-2"><span className={fieldLabelClassName}>Follow-up Status</span><Select modal={false} onValueChange={(value) => updateField("followUpStatus", (value ?? "Open") as LeadFormValues["followUpStatus"])} value={formValues.followUpStatus ?? "Open"}><SelectTrigger className={formSelectClassName}><span>{`${formValues.followUpStatus ?? "Open"}`.replace(/([A-Z])/g, " $1").trim()}</span></SelectTrigger><SelectContent>{leadFormSelectOptions.followUpStatuses.map((status) => <SelectItem key={status} value={status}>{status.replace(/([A-Z])/g, " $1").trim()}</SelectItem>)}</SelectContent></Select></label>
-                <label className="space-y-2"><span className={fieldLabelClassName}>Lifecycle Stage</span><Select modal={false} onValueChange={(value) => updateField("stage", (value ?? formValues.stage) as LeadFormValues["stage"])} value={formValues.stage}><SelectTrigger className={formSelectClassName}><span>{selectedStageLabel}</span></SelectTrigger><SelectContent>{leadFormSelectOptions.stages.map((stage) => <SelectItem key={stage} value={stage}>{leadStageMeta[stage].label}</SelectItem>)}</SelectContent></Select></label>
+                <label className="space-y-2"><span className={fieldLabelClassName}>Lifecycle Stage</span><Select modal={false} onValueChange={(value) => { const stage = (value ?? formValues.stage) as LeadFormValues["stage"]; updateField("stage", stage); if (stage === "Contacted") updateField("inBoard", true); else if (stage === "Deal" || stage === "Canceled") updateField("inBoard", false) }} value={formValues.stage}><SelectTrigger className={formSelectClassName}><span>{selectedStageLabel}</span></SelectTrigger><SelectContent>{leadFormSelectOptions.stages.map((stage) => <SelectItem key={stage} value={stage}>{leadStageMeta[stage].label}</SelectItem>)}</SelectContent></Select></label>
               </div>
             </section>
 

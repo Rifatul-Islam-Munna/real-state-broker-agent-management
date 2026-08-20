@@ -48,12 +48,12 @@ import type { LeadOutreachComposerValues, LeadOutreachMode } from "./lead-outrea
 import {
   boardLeadStages,
   type LeadFormValues,
+  type LeadListFilter,
   leadStageMeta,
   leadStageOrder,
 } from "./lead-shared"
 
 type LeadView = "board" | "list"
-type LeadListFilter = LeadStage | "all" | "not-listed"
 const BOARD_PAGE_SIZE = 8
 const paginatedBoardStages = new Set<LeadStage>([
   "New",
@@ -123,11 +123,13 @@ type Section2SectionProps = {
   onCreateLead: (values: LeadFormValues) => Promise<string | null>
   onPageChange: (page: number) => void
   onSearchChange: (value: string) => void
+  onStageFilterChange: (value: LeadListFilter) => void
   onSetLeadBoard: (leadId: number, inBoard: boolean) => Promise<void>
   onStageChange: (leadId: number, stage: LeadStage) => Promise<void>
   onUpdateLead: (leadId: number, values: LeadFormValues) => Promise<string | null>
   propertyOptions: PropertyItem[]
   searchTerm?: string
+  stageFilter: LeadListFilter
   totalPages: number
   totalResults: number
 }
@@ -154,11 +156,13 @@ export function Section2Section({
   onCreateLead,
   onPageChange,
   onSearchChange,
+  onStageFilterChange,
   onSetLeadBoard,
   onStageChange,
   onUpdateLead,
   propertyOptions,
   searchTerm,
+  stageFilter,
   totalPages,
   totalResults,
 }: Section2SectionProps) {
@@ -172,7 +176,6 @@ export function Section2Section({
   const [deleteMessage, setDeleteMessage] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<LeadView>("list")
   const [boardStagePages, setBoardStagePages] = useState<Partial<Record<LeadStage, number>>>({})
-  const [stageFilter, setStageFilter] = useState<LeadListFilter>("all")
   const [dialogState, setDialogState] = useState<LeadDialogState>(null)
   const [importOpen, setImportOpen] = useState(false)
   const [csvHeaders, setCsvHeaders] = useState<string[]>([])
@@ -709,7 +712,7 @@ export function Section2Section({
         ) : (
           <section className="overflow-hidden rounded-[24px] bg-white shadow-[var(--shadow-surface-1)]">
             <div className="flex justify-end px-5 py-5 sm:px-6">
-              <Select onValueChange={(value) => setStageFilter((value ?? "all") as LeadListFilter)} value={stageFilter}>
+              <Select onValueChange={(value) => onStageFilterChange((value ?? "all") as LeadListFilter)} value={stageFilter}>
                 <SelectTrigger className="h-10 w-full rounded-lg border-0 bg-[var(--ether-surface-container-low)] px-4 font-semibold shadow-none sm:w-48"><SelectValue placeholder="Filter by stage" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All stages</SelectItem>

@@ -104,6 +104,43 @@ describe('TenantLegacyCompatibilityService response defaults', () => {
     expect((service as any).filter(items, { date: '2026-08-18' })).toEqual([items[0]]);
   });
 
+  test('filters leads by lifecycle stage and property listing status', () => {
+    const service = new TenantLegacyCompatibilityService(
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+    const items = [
+      { id: 1, stage: 'Contacted', propertyListingStatus: 'Listed' },
+      { id: 2, stage: 'Contacted', propertyListingStatus: 'NotListed' },
+      { id: 3, stage: 'New', propertyListingStatus: 'NotListed' },
+    ];
+
+    expect((service as any).filter(items, { status: 'Contacted' })).toEqual([
+      items[0],
+      items[1],
+    ]);
+    expect((service as any).filter(items, { propertyListingStatus: 'NotListed' })).toEqual([
+      items[1],
+      items[2],
+    ]);
+  });
+
+  test('puts contacted leads on board and removes terminal leads', () => {
+    const service = new TenantLegacyCompatibilityService(
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+
+    expect((service as any).normalizeLeadPayload({ stage: 'Contacted', inBoard: false }))
+      .toMatchObject({ stage: 'Contacted', inBoard: true });
+    expect((service as any).normalizeLeadPayload({ stage: 'Deal', inBoard: true }))
+      .toMatchObject({ stage: 'Deal', inBoard: false });
+    expect((service as any).normalizeLeadPayload({ stage: 'Canceled', inBoard: true }))
+      .toMatchObject({ stage: 'Canceled', inBoard: false });
+  });
+
   test('returns lead history as an array for the lead detail UI', async () => {
     const query = jest.fn().mockResolvedValue({
       rows: [{

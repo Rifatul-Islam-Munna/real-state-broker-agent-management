@@ -201,6 +201,7 @@ export class TenantOutreachDeliveryService implements OnModuleDestroy {
     const provider = this.text(config.providerName, 'Twilio').toLowerCase();
     if (provider === 'twilio') return this.twilioMessage(config, job);
     if (provider === 'plivo') return this.plivoMessage(config, job);
+    if (provider === 'ringcentral') return this.ringCentralMessage(config, job);
     throw new PermanentTenantDeliveryError(
       `Tenant SMS provider ${config.providerName ?? provider} is not supported.`,
     );
@@ -307,6 +308,63 @@ export class TenantOutreachDeliveryService implements OnModuleDestroy {
       ? result.message_uuid[0]
       : result.message_uuid;
     return { providerMessageId: this.text(messageId, job.idempotency_key) };
+  }
+
+  private async ringCentralMessage(config: any, job: TenantOutreachJob) {
+    const platform = await this.ringCentralPlatform(config);
+    const mediaUrls = this.mediaUrls(job.media_urls ?? job.payload?.mediaUrls);
+    const endpoint = `/restapi/v1.0/account/~/extension/~/${mediaUrls.length ? 'mms' : 'sms'}`;
+    let response: any;
+
+    if (mediaUrls.length) {
+      const form = new FormData();
+      form.append('json', new Blob([JSON.stringify({
+        from: { phoneNumber: this.text(config.fromNumber) },
+        to: [{ phoneNumber: job.recipient_phone }],
+        text: job.body,
+      })], { type: 'application/json' }));
+      for (const mediaUrl of mediaUrls) {
+        const mediaResponse = await fetch(mediaUrl);
+        if (!mediaResponse.ok) throw new Error(`Attachment fetch failed: ${mediaUrl}`);
+        form.append(
+          'attachment',
+          await mediaResponse.blob(),
+          mediaUrl.split('/').pop() || 'attachment',
+        );
+      }
+      response = await platform.post(endpoint, form);
+    } else {
+      response = await platform.post(endpoint, {
+        from: { phoneNumber: this.text(config.fromNumber) },
+        to: [{ phoneNumber: job.recipient_phone }],
+        text: job.body,
+      });
+    }
+
+    const payload = await response.json();
+    return { providerMessageId: this.text(payload?.id, job.idempotency_key) };
+  }
+
+  private async ringCentralPlatform(config: any) {
+    const clientId = this.text(config.accountId);
+    const clientSecret = this.text(config.clientSecret);
+    const jwt = this.text(config.authToken);
+    const from = this.text(config.fromNumber);
+    if (!clientId || !clientSecret || !jwt || !from) {
+      throw new PermanentTenantDeliveryError(
+        'Tenant RingCentral client ID, client secret, JWT, and from number are required.',
+      );
+    }
+    const RingCentralSdk =
+      require('@ringcentral/sdk').SDK ?? require('@ringcentral/sdk');
+    const sdk = new RingCentralSdk({
+      server: this.text(config.baseUrl, 'https://platform.ringcentral.com').replace(/\/$/, ''),
+      clientId,
+      clientSecret,
+    });
+    const platform = sdk.platform();
+    await platform.login({ jwt });
+    return platform;
   }
 
   private async providerRequest(url: string, init: RequestInit) {

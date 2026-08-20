@@ -295,7 +295,7 @@ export class TenantSmsInboxService {
         : provider === 'plivo'
           ? await this.fetchPlivo(config, since, maxMessages)
           : provider === 'ringcentral'
-            ? await this.fetchRingCentral(config, maxMessages)
+            ? await this.fetchRingCentral(config, since, scanStartedAt, maxMessages)
             : (() => {
                 throw new Error(
                   `Unsupported tenant SMS provider: ${config.providerName}.`,
@@ -359,7 +359,12 @@ export class TenantSmsInboxService {
     if (Array.isArray(response?.objects)) return response.objects;
     return [];
   }
-  private async fetchRingCentral(config: any, limit: number) {
+  private async fetchRingCentral(
+    config: any,
+    since: Date,
+    until: Date,
+    pageSize: number,
+  ) {
     const RingCentralSdk =
       require('@ringcentral/sdk').SDK ?? require('@ringcentral/sdk');
     const sdk = new RingCentralSdk({
@@ -367,20 +372,36 @@ export class TenantSmsInboxService {
         /\/$/,
         '',
       ),
+      clientId: `${config.accountId ?? ''}`.trim(),
+      clientSecret: `${config.clientSecret ?? ''}`.trim(),
     });
     const platform = sdk.platform();
-    await platform.auth().setData({
-      access_token: config.authToken,
-      expires_in: 3600,
-      expire_time: Date.now() + 3_600_000,
-      token_type: 'bearer',
-    });
-    const response = await platform.get(
-      '/restapi/v1.0/account/~/extension/~/message-store',
-      { perPage: limit, type: 'SMS' },
-    );
-    const payload = await response.json();
-    return Array.isArray(payload.records) ? payload.records : [];
+    await platform.login({ jwt: `${config.authToken ?? ''}`.trim() });
+    // GET only: importing messages must never change RingCentral readStatus.
+    const records: any[] = [];
+    let page = 1;
+    while (true) {
+      const response = await platform.get(
+        '/restapi/v1.0/account/~/extension/~/message-store',
+        {
+          dateFrom: since.toISOString(),
+          dateTo: until.toISOString(),
+          messageType: 'SMS',
+          page,
+          perPage: pageSize,
+        },
+      );
+      const payload = await response.json();
+      if (Array.isArray(payload.records)) records.push(...payload.records);
+      const reportedPages = Number(payload?.paging?.totalPages);
+      const hasNextPage = Boolean(payload?.navigation?.nextPage?.uri);
+      if (!hasNextPage && (!Number.isFinite(reportedPages) || page >= reportedPages)) {
+        break;
+      }
+      page++;
+      if (page > 1000) throw new Error('RingCentral message paging exceeded 1000 pages.');
+    }
+    return records;
   }
 
   private normalizeProviderRecord(provider: string, record: any) {

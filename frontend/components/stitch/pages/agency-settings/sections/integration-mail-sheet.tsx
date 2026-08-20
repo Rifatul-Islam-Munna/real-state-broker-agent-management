@@ -308,8 +308,9 @@ export function IntegrationMailSheet({
               ) : null}
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="Sync interval"><Input min={1} onChange={(event) => patch({ syncIntervalMinutes: event.target.value })} type="number" value={values.syncIntervalMinutes} /></Field>
-                <Field label="Messages per sync"><Input min={5} onChange={(event) => patch({ maxMessagesPerSync: event.target.value })} type="number" value={values.maxMessagesPerSync} /></Field>
+                <Field label="Messages per request"><Input min={5} onChange={(event) => patch({ maxMessagesPerSync: event.target.value })} type="number" value={values.maxMessagesPerSync} /></Field>
               </div>
+              <p className="text-xs leading-5 text-muted-foreground">First sync scans previous 14 days. Later syncs continue from last successful run. All Gmail pages and IMAP batches are processed; request size does not drop remaining email.</p>
               <Field label="Local inbox retention">
                 <Select onValueChange={(value) => patch({ localInboxRetentionDays: value })} value={values.localInboxRetentionDays}>
                   <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>

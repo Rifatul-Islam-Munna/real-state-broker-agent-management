@@ -109,7 +109,7 @@ export class TenantWorkspaceSettingsService {
         ? (communication.syncIntervalMinutes ?? 5)
         : null,
       communicationConfig: Object.keys(communication).length
-        ? this.sanitizeSecrets(communication, ['authToken'])
+        ? this.sanitizeSecrets(communication, ['authToken', 'clientSecret'])
         : null,
       hasSmtpConfig: this.smtpValid(smtp),
       smtpUpdatedAt: stored.smtpUpdatedAt ?? null,
@@ -148,11 +148,11 @@ export class TenantWorkspaceSettingsService {
       const value = this.mergeSecrets(
         this.object(current.communication),
         input.communication,
-        ['authToken'],
+        ['authToken', 'clientSecret'],
       );
       if (!this.communicationValid(value))
         throw new BadRequestException(
-          'Account ID, auth token, and from number are required.',
+          `${this.text(value?.providerName).toLowerCase() === 'ringcentral' ? 'RingCentral client ID, client secret, JWT, and from number' : 'Account ID, auth token, and from number'} are required.`,
         );
       next.communication = value;
       next.communicationUpdatedAt = now;
@@ -217,7 +217,7 @@ export class TenantWorkspaceSettingsService {
     const row = await this.getSetting(tenant, INTEGRATIONS_KEY);
     return this.decryptSecrets(
       this.object(this.object(row?.value).communication),
-      ['authToken'],
+      ['authToken', 'clientSecret'],
     );
   }
 
@@ -520,6 +520,14 @@ export class TenantWorkspaceSettingsService {
   }
 
   private communicationValid(value: any) {
+    if (this.text(value?.providerName).toLowerCase() === 'ringcentral') {
+      return Boolean(
+        value?.accountId &&
+        value?.clientSecret &&
+        value?.authToken &&
+        value?.fromNumber
+      );
+    }
     return Boolean(
       value?.providerName &&
       value?.accountId &&

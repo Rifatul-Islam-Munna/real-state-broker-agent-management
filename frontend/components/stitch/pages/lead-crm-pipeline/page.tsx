@@ -25,6 +25,7 @@ import type { DocumentType } from "@/@types/real-estate-api"
 
 import {
   type LeadFormValues,
+  type LeadListFilter,
   Section1Section,
   Section2Section,
 } from "./sections"
@@ -45,7 +46,12 @@ function buildLeadWriteFields(values: LeadFormValues) {
     monthlyEarning: values.monthlyEarning?.trim() ?? "",
     combinedMonthlyEarning: values.combinedMonthlyEarning?.trim() ?? "",
     email: values.email?.trim() ?? "",
-    inBoard: values.inBoard,
+    inBoard:
+      values.stage === "Contacted"
+        ? true
+        : values.stage === "Deal" || values.stage === "Canceled"
+          ? false
+          : values.inBoard,
     interest: values.interest?.trim() ?? "",
     name: values.name?.trim() ?? "",
     notes: (values.notes ?? "")
@@ -81,6 +87,7 @@ export function LeadCrmPipelinePage() {
   const [createDialogVersion, setCreateDialogVersion] = useState(0)
   const [searchTerm, setSearchTerm] = useState("")
   const [dateFilter, setDateFilter] = useState("")
+  const [stageFilter, setStageFilter] = useState<LeadListFilter>("all")
   const [page, setPage] = useState(1)
   const [localLeads, setLocalLeads] = useState<LeadItem[]>([])
   const [localBoardLeads, setLocalBoardLeads] = useState<LeadItem[]>([])
@@ -96,6 +103,12 @@ export function LeadCrmPipelinePage() {
     pageSize: PAGE_SIZE,
     search: deferredSearch || undefined,
     date: dateFilter || undefined,
+    status:
+      stageFilter !== "all" && stageFilter !== "not-listed"
+        ? stageFilter
+        : undefined,
+    propertyListingStatus:
+      stageFilter === "not-listed" ? "NotListed" : undefined,
   })
   const boardLeadsQuery = useLeads({
     page: 1,
@@ -390,7 +403,12 @@ export function LeadCrmPipelinePage() {
           setSearchTerm(value)
           setPage(1)
         }}
+        onStageFilterChange={(value) => {
+          setStageFilter(value)
+          setPage(1)
+        }}
         searchTerm={searchTerm}
+        stageFilter={stageFilter}
         onCancelLead={handleCancelLead}
         onCommunicate={handleCommunicate}
         onConvertLeadToDeal={handleConvertLeadToDeal}
@@ -401,7 +419,7 @@ export function LeadCrmPipelinePage() {
         onUpdateLead={handleUpdateLead}
         propertyOptions={propertyOptionsQuery.data?.items ?? []}
         totalPages={leadsQuery.data?.totalPages ?? 1}
-        totalResults={leadsQuery.data?.totalCount ?? displayedLeads.length}
+        totalResults={boardLeadsQuery.data?.totalCount ?? displayedBoardLeads.length}
       />
     </div>
   )
