@@ -148,60 +148,53 @@ export const defaultHomePageSettings: HomePageSettings = {
   updatedAt: "",
 }
 
-export function cloneHomePageSettings(settings: HomePageSettings) {
+export function cloneHomePageSettings(settings?: Partial<HomePageSettings> | null): HomePageSettings {
+  const source = settings ?? {}
+  const defaults = defaultHomePageSettings
+  const image = (value: any, fallback: any) => ({
+    objectName: value?.objectName ?? fallback?.objectName ?? null,
+    url: value?.url ?? fallback?.url ?? '',
+  })
+  const hero = source.hero ?? {}
+  const neighborhoods = source.neighborhoods ?? {}
+  const whyChooseUs = source.whyChooseUs ?? {}
+  const testimonial = source.testimonial ?? {}
+
   return {
     hero: {
-      backgroundImage: {
-        objectName: settings.hero.backgroundImage.objectName ?? null,
-        url: settings.hero.backgroundImage.url,
-      },
-      buyMode: { ...settings.hero.buyMode },
-      description: settings.hero.description,
-      headline: settings.hero.headline,
-      highlightedHeadline: settings.hero.highlightedHeadline,
-      rentMode: { ...settings.hero.rentMode },
-      sellMode: { ...settings.hero.sellMode },
+      ...defaults.hero,
+      ...hero,
+      backgroundImage: image(hero.backgroundImage, defaults.hero.backgroundImage),
+      buyMode: { ...defaults.hero.buyMode, ...(hero.buyMode ?? {}) },
+      rentMode: { ...defaults.hero.rentMode, ...(hero.rentMode ?? {}) },
+      sellMode: { ...defaults.hero.sellMode, ...(hero.sellMode ?? {}) },
     },
-    featuredListings: { ...settings.featuredListings },
+    featuredListings: { ...defaults.featuredListings, ...(source.featuredListings ?? {}) },
     neighborhoods: {
-      cards: settings.neighborhoods.cards.map((card) => ({
-        image: {
-          objectName: card.image.objectName ?? null,
-          url: card.image.url,
-        },
-        name: card.name,
-        propertyCountLabel: card.propertyCountLabel,
+      ...defaults.neighborhoods,
+      ...neighborhoods,
+      cards: (neighborhoods.cards ?? defaults.neighborhoods.cards).map((card: any, index: number) => ({
+        ...defaults.neighborhoods.cards[index],
+        ...card,
+        image: image(card?.image, defaults.neighborhoods.cards[index]?.image),
       })),
-      eyebrow: settings.neighborhoods.eyebrow,
-      title: settings.neighborhoods.title,
     },
-    services: settings.services.map((item) => ({ ...item })),
-    team: { ...settings.team },
+    services: (source.services ?? defaults.services).map((item) => ({ ...item })),
+    team: { ...defaults.team, ...(source.team ?? {}) },
     testimonial: {
-      avatarImage: {
-        objectName: settings.testimonial.avatarImage.objectName ?? null,
-        url: settings.testimonial.avatarImage.url,
-      },
-      name: settings.testimonial.name,
-      quote: settings.testimonial.quote,
-      role: settings.testimonial.role,
+      ...defaults.testimonial,
+      ...testimonial,
+      avatarImage: image(testimonial.avatarImage, defaults.testimonial.avatarImage),
     },
-    blog: { ...settings.blog },
-    updatedAt: settings.updatedAt,
+    blog: { ...defaults.blog, ...(source.blog ?? {}) },
+    updatedAt: source.updatedAt ?? defaults.updatedAt,
     whyChooseUs: {
-      description: settings.whyChooseUs.description,
-      eyebrow: settings.whyChooseUs.eyebrow,
-      features: settings.whyChooseUs.features.map((item) => ({ ...item })),
-      primaryImage: {
-        objectName: settings.whyChooseUs.primaryImage.objectName ?? null,
-        url: settings.whyChooseUs.primaryImage.url,
-      },
-      secondaryImage: {
-        objectName: settings.whyChooseUs.secondaryImage.objectName ?? null,
-        url: settings.whyChooseUs.secondaryImage.url,
-      },
-      stats: settings.whyChooseUs.stats.map((item) => ({ ...item })),
-      title: settings.whyChooseUs.title,
+      ...defaults.whyChooseUs,
+      ...whyChooseUs,
+      features: (whyChooseUs.features ?? defaults.whyChooseUs.features).map((item) => ({ ...item })),
+      primaryImage: image(whyChooseUs.primaryImage, defaults.whyChooseUs.primaryImage),
+      secondaryImage: image(whyChooseUs.secondaryImage, defaults.whyChooseUs.secondaryImage),
+      stats: (whyChooseUs.stats ?? defaults.whyChooseUs.stats).map((item) => ({ ...item })),
     },
   }
 }

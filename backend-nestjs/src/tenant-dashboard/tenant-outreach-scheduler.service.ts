@@ -206,13 +206,13 @@ export class TenantOutreachSchedulerService implements OnModuleInit {
       try {
         const updated = await client.query<TenantOutreachJob>(
           `UPDATE tenant_outreach_job
-           SET status = $3,
+           SET status = $3::text,
                next_attempt_at = CASE
-                 WHEN $3 = 'retrying' THEN now() + ($4 * interval '1 second')
+                 WHEN $3::text = 'retrying' THEN now() + ($4::int * interval '1 second')
                  ELSE next_attempt_at
                END,
-               last_error = $5,
-               completed_at = CASE WHEN $3 IN ('failed', 'dead_letter') THEN now() ELSE NULL END,
+               last_error = $5::text,
+               completed_at = CASE WHEN $3::text IN ('failed', 'dead_letter') THEN now() ELSE NULL END,
                locked_at = NULL,
                locked_by = NULL,
                updated_at = now()

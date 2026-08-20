@@ -451,6 +451,10 @@ export class TenantOutreachService {
     for (const leadId of leadIds) {
       try {
         const item = await this.queueOutreach(tenant, { ...input, leadId });
+        if (!item) {
+          failures.push(`Lead #${leadId}: Outreach job was not created.`);
+          continue;
+        }
         if (item.status === 'Failed') failures.push(`${item.leadName}: ${item.summary}`);
         else savedCount += 1;
       } catch (error) {
@@ -1437,13 +1441,13 @@ export class TenantOutreachService {
       try {
         await client.query(
           `UPDATE tenant_outreach_job
-           SET status = $2,
+           SET status = $2::text,
                next_attempt_at = CASE
-                 WHEN $2 = 'retrying' THEN now() + ($3 * interval '1 second')
+                 WHEN $2::text = 'retrying' THEN now() + ($3::int * interval '1 second')
                  ELSE next_attempt_at
                END,
-               last_error = $4,
-               completed_at = CASE WHEN $2 IN ('failed', 'dead_letter') THEN now() ELSE NULL END,
+               last_error = $4::text,
+               completed_at = CASE WHEN $2::text IN ('failed', 'dead_letter') THEN now() ELSE NULL END,
                locked_at = NULL, locked_by = NULL, updated_at = now()
            WHERE id = $1 AND status = 'processing'`,
           [job.id, status, retrySeconds, message.slice(0, 4000)],
@@ -1469,6 +1473,7 @@ export class TenantOutreachService {
   }
 
   private mapJob(row: TenantOutreachJob) {
+    if (!row) return null;
     const payload = this.object(row.payload) ?? {};
     const lead = this.object(payload.lead) ?? {};
     const publicStatus = this.publicStatus(row.status);

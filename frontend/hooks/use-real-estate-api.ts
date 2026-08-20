@@ -4,6 +4,8 @@ import { keepPreviousData, useQueryClient } from "@tanstack/react-query"
 
 import { useQueryWrapper } from "@/api-hooks/react-query-wrapper"
 import { useCommonMutationApi } from "@/api-hooks/use-api-mutation"
+import { cloneHomePageSettings, defaultHomePageSettings } from "@/lib/home-page-settings"
+import { cloneMarketingSettings, defaultMarketingSettings } from "@/lib/marketing-settings"
 import type {
   AgencyCommunicationChannel,
   AgencyCommunicationTemplateItem,
@@ -230,6 +232,7 @@ export function useAdminHomePageSettings() {
     {
       ...defaultQueryOptions,
       placeholderData: undefined,
+      select: (value) => value ?? cloneHomePageSettings(defaultHomePageSettings),
     },
     0,
     "homepage-settings",
@@ -267,6 +270,7 @@ export function useMarketingSettings() {
     {
       ...defaultQueryOptions,
       placeholderData: undefined,
+      select: (value) => value ?? cloneMarketingSettings(defaultMarketingSettings),
     },
     0,
     "marketing-settings",

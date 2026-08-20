@@ -84,25 +84,32 @@ export const defaultMarketingSettings: MarketingSettings = {
   updatedAt: null,
 }
 
-export function cloneMarketingSettings(settings: MarketingSettings): MarketingSettings {
+export function cloneMarketingSettings(settings?: Partial<MarketingSettings> | null): MarketingSettings {
+  const source = settings ?? {}
+  const summary = source.summary ?? {}
+  const homepageBoost = source.homepageBoost ?? {}
+  const socialSharing = source.socialSharing ?? {}
+
   return {
     summary: {
-      emailOpenRate: { ...settings.summary.emailOpenRate },
-      smsCtr: { ...settings.summary.smsCtr },
-      conversions: { ...settings.summary.conversions },
-      socialReach: { ...settings.summary.socialReach },
+      emailOpenRate: { ...defaultMarketingSettings.summary.emailOpenRate, ...(summary.emailOpenRate ?? {}) },
+      smsCtr: { ...defaultMarketingSettings.summary.smsCtr, ...(summary.smsCtr ?? {}) },
+      conversions: { ...defaultMarketingSettings.summary.conversions, ...(summary.conversions ?? {}) },
+      socialReach: { ...defaultMarketingSettings.summary.socialReach, ...(summary.socialReach ?? {}) },
     },
-    emailCampaigns: settings.emailCampaigns.map((item) => ({ ...item })),
-    smsStatuses: settings.smsStatuses.map((item) => ({ ...item })),
+    emailCampaigns: (source.emailCampaigns ?? defaultMarketingSettings.emailCampaigns).map((item) => ({ ...item })),
+    smsStatuses: (source.smsStatuses ?? defaultMarketingSettings.smsStatuses).map((item) => ({ ...item })),
     homepageBoost: {
-      ...settings.homepageBoost,
-      slots: settings.homepageBoost.slots.map((item) => ({ ...item })),
+      ...defaultMarketingSettings.homepageBoost,
+      ...homepageBoost,
+      slots: (homepageBoost.slots ?? defaultMarketingSettings.homepageBoost.slots).map((item) => ({ ...item })),
     },
-    templates: settings.templates.map((item) => ({ ...item })),
+    templates: (source.templates ?? defaultMarketingSettings.templates).map((item) => ({ ...item })),
     socialSharing: {
-      ...settings.socialSharing,
-      channels: settings.socialSharing.channels.map((item) => ({ ...item })),
+      ...defaultMarketingSettings.socialSharing,
+      ...socialSharing,
+      channels: (socialSharing.channels ?? defaultMarketingSettings.socialSharing.channels).map((item) => ({ ...item })),
     },
-    updatedAt: settings.updatedAt ?? null,
+    updatedAt: source.updatedAt ?? null,
   }
 }
