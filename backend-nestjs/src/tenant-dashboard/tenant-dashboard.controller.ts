@@ -6,6 +6,7 @@
   Param,
   Patch,
   Post,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -117,6 +118,18 @@ export class TenantDashboardController {
   @TenantPlanPermissions('normal-dashboard', 'property-management-dashboard')
   updateSubdomain(@Req() req: any, @Body() body: any) {
     return this.dashboard.updateSubdomain(req.tenant, body?.subdomain);
+  }
+
+  @Get('lead-history')
+  @TenantPlanPermissions('normal-dashboard', 'property-management-dashboard')
+  leadHistory(@Req() req: any, @Query('leadId') leadId?: string) {
+    return this.dashboard.leadHistory(req.tenant, Number(leadId) || 0);
+  }
+
+  @Get('property-chats')
+  @TenantPlanPermissions('normal-dashboard', 'property-management-dashboard')
+  propertyChats(@Req() req: any, @Query() query: any) {
+    return this.dashboard.propertyChats(req.tenant, query);
   }
 
   @Get('owner-reports')

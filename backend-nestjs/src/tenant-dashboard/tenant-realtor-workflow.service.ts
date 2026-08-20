@@ -896,11 +896,58 @@ export class TenantRealtorWorkflowService {
             payload: {
               templateId: this.clean(realtorTemplate.id, 120),
               showingId: Number(ctx.showingId) || null,
+              propertyId: Number(ctx.propertyId) || null,
               audience: 'Realtor',
               automatic: true,
             },
           });
           if (jobs[0]?.status !== 'failed') realtor += 1;
+        }
+
+        if (automation.followUpEnabled === true && realtorTemplate) {
+          const followUps = templates
+            .filter((item: any) =>
+              item?.isActive !== false &&
+              item?.audience === 'Realtor' &&
+              ['FollowUp1', 'FollowUp2', 'FollowUp3'].includes(item?.sequenceType),
+            )
+            .sort((left: any, right: any) =>
+              ['FollowUp1', 'FollowUp2', 'FollowUp3'].indexOf(left.sequenceType) -
+              ['FollowUp1', 'FollowUp2', 'FollowUp3'].indexOf(right.sequenceType),
+            );
+          let cumulativeDays = 0;
+          for (const template of followUps) {
+            cumulativeDays += Math.max(1, Number(template.gapDays) || 1);
+            const scheduledAt = new Date(Date.now() + cumulativeDays * 86_400_000);
+            for (const channel of channels.filter((item) => this.templateHasChannel(template, item))) {
+              const recipientEmail = channel === 'Email' ? this.clean(ctx.realtorEmail, 240) : '';
+              const recipientPhone = channel === 'SMS' ? this.clean(ctx.realtorPhone, 80) : '';
+              if (channel === 'Email' && !recipientEmail) continue;
+              if (channel === 'SMS' && !recipientPhone) continue;
+              await this.outreach.enqueueWithClient(client, {
+                leadId: Number(ctx.leadId) > 0 ? Number(ctx.leadId) : null,
+                sourceType: 'showing-followup',
+                sourceId: ctx.showingId,
+                channels: [channel],
+                recipientName: tokens.agentName,
+                recipientEmail,
+                recipientPhone,
+                title: this.renderShowingTemplate(this.clean(template.subject, 500, 'Showing follow-up'), tokens),
+                body: this.renderShowingTemplate(this.clean(template.body, 4000, 'Showing follow-up'), tokens),
+                createdBy: `showing-followup:${ctx.showingId}:${this.clean(template.id, 120)}:realtor`,
+                idempotencyKey: `showing-followup:${ctx.showingId}:${this.clean(template.id, 120)}:${channel.toLowerCase()}`,
+                scheduledAt,
+                payload: {
+                  templateId: this.clean(template.id, 120),
+                  showingId: Number(ctx.showingId) || null,
+                  propertyId: Number(ctx.propertyId) || null,
+                  audience: 'Realtor',
+                  sequenceType: template.sequenceType,
+                  automatic: true,
+                },
+              });
+            }
+          }
         }
         return { lead, realtor };
       },

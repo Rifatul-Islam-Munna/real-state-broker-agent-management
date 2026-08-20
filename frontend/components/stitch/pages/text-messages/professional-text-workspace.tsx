@@ -239,7 +239,7 @@ function ProfessionalTextWorkspace({ initialMessageId }: { initialMessageId?: nu
                     <Avatar value={selectedConversation.leadName || selectedConversation.number} />
                     <div className="min-w-0">
                       <h2 className="truncate text-lg font-bold text-[var(--ether-on-surface)]">{selectedConversation.leadName || selectedConversation.number}</h2>
-                      <p className="truncate text-sm text-[var(--ether-on-surface-variant)]">{selectedConversation.number} ? {selectedConversation.provider}</p>
+                      <p className="truncate text-sm text-[var(--ether-on-surface-variant)]">{selectedConversation.number} · {selectedConversation.provider}</p>
                     </div>
                   </div>
 
@@ -313,7 +313,7 @@ function ProfessionalTextWorkspace({ initialMessageId }: { initialMessageId?: nu
                       >
                         <AppIcon name="attach_file" />
                       </Button>
-                      <span className="text-xs text-[var(--ether-outline)]">Enter to send ? Shift+Enter for a new line</span>
+                      <span className="text-xs text-[var(--ether-outline)]">Enter to send · Shift+Enter for a new line</span>
                     </div>
                     <Button
                       className="rounded-full bg-[var(--ether-primary)] text-white"

@@ -117,6 +117,11 @@ export class TenantShowingFeedbackAutomationService {
         byProperty.set(propertyId, list);
       }
 
+      // Classification remains active while owner delivery is paused.
+      if (automation.deliveryEnabled === false) {
+        return { scanned: feedbackRows.rowCount ?? 0, sent: 0, classified };
+      }
+
       const deliveryState = this.object(automation.deliveryState);
       let sent = 0;
       for (const [propertyId, records] of byProperty) {

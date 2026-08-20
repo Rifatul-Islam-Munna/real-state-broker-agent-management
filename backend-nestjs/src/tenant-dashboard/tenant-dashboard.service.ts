@@ -28,6 +28,113 @@ export class TenantDashboardService {
     @InjectRepository(SaasTenant) private readonly tenantRepo: Repository<SaasTenant>,
   ) {}
 
+  async leadHistory(tenant: SaasTenant, leadId: number) {
+    if (!leadId) return [];
+    return this.databases.withTenantClient(this.databaseName(tenant), async (client) => {
+      const [jobs, legacy] = await Promise.all([
+        client.query(
+          `SELECT j.*, l.full_name AS lead_name
+           FROM tenant_outreach_job j
+           LEFT JOIN tenant_lead l ON l.id = j.lead_id
+           WHERE j.lead_id = $1
+           ORDER BY COALESCE(j.occurred_at, j.scheduled_at, j.created_at) DESC, j.id DESC`,
+          [leadId],
+        ),
+        client.query(
+          `SELECT id, payload, created_at, updated_at
+           FROM tenant_legacy_resource
+           WHERE resource = 'lead-history'
+             AND payload->>'leadId' = $1
+           ORDER BY created_at DESC`,
+          [String(leadId)],
+        ),
+      ]);
+      const entries = [
+        ...legacy.rows.map((row: any) => ({
+          ...(row.payload ?? {}),
+          id: Number(row.id),
+          leadId,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+        })),
+        ...jobs.rows.map((row: any) => ({
+          id: -Number(row.id),
+          leadId,
+          kind: row.channel === 'SMS' ? 'Sms' : row.channel === 'Email' ? 'Email' : 'System',
+          direction: row.direction === 'Incoming' || row.status === 'received' ? 'Incoming' : 'Outgoing',
+          status: row.status === 'sent' ? 'Sent' : row.status === 'received' ? 'Received' : row.status === 'failed' ? 'Failed' : 'Scheduled',
+          title: row.title || `${row.channel ?? 'Message'} activity`,
+          summary: row.last_error || row.body || row.title || 'Lead activity',
+          body: row.body || '',
+          provider: row.provider || row.channel || 'Workspace',
+          createdBy: row.created_by || 'Workspace',
+          scheduledAt: row.scheduled_at,
+          occurredAt: row.occurred_at,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+        })),
+      ];
+      return entries.sort((left: any, right: any) =>
+        Number(new Date(right.occurredAt ?? right.scheduledAt ?? right.createdAt)) -
+        Number(new Date(left.occurredAt ?? left.scheduledAt ?? left.createdAt)),
+      );
+    });
+  }
+
+  async propertyChats(tenant: SaasTenant, query: any) {
+    return this.databases.withTenantClient(this.databaseName(tenant), async (client) => {
+      const result = await client.query(
+        `SELECT id, resource, payload, created_at, updated_at
+         FROM tenant_legacy_resource
+         WHERE resource IN ('contact-requests', 'property-chats')
+         ORDER BY created_at DESC`,
+      );
+      const search = `${query?.search ?? ''}`.trim().toLowerCase();
+      const status = `${query?.status ?? ''}`.trim().toLowerCase();
+      const items = result.rows
+        .map((row: any) => {
+          const payload = row.payload ?? {};
+          const rawStatus = `${payload.status ?? 'New'}`;
+          const normalizedStatus = row.resource === 'contact-requests'
+            ? rawStatus === 'Converted' ? 'LeadCreated' : rawStatus === 'Reviewing' ? 'NeedsReview' : 'New'
+            : rawStatus;
+          return {
+            id: Number(row.id),
+            propertyId: Number(payload.propertyId) || 0,
+            propertyTitle: payload.propertyTitle ?? '',
+            assignedAgent: payload.agentName ?? '',
+            contactName: payload.name ?? payload.contactName ?? '',
+            contactEmail: payload.email ?? payload.contactEmail ?? '',
+            contactPhone: payload.phone ?? payload.contactPhone ?? '',
+            budget: payload.budget ?? '',
+            timeline: payload.timeline ?? '',
+            interest: payload.interest ?? '',
+            summary: payload.message ?? payload.summary ?? '',
+            qualificationScore: Number(payload.qualificationScore) || 0,
+            autoQualified: Boolean(payload.leadId),
+            status: normalizedStatus,
+            leadId: Number(payload.leadId) || null,
+            createdAt: row.created_at,
+            updatedAt: row.updated_at,
+            messages: [{ id: Number(row.id), senderRole: 'Visitor', message: payload.message ?? payload.summary ?? '', createdAt: row.created_at }],
+          };
+        })
+        .filter((item: any) => !status || item.status.toLowerCase() === status)
+        .filter((item: any) => !search || JSON.stringify(item).toLowerCase().includes(search));
+      const page = Math.max(1, Number(query?.page) || 1);
+      const pageSize = Math.min(100, Math.max(1, Number(query?.pageSize) || 20));
+      return {
+        items: items.slice((page - 1) * pageSize, page * pageSize),
+        totalCount: items.length,
+        page,
+        pageSize,
+        totalPages: Math.max(1, Math.ceil(items.length / pageSize)),
+        hasNextPage: page * pageSize < items.length,
+        hasPreviousPage: page > 1,
+      };
+    });
+  }
+
   context(tenant: SaasTenant) {
     return {
       tenant: {

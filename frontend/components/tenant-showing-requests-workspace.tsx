@@ -286,8 +286,8 @@ export function TenantShowingRequestsWorkspace({ leads, properties, templates, r
                         onClick={() => requestState.requestId ? void copyFreshLink(requestState.requestId, Number(expiryHours)) : undefined}
                         type="button"
                       >
-                        {copiedLinkId === 0 ? <CheckCircle2 className="size-3.5" /> : <ClipboardList className="size-3.5" />}
-                        {copiedLinkId === 0 ? "Copied" : "Copy link"}
+                        {copiedLinkId === requestState.requestId ? <CheckCircle2 className="size-3.5" /> : <ClipboardList className="size-3.5" />}
+                        {copiedLinkId === requestState.requestId ? "Copied" : "Copy link"}
                       </button>
                     </div>
                   ) : null}

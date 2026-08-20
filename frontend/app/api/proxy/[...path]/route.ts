@@ -42,6 +42,8 @@ function tenantPath(path: string[]) {
   if (joined === "sms-inbox/sync") return "tenant-sms-inbox/sync"
   if (joined === "sms-inbox/sync-status") return "tenant-sms-inbox/sync-status"
   if (joined === "sms-inbox/attachment") return "tenant-sms-inbox/attachment"
+  if (joined === "lead-history") return "tenant-dashboard/lead-history"
+  if (joined === "property-chats") return "tenant-dashboard/property-chats"
   if (joined === "lead-outreach/templates")
     return "tenant-workspace/lead-outreach/templates"
   if (joined === "lead-outreach/schedule")

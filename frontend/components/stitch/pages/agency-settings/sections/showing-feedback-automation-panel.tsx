@@ -357,6 +357,14 @@ export function ShowingFeedbackAutomationPanel() {
             status={automation.channels.includes("SMS") ? "ACTIVE" : "PAUSED"}
           />
           <ChannelCard
+            checked={automation.deliveryEnabled !== false}
+            description="Classification continues while paused"
+            icon="send"
+            label="Owner Delivery"
+            onChange={(checked) => patch({ deliveryEnabled: checked })}
+            status={automation.deliveryEnabled !== false ? "ACTIVE" : "PAUSED"}
+          />
+          <ChannelCard
             checked={automation.compressWithAi}
             description="Sentiment summary synthesis"
             icon="auto_awesome"

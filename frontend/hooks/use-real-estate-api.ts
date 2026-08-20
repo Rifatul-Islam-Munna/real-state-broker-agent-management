@@ -1119,7 +1119,7 @@ export function useSmsMessageItem(id?: number) {
 }
 
 export function useSendSmsMessage() {
-  const invalidate = useInvalidate(["sms-messages", "lead-history", "leads"])
+  const invalidate = useInvalidate(["sms-messages", "sms-message-item", "lead-history", "leads"])
 
   return useCommonMutationApi<SmsMessageItem, SendSmsMessageInput>({
     method: "POST",

@@ -6,6 +6,8 @@ import {
 
 export type ShowingFeedbackAutomationSettings = {
   enabled: boolean
+  /** When false, feedback is still classified and stored but no owner report is queued. */
+  deliveryEnabled: boolean
   /** Internal compatibility field: 0-6 represents Sunday-Saturday for the weekly report. */
   gapDays: number
   channels: Array<"Email" | "SMS">
@@ -66,6 +68,7 @@ export const defaultAgencySettings: AgencyWorkspaceSettings = {
   },
   showingFeedbackAutomation: {
     enabled: false,
+    deliveryEnabled: true,
     gapDays: 1,
     channels: ["Email"],
     templateId: "owner-feedback-summary",
@@ -332,6 +335,7 @@ export function cloneAgencySettings(
     },
     showingFeedbackAutomation: {
       enabled: automation.enabled === true,
+      deliveryEnabled: automation.deliveryEnabled !== false,
       gapDays: Math.min(6, Math.max(0, Number(automation.gapDays ?? 1) || 0)),
       channels: (automation.channels ?? ["Email"]).filter(
         (item): item is "Email" | "SMS" => item === "Email" || item === "SMS"

@@ -1189,6 +1189,49 @@ export class TenantOutreachService {
             )
           : false;
         if (row && isReply) {
+          const showingMessage = await client.query(
+            `SELECT payload, recipient_name, recipient_email, recipient_phone
+             FROM tenant_outreach_job
+             WHERE lead_id = $1
+               AND channel = $2
+               AND direction <> 'Incoming'
+               AND status = 'sent'
+               AND source_type IN ('showing-confirmation', 'showing-followup')
+               AND payload->>'audience' = 'Realtor'
+               AND COALESCE(occurred_at, completed_at, updated_at, created_at) <= $3
+             ORDER BY COALESCE(occurred_at, completed_at, updated_at, created_at) DESC, id DESC
+             LIMIT 1`,
+            [Number(lead.id), input.channel, input.receivedAt],
+          );
+          const showingPayload = this.object(showingMessage.rows[0]?.payload) ?? {};
+          const leadPayload = this.object(lead.payload) ?? {};
+          const propertyId = Number(showingPayload.propertyId ?? leadPayload.primaryPropertyId ?? leadPayload.propertyId) || 0;
+          if (propertyId > 0) {
+            const existingFeedback = await client.query(
+              `SELECT 1 FROM tenant_legacy_resource
+               WHERE resource = 'showing-feedback'
+                 AND payload->>'sourceMessageId' = $1
+               LIMIT 1`,
+              [providerMessageId],
+            );
+            if (!existingFeedback.rowCount) {
+              await client.query(
+                `INSERT INTO tenant_legacy_resource(resource, payload)
+                 VALUES ('showing-feedback', $1::jsonb)`,
+                [JSON.stringify({
+                  propertyId,
+                  leadId: Number(lead.id),
+                  realtorName: showingMessage.rows[0]?.recipient_name ?? '',
+                  realtorContact: input.sender,
+                  feedbackText: input.body,
+                  receivedAt: input.receivedAt.toISOString(),
+                  sourceMessageId: providerMessageId,
+                  sentiment: '',
+                  source: 'realtor-reply',
+                })],
+              );
+            }
+          }
           await client.query(
             `UPDATE tenant_outreach_job
              SET payload = COALESCE(payload, '{}'::jsonb) ||

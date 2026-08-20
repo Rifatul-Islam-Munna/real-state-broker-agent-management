@@ -61,6 +61,10 @@ export class TenantWorkspaceSettingsService {
         ...this.object(current.leadAutomation),
         ...this.object(input.leadAutomation),
       },
+      showingFeedbackAutomation: {
+        ...this.object(current.showingFeedbackAutomation),
+        ...this.object(input.showingFeedbackAutomation),
+      },
       communicationTemplates: Array.isArray(input.communicationTemplates)
         ? input.communicationTemplates
         : current.communicationTemplates,
@@ -802,6 +806,18 @@ export class TenantWorkspaceSettingsService {
           variableTokens: ['{{client_name}}', '{{agency_name}}'],
           sequenceType: 'FollowUp3',
           gapDays: 7,
+        },
+        {
+          ...common,
+          id: 'tenant-owner-feedback',
+          name: 'Weekly Owner Feedback Summary',
+          subject: 'Showing feedback for {{property_address}}',
+          body: 'Positive feedback:\n{{positive_feedback}}\n\nNegative feedback:\n{{negative_feedback}}\n\nSummary:\n{{feedback_summary}}',
+          channels: ['Email', 'SMS'],
+          variableTokens: ['{{property_address}}', '{{positive_feedback}}', '{{negative_feedback}}', '{{feedback_summary}}'],
+          audience: 'OwnerFeedback',
+          sequenceType: 'Direct',
+          gapDays: 0,
         },
       ],
     };
