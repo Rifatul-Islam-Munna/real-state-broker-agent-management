@@ -6,6 +6,8 @@ import { useState } from "react"
 import { AppIcon } from "@/components/ui/app-icon"
 import { type LeadItem, useLeadHistory } from "@/hooks/use-real-estate-api"
 import { useLeadOutreachSchedule } from "@/hooks/use-lead-outreach-api"
+import { useSchedulingSettings } from "@/hooks/use-scheduling-settings"
+import { formatDateTimeInZone } from "@/lib/time-zone"
 import { formatDateTimeLabel, formatLeadPriority, formatRelativeTimeLabel } from "@/lib/admin-portal"
 import { cn } from "@/lib/utils"
 
@@ -32,18 +34,21 @@ function cleanFeedText(value?: string | null) {
     .trim()
 }
 
-function activityTitle(title: string, status?: string) {
+function activityTitle(title: string, status?: string, kind?: string, direction?: string) {
+  if ((kind === "MailInbox" || kind === "ContactForm") && direction === "Incoming") {
+    return `Original inquiry · ${title}`
+  }
   if (status === "Scheduled") return `Scheduled · ${title}`
   if (status === "Sent") return `Sent · ${title}`
-  if (status === "Received") return `Received · ${title}`
+  if (status === "Received") return `Received reply · ${title}`
   if (status === "Failed") return `Failed · ${title}`
   return title
 }
 
-function activityDescription(entry: { summary?: string | null; body?: string | null; status?: string; scheduledAt?: string | null }) {
+function activityDescription(entry: { summary?: string | null; body?: string | null; status?: string; scheduledAt?: string | null }, timeZone: string) {
   const description = cleanFeedText(entry.summary || entry.body)
   if (entry.status === "Scheduled" && entry.scheduledAt) {
-    return `This message is queued and will send on ${formatDateTimeLabel(entry.scheduledAt)}.\\n\\n${description}`.trim()
+    return `This message is queued and will send on ${formatDateTimeInZone(entry.scheduledAt, timeZone)}.\\n\\n${description}`.trim()
   }
   return description || "No message details recorded."
 }
@@ -253,6 +258,8 @@ export function LeadDetailsPanel({
 }) {
   const leadNotes = getLeadNotes(lead.notes)
   const sourceLabel = displayText(lead.source)
+  const schedulingQuery = useSchedulingSettings()
+  const workspaceTimeZone = schedulingQuery.data?.timeZone || "UTC"
   const historyQuery = useLeadHistory(lead.id)
   const historyEntries = Array.isArray(historyQuery.data) ? historyQuery.data : []
   const happenedEntries = historyEntries.filter((entry) => entry.status !== "Scheduled")
@@ -364,7 +371,7 @@ export function LeadDetailsPanel({
               <div className={cn("col-span-2 rounded-r-lg border-l-4 p-3", lead.isFollowUpOverdue ? "border-[var(--ether-error)] bg-[var(--ether-error-container)]" : "border-[var(--ether-primary)] bg-[var(--ether-surface-container-low)]")}>
                 <p className={cn("ether-label-caps text-[9px]", lead.isFollowUpOverdue ? "text-[var(--ether-error)]" : "text-[var(--ether-primary)]")}>Immediate Next Action</p>
                 <p className="mt-1 text-xs font-bold text-[var(--ether-on-surface)]">{displayText(lead.nextActionType, "No next action")}</p>
-                <p className="mt-1 text-[10px] font-semibold text-[var(--ether-on-surface-variant)]">{lead.nextActionDate ? `Due ${formatDateTimeLabel(lead.nextActionDate)}` : "No due date"}</p>
+                <p className="mt-1 text-[10px] font-semibold text-[var(--ether-on-surface-variant)]">{lead.nextActionDate ? `Due ${formatDateTimeInZone(lead.nextActionDate, workspaceTimeZone)}` : "No due date"}</p>
               </div>
             </div>
           </section>
@@ -380,7 +387,15 @@ export function LeadDetailsPanel({
                       <p className="text-xs font-bold text-[var(--ether-on-surface)]">{entry.title}</p>
                       <span className="whitespace-nowrap text-[9px] font-bold uppercase text-[var(--ether-primary)]">Queued</span>
                     </div>
-                    <p className="mt-1 text-[10px] font-semibold text-[var(--ether-on-surface-variant)]">Will send {formatDateTimeLabel(entry.scheduledAt ?? entry.createdAt)}</p>
+                    <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-[10px] font-semibold text-[var(--ether-on-surface-variant)]">Will send {formatDateTimeInZone(entry.scheduledAt ?? entry.createdAt, workspaceTimeZone)}</p>
+                      <Link
+                        className="inline-flex items-center gap-1 rounded-lg border border-[var(--ether-primary)]/20 bg-white px-2.5 py-1.5 text-[10px] font-bold text-[var(--ether-primary)] hover:bg-[var(--ether-primary-fixed)]"
+                        href={`/dashboard/lead-schedule?leadId=${lead.id}&scheduleId=${entry.id}`}
+                      >
+                        <AppIcon name="event_note" /> View in Lead Schedule
+                      </Link>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -396,6 +411,7 @@ export function LeadDetailsPanel({
                   actionHref={entry.kind === "Sms" ? `/dashboard/text-messages/${entry.id}` : undefined}
                   actionLabel={entry.kind === "Sms" ? "Open conversation" : undefined}
                   date={entry.occurredAt ?? entry.createdAt}
+                  timeZone={workspaceTimeZone}
                   description={cleanFeedText(entry.body || entry.summary || "Reply received without message text.")}
                   key={`reply-${entry.id}`}
                   title={`${entry.kind === "Sms" ? "SMS" : "Email"} · Received reply`}
@@ -408,9 +424,10 @@ export function LeadDetailsPanel({
               {happenedEntries.map((entry) => (
                 <ActivityItem
                   key={`${lead.id}-${entry.id}-${entry.createdAt}`}
-                  title={activityTitle(entry.title, entry.status)}
-                  description={activityDescription(entry)}
+                  title={activityTitle(entry.title, entry.status, entry.kind, entry.direction)}
+                  description={activityDescription(entry, workspaceTimeZone)}
                   date={entry.occurredAt ?? entry.createdAt}
+                  timeZone={workspaceTimeZone}
                 />
               ))}
               {leadNotes.map((note, index) => <ActivityItem key={`${lead.id}-note-${index}`} title={`Note ${index + 1}`} description={note} />)}
@@ -437,11 +454,11 @@ export function LeadDetailsPanel({
   )
 }
 
-function ActivityItem({ actionHref, actionLabel, title, description, date }: { actionHref?: string; actionLabel?: string; title: string; description: string; date?: string | null }) {
+function ActivityItem({ actionHref, actionLabel, title, description, date, timeZone = "UTC" }: { actionHref?: string; actionLabel?: string; title: string; description: string; date?: string | null; timeZone?: string }) {
   return (
     <div className="relative">
       <span className="absolute -left-[29px] top-1 size-2 rounded-full bg-[var(--ether-primary)] ring-2 ring-white" />
-      <div className="flex items-start justify-between gap-4"><h4 className="text-xs font-bold text-[var(--ether-on-surface)]">{title}</h4>{date ? <span className="whitespace-nowrap text-[9px] font-bold uppercase text-[var(--ether-outline)]">{formatDateTimeLabel(date)}</span> : null}</div>
+      <div className="flex items-start justify-between gap-4"><h4 className="text-xs font-bold text-[var(--ether-on-surface)]">{title}</h4>{date ? <span className="whitespace-nowrap text-[9px] font-bold uppercase text-[var(--ether-outline)]">{formatDateTimeInZone(date, timeZone)}</span> : null}</div>
       <p className="mt-1 text-xs leading-5 text-[var(--ether-on-surface-variant)]">{description}</p>
       {actionHref && actionLabel ? <Link className="mt-2 inline-flex items-center gap-1 rounded-lg border border-[var(--ether-outline-variant)] px-2.5 py-1.5 text-[10px] font-bold text-[var(--ether-primary)] hover:bg-[var(--ether-surface-container-low)]" href={actionHref}><AppIcon name="forum" />{actionLabel}</Link> : null}
     </div>

@@ -163,7 +163,9 @@ export function LeadOutreachSchedulePage() {
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const rawLeadId = searchParams.get("leadId")
+  const rawScheduleId = searchParams.get("scheduleId")
   const selectedLeadId = rawLeadId ? Number(rawLeadId) : NaN
+  const selectedScheduleId = rawScheduleId ? Number(rawScheduleId) : NaN
   const [kindFilter, setKindFilter] = useState<"" | OutreachKind>("")
   const [followUpFilter, setFollowUpFilter] = useState<FollowUpFilter>("")
   const [composerOpen, setComposerOpen] = useState(false)
@@ -294,6 +296,8 @@ export function LeadOutreachSchedulePage() {
       .filter((entry) => {
         const activityType = scheduleEntryActivityType(entry)
 
+        if (Number.isFinite(selectedLeadId) && entry.leadId !== selectedLeadId) return false
+        if (Number.isFinite(selectedScheduleId) && entry.id !== selectedScheduleId) return false
         if (followUpFilter && followUpFilter !== activityType) return false
         if (stageFilter && entry.leadStage !== stageFilter) return false
         if (!term) return true
@@ -315,7 +319,7 @@ export function LeadOutreachSchedulePage() {
         const rightUpdated = new Date(right.updatedAt ?? right.createdAt).getTime()
         return rightUpdated - leftUpdated || right.id - left.id
       })
-  }, [followUpFilter, scheduleQuery.data, searchTerm, stageFilter])
+  }, [followUpFilter, scheduleQuery.data, searchTerm, selectedLeadId, selectedScheduleId, stageFilter])
   const totalPages = Math.max(1, Math.ceil(filteredSchedule.length / pageSize))
   const paginatedSchedule = useMemo(
     () => filteredSchedule.slice((page - 1) * pageSize, page * pageSize),
