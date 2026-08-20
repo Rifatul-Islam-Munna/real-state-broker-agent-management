@@ -326,13 +326,44 @@ export class TenantOutreachDeliveryService implements OnModuleDestroy {
       for (const mediaUrl of mediaUrls) {
         const mediaResponse = await fetch(mediaUrl);
         if (!mediaResponse.ok) throw new Error(`Attachment fetch failed: ${mediaUrl}`);
+        const fileName = decodeURIComponent(mediaUrl.split('/').pop()?.split('?')[0] || 'attachment');
+        const blob = await mediaResponse.blob();
         form.append(
           'attachment',
-          await mediaResponse.blob(),
-          mediaUrl.split('/').pop() || 'attachment',
+          new Blob([blob], { type: mediaResponse.headers.get('content-type') || blob.type || 'application/octet-stream' }),
+          fileName,
         );
       }
-      response = await platform.post(endpoint, form);
+      const auth = await platform.auth().data();
+      const multipartResponse = await fetch(
+        `${this.text(config.baseUrl, 'https://platform.ringcentral.com').replace(/\/$/, '')}${endpoint}`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${this.text(auth?.access_token)}`,
+            'Idempotency-Key': job.idempotency_key,
+          },
+          body: form,
+        },
+      );
+      const responseText = await multipartResponse.text();
+      let multipartPayload: any = {};
+      try {
+        multipartPayload = responseText ? JSON.parse(responseText) : {};
+      } catch {
+        multipartPayload = { message: responseText };
+      }
+      if (!multipartResponse.ok) {
+        const providerError = this.text(
+          multipartPayload?.message ?? multipartPayload?.error?.message,
+          `RingCentral MMS request failed with status ${multipartResponse.status}.`,
+        );
+        if (multipartResponse.status >= 400 && multipartResponse.status < 500 && multipartResponse.status !== 408 && multipartResponse.status !== 429) {
+          throw new PermanentTenantDeliveryError(providerError);
+        }
+        throw new Error(providerError);
+      }
+      response = { json: async () => multipartPayload };
     } else {
       response = await platform.post(endpoint, {
         from: { phoneNumber: this.text(config.fromNumber) },
