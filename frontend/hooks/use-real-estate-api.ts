@@ -347,7 +347,7 @@ export function useAgencySettings() {
 }
 
 export function useUpdateAgencySettings() {
-  const invalidate = useInvalidate(["agency-settings"])
+  const invalidate = useInvalidate(["agency-settings", "lead-outreach-templates"])
 
   return useCommonMutationApi<AgencySettings, AgencySettings>({
     method: "PATCH",

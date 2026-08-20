@@ -84,7 +84,10 @@ export class TenantInboxSyncService {
 
   @Cron('25 * * * * *')
   async scheduleAllTenantFollowUps() {
-    if (process.env.TENANT_INBOX_SYNC_ENABLED === 'false' || this.followUpRunning) {
+    if (
+      process.env.TENANT_LEAD_AUTOMATION_ENABLED === 'false' ||
+      this.followUpRunning
+    ) {
       return;
     }
     this.followUpRunning = true;
@@ -101,6 +104,7 @@ export class TenantInboxSyncService {
         this.clamp(process.env.TENANT_SYNC_TENANT_CONCURRENCY, 3, 1, 10),
         async (tenant) => {
           try {
+            await this.autoSendWelcomeForLeads(tenant);
             await this.scheduleTenantFollowUps(tenant);
             await this.removeStalePostVisitFollowUps(tenant);
           } catch (error) {
@@ -1140,11 +1144,15 @@ export class TenantInboxSyncService {
       if (automation.enabled !== true) {
         return { scanned: 0, enqueued: 0, skipped: 0 };
       }
+      if (agency?.firstMessageAutomation?.lead === false) {
+        return { scanned: 0, enqueued: 0, skipped: 0 };
+      }
       const directTemplates = (agency?.communicationTemplates ?? []).filter(
         (item: any) =>
           item?.isActive !== false &&
           (item?.audience ?? 'Lead') === 'Lead' &&
-          (item?.sequenceType ?? 'Direct') === 'Direct',
+          (item?.sequenceType ?? 'Direct') === 'Direct' &&
+          Boolean(this.text(item?.body)),
       );
       const template =
         directTemplates.find(
@@ -1153,8 +1161,10 @@ export class TenantInboxSyncService {
       if (!template) {
         return { scanned: 0, enqueued: 0, skipped: 0 };
       }
-      const channels = this.stringList(automation.channels).filter((channel) =>
-        this.stringList(template.channels).includes(channel),
+      const channels = this.stringList(automation.channels).filter(
+        (channel) =>
+          ['Email', 'SMS'].includes(channel) &&
+          this.stringList(template.channels).includes(channel),
       );
       if (!channels.length) {
         return { scanned: 0, enqueued: 0, skipped: 0 };
@@ -1166,10 +1176,12 @@ export class TenantInboxSyncService {
          JOIN tenant_lead_property lp ON lp.lead_id = l.id
          JOIN tenant_property p ON p.id = lp.property_id
          WHERE (l.email IS NOT NULL OR l.phone IS NOT NULL)
-           AND (SELECT COUNT(*) FROM tenant_outreach_job inc
-                WHERE inc.lead_id = l.id
-                  AND inc.direction = 'Incoming'
-                  AND inc.source_type = 'mail-inbox') = 1
+           AND EXISTS (
+             SELECT 1 FROM tenant_outreach_job inc
+             WHERE inc.lead_id = l.id
+               AND inc.direction = 'Incoming'
+               AND inc.source_type = 'mail-inbox'
+           )
            AND NOT EXISTS (
              SELECT 1 FROM tenant_outreach_job out
              WHERE out.lead_id = l.id AND out.direction <> 'Incoming'
@@ -1196,12 +1208,12 @@ export class TenantInboxSyncService {
           };
           const propertyPayload = this.jsonObject(row.property_payload);
           const mediaUrls = this.welcomeAttachmentUrls(template, propertyPayload);
-          const delayMinutes = Math.max(
+          const delayMinutes = this.clamp(
+            agency?.firstMessageAutomation?.leadDelayMinutes ??
+              agency?.firstMessageAutomation?.delayMinutes,
             0,
-            Number(
-              agency?.firstMessageAutomation?.leadDelayMinutes ??
-                agency?.firstMessageAutomation?.delayMinutes,
-            ) || 0,
+            0,
+            43_200,
           );
           const scheduledAt = new Date(Date.now() + delayMinutes * 60_000);
           for (const channel of channels) {
@@ -1416,6 +1428,7 @@ export class TenantInboxSyncService {
           (item: any) =>
             item?.isActive !== false &&
             (item?.audience ?? 'Lead') === 'Lead' &&
+            Boolean(this.text(item?.body)) &&
             Object.prototype.hasOwnProperty.call(order, item?.sequenceType),
         )
         .sort(

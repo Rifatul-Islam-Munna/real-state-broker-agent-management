@@ -57,7 +57,9 @@ export function useLeadOutreachTemplates() {
     "/lead-outreach/templates",
     {
       ...defaultQueryOptions,
+      gcTime: 10 * 60_000,
       placeholderData: undefined,
+      staleTime: 5 * 60_000,
     },
     0,
     "lead-outreach-templates"

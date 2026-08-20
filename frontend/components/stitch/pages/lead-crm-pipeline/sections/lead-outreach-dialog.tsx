@@ -105,6 +105,9 @@ export function LeadOutreachDialog({
       if (template.isActive === false) {
         return false
       }
+      if ((template.audience ?? "Lead") !== "Lead") {
+        return false
+      }
 
       if (deliveryMode === "email") {
         return template.channels.includes("Email")
@@ -115,7 +118,7 @@ export function LeadOutreachDialog({
       }
 
       if (deliveryMode === "both") {
-        return template.channels.includes("Email") && template.channels.includes("SMS")
+        return template.channels.includes("Email") || template.channels.includes("SMS")
       }
 
       return false
@@ -141,21 +144,17 @@ export function LeadOutreachDialog({
       .filter((doc) => !search || `${doc.title} ${doc.category} ${doc.documentType}`.toLowerCase().includes(search))
   }, [allDocuments, documentCategory, documentSearch])
 
-  const selectedDocumentUrls = useMemo(
-    () => allDocuments
-      .filter((doc) => selectedDocumentIds.includes(doc.id))
-      .map((doc) => doc.fileUrl)
-      .filter(Boolean),
-    [allDocuments, selectedDocumentIds],
-  )
-
   useEffect(() => {
-    if (!open || !lead || mode === "call" || defaultTemplateApplied || filteredTemplates.length === 0) return
+    if (!open || !lead || mode === "call" || filteredTemplates.length === 0) return
+    if (defaultTemplateApplied && templateId === emptyTemplateValue) return
 
     const configuredId = agencySettingsQuery.data?.leadAutomation?.directTemplateId
-    const selectedTemplate = filteredTemplates.find((template) => template.id === configuredId)
-      ?? filteredTemplates.find((template) => (template.sequenceType ?? "Direct") === "Direct")
-      ?? filteredTemplates[0]
+    const selectedTemplate = defaultTemplateApplied
+      ? filteredTemplates.find((template) => template.id === templateId)
+      : filteredTemplates.find((template) => template.id === configuredId)
+        ?? filteredTemplates.find((template) => (template.sequenceType ?? "Direct") === "Direct")
+        ?? filteredTemplates[0]
+    if (!selectedTemplate) return
     const agentName = currentUserQuery.data?.fullName ?? null
     const agencyName = agencySettingsQuery.data?.profile?.agencyName ?? null
 
@@ -175,7 +174,7 @@ export function LeadOutreachDialog({
       templateId: selectedTemplate.id,
     }))
     setDefaultTemplateApplied(true)
-  }, [agencySettingsQuery.data?.leadAutomation?.directTemplateId, agencySettingsQuery.data?.profile?.agencyName, currentUserQuery.data?.fullName, defaultTemplateApplied, deliveryMode, filteredTemplates, lead, mode, open])
+  }, [agencySettingsQuery.data?.leadAutomation?.directTemplateId, agencySettingsQuery.data?.profile?.agencyName, currentUserQuery.data?.fullName, defaultTemplateApplied, deliveryMode, filteredTemplates, lead, mode, open, templateId])
 
   if (!lead || !mode) {
     return null
@@ -211,6 +210,9 @@ export function LeadOutreachDialog({
   })
   const previewDocuments = [...automaticDocuments, ...selectedDocuments]
     .filter((doc, index, items) => items.findIndex((item) => item.id === doc.id) === index)
+  const previewDocumentUrls = previewDocuments
+    .map((doc) => doc.fileUrl)
+    .filter(Boolean)
   const selectedTemplateLabel = templateId === emptyTemplateValue
     ? "No template"
     : filteredTemplates.find((template) => template.id === templateId)?.name ?? "No template"
@@ -263,7 +265,7 @@ export function LeadOutreachDialog({
       attachmentDocumentType: values.attachmentDocumentType,
       attachmentMode: values.attachmentMode,
       attachPropertyDocuments: values.attachPropertyDocuments !== false,
-      mediaUrls: selectedDocumentUrls,
+      mediaUrls: previewDocumentUrls,
       templateId: templateId === emptyTemplateValue ? undefined : templateId,
       sequenceType: filteredTemplates.find((template) => template.id === templateId)?.sequenceType,
       pdfTemplateId: pdfTemplateId === emptyTemplateValue ? values.pdfTemplateId : pdfTemplateId,
@@ -567,19 +569,23 @@ export function LeadOutreachDialog({
 
               <div className="custom-scrollbar mt-4 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
                 {documents.map((doc) => {
-                  const selected = selectedDocumentIds.includes(doc.id)
+                  const automatic = automaticDocuments.some((item) => item.id === doc.id)
+                  const selected = automatic || selectedDocumentIds.includes(doc.id)
                   return (
                     <label className={`flex cursor-pointer items-start gap-3 rounded-lg p-3 transition ${selected ? "border border-[var(--ether-primary)] bg-white shadow-sm" : "border border-transparent hover:border-[var(--ether-outline-variant)] hover:bg-white"}`} key={doc.id}>
                       <input
                         checked={selected}
                         className="mt-1 size-4 rounded border-[var(--ether-outline-variant)] text-[var(--ether-primary)] focus:ring-[var(--ether-primary)]"
+                        disabled={automatic}
                         onChange={(event) => setSelectedDocumentIds((current) => event.target.checked ? [...current, doc.id] : current.filter((id) => id !== doc.id))}
                         type="checkbox"
                       />
                       <span className="min-w-0 flex-1">
                         <span className="flex items-center justify-between gap-2">
                           <span className="rounded bg-[var(--ether-secondary-container)]/45 px-1.5 py-0.5 text-[9px] font-bold uppercase text-[var(--ether-secondary)]">{doc.category}</span>
-                          <span className="truncate text-[9px] text-[var(--ether-outline)]">{doc.documentType}</span>
+                          <span className="truncate text-[9px] text-[var(--ether-outline)]">
+                            {automatic ? "Auto attached" : doc.documentType}
+                          </span>
                         </span>
                         <span className="mt-1 block truncate text-sm font-semibold text-[var(--ether-on-surface)]">{doc.title}</span>
                       </span>
