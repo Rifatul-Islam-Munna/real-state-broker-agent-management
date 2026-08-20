@@ -38,6 +38,7 @@ type Values = {
   enableSmsSync: boolean
   syncIntervalMinutes: string
   maxMessagesPerSync: string
+  localSmsRetentionDays: string
   hasAuthToken: boolean
   hasClientSecret: boolean
 }
@@ -56,6 +57,7 @@ const emptyValues = (): Values => ({
   enableSmsSync: false,
   syncIntervalMinutes: "5",
   maxMessagesPerSync: "25",
+  localSmsRetentionDays: "0",
   hasAuthToken: false,
   hasClientSecret: false,
 })
@@ -83,6 +85,7 @@ export function IntegrationCommunicationSheet({
       clientSecret: "",
       syncIntervalMinutes: String(config?.syncIntervalMinutes ?? defaults.syncIntervalMinutes),
       maxMessagesPerSync: String(config?.maxMessagesPerSync ?? defaults.maxMessagesPerSync),
+      localSmsRetentionDays: String(config?.localSmsRetentionDays ?? defaults.localSmsRetentionDays),
     })
     setError(null)
   }, [config, open])
@@ -133,6 +136,7 @@ export function IntegrationCommunicationSheet({
         enableSmsSync: values.enableSmsSync,
         syncIntervalMinutes: Math.max(1, Number(values.syncIntervalMinutes) || 5),
         maxMessagesPerSync: Math.max(5, Number(values.maxMessagesPerSync) || 25),
+        localSmsRetentionDays: Math.max(0, Number(values.localSmsRetentionDays) || 0),
       },
     })
     if (response.error) {
@@ -202,6 +206,19 @@ export function IntegrationCommunicationSheet({
                 <Field label={values.providerName === "RingCentral" ? "Messages per request" : "Messages per sync"}><Input min={5} onChange={(event) => patch({ maxMessagesPerSync: event.target.value })} type="number" value={values.maxMessagesPerSync} /></Field>
               </div>
               {values.providerName === "RingCentral" ? <p className="text-xs leading-5 text-muted-foreground">First sync scans previous 24 hours. Later syncs scan from last successful run with 10-minute overlap. Every page is fetched; request size does not drop remaining SMS.</p> : null}
+              <Field label="Local message retention">
+                <Select onValueChange={(value) => patch({ localSmsRetentionDays: value })} value={values.localSmsRetentionDays}>
+                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0">Keep forever</SelectItem>
+                    <SelectItem value="30">1 month</SelectItem>
+                    <SelectItem value="90">3 months</SelectItem>
+                    <SelectItem value="150">5 months</SelectItem>
+                    <SelectItem value="365">1 year</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs leading-5 text-muted-foreground">Deletes completed SMS/MMS copies only from this workspace database. Never deletes provider messages.</p>
+              </Field>
             </div>
           ) : null}
         </div>

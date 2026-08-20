@@ -20,6 +20,7 @@ export class TenantSmsInboxService {
   private readonly logger = new Logger(TenantSmsInboxService.name);
   private readonly workerId = `${hostname()}:${process.pid}:sms:${randomUUID().slice(0, 8)}`;
   private running = false;
+  private cleanupRunning = false;
 
   constructor(
     @InjectRepository(SaasTenant)
@@ -50,6 +51,30 @@ export class TenantSmsInboxService {
       );
     } finally {
       this.running = false;
+    }
+  }
+
+  @Cron('15 3 * * *')
+  async cleanupFleet() {
+    if (this.cleanupRunning) return;
+    this.cleanupRunning = true;
+    try {
+      const tenants = await this.eligibleTenants();
+      await this.mapLimit(tenants, 3, async (tenant) => {
+        try {
+          const config: any = await this.settings.getRawCommunication(tenant);
+          await this.cleanupLocalSms(
+            this.databaseName(tenant),
+            this.retentionDays(config?.localSmsRetentionDays),
+          );
+        } catch (error) {
+          this.logger.warn(
+            `Tenant ${tenant.id} SMS cleanup failed: ${this.errorMessage(error)}`,
+          );
+        }
+      });
+    } finally {
+      this.cleanupRunning = false;
     }
   }
   async list(
@@ -192,7 +217,11 @@ export class TenantSmsInboxService {
         startedAt,
       );
       await this.finishSuccess(tenant, config, result, startedAt);
-      return { ...result, skipped: false };
+      const deletedLocalMessages = await this.cleanupLocalSms(
+        this.databaseName(tenant),
+        this.retentionDays(config.localSmsRetentionDays),
+      );
+      return { ...result, skipped: false, deletedLocalMessages };
     } catch (error) {
       await this.finishFailure(tenant, claim.cursor, error);
       throw error;
@@ -217,6 +246,9 @@ export class TenantSmsInboxService {
           ),
           syncEnabled: config?.enableSmsSync === true,
           syncIntervalMinutes: Number(config?.syncIntervalMinutes) || 5,
+          localSmsRetentionDays: this.retentionDays(
+            config?.localSmsRetentionDays,
+          ),
           status: row.status ?? 'scheduled',
           isRunning: row.status === 'processing',
           lastStartedAt: row.last_started_at ?? null,
@@ -640,8 +672,8 @@ export class TenantSmsInboxService {
       mediaUrls:
         `${row.provider ?? ''}`.toLowerCase() === 'ringcentral'
           ? this.ringCentralAttachments(row.payload).map(
-              (_item: any, index: number) =>
-                `/api/proxy/sms-inbox/attachment?messageId=${Number(row.id)}&index=${index}`,
+              (item: any, index: number) =>
+                `/api/proxy/sms-inbox/attachment?messageId=${Number(row.id)}&index=${index}&contentType=${encodeURIComponent(`${item?.contentType ?? ''}`)}`,
             )
           : Array.isArray(row.media_urls)
             ? row.media_urls
@@ -693,6 +725,22 @@ export class TenantSmsInboxService {
     );
   }
 
+  private async cleanupLocalSms(databaseName: string, retentionDays: number) {
+    if (retentionDays <= 0) return 0;
+    return this.databases.withTenantClient(databaseName, async (client) => {
+      const result = await client.query(
+        `DELETE FROM tenant_outreach_job
+         WHERE channel = 'SMS'
+           AND status IN ('sent', 'received', 'failed', 'dead_letter', 'cancelled')
+           AND COALESCE(occurred_at, completed_at, created_at) <
+               now() - ($1::text || ' days')::interval
+         RETURNING id`,
+        [retentionDays],
+      );
+      return result.rowCount ?? 0;
+    });
+  }
+
   private async mapLimit<T>(
     items: T[],
     concurrency: number,
@@ -718,6 +766,12 @@ export class TenantSmsInboxService {
           ),
         ]
       : [];
+  }
+
+  private retentionDays(value: unknown) {
+    const parsed = Number.parseInt(`${value ?? ''}`, 10);
+    if (!Number.isFinite(parsed) || parsed <= 0) return 0;
+    return Math.min(3650, Math.max(7, parsed));
   }
 
   private int(value: unknown, fallback: number, min: number, max: number) {

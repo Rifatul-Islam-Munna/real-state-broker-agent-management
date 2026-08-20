@@ -167,4 +167,30 @@ describe('tenant RingCentral integration', () => {
 
     expect(message.mediaUrls).toEqual(['https://media.ringcentral.com/photo']);
   });
+
+  test('retention deletes completed local SMS only', async () => {
+    const query = jest.fn().mockResolvedValue({ rowCount: 3, rows: [] });
+    const databases = {
+      withTenantClient: jest.fn((_database: string, callback: any) =>
+        callback({ query }),
+      ),
+    };
+    const service = new TenantSmsInboxService(
+      {} as any,
+      databases as any,
+      {} as any,
+      {} as any,
+    );
+
+    await expect(
+      (service as any).cleanupLocalSms('tenant_demo', 30),
+    ).resolves.toBe(3);
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining("WHERE channel = 'SMS'"),
+      [30],
+    );
+    expect(query.mock.calls[0][0]).toContain(
+      "status IN ('sent', 'received', 'failed', 'dead_letter', 'cancelled')",
+    );
+  });
 });

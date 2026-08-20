@@ -291,6 +291,7 @@ export type CommunicationProviderWriteInput = {
   enableSmsSync?: boolean
   syncIntervalMinutes?: number
   maxMessagesPerSync?: number
+  localSmsRetentionDays?: number
 }
 
 export type AiProviderIntegrationWriteInput = {

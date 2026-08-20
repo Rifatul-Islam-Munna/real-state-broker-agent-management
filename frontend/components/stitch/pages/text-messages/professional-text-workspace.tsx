@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element */
 "use client"
 
 import Link from "next/link"
@@ -163,6 +164,7 @@ function ProfessionalTextWorkspace({ initialMessageId }: { initialMessageId?: nu
               </div>
               <div className="flex gap-2">
                 <Button
+                  aria-label="Sync messages now"
                   className="rounded-lg border-[var(--ether-outline-variant)] bg-white"
                   disabled={syncMutation.isPending}
                   onClick={() => void syncMutation.mutateAsync({})}
@@ -433,7 +435,7 @@ function MessageBubble({ message }: { message: SmsMessageItem }) {
     <div className={`flex ${outgoing ? "justify-end" : "justify-start"}`}>
       <div className={`max-w-[82%] rounded-2xl px-4 py-3 shadow-sm ${outgoing ? "rounded-br-md bg-primary text-primary-foreground" : "rounded-bl-md border bg-background"}`}>
         <p className="whitespace-pre-wrap text-sm leading-6">{message.body || "Attachment"}</p>
-        {message.mediaUrls.length ? <div className="mt-3 flex flex-wrap gap-2">{message.mediaUrls.map((url) => <a className="rounded-lg border px-3 py-2 text-xs font-medium" href={url} key={url} rel="noreferrer" target="_blank">Open attachment</a>)}</div> : null}
+        {message.mediaUrls.length ? <div className="mt-3 grid gap-2">{message.mediaUrls.map((url) => <InlineAttachment key={url} outgoing={outgoing} url={url} />)}</div> : null}
         <p className={`mt-2 text-right text-[10px] ${outgoing ? "text-primary-foreground/70" : "text-muted-foreground"}`}>{shortTime(message.occurredAt || message.createdAt)}</p>
       </div>
     </div>
@@ -441,7 +443,32 @@ function MessageBubble({ message }: { message: SmsMessageItem }) {
 }
 
 function LocalBubble({ message }: { message: LocalReply }) {
-  return <div className="flex justify-end"><div className="max-w-[82%] rounded-2xl rounded-br-md bg-primary px-4 py-3 text-primary-foreground shadow-sm"><p className="whitespace-pre-wrap text-sm leading-6">{message.body}</p>{message.mediaUrls.length ? <Badge className="mt-2" variant="secondary">{message.mediaUrls.length} attachment(s)</Badge> : null}<p className="mt-2 text-right text-[10px] text-primary-foreground/70">{shortTime(message.createdAt)}</p></div></div>
+  return <div className="flex justify-end"><div className="max-w-[82%] rounded-2xl rounded-br-md bg-primary px-4 py-3 text-primary-foreground shadow-sm"><p className="whitespace-pre-wrap text-sm leading-6">{message.body}</p>{message.mediaUrls.length ? <div className="mt-3 grid gap-2">{message.mediaUrls.map((url) => <InlineAttachment key={url} outgoing url={url} />)}</div> : null}<p className="mt-2 text-right text-[10px] text-primary-foreground/70">{shortTime(message.createdAt)}</p></div></div>
+}
+
+function InlineAttachment({ outgoing, url }: { outgoing: boolean; url: string }) {
+  const [failed, setFailed] = useState(false)
+  const contentType = attachmentContentType(url)
+  const frameClass = "max-h-[22rem] w-full max-w-sm rounded-xl object-contain"
+
+  if (contentType.startsWith("video/")) {
+    return <video className={frameClass} controls preload="metadata" src={url}>Video attachment</video>
+  }
+  if (contentType.startsWith("audio/")) {
+    return <audio className="w-full max-w-sm" controls preload="metadata" src={url}>Audio attachment</audio>
+  }
+  if (!failed && (!contentType || contentType.startsWith("image/"))) {
+    return <a className="block overflow-hidden rounded-xl" href={url} rel="noreferrer" target="_blank"><img alt="MMS attachment" className={frameClass} loading="lazy" onError={() => setFailed(true)} src={url} /></a>
+  }
+  return <a className={`inline-flex w-fit items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium ${outgoing ? "border-primary-foreground/40 text-primary-foreground" : "text-foreground"}`} href={url} rel="noreferrer" target="_blank"><AppIcon name="download" />Download attachment</a>
+}
+
+function attachmentContentType(url: string) {
+  try {
+    return new URL(url, "http://local").searchParams.get("contentType")?.toLowerCase() ?? ""
+  } catch {
+    return ""
+  }
 }
 
 function Avatar({ className = "", value }: { className?: string; value: string }) {
