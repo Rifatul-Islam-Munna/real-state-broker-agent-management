@@ -143,10 +143,19 @@ export class LeadOutreachService {
     if (!shouldSchedule && kind === 'Sms' && hasTarget) {
       const sms = status === 'Failed'
         ? { status }
-        : await this.smsService.send({ leadId: lead.id, body: dto.message.trim(), mediaUrls, skipHistory: true }, dto.createdBy?.trim() || 'CRM');
+        : await this.smsService.send({
+          leadId: lead.id,
+          body: dto.message.trim(),
+          mediaUrls,
+          skipHistory: true,
+          // Outreach records the final delivery result itself so manual and cron
+          // sends produce one authoritative lead-history entry.
+          throwOnFailure: false,
+        }, dto.createdBy?.trim() || 'CRM');
       if (sms.status === 'Failed') {
         status = 'Failed';
-        sendFailure ||= ' Provider send failed.';
+        const providerError = 'error' in sms ? sms.error : null;
+        sendFailure ||= ` ${providerError || 'Provider send failed.'}`;
       }
     }
     if (!shouldSchedule && kind === 'Email' && hasTarget) {

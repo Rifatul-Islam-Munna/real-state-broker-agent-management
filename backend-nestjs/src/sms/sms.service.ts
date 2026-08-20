@@ -67,11 +67,16 @@ export class SmsService {
 
     let providerMessageId = '';
     let status = 'Sent';
+    let failureReason = '';
     try {
       providerMessageId = await this.sendViaProvider(config, toNumber, body, mediaUrls);
+      if (!providerMessageId) {
+        throw new Error('SMS provider did not return a message id.');
+      }
     } catch (error: any) {
       status = 'Failed';
-      this.logger.warn(`SMS send failed: ${error.message}`);
+      failureReason = error?.message || 'SMS provider rejected the message.';
+      this.logger.warn(`SMS send failed for ${toNumber}: ${failureReason}`);
     }
 
     const saved = await this.saveMessage({
@@ -82,7 +87,7 @@ export class SmsService {
       mediaUrls,
       provider: config.providerName ?? 'Custom',
       providerMessageId: providerMessageId || `local-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-      rawPayload: { createdBy },
+      rawPayload: { createdBy, failureReason: failureReason || null },
       status,
       toNumber,
     });
@@ -94,12 +99,25 @@ export class SmsService {
         direction: 'Outgoing',
         status,
         title: status === 'Sent' ? 'SMS sent' : 'SMS failed',
-        summary: `${status === 'Sent' ? 'SMS sent to' : 'SMS failed for'} ${toNumber} via ${config.providerName ?? 'SMS provider'}.`,
+        summary: `${status === 'Sent' ? 'SMS sent to' : 'SMS failed for'} ${toNumber} via ${config.providerName ?? 'SMS provider'}.${failureReason ? ` ${failureReason}` : ''}`,
         body: this.messageBodyWithMedia(body, mediaUrls),
         provider: config.providerName ?? 'SMS',
         createdBy,
         occurredAt: new Date(),
       } as any));
+    }
+
+    if (status === 'Sent' && lead && !['Deal', 'Canceled'].includes(String(lead.stage))) {
+      const contactedAt = new Date();
+      if (lead.stage === LeadStage.New) lead.stage = LeadStage.Contacted;
+      lead.inBoard = true;
+      lead.lastActivityAt = contactedAt;
+      lead.updatedAt = contactedAt;
+      await this.leadRepo.save(lead);
+    }
+
+    if (status === 'Failed' && dto.throwOnFailure !== false) {
+      throw new BadRequestException(`SMS was not sent: ${failureReason}`);
     }
 
     return this.mapMessage(saved);
@@ -367,7 +385,16 @@ export class SmsService {
   }
 
   private stringList(value: any) {
-    return Array.isArray(value) ? [...new Set(value.map((item) => `${item ?? ''}`.trim()).filter(Boolean))] : [];
+    if (!Array.isArray(value)) return [];
+    return [...new Set(value
+      .map((item) => this.normalizeMediaUrl(item))
+      .filter(Boolean))];
+  }
+
+  private normalizeMediaUrl(value: unknown) {
+    const raw = `${value ?? ''}`.trim();
+    const markdownMatch = raw.match(/^\[.*?\]\((https?:\/\/[^)]+)\)$/);
+    return (markdownMatch?.[1] ?? raw).trim();
   }
 
   private messageBodyWithMedia(body: string, mediaUrls: string[]) {
@@ -375,6 +402,22 @@ export class SmsService {
   }
 
   private mapMessage(item: SmsMessage) {
-    return { id: item.id, provider: item.provider, providerMessageId: item.providerMessageId, leadId: item.leadId ?? null, leadName: item.leadName, fromNumber: item.fromNumber, toNumber: item.toNumber, body: item.body, mediaUrls: item.mediaUrls ?? [], direction: item.direction, status: item.status, occurredAt: item.occurredAt, createdAt: item.createdAt, updatedAt: item.updatedAt };
+    return {
+      id: item.id,
+      provider: item.provider,
+      providerMessageId: item.providerMessageId,
+      leadId: item.leadId ?? null,
+      leadName: item.leadName,
+      fromNumber: item.fromNumber,
+      toNumber: item.toNumber,
+      body: item.body,
+      mediaUrls: item.mediaUrls ?? [],
+      direction: item.direction,
+      status: item.status,
+      error: item.status === 'Failed' ? item.rawPayload?.failureReason ?? null : null,
+      occurredAt: item.occurredAt,
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
+    };
   }
 }
