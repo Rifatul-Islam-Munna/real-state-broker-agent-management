@@ -351,7 +351,7 @@ export class TenantOutreachService {
   }
 
   async queueOutreach(tenant: SaasTenant, input: any) {
-    return this.databases.withTenantClient(this.databaseName(tenant), async (client) => {
+    const queued = await this.databases.withTenantClient(this.databaseName(tenant), async (client) => {
       const leadId = this.positiveId(input?.leadId, 'Lead id');
       const lead = await this.leadSnapshot(client, leadId);
       const channel = this.channel(input?.kind);
@@ -397,29 +397,43 @@ export class TenantOutreachService {
           lead,
         },
       });
-      if (jobs[0]?.status !== 'failed') {
-        const currentStage = this.text(
-          lead?.payload?.stage ?? lead?.stage ?? lead?.status,
-          'New',
-        );
-        const followUp = this.text(template?.sequenceType).startsWith('FollowUp');
-        const nextStage = followUp
-          ? !['Deal', 'Canceled'].includes(currentStage) ? 'FollowUp' : currentStage
-          : currentStage.toLowerCase() === 'new' ? 'Contacted' : currentStage;
-        await client.query(
-          `UPDATE tenant_lead
-           SET payload = COALESCE(payload, '{}'::jsonb) || $2::jsonb,
-               updated_at = now()
-           WHERE id = $1`,
-          [leadId, JSON.stringify({
-            stage: nextStage,
-            inBoard: !['Deal', 'Canceled'].includes(nextStage),
-            lastActivityAt: new Date().toISOString(),
-            ...(followUp ? { followUpStatus: 'Scheduled' } : {}),
-          })],
-        );
-      }
       return this.mapJob(jobs[0]);
+    });
+
+    if (input?.sendNow === true && !input?.scheduledAt && queued?.rawStatus === 'scheduled') {
+      const claimed = await this.claimManualJob(tenant, Number(queued.id));
+      if (claimed) {
+        await this.processClaimedJob(tenant, claimed);
+        return this.getMappedJob(tenant, Number(queued.id));
+      }
+    }
+
+    return queued;
+  }
+
+  private async claimManualJob(tenant: SaasTenant, jobId: number) {
+    const workerId = `manual-${process.pid}-${Date.now()}`;
+    return this.databases.withTenantClient(this.databaseName(tenant), async (client) => {
+      const result = await client.query<TenantOutreachJob>(
+        `UPDATE tenant_outreach_job
+         SET status = 'processing', attempt_count = attempt_count + 1,
+             locked_at = now(), locked_by = $2::text, updated_at = now()
+         WHERE id = $1 AND status = 'scheduled'
+         RETURNING *`,
+        [jobId, workerId],
+      );
+      return result.rows[0] ? this.normalizeClaimedJob(result.rows[0]) : null;
+    });
+  }
+
+  private async getMappedJob(tenant: SaasTenant, jobId: number) {
+    return this.databases.withTenantClient(this.databaseName(tenant), async (client) => {
+      const result = await client.query<TenantOutreachJob>(
+        'SELECT * FROM tenant_outreach_job WHERE id = $1',
+        [jobId],
+      );
+      if (!result.rows[0]) throw new NotFoundException('Outreach job was not found after sending.');
+      return this.mapJob(result.rows[0]);
     });
   }
 
@@ -523,12 +537,12 @@ export class TenantOutreachService {
             : 'Schedule cancelled by a tenant user.';
       const updated = await client.query<TenantOutreachJob>(
         `UPDATE tenant_outreach_job
-         SET status = $2,
-             next_attempt_at = CASE WHEN $2 = 'scheduled' THEN now() ELSE next_attempt_at END,
+         SET status = $2::text,
+             next_attempt_at = CASE WHEN $2::text = 'scheduled' THEN now() ELSE next_attempt_at END,
              locked_at = NULL,
              locked_by = NULL,
-             last_error = CASE WHEN $2 IN ('paused', 'cancelled') THEN $3 ELSE '' END,
-             completed_at = CASE WHEN $2 = 'cancelled' THEN now() ELSE NULL END,
+             last_error = CASE WHEN $2::text IN ('paused', 'cancelled') THEN $3::text ELSE '' END,
+             completed_at = CASE WHEN $2::text = 'cancelled' THEN now() ELSE NULL END,
              updated_at = now()
          WHERE id = $1
          RETURNING *`,

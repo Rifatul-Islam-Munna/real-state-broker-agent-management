@@ -413,7 +413,11 @@ export class TenantOutreachDeliveryService implements OnModuleDestroy {
 
   private mediaUrls(value: any) {
     const source = Array.isArray(value) ? value : [];
-    return [...new Set(source.map((item) => this.text(item)).filter((url) => /^https:\/\//i.test(url)))].slice(0, 10);
+    return [...new Set(source
+      .map((item) => this.text(item))
+      .map((url) => url.match(/^\[.*?\]\((https?:\/\/[^)]+)\)$/)?.[1] ?? url)
+      .map((url) => url.trim())
+      .filter((url) => /^https:\/\//i.test(url)))].slice(0, 10);
   }
 
   private escapeHtml(value: string) {

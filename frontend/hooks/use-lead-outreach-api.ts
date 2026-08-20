@@ -81,7 +81,7 @@ export function useDispatchLeadOutreach() {
   return useCommonMutationApi<LeadHistoryEntry, LeadOutreachDispatchInput>({
     method: "POST",
     onSuccess: () => void invalidate(),
-    successMessage: "Lead outreach saved",
+    successMessage: "Message sent",
     url: "/lead-outreach",
   })
 }

@@ -61,8 +61,10 @@ export class TenantOutreachWorkerService {
       try {
         await this.processTenant(tenant);
       } catch (error) {
+        const message = this.errorMessage(error);
         this.logger.error(
-          `Tenant ${tenant.id} queue processing failed: ${this.errorMessage(error)}`,
+          `Tenant ${tenant.id} queue processing failed: ${message}`,
+          error instanceof Error ? error.stack : undefined,
         );
       }
     });

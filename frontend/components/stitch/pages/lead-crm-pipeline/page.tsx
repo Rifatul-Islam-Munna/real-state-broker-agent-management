@@ -237,6 +237,7 @@ export function LeadCrmPipelinePage() {
         templateId: values.templateId,
         pdfTemplateId: values.pdfTemplateId,
         scheduledAt: values.scheduledAt || undefined,
+        sendNow: !values.scheduledAt,
         createdBy: portalRoutes.kind === "agent" ? "Agent" : "Admin",
       })
 

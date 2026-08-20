@@ -977,6 +977,9 @@ export type LeadOutreachDispatchInput = {
   scheduledAt?: string | null
 }
 
+  sendNow?: boolean
+}
+
 export type LeadOutreachAudienceType = "LeadStage" | "DealStage"
 
 export type LeadOutreachBulkDispatchInput = {
