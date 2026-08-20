@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
   Optional,
 } from '@nestjs/common';
@@ -85,6 +86,8 @@ const SETTINGS = {
 
 @Injectable()
 export class TenantOutreachService {
+  private readonly logger = new Logger(TenantOutreachService.name);
+
   constructor(
     private readonly databases: TenantDatabaseService,
     @Optional() private readonly workspaceSettings?: TenantWorkspaceSettingsService,
@@ -938,6 +941,10 @@ export class TenantOutreachService {
       return { id: normalized.id, status: 'sent' as const };
     } catch (error) {
       const message = error instanceof Error ? error.message : `${error ?? 'Delivery failed'}`;
+      this.logger?.error?.(
+        `[outreach] delivery failed tenant=${tenant.id} database=${databaseName} job=${normalized.id} lead=${normalized.lead_id ?? 'none'} channel=${normalized.channel} provider=${normalized.provider || 'unknown'}: ${message}`,
+        error instanceof Error ? error.stack : undefined,
+      );
       const permanent = error instanceof PermanentTenantDeliveryError;
       const exhausted = normalized.attempt_count >= normalized.max_attempts;
       const status: TenantOutreachStatus = permanent
