@@ -463,7 +463,32 @@ export class TenantOutreachService {
   ) {
     return this.databases.withTenantClient(this.databaseName(tenant), async (client) => {
       const result = await client.query<TenantOutreachJob>(
-        'SELECT * FROM tenant_outreach_job ORDER BY created_at DESC LIMIT 2000',
+        `SELECT j.*,
+                CASE
+                  WHEN (j.direction = 'Incoming' OR j.status = 'received')
+                       AND j.lead_id IS NOT NULL
+                  THEN EXISTS (
+                    SELECT 1
+                    FROM tenant_outreach_job prior
+                    WHERE prior.lead_id = j.lead_id
+                      AND prior.channel = j.channel
+                      AND prior.direction <> 'Incoming'
+                      AND prior.status = 'sent'
+                      AND COALESCE(prior.occurred_at, prior.completed_at, prior.updated_at, prior.created_at)
+                          <= COALESCE(j.occurred_at, j.completed_at, j.updated_at, j.created_at)
+                      AND (
+                        (j.channel = 'Email' AND lower(COALESCE(prior.recipient_email, '')) =
+                                                 lower(COALESCE(j.recipient_email, '')))
+                        OR
+                        (j.channel = 'SMS' AND regexp_replace(COALESCE(prior.recipient_phone, ''), '[^0-9]', '', 'g') =
+                                               regexp_replace(COALESCE(j.recipient_phone, ''), '[^0-9]', '', 'g'))
+                      )
+                  )
+                  ELSE false
+                END AS inferred_is_reply
+         FROM tenant_outreach_job j
+         ORDER BY j.created_at DESC
+         LIMIT 2000`,
       );
       const leadId = Number(filters.leadId);
       return result.rows
@@ -1141,6 +1166,14 @@ export class TenantOutreachService {
         if (row && isReply) {
           await client.query(
             `UPDATE tenant_outreach_job
+             SET payload = COALESCE(payload, '{}'::jsonb) ||
+                 jsonb_build_object('isReply', true),
+                 updated_at = now()
+             WHERE id = $1`,
+            [row.id],
+          );
+          await client.query(
+            `UPDATE tenant_outreach_job
              SET status = 'cancelled',
                  last_error = 'Cancelled because this lead replied.',
                  completed_at = now(),
@@ -1464,6 +1497,7 @@ export class TenantOutreachService {
       leadPropertyId: lead.propertyId ?? null,
       leadStage: this.text(lead.stage ?? lead.status),
       leadPriority: this.text(lead.priority),
+      isReply: payload.isReply === true || (row as any).inferred_is_reply === true,
     };
   }
 

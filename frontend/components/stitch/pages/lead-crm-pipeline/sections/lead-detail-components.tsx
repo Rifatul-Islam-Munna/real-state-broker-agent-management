@@ -5,6 +5,7 @@ import { useState } from "react"
 
 import { AppIcon } from "@/components/ui/app-icon"
 import { type LeadItem, useLeadHistory } from "@/hooks/use-real-estate-api"
+import { useLeadOutreachSchedule } from "@/hooks/use-lead-outreach-api"
 import { formatDateTimeLabel, formatLeadPriority, formatRelativeTimeLabel } from "@/lib/admin-portal"
 import { cn } from "@/lib/utils"
 
@@ -226,6 +227,10 @@ export function LeadDetailsPanel({
   const sourceLabel = displayText(lead.source)
   const historyQuery = useLeadHistory(lead.id)
   const historyEntries = Array.isArray(historyQuery.data) ? historyQuery.data : []
+  const outreachQuery = useLeadOutreachSchedule({ leadId: lead.id })
+  const replyEntries = (outreachQuery.data ?? [])
+    .filter((entry) => entry.direction === "Incoming" && entry.isReply)
+    .sort((left, right) => new Date(right.occurredAt ?? right.createdAt).getTime() - new Date(left.occurredAt ?? left.createdAt).getTime())
   const agentInitials = displayText(lead.agent, "NA")
     .split(" ")
     .filter(Boolean)
@@ -335,10 +340,20 @@ export function LeadDetailsPanel({
             <h3 className="ether-label-caps flex items-center gap-2 text-[10px] text-[var(--ether-outline)]"><AppIcon name="analytics" /> Notes & Activity Feed</h3>
             <div className="relative ml-3 mt-5 space-y-6 border-l border-[var(--ether-outline-variant)] pl-6">
               <ActivityItem title="Stage Updated" description={`Lead stage is ${leadStageMeta[lead.stage].label}.`} date={lead.updatedAt} />
+              {replyEntries.map((entry) => (
+                <ActivityItem
+                  actionHref={entry.kind === "Sms" ? `/dashboard/text-messages/${entry.id}` : undefined}
+                  actionLabel={entry.kind === "Sms" ? "Open conversation" : undefined}
+                  date={entry.occurredAt ?? entry.createdAt}
+                  description={displayText(entry.body, entry.summary || "Reply received without message text.")}
+                  key={`reply-${entry.id}`}
+                  title={`${entry.kind === "Sms" ? "SMS" : "Email"} Reply Received`}
+                />
+              ))}
               <ActivityItem title="Lead Created" description={`${sourceLabel} intake created this lead.`} date={lead.createdAt} />
 
-              {historyQuery.isLoading ? <p className="text-xs text-[var(--ether-outline)]">Loading history...</p> : null}
-              {historyQuery.error ? <p className="text-xs font-semibold text-[var(--ether-error)]">{historyQuery.error.message}</p> : null}
+              {historyQuery.isLoading || outreachQuery.isLoading ? <p className="text-xs text-[var(--ether-outline)]">Loading history...</p> : null}
+              {historyQuery.error || outreachQuery.error ? <p className="text-xs font-semibold text-[var(--ether-error)]">{historyQuery.error?.message ?? outreachQuery.error?.message}</p> : null}
               {historyEntries.map((entry) => (
                 <ActivityItem key={`${lead.id}-${entry.id}-${entry.createdAt}`} title={entry.title} description={entry.summary} date={entry.scheduledAt ?? entry.occurredAt ?? entry.createdAt} />
               ))}
@@ -366,12 +381,13 @@ export function LeadDetailsPanel({
   )
 }
 
-function ActivityItem({ title, description, date }: { title: string; description: string; date?: string | null }) {
+function ActivityItem({ actionHref, actionLabel, title, description, date }: { actionHref?: string; actionLabel?: string; title: string; description: string; date?: string | null }) {
   return (
     <div className="relative">
       <span className="absolute -left-[29px] top-1 size-2 rounded-full bg-[var(--ether-primary)] ring-2 ring-white" />
       <div className="flex items-start justify-between gap-4"><h4 className="text-xs font-bold text-[var(--ether-on-surface)]">{title}</h4>{date ? <span className="whitespace-nowrap text-[9px] font-bold uppercase text-[var(--ether-outline)]">{formatDateTimeLabel(date)}</span> : null}</div>
       <p className="mt-1 text-xs leading-5 text-[var(--ether-on-surface-variant)]">{description}</p>
+      {actionHref && actionLabel ? <Link className="mt-2 inline-flex items-center gap-1 rounded-lg border border-[var(--ether-outline-variant)] px-2.5 py-1.5 text-[10px] font-bold text-[var(--ether-primary)] hover:bg-[var(--ether-surface-container-low)]" href={actionHref}><AppIcon name="forum" />{actionLabel}</Link> : null}
     </div>
   )
 }

@@ -1043,6 +1043,7 @@ export type LeadOutreachScheduleItem = {
   maxAttempts?: number
   lastError?: string
   providerMessageId?: string
+  isReply?: boolean
 }
 
 export type TenantOutreachMonitor = {

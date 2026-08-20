@@ -377,4 +377,37 @@ describe('TenantOutreachService reliability', () => {
       [9, true, true],
     );
   });
+
+  it('returns reply body and message id when inbound follows sent outreach', async () => {
+    const query = jest.fn().mockResolvedValue({
+      rowCount: 1,
+      rows: [{
+        id: 31627,
+        lead_id: 9,
+        channel: 'SMS',
+        direction: 'Incoming',
+        status: 'received',
+        title: 'SMS reply',
+        body: 'Yes, Saturday morning works.',
+        provider: 'RingCentral',
+        media_urls: [],
+        payload: {},
+        inferred_is_reply: true,
+        created_at: new Date('2026-08-20T12:00:00Z'),
+        updated_at: new Date('2026-08-20T12:00:00Z'),
+      }],
+    });
+    const { service } = createService(query);
+
+    await expect(service.getSchedule(tenant, { leadId: 9 })).resolves.toEqual([
+      expect.objectContaining({
+        id: 31627,
+        body: 'Yes, Saturday morning works.',
+        direction: 'Incoming',
+        isReply: true,
+      }),
+    ]);
+    expect(query.mock.calls[0][0]).toContain('END AS inferred_is_reply');
+    expect(query.mock.calls[0][0]).toContain("prior.status = 'sent'");
+  });
 });
