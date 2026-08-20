@@ -56,18 +56,11 @@ export function validateLeadForm(values: LeadFormValues) {
 
   if (!values.name.trim()) errors.name = "Lead name is required."
   if (!values.email.trim()) errors.email = "Email is required."
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email.trim())) {
+  else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email.trim())) {
     errors.email = "Enter a valid email address."
   }
   if (!values.phone.trim()) errors.phone = "Phone is required."
-  if (!values.summary.trim() || values.summary.trim().length < 12) {
-    errors.summary = "Summary must be at least 12 characters."
-  }
   if (!values.property.trim()) errors.property = "Select a property."
-  if (!values.budget.trim()) errors.budget = "Budget is required."
-  if (!values.source.trim()) errors.source = "Source is required."
-  if (!values.interest.trim()) errors.interest = "Interest is required."
-  if (!values.timeline.trim()) errors.timeline = "Timeline is required."
   if (values.nextActionDate && !values.nextActionType.trim()) errors.nextActionType = "Next action type is required."
 
   return errors
