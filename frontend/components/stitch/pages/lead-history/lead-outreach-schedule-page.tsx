@@ -45,6 +45,7 @@ import {
   useLeads,
   usePortalCurrentUser,
 } from "@/hooks/use-real-estate-api"
+import { useSchedulingSettings } from "@/hooks/use-scheduling-settings"
 import {
   useDispatchBulkLeadOutreach,
   useDispatchLeadOutreach,
@@ -54,6 +55,7 @@ import {
   useTenantOutreachMonitor,
   useUpdateLeadOutreachScheduleStatus,
 } from "@/hooks/use-lead-outreach-api"
+import { formatDateTimeInZone } from "@/lib/time-zone"
 import { cn } from "@/lib/utils"
 import {
   dealStageOrder,
@@ -212,6 +214,8 @@ export function LeadOutreachSchedulePage() {
     kind: kindFilter || undefined,
     status: statusFilter || undefined,
   })
+  const schedulingQuery = useSchedulingSettings()
+  const workspaceTimeZone = schedulingQuery.data?.timeZone || "UTC"
   const templatesQuery = useLeadOutreachTemplates()
   const currentUserQuery = usePortalCurrentUser()
   const tenantMonitorQuery = useTenantOutreachMonitor(
@@ -286,25 +290,31 @@ export function LeadOutreachSchedulePage() {
   const filteredSchedule = useMemo(() => {
     const term = searchTerm.trim().toLowerCase()
     const rows = Array.isArray(scheduleQuery.data) ? scheduleQuery.data : []
-    return rows.filter((entry) => {
-      const activityType = scheduleEntryActivityType(entry)
+    return rows
+      .filter((entry) => {
+        const activityType = scheduleEntryActivityType(entry)
 
-      if (followUpFilter && followUpFilter !== activityType) return false
-      if (stageFilter && entry.leadStage !== stageFilter) return false
-      if (!term) return true
+        if (followUpFilter && followUpFilter !== activityType) return false
+        if (stageFilter && entry.leadStage !== stageFilter) return false
+        if (!term) return true
 
-      return [
-        entry.leadName,
-        entry.leadEmail,
-        entry.leadPhone,
-        entry.leadProperty,
-        entry.title,
-        entry.summary,
-        entry.body,
-        entry.status,
-        entry.kind,
-      ].some((value) => `${value ?? ""}`.toLowerCase().includes(term))
-    })
+        return [
+          entry.leadName,
+          entry.leadEmail,
+          entry.leadPhone,
+          entry.leadProperty,
+          entry.title,
+          entry.summary,
+          entry.body,
+          entry.status,
+          entry.kind,
+        ].some((value) => `${value ?? ""}`.toLowerCase().includes(term))
+      })
+      .sort((left, right) => {
+        const leftUpdated = new Date(left.updatedAt ?? left.createdAt).getTime()
+        const rightUpdated = new Date(right.updatedAt ?? right.createdAt).getTime()
+        return rightUpdated - leftUpdated || right.id - left.id
+      })
   }, [followUpFilter, scheduleQuery.data, searchTerm, stageFilter])
   const totalPages = Math.max(1, Math.ceil(filteredSchedule.length / pageSize))
   const paginatedSchedule = useMemo(
@@ -822,14 +832,14 @@ export function LeadOutreachSchedulePage() {
                         </TableCell>
                         <TableCell className="min-w-48">
                           <p className="font-semibold text-[var(--ether-on-surface)]">
-                            {entry.scheduledAt
-                              ? formatDateTimeLabel(entry.scheduledAt)
+                            {entry.status === "Scheduled" && entry.scheduledAt
+                              ? `Will send: ${formatDateTimeInZone(entry.scheduledAt, workspaceTimeZone)}`
                               : entry.occurredAt
-                                ? formatDateTimeLabel(entry.occurredAt)
+                                ? `Occurred: ${formatDateTimeInZone(entry.occurredAt, workspaceTimeZone)}`
                                 : "Pending review"}
                           </p>
                           <p className="mt-1 text-xs text-[var(--ether-outline)]">
-                            Saved: {formatDateTimeLabel(entry.createdAt)}
+                            Updated: {formatDateTimeInZone(entry.updatedAt ?? entry.createdAt, workspaceTimeZone)} · {workspaceTimeZone}
                           </p>
                         </TableCell>
                         <TableCell className="pr-6">

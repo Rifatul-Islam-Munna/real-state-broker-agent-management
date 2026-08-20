@@ -20,6 +20,34 @@ function getLeadNotes(notes?: string[] | null) {
   return (notes ?? []).filter((note) => (note?.trim() ?? "").length > 0)
 }
 
+function cleanFeedText(value?: string | null) {
+  return (value ?? "")
+    .replace(/&nbsp;|&#xa0;|&#xA0;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&apos;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/\\r\\n/g, "\\n")
+    .trim()
+}
+
+function activityTitle(title: string, status?: string) {
+  if (status === "Scheduled") return `Scheduled · ${title}`
+  if (status === "Sent") return `Sent · ${title}`
+  if (status === "Received") return `Received · ${title}`
+  if (status === "Failed") return `Failed · ${title}`
+  return title
+}
+
+function activityDescription(entry: { summary?: string | null; body?: string | null; status?: string; scheduledAt?: string | null }) {
+  const description = cleanFeedText(entry.summary || entry.body)
+  if (entry.status === "Scheduled" && entry.scheduledAt) {
+    return `This message is queued and will send on ${formatDateTimeLabel(entry.scheduledAt)}.\\n\\n${description}`.trim()
+  }
+  return description || "No message details recorded."
+}
+
 export function LeadActions({
   dealHref,
   historyHref,
@@ -227,6 +255,10 @@ export function LeadDetailsPanel({
   const sourceLabel = displayText(lead.source)
   const historyQuery = useLeadHistory(lead.id)
   const historyEntries = Array.isArray(historyQuery.data) ? historyQuery.data : []
+  const happenedEntries = historyEntries.filter((entry) => entry.status !== "Scheduled")
+  const nextStepEntries = historyEntries
+    .filter((entry) => entry.status === "Scheduled")
+    .sort((left, right) => new Date(left.scheduledAt ?? left.createdAt).getTime() - new Date(right.scheduledAt ?? right.createdAt).getTime())
   const outreachQuery = useLeadOutreachSchedule({ leadId: lead.id })
   const replyEntries = (outreachQuery.data ?? [])
     .filter((entry) => entry.direction === "Incoming" && entry.isReply)
@@ -337,26 +369,49 @@ export function LeadDetailsPanel({
             </div>
           </section>
 
+          {nextStepEntries.length > 0 ? (
+            <section className="rounded-xl border border-[var(--ether-primary)]/15 bg-[var(--ether-primary-fixed)]/35 p-4">
+              <h3 className="ether-label-caps flex items-center gap-2 text-[10px] text-[var(--ether-primary)]"><AppIcon name="schedule" /> Next Steps</h3>
+              <p className="mt-2 text-xs leading-5 text-[var(--ether-on-surface-variant)]">These are queued actions. They are not shown as completed activity.</p>
+              <div className="mt-3 space-y-3">
+                {nextStepEntries.map((entry) => (
+                  <div className="rounded-lg border border-[var(--ether-primary)]/10 bg-white/75 p-3" key={`next-${lead.id}-${entry.id}-${entry.createdAt}`}>
+                    <div className="flex items-start justify-between gap-3">
+                      <p className="text-xs font-bold text-[var(--ether-on-surface)]">{entry.title}</p>
+                      <span className="whitespace-nowrap text-[9px] font-bold uppercase text-[var(--ether-primary)]">Queued</span>
+                    </div>
+                    <p className="mt-1 text-[10px] font-semibold text-[var(--ether-on-surface-variant)]">Will send {formatDateTimeLabel(entry.scheduledAt ?? entry.createdAt)}</p>
+                  </div>
+                ))}
+              </div>
+            </section>
+          ) : null}
+
           <section>
             <h3 className="ether-label-caps flex items-center gap-2 text-[10px] text-[var(--ether-outline)]"><AppIcon name="analytics" /> Notes & Activity Feed</h3>
             <div className="relative ml-3 mt-5 space-y-6 border-l border-[var(--ether-outline-variant)] pl-6">
-              <ActivityItem title="Stage Updated" description={`Lead stage is ${leadStageMeta[lead.stage].label}.`} date={lead.updatedAt} />
+              
               {replyEntries.map((entry) => (
                 <ActivityItem
                   actionHref={entry.kind === "Sms" ? `/dashboard/text-messages/${entry.id}` : undefined}
                   actionLabel={entry.kind === "Sms" ? "Open conversation" : undefined}
                   date={entry.occurredAt ?? entry.createdAt}
-                  description={displayText(entry.body, entry.summary || "Reply received without message text.")}
+                  description={cleanFeedText(entry.body || entry.summary || "Reply received without message text.")}
                   key={`reply-${entry.id}`}
-                  title={`${entry.kind === "Sms" ? "SMS" : "Email"} Reply Received`}
+                  title={`${entry.kind === "Sms" ? "SMS" : "Email"} · Received reply`}
                 />
               ))}
-              <ActivityItem title="Lead Created" description={`${sourceLabel} intake created this lead.`} date={lead.createdAt} />
+              
 
               {historyQuery.isLoading || outreachQuery.isLoading ? <p className="text-xs text-[var(--ether-outline)]">Loading history...</p> : null}
               {historyQuery.error || outreachQuery.error ? <p className="text-xs font-semibold text-[var(--ether-error)]">{historyQuery.error?.message ?? outreachQuery.error?.message}</p> : null}
-              {historyEntries.map((entry) => (
-                <ActivityItem key={`${lead.id}-${entry.id}-${entry.createdAt}`} title={entry.title} description={entry.summary} date={entry.scheduledAt ?? entry.occurredAt ?? entry.createdAt} />
+              {happenedEntries.map((entry) => (
+                <ActivityItem
+                  key={`${lead.id}-${entry.id}-${entry.createdAt}`}
+                  title={activityTitle(entry.title, entry.status)}
+                  description={activityDescription(entry)}
+                  date={entry.occurredAt ?? entry.createdAt}
+                />
               ))}
               {leadNotes.map((note, index) => <ActivityItem key={`${lead.id}-note-${index}`} title={`Note ${index + 1}`} description={note} />)}
             </div>
