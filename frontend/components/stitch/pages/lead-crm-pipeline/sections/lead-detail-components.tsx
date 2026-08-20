@@ -231,6 +231,7 @@ export function LeadDetailsPanel({
   const replyEntries = (outreachQuery.data ?? [])
     .filter((entry) => entry.direction === "Incoming" && entry.isReply)
     .sort((left, right) => new Date(right.occurredAt ?? right.createdAt).getTime() - new Date(left.occurredAt ?? left.createdAt).getTime())
+    .slice(0, 3)
   const agentInitials = displayText(lead.agent, "NA")
     .split(" ")
     .filter(Boolean)
