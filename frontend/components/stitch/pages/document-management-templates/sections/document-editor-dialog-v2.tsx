@@ -71,6 +71,7 @@ export function DocumentEditorDialog({
   const [isUploading, setIsUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const isBusy = isSubmitting || isUploading
+  const selectedProperty = properties.find((property) => property.id === formValues.propertyId)
 
   useEffect(() => {
     setFormValues(initialValues)
@@ -131,10 +132,10 @@ export function DocumentEditorDialog({
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => (!nextOpen ? closeDialog() : undefined)}>
       <DialogContent
-        className="max-h-[calc(100dvh-2rem)] max-w-5xl gap-0 overflow-hidden p-0"
+        className="!flex h-[calc(100dvh-2rem)] max-h-[calc(100dvh-2rem)] max-w-5xl flex-col gap-0 overflow-hidden p-0"
         showCloseButton={false}
       >
-        <DialogHeader className="border-b px-5 py-5 sm:px-6">
+        <DialogHeader className="shrink-0 border-b px-5 py-5 sm:px-6">
           <DialogTitle className="text-2xl">
             {mode === "create" ? "Upload document" : "Edit document"}
           </DialogTitle>
@@ -144,7 +145,7 @@ export function DocumentEditorDialog({
         </DialogHeader>
 
         <form
-          className="flex min-h-0 flex-1 flex-col"
+          className="flex min-h-0 flex-1 flex-col overflow-hidden"
           onSubmit={async (event) => {
             event.preventDefault()
             const nextErrors = validateDocumentForm(formValues)
@@ -157,7 +158,7 @@ export function DocumentEditorDialog({
             await onSubmit(formValues)
           }}
         >
-          <div className="grid min-h-0 flex-1 gap-6 overflow-y-auto p-5 sm:p-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]">
+          <div className="grid min-h-0 flex-1 gap-6 overflow-y-auto overscroll-contain p-5 sm:p-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]">
             <div className="space-y-5">
               <div className="space-y-2">
                 <Label htmlFor="document-title">{"Document title"}</Label>
@@ -252,7 +253,11 @@ export function DocumentEditorDialog({
                     value={formValues.propertyId ? String(formValues.propertyId) : ""}
                   >
                     <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select property" />
+                      <span className="truncate">
+                        {selectedProperty
+                          ? [selectedProperty.title, selectedProperty.location].filter(Boolean).join(" — ")
+                          : "Select property"}
+                      </span>
                     </SelectTrigger>
                     <SelectContent>
                       {properties.map((property) => (
@@ -433,14 +438,14 @@ export function DocumentEditorDialog({
           </div>
 
           {submitError ? (
-            <div className="px-5 pb-4 sm:px-6">
+            <div className="shrink-0 px-5 pb-4 sm:px-6">
               <Alert variant="destructive">
                 <AlertDescription>{submitError}</AlertDescription>
               </Alert>
             </div>
           ) : null}
 
-          <DialogFooter className="mx-0 mb-0 rounded-none px-5 py-4 sm:px-6">
+          <DialogFooter className="mx-0 mb-0 shrink-0 rounded-none bg-background px-5 py-4 sm:px-6">
             <Button disabled={isBusy} onClick={closeDialog} type="button" variant="outline">
               {"Cancel"}
             </Button>
