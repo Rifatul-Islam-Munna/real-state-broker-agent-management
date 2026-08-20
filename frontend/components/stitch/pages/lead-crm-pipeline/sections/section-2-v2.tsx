@@ -228,6 +228,7 @@ export function Section2Section({
     }
     setDeleteMessage(null)
     setSelectedIds([])
+    setSelectedLeadId((current) => current && selectedIds.includes(current) ? null : current)
     setDeleteConfirmOpen(false)
   }
 
@@ -891,6 +892,11 @@ export function Section2Section({
               lead={selectedLead}
               onClose={() => setSelectedLeadId(null)}
               onConvertLeadToDeal={onConvertLeadToDeal}
+              onDeletePermanently={(leadId) => {
+                setDeleteMessage(null)
+                setSelectedIds([leadId])
+                setDeleteConfirmOpen(true)
+              }}
               onDialogOpen={(type, leadId) => setDialogState({ type, leadId })}
               onToggleBoard={onSetLeadBoard}
             />
@@ -959,7 +965,7 @@ export function Section2Section({
           <DialogHeader>
             <DialogTitle>{"Delete leads"}</DialogTitle>
             <DialogDescription>
-              {`This permanently deletes ${selectedIds.length} selected lead${selectedIds.length === 1 ? "" : "s"} and their property links. Inbox messages are kept but unlinked. This cannot be undone.`}
+              {`This permanently deletes ${selectedIds.length} selected lead${selectedIds.length === 1 ? "" : "s"}, outreach, inbox history, showings, property links, and connected records. Old imported messages will not recreate the lead. A future new inquiry can create it again. This cannot be undone.`}
             </DialogDescription>
           </DialogHeader>
           {deleteMessage ? (

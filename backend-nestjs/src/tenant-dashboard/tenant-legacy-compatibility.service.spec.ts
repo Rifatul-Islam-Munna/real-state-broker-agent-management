@@ -1,6 +1,39 @@
 import { TenantLegacyCompatibilityService } from './tenant-legacy-compatibility.service';
 
 describe('TenantLegacyCompatibilityService response defaults', () => {
+  test('permanently deletes lead and all connected tenant records in one transaction', async () => {
+    const statements: string[] = [];
+    const query = jest.fn(async (sql: string) => {
+      statements.push(sql);
+      if (sql.includes('DELETE FROM tenant_lead WHERE')) {
+        return { rowCount: 1, rows: [{ id: 9 }] };
+      }
+      return { rowCount: 0, rows: [] };
+    });
+    const databases = {
+      withTenantClient: jest.fn((_database: string, callback: any) => callback({ query })),
+    };
+    const service = new TenantLegacyCompatibilityService(
+      databases as any,
+      {} as any,
+      {} as any,
+    );
+
+    await expect(service.deleteLead(
+      { databaseName: 'tenant_1_demo' } as any,
+      { id: 9 },
+    )).resolves.toEqual({ deleted: [9] });
+    expect(statements).toEqual(expect.arrayContaining([
+      'BEGIN',
+      expect.stringContaining('tenant_mail_deletion_tombstone'),
+      expect.stringContaining('DELETE FROM tenant_outreach_job'),
+      expect.stringContaining('DELETE FROM tenant_legacy_resource'),
+      expect.stringContaining('DELETE FROM tenant_audit_log'),
+      expect.stringContaining('DELETE FROM tenant_lead WHERE'),
+      'COMMIT',
+    ]));
+  });
+
   test('normalizes incomplete deal records before UI rendering', () => {
     const service = new TenantLegacyCompatibilityService(
       {} as any,

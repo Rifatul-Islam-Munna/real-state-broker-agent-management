@@ -209,6 +209,7 @@ export function LeadDetailsPanel({
   lead,
   onClose,
   onConvertLeadToDeal,
+  onDeletePermanently,
   onDialogOpen,
   onToggleBoard,
 }: {
@@ -217,6 +218,7 @@ export function LeadDetailsPanel({
   lead: LeadItem
   onClose: () => void
   onConvertLeadToDeal: (leadId: number) => Promise<string | null>
+  onDeletePermanently: (leadId: number) => void
   onDialogOpen: (type: "cancel" | "edit" | "email" | "message" | "call", leadId: number) => void
   onToggleBoard: (leadId: number, inBoard: boolean) => Promise<void>
 }) {
@@ -349,7 +351,10 @@ export function LeadDetailsPanel({
       <footer className="flex min-w-0 items-center justify-between gap-4 border-t border-[var(--ether-outline-variant)] bg-[var(--ether-surface-container-low)] px-5 py-4">
         <div className="flex min-w-0 flex-wrap items-center gap-3">
           <button className="inline-flex items-center gap-1 text-xs font-bold text-[var(--ether-error)] hover:underline" onClick={() => onDialogOpen("cancel", lead.id)} type="button">
-            <AppIcon name="delete" /> Archive Lead
+            <AppIcon name="archive" /> Archive Lead
+          </button>
+          <button className="inline-flex items-center gap-1 text-xs font-bold text-[var(--ether-error)] hover:underline" onClick={() => onDeletePermanently(lead.id)} type="button">
+            <AppIcon name="delete_forever" /> Delete permanently
           </button>
           <button className="text-xs font-semibold text-[var(--ether-on-surface-variant)]" onClick={() => void onToggleBoard(lead.id, !lead.inBoard)} type="button">
             {lead.inBoard ? "Remove from board" : "Add to board"}

@@ -247,12 +247,46 @@ export class TenantLegacyCompatibilityService {
       ids.push(id);
     }
     return this.databases.withTenantClient(this.databaseName(tenant), async (client) => {
-      const result = await client.query(
-        'DELETE FROM tenant_lead WHERE id = ANY($1::bigint[]) RETURNING id',
-        [ids],
-      );
-      if (!result.rowCount) throw new NotFoundException('Lead not found');
-      return { deleted: result.rows.map((row: any) => Number(row.id)) };
+      await client.query('BEGIN');
+      try {
+        const idTexts = ids.map(String);
+        await client.query(
+          `INSERT INTO tenant_mail_deletion_tombstone(provider, provider_message_id)
+           SELECT DISTINCT provider, provider_message_id
+           FROM tenant_outreach_job
+           WHERE lead_id = ANY($1::bigint[])
+             AND direction = 'Incoming'
+             AND provider <> ''
+             AND provider_message_id <> ''
+           ON CONFLICT (provider, provider_message_id) DO NOTHING`,
+          [ids],
+        );
+        await client.query(
+          'DELETE FROM tenant_outreach_job WHERE lead_id = ANY($1::bigint[])',
+          [ids],
+        );
+        await client.query(
+          `DELETE FROM tenant_legacy_resource
+           WHERE payload->>'leadId' = ANY($1::text[])
+              OR payload->>'sourceLeadId' = ANY($1::text[])`,
+          [idTexts],
+        );
+        await client.query(
+          `DELETE FROM tenant_audit_log
+           WHERE metadata->>'leadId' = ANY($1::text[])`,
+          [idTexts],
+        );
+        const result = await client.query(
+          'DELETE FROM tenant_lead WHERE id = ANY($1::bigint[]) RETURNING id',
+          [ids],
+        );
+        if (!result.rowCount) throw new NotFoundException('Lead not found');
+        await client.query('COMMIT');
+        return { deleted: result.rows.map((row: any) => Number(row.id)) };
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      }
     });
   }
 
