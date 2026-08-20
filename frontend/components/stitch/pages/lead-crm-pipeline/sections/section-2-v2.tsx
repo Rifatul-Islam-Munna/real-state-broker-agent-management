@@ -170,7 +170,7 @@ export function Section2Section({
   const [selectedIds, setSelectedIds] = useState<number[]>([])
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [deleteMessage, setDeleteMessage] = useState<string | null>(null)
-  const [viewMode, setViewMode] = useState<LeadView>("board")
+  const [viewMode, setViewMode] = useState<LeadView>("list")
   const [boardStagePages, setBoardStagePages] = useState<Partial<Record<LeadStage, number>>>({})
   const [stageFilter, setStageFilter] = useState<LeadListFilter>("all")
   const [dialogState, setDialogState] = useState<LeadDialogState>(null)
@@ -587,11 +587,11 @@ export function Section2Section({
             <AlertDescription>{csvMessage}</AlertDescription>
           </Alert>
         ) : null}
-        {isLoading ? (
+        {isLoading && viewMode === "board" ? (
           <Alert>
             <AlertDescription>{"Loading leads..."}</AlertDescription>
           </Alert>
-        ) : errorMessage ? (
+        ) : errorMessage && viewMode === "board" ? (
           <Alert variant="destructive">
             <AlertDescription>{errorMessage}</AlertDescription>
           </Alert>
@@ -706,15 +706,9 @@ export function Section2Section({
               </div>
             )}
           </div>
-        ) : orderedLeads.length > 0 ? (
+        ) : (
           <section className="overflow-hidden rounded-[24px] bg-white shadow-[var(--shadow-surface-1)]">
-            <div className="flex flex-col gap-4 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-              <div className="flex items-center gap-3">
-                <div className="inline-flex rounded-lg bg-[var(--ether-surface-container)] p-1">
-                  <button className="rounded-md bg-white px-4 py-2 text-sm font-bold text-[var(--ether-primary)] shadow-sm" onClick={() => setViewMode("list")} type="button"><AppIcon className="mr-2 inline text-base" name="view_list" />List View</button>
-                  <button className="rounded-md px-4 py-2 text-sm font-semibold text-[var(--ether-on-surface-variant)]" onClick={() => setViewMode("board")} type="button"><AppIcon className="mr-2 inline text-base" name="view_kanban" />Board View</button>
-                </div>
-              </div>
+            <div className="flex justify-end px-5 py-5 sm:px-6">
               <Select onValueChange={(value) => setStageFilter((value ?? "all") as LeadListFilter)} value={stageFilter}>
                 <SelectTrigger className="h-10 w-full rounded-lg border-0 bg-[var(--ether-surface-container-low)] px-4 font-semibold shadow-none sm:w-48"><SelectValue placeholder="Filter by stage" /></SelectTrigger>
                 <SelectContent>
@@ -776,7 +770,19 @@ export function Section2Section({
                   </tr>
                 </thead>
                 <tbody>
-                  {orderedLeads.map((lead, index) => {
+                  {isLoading || errorMessage || orderedLeads.length === 0 ? (
+                    <tr>
+                      <td className="px-6 py-16 text-center" colSpan={5}>
+                        <AppIcon className="mx-auto text-3xl text-[var(--ether-outline)]" name={errorMessage ? "error" : isLoading ? "hourglass_top" : "inbox"} />
+                        <p className="mt-3 text-sm font-semibold text-[var(--ether-on-surface)]">
+                          {errorMessage ? "Could not load leads" : isLoading ? "Please wait, loading leads..." : "No leads found"}
+                        </p>
+                        <p className="mt-1 text-xs text-[var(--ether-on-surface-variant)]">
+                          {errorMessage ?? (isLoading ? "Your lead list will appear here." : "No leads match the current filters.")}
+                        </p>
+                      </td>
+                    </tr>
+                  ) : orderedLeads.map((lead, index) => {
                     const initials = `${lead.name ?? ""}`.split(" ").filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase()
                     const avatarTone = index % 3 === 0 ? "bg-[var(--ether-primary-fixed)] text-[var(--ether-primary)]" : index % 3 === 1 ? "bg-[var(--ether-tertiary-fixed)] text-[var(--ether-tertiary)]" : "bg-[color-mix(in_srgb,var(--ether-secondary-container)_35%,white)] text-[var(--ether-secondary)]"
                     const isSelected = selectedIds.includes(lead.id)
@@ -858,13 +864,6 @@ export function Section2Section({
               </table>
             </div>
           </section>
-        ) : (
-          <div className="rounded-[24px] bg-white p-10 text-center shadow-[var(--shadow-surface-1)]">
-            <p className="font-semibold">{"No leads found"}</p>
-            <p className="mt-2 text-sm text-muted-foreground">
-              {"Create a lead to start populating the CRM."}
-            </p>
-          </div>
         )}
 
         <div className="rounded-[24px] bg-white p-3 shadow-[var(--shadow-surface-1)]">

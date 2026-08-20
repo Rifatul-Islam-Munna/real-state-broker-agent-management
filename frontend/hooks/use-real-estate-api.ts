@@ -180,7 +180,7 @@ const defaultQueryOptions = {
   placeholderData: keepPreviousData,
   refetchOnReconnect: false,
   refetchOnWindowFocus: false,
-  staleTime: 30_000,
+  staleTime: 60_000,
 } as const
 
 function buildQuery(params?: QueryParams) {
@@ -448,7 +448,7 @@ export function useDocumentRepositorySummary() {
 }
 
 export function useCreateDocumentRepositoryItem() {
-  const invalidate = useInvalidate(["documents", "document-summary"])
+  const invalidate = useInvalidate(["documents", "document-summary", "properties", "managed-properties", "leads"])
 
   return useCommonMutationApi<DocumentRepositoryItem, DocumentRepositorySaveInput>({
     method: "POST",
@@ -459,7 +459,7 @@ export function useCreateDocumentRepositoryItem() {
 }
 
 export function useUpdateDocumentRepositoryItem() {
-  const invalidate = useInvalidate(["documents", "document-summary"])
+  const invalidate = useInvalidate(["documents", "document-summary", "properties", "managed-properties", "leads"])
 
   return useCommonMutationApi<DocumentRepositoryItem, UpdateDocumentRepositoryInput>({
     method: "PATCH",
@@ -470,7 +470,7 @@ export function useUpdateDocumentRepositoryItem() {
 }
 
 export function useDeleteDocumentRepositoryItem() {
-  const invalidate = useInvalidate(["documents", "document-summary"])
+  const invalidate = useInvalidate(["documents", "document-summary", "properties", "managed-properties", "leads"])
 
   return useCommonMutationApi<unknown, { id: string }>({
     method: "DELETE",
@@ -560,6 +560,8 @@ export function useCreateProperty() {
     "managed-properties",
     "documents",
     "document-summary",
+    "leads",
+    "dashboard",
   ])
 
   return useCommonMutationApi<PropertyItem, PropertySaveInput>({
@@ -576,6 +578,8 @@ export function useUpdateProperty() {
     "managed-properties",
     "documents",
     "document-summary",
+    "leads",
+    "dashboard",
   ])
 
   return useCommonMutationApi<PropertyItem, PropertyItem>({
@@ -587,7 +591,7 @@ export function useUpdateProperty() {
 }
 
 export function useDeleteProperty() {
-  const invalidate = useInvalidate(["properties", "managed-properties"])
+  const invalidate = useInvalidate(["properties", "managed-properties", "documents", "document-summary", "leads", "dashboard"])
 
   return useCommonMutationApi<unknown, { id: string }>({
     method: "DELETE",

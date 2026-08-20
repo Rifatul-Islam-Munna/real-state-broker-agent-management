@@ -49,6 +49,13 @@ export class TenantLegacyCompatibilityService {
          RETURNING id, title, status, payload, created_at, updated_at`,
         [Number(row.id), JSON.stringify(nextPayload)],
       );
+      if ((updated.rows[0] ?? row)?.status === 'published') {
+        await this.linkMatchingUnlistedLeads(
+          client,
+          Number(row.id),
+          `${row.title ?? body?.title ?? ''}`.trim(),
+        );
+      }
       return this.propertyItem(updated.rows[0] ?? { ...row, payload: nextPayload });
     });
   }
@@ -70,8 +77,77 @@ export class TenantLegacyCompatibilityService {
          WHERE id = $1 RETURNING id, title, status, payload, created_at, updated_at`,
         [id, `${body?.title ?? payload.title ?? ''}`.trim(), this.storagePropertyStatus(body?.status), JSON.stringify(payload)],
       );
+      if (result.rows[0]?.status === 'published') {
+        await this.linkMatchingUnlistedLeads(
+          client,
+          id,
+          `${result.rows[0]?.title ?? body?.title ?? payload.title ?? ''}`.trim(),
+        );
+      }
       return this.propertyItem(result.rows[0]);
     });
+  }
+
+  private async linkMatchingUnlistedLeads(
+    client: PoolClient,
+    propertyId: number,
+    propertyTitle: string,
+  ) {
+    const propertyKey = this.propertyMatchKey(propertyTitle);
+    if (!propertyKey) return 0;
+    const result = await client.query(
+      `SELECT id, payload
+       FROM tenant_lead lead
+       WHERE COALESCE(payload->>'property', '') <> ''
+         AND NOT EXISTS (
+           SELECT 1 FROM tenant_lead_property link
+           WHERE link.lead_id = lead.id
+         )`,
+    );
+    const matchingIds = result.rows
+      .filter((lead: any) => this.propertyMatchKey(lead?.payload?.property) === propertyKey)
+      .map((lead: any) => Number(lead.id))
+      .filter((id: number) => Number.isInteger(id) && id > 0);
+    for (const leadId of matchingIds) {
+      await client.query(
+        `INSERT INTO tenant_lead_property(lead_id, property_id)
+         VALUES ($1, $2)
+         ON CONFLICT DO NOTHING`,
+        [leadId, propertyId],
+      );
+      await client.query(
+        `UPDATE tenant_lead
+         SET payload = COALESCE(payload, '{}'::jsonb) || $2::jsonb,
+             updated_at = now()
+         WHERE id = $1`,
+        [leadId, JSON.stringify({
+          primaryPropertyId: propertyId,
+          property: propertyTitle,
+          propertyListingStatus: 'Listed',
+        })],
+      );
+    }
+    return matchingIds.length;
+  }
+
+  private propertyMatchKey(value: unknown) {
+    return `${value ?? ''}`
+      .toLowerCase()
+      .replace(/\b(north)\b/g, 'n')
+      .replace(/\b(south)\b/g, 's')
+      .replace(/\b(east)\b/g, 'e')
+      .replace(/\b(west)\b/g, 'w')
+      .replace(/\b(street)\b/g, 'st')
+      .replace(/\b(road)\b/g, 'rd')
+      .replace(/\b(avenue)\b/g, 'ave')
+      .replace(/\b(boulevard)\b/g, 'blvd')
+      .replace(/\b(drive)\b/g, 'dr')
+      .replace(/\b(lane)\b/g, 'ln')
+      .replace(/\b(court)\b/g, 'ct')
+      .replace(/\b(unit|apartment|apt|suite)\b/g, ' ')
+      .replace(/[^a-z0-9]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
   }
 
   private async syncPropertyDocuments(

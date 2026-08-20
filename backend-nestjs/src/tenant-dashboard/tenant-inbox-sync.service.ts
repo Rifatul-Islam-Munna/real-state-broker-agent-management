@@ -104,6 +104,7 @@ export class TenantInboxSyncService {
         this.clamp(process.env.TENANT_SYNC_TENANT_CONCURRENCY, 3, 1, 10),
         async (tenant) => {
           try {
+            await this.linkMissingLeadProperties(tenant);
             await this.autoSendWelcomeForLeads(tenant);
             await this.scheduleTenantFollowUps(tenant);
             await this.removeStalePostVisitFollowUps(tenant);

@@ -1,6 +1,40 @@
 import { TenantLegacyCompatibilityService } from './tenant-legacy-compatibility.service';
 
 describe('TenantLegacyCompatibilityService response defaults', () => {
+  test('links an existing unlisted lead immediately when matching property is added', async () => {
+    const query = jest.fn(async (sql: string) => {
+      if (sql.includes('FROM tenant_lead lead')) {
+        return {
+          rowCount: 2,
+          rows: [
+            { id: 21, payload: { property: '9230 Lagoon Pl #411' } },
+            { id: 22, payload: { property: '1000 NE 14th Ave #411' } },
+          ],
+        };
+      }
+      return { rowCount: 1, rows: [] };
+    });
+    const service = new TenantLegacyCompatibilityService(
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+
+    await expect((service as any).linkMatchingUnlistedLeads(
+      { query },
+      9,
+      '9230 Lagoon Pl Unit #411',
+    )).resolves.toBe(1);
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('INSERT INTO tenant_lead_property'),
+      [21, 9],
+    );
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('UPDATE tenant_lead'),
+      [21, expect.stringContaining('"propertyListingStatus":"Listed"')],
+    );
+  });
+
   test('permanently deletes lead and all connected tenant records in one transaction', async () => {
     const statements: string[] = [];
     const query = jest.fn(async (sql: string) => {
