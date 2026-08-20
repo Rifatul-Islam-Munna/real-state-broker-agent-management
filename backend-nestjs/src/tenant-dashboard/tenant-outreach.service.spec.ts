@@ -176,14 +176,8 @@ describe('TenantOutreachService reliability', () => {
     },
   );
 
-  it('blocks email and SMS outreach for leads without a property', async () => {
+  it('allows a user to manually send outreach for an unlisted-property lead', async () => {
     const query = jest.fn(async (sql: string) => {
-      if (sql.includes('FROM tenant_lead_property')) {
-        return { rowCount: 0, rows: [] };
-      }
-      if (sql.includes("payload->>'property'")) {
-        return { rowCount: 1, rows: [{ property: '' }] };
-      }
       if (sql.includes('SELECT to_jsonb(lead)')) {
         return {
           rowCount: 1,
@@ -195,17 +189,19 @@ describe('TenantOutreachService reliability', () => {
       return { rowCount: 0, rows: [] };
     });
     const { service } = createService(query);
+    jest.spyOn(service as any, 'enqueueWithClient').mockResolvedValue([{
+      id: 98,
+      status: 'scheduled',
+      leadId: 9,
+      channel: 'Email',
+    }]);
 
     await expect(service.queueOutreach(tenant, {
       leadId: 9,
       kind: 'Email',
+      title: 'Manual review approved',
       message: 'Hi',
-    })).rejects.toThrow('no property selected');
-    await expect(service.queueOutreach(tenant, {
-      leadId: 9,
-      kind: 'Sms',
-      message: 'Hi',
-    })).rejects.toThrow('no property selected');
+    })).resolves.toMatchObject({ id: 98, status: 'Scheduled' });
   });
 
   it('allows outreach for leads that have a linked property', async () => {

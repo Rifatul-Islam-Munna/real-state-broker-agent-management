@@ -355,11 +355,6 @@ export class TenantOutreachService {
       const leadId = this.positiveId(input?.leadId, 'Lead id');
       const lead = await this.leadSnapshot(client, leadId);
       const channel = this.channel(input?.kind);
-      if (channel !== 'Call' && !(await this.leadHasProperty(client, leadId))) {
-        throw new BadRequestException(
-          'This lead has no property selected. Email and SMS outreach are blocked until a property is selected for this lead.',
-        );
-      }
       const agency = await this.agencySettings(client);
       const template = input?.templateId
         ? agency.communicationTemplates.find(
@@ -699,6 +694,24 @@ export class TenantOutreachService {
     return this.databases.withTenantClient(this.databaseName(tenant), async (client) => {
       await client.query('BEGIN');
       try {
+        await client.query(
+          `UPDATE tenant_outreach_job j
+           SET status = 'cancelled',
+               last_error = 'Cancelled because linked property is not currently published.',
+               completed_at = now(),
+               locked_at = NULL,
+               locked_by = NULL,
+               updated_at = now()
+           WHERE j.status IN ('scheduled', 'retrying')
+             AND j.source_type IN ('lead-automation', 'lead-followup')
+             AND NOT EXISTS (
+               SELECT 1
+               FROM tenant_lead_property lp
+               JOIN tenant_property p ON p.id = lp.property_id
+               WHERE lp.lead_id = j.lead_id
+                 AND p.status = 'published'
+             )`,
+        );
         const result = await client.query<TenantOutreachJob>(
           `WITH due AS (
              SELECT j.id
@@ -894,20 +907,6 @@ export class TenantOutreachService {
     );
     if (!result.rows[0]?.value) throw new NotFoundException('Tenant lead was not found.');
     return this.camelize(result.rows[0].value);
-  }
-
-  private async leadHasProperty(client: PoolClient, leadId: number) {
-    const linked = await client.query(
-      'SELECT 1 FROM tenant_lead_property WHERE lead_id = $1 LIMIT 1',
-      [leadId],
-    );
-    if (linked.rowCount) return true;
-    const lead = await client.query(
-      `SELECT COALESCE(payload->>'property', '') AS property
-       FROM tenant_lead WHERE id = $1`,
-      [leadId],
-    );
-    return this.text(lead.rows[0]?.property).length > 0;
   }
 
   private async resolveAudience(client: PoolClient, input: any) {

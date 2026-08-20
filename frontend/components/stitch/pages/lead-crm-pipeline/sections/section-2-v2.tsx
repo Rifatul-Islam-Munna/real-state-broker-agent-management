@@ -53,6 +53,7 @@ import {
 } from "./lead-shared"
 
 type LeadView = "board" | "list"
+type LeadListFilter = LeadStage | "all" | "not-listed"
 const BOARD_PAGE_SIZE = 8
 const paginatedBoardStages = new Set<LeadStage>([
   "New",
@@ -171,7 +172,7 @@ export function Section2Section({
   const [deleteMessage, setDeleteMessage] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<LeadView>("board")
   const [boardStagePages, setBoardStagePages] = useState<Partial<Record<LeadStage, number>>>({})
-  const [stageFilter, setStageFilter] = useState<LeadStage | "all">("all")
+  const [stageFilter, setStageFilter] = useState<LeadListFilter>("all")
   const [dialogState, setDialogState] = useState<LeadDialogState>(null)
   const [importOpen, setImportOpen] = useState(false)
   const [csvHeaders, setCsvHeaders] = useState<string[]>([])
@@ -401,7 +402,12 @@ export function Section2Section({
   const orderedLeads = useMemo(
     () =>
       [...leads]
-        .filter((lead) => stageFilter === "all" || lead.stage === stageFilter)
+        .filter((lead) =>
+          stageFilter === "all" ||
+          (stageFilter === "not-listed"
+            ? lead.propertyListingStatus === "NotListed"
+            : lead.stage === stageFilter),
+        )
         .sort((left, right) => {
           const leftDate = new Date(left.lastActivityAt ?? left.createdAt ?? 0).getTime()
           const rightDate = new Date(right.lastActivityAt ?? right.createdAt ?? 0).getTime()
@@ -708,10 +714,11 @@ export function Section2Section({
                   <button className="rounded-md px-4 py-2 text-sm font-semibold text-[var(--ether-on-surface-variant)]" onClick={() => setViewMode("board")} type="button"><AppIcon className="mr-2 inline text-base" name="view_kanban" />Board View</button>
                 </div>
               </div>
-              <Select onValueChange={(value) => setStageFilter((value ?? "all") as LeadStage | "all")} value={stageFilter}>
+              <Select onValueChange={(value) => setStageFilter((value ?? "all") as LeadListFilter)} value={stageFilter}>
                 <SelectTrigger className="h-10 w-full rounded-lg border-0 bg-[var(--ether-surface-container-low)] px-4 font-semibold shadow-none sm:w-48"><SelectValue placeholder="Filter by stage" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All stages</SelectItem>
+                  <SelectItem value="not-listed">Not listed</SelectItem>
                   {leadStageOrder.map((stage) => <SelectItem key={stage} value={stage}>{leadStageMeta[stage].label}</SelectItem>)}
                 </SelectContent>
               </Select>
@@ -805,6 +812,7 @@ export function Section2Section({
                         </td>
                         <td className="px-6 py-5">
                           <p className="max-w-64 font-semibold text-[var(--ether-on-surface)]">{lead.property || "No property selected"}</p>
+                          {lead.propertyListingStatus === "NotListed" ? <Badge className="mt-1 rounded-full border-amber-200 bg-amber-50 text-amber-800" variant="outline">Not listed · manual send only</Badge> : null}
                           <p className="mt-1 text-sm text-[var(--ether-on-surface-variant)]">{lead.interest || "General interest"} ? {lead.budget || "Budget not set"}</p>
                         </td>
                         <td className="px-6 py-5">

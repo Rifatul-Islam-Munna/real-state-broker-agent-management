@@ -705,6 +705,12 @@ export class TenantLegacyCompatibilityService {
 
   private leadItem(row: any) {
     const payload = row?.payload && typeof row.payload === 'object' ? row.payload : {};
+    const properties = Array.isArray(row.properties)
+      ? row.properties
+      : Array.isArray(payload.properties) ? payload.properties : [];
+    const propertyListingStatus = properties.length
+      ? properties.some((property: any) => property?.status === 'published') ? 'Listed' : 'NotListed'
+      : payload.propertyListingStatus === 'Listed' ? 'Listed' : 'NotListed';
     const notes = Array.isArray(payload.notes)
       ? payload.notes
       : `${payload.notes ?? ''}`.trim()
@@ -720,6 +726,7 @@ export class TenantLegacyCompatibilityService {
       summary: payload.summary || '',
       property: payload.property || '',
       propertyId: payload.propertyId ?? null,
+      propertyListingStatus,
       priority: payload.priority || 'Warm',
       source: payload.source || 'Manual',
       budget: payload.budget || '',
@@ -746,7 +753,7 @@ export class TenantLegacyCompatibilityService {
       isFollowUpOverdue: Boolean(payload.isFollowUpOverdue),
       createdAt: row.created_at ?? row.createdAt,
       updatedAt: row.updated_at ?? row.updatedAt,
-      properties: row.properties ?? payload.properties ?? [],
+      properties,
     };
   }
 

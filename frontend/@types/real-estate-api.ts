@@ -809,6 +809,7 @@ export type LeadItem = {
   summary: string
   property: string
   propertyId?: number | null
+  propertyListingStatus?: "Listed" | "NotListed"
   budget: string
   creditScore?: string
   combinedCreditScore?: string

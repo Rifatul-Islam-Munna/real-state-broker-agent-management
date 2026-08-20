@@ -584,7 +584,7 @@ describe('TenantInboxSyncService stored email recovery', () => {
       if (sql.includes('FROM tenant_property')) {
         return {
           rowCount: 1,
-          rows: [{ id: 21, title: '2500 Parkview Dr Unit #1216', payload: {} }],
+          rows: [{ id: 21, title: '2500 Parkview Dr Unit #1216', status: 'published', payload: {} }],
         };
       }
       return { rowCount: 0, rows: [] };
@@ -622,6 +622,71 @@ describe('TenantInboxSyncService stored email recovery', () => {
 });
 
 describe('TenantInboxSyncService active parser processing', () => {
+  test('does not create a lead when parsed property is inactive', async () => {
+    const query = jest.fn(async (sql: string) => {
+      if (sql.includes("resource = 'lead-collection-templates'")) {
+        return {
+          rowCount: 1,
+          rows: [{
+            id: 7,
+            payload: {
+              name: 'Property inquiry parser',
+              senderPatterns: ['*@example.com'],
+              subjectPattern: 'New inquiry',
+              subjectMatchMode: 'Contains',
+              sourceText: 'Name: Taylor Morgan\nProperty: 123 Main St',
+              mappings: [
+                {
+                  field: 'name',
+                  source: 'EmailBody',
+                  sampleValue: 'Taylor Morgan',
+                  selectionStart: 6,
+                  selectionEnd: 19,
+                  prefix: 'Name:',
+                  suffix: 'Property:',
+                  required: true,
+                  transform: 'Text',
+                },
+                {
+                  field: 'property',
+                  source: 'EmailBody',
+                  sampleValue: '123 Main St',
+                  selectionStart: 30,
+                  selectionEnd: 41,
+                  prefix: 'Property:',
+                  suffix: '',
+                  required: true,
+                  transform: 'Text',
+                },
+              ],
+              requiredFields: ['name', 'property'],
+              confidenceThreshold: 0.8,
+            },
+          }],
+        };
+      }
+      return { rowCount: 0, rows: [] };
+    });
+    const service = new TenantInboxSyncService({} as any, {} as any, {} as any);
+    jest.spyOn(service as any, 'resolveLeadProperty').mockResolvedValue({
+      id: 4,
+      title: '123 Main St',
+      status: 'archived',
+    });
+
+    const parsed = await (service as any).createOrMatchLeadFromTemplate({ query }, {
+      sender: 'lead@example.com',
+      subject: 'New inquiry',
+      body: 'Name: Taylor Morgan\nProperty: 123 Main St',
+      receivedAt: new Date('2026-08-20T00:00:00Z'),
+      payload: {},
+    });
+
+    expect(parsed).toMatchObject({ created: false, lead: null });
+    expect(parsed.result.diagnostics.at(-1)).toContain('is inactive');
+    expect(query.mock.calls.some(([sql]) => sql.includes('INSERT INTO tenant_lead('))).toBe(false);
+  });
+
   test('creates a lead from any matching active parser regardless of mailbox tags', async () => {
     const query = jest.fn(async (sql: string) => {
       if (sql.includes("resource = 'lead-collection-templates'")) {
@@ -691,7 +756,10 @@ describe('TenantInboxSyncService active parser processing', () => {
     expect(parsed.result).toMatchObject({ matched: true, templateId: 8 });
     const insertCall = query.mock.calls.find(([sql]) => sql.includes('INSERT INTO tenant_lead('));
     expect(insertCall).toBeDefined();
-    expect(JSON.parse(insertCall?.[1]?.[3] as string)).toMatchObject({ inBoard: false });
+    expect(JSON.parse(insertCall?.[1]?.[3] as string)).toMatchObject({
+      inBoard: false,
+      propertyListingStatus: 'NotListed',
+    });
   });
 
   test('does not create a lead when no active template matches', async () => {

@@ -1088,7 +1088,7 @@ export class TenantInboxSyncService {
             },
             this.text(extracted?.property),
           );
-          if (!match) continue;
+          if (!match || match.status !== 'published') continue;
           await client.query(
             `INSERT INTO tenant_lead_property(lead_id, property_id)
              VALUES ($1, $2)
@@ -1176,6 +1176,7 @@ export class TenantInboxSyncService {
          JOIN tenant_lead_property lp ON lp.lead_id = l.id
          JOIN tenant_property p ON p.id = lp.property_id
          WHERE (l.email IS NOT NULL OR l.phone IS NOT NULL)
+           AND p.status = 'published'
            AND EXISTS (
              SELECT 1 FROM tenant_outreach_job inc
              WHERE inc.lead_id = l.id
@@ -1457,6 +1458,7 @@ export class TenantInboxSyncService {
          ) w ON w.lead_id = l.id
          JOIN tenant_lead_property lp ON lp.lead_id = l.id
          JOIN tenant_property p ON p.id = lp.property_id
+         WHERE p.status = 'published'
          ORDER BY l.id ASC
          LIMIT 100`,
       );
@@ -1779,6 +1781,19 @@ export class TenantInboxSyncService {
       emailInput,
       this.text(values.property),
     );
+    if (propertyMatch && propertyMatch.status && propertyMatch.status !== 'published') {
+      return {
+        lead: null,
+        created: false,
+        result: {
+          ...result,
+          diagnostics: [
+            ...(Array.isArray(result.diagnostics) ? result.diagnostics : []),
+            `Lead ignored because property ${propertyMatch.title} is inactive.`,
+          ],
+        },
+      };
+    }
     if (propertyMatch) values.property = propertyMatch.title;
     const leadPayload = {
       ...values,
@@ -1796,6 +1811,7 @@ export class TenantInboxSyncService {
       latestEmailAt: input.receivedAt.toISOString(),
       lastActivityAt: input.receivedAt.toISOString(),
       inBoard: existing?.payload?.inBoard === true,
+      propertyListingStatus: propertyMatch ? 'Listed' : 'NotListed',
     };
 
     let lead: any;
@@ -1956,16 +1972,23 @@ export class TenantInboxSyncService {
       const id = await this.matchParsedProperty(client, extractedProperty);
       if (id) {
         const row = await client.query(
-          'SELECT title FROM tenant_property WHERE id = $1',
+          'SELECT title, status FROM tenant_property WHERE id = $1',
           [id],
         );
         return {
           id,
           title: this.text(row.rows[0]?.title, extractedProperty),
+          status: this.text(row.rows[0]?.status),
         };
       }
     }
-    return this.matchPropertyMentionedInEmail(client, emailInput);
+    const match = await this.matchPropertyMentionedInEmail(client, emailInput);
+    if (!match) return null;
+    const row = await client.query(
+      'SELECT status FROM tenant_property WHERE id = $1',
+      [match.id],
+    );
+    return { ...match, status: this.text(row.rows[0]?.status) };
   }
 
   private async matchPropertyMentionedInEmail(
