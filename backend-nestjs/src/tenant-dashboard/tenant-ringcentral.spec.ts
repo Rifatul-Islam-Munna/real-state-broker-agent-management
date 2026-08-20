@@ -95,4 +95,76 @@ describe('tenant RingCentral integration', () => {
     expect(mockGet).toHaveBeenCalledTimes(2);
     expect(mockPut).not.toHaveBeenCalled();
   });
+
+  test('imports provider-sent SMS before later inbound reply', async () => {
+    const outreach = {
+      recordOutboundSms: jest.fn().mockResolvedValue({ leadId: 9 }),
+      recordInboundSms: jest.fn().mockResolvedValue({ leadId: 9 }),
+    };
+    const service = new TenantSmsInboxService(
+      {} as any,
+      {} as any,
+      {} as any,
+      outreach as any,
+    );
+    jest.spyOn(service as any, 'fetchRingCentral').mockResolvedValue([
+      {
+        id: 'in-1',
+        direction: 'Inbound',
+        creationTime: '2026-08-20T00:02:00.000Z',
+        from: { phoneNumber: '+15550000002' },
+        to: [{ phoneNumber: '+15550000001' }],
+        subject: 'Reply',
+      },
+      {
+        id: 'out-1',
+        direction: 'Outbound',
+        creationTime: '2026-08-20T00:01:00.000Z',
+        from: { phoneNumber: '+15550000001' },
+        to: [{ phoneNumber: '+15550000002' }],
+        subject: 'Sent from RingCentral',
+      },
+    ]);
+
+    await (service as any).syncProvider(
+      {} as any,
+      config,
+      {},
+      new Date('2026-08-20T00:05:00.000Z'),
+    );
+
+    expect(outreach.recordOutboundSms).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        messageId: 'out-1',
+        recipientPhone: '+15550000002',
+      }),
+    );
+    expect(outreach.recordInboundSms).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ messageId: 'in-1' }),
+    );
+    expect(outreach.recordOutboundSms.mock.invocationCallOrder[0]).toBeLessThan(
+      outreach.recordInboundSms.mock.invocationCallOrder[0],
+    );
+  });
+
+  test('does not expose RingCentral text body as an attachment', () => {
+    const service = new TenantSmsInboxService(
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+    const message = (service as any).normalizeProviderRecord('ringcentral', {
+      id: 'mms-1',
+      direction: 'Inbound',
+      attachments: [
+        { type: 'Text', contentType: 'text/plain', uri: 'https://media.ringcentral.com/text' },
+        { type: 'MmsAttachment', contentType: 'image/jpeg', uri: 'https://media.ringcentral.com/photo' },
+      ],
+    });
+
+    expect(message.mediaUrls).toEqual(['https://media.ringcentral.com/photo']);
+  });
 });

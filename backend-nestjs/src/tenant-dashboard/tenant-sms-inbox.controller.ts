@@ -6,6 +6,7 @@
   Post,
   Query,
   Req,
+  StreamableFile,
   UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -61,6 +62,23 @@ export class TenantSmsInboxController {
   @Get('sync-status')
   status(@Req() req: any) {
     return this.sms.getStatus(req.tenant);
+  }
+
+  @Get('attachment')
+  async attachment(
+    @Req() req: any,
+    @Query('messageId') messageId?: string,
+    @Query('index') index?: string,
+  ) {
+    const file = await this.sms.attachment(
+      req.tenant,
+      Number(messageId),
+      Number(index),
+    );
+    return new StreamableFile(file.buffer, {
+      type: file.contentType,
+      disposition: `inline; filename="${file.filename}"`,
+    });
   }
 
   private actor(user: any) {

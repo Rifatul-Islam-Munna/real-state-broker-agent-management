@@ -649,6 +649,116 @@ export class TenantOutreachService {
     });
   }
 
+  async recordOutboundSms(
+    tenant: SaasTenant,
+    input: {
+      senderPhone?: string;
+      recipientPhone: string;
+      body?: string;
+      messageId: string;
+      provider?: string;
+      sentAt?: Date;
+      mediaUrls?: string[];
+      payload?: Record<string, unknown>;
+    },
+  ) {
+    const recipient = this.text(input.recipientPhone);
+    const providerMessageId = this.text(input.messageId);
+    if (!recipient || !providerMessageId) {
+      throw new BadRequestException(
+        'Outbound recipient and provider message ID are required.',
+      );
+    }
+    return this.databases.withTenantClient(
+      this.databaseName(tenant),
+      async (client) => {
+        await client.query('BEGIN');
+        try {
+          const lead = await this.findLeadForInbound(client, 'SMS', recipient);
+          const occurredAt = input.sentAt ?? new Date();
+          const payload = {
+            ...(input.payload ?? {}),
+            lead,
+            outboundSender: this.text(input.senderPhone),
+            outboundRecipient: recipient,
+          };
+          let result = await client.query<TenantOutreachJob>(
+            `UPDATE tenant_outreach_job
+             SET lead_id = COALESCE(lead_id, $2),
+                 body = CASE WHEN COALESCE(body, '') = '' THEN $3 ELSE body END,
+                 media_urls = CASE
+                   WHEN jsonb_array_length($4::jsonb) > 0 THEN $4::jsonb
+                   ELSE media_urls
+                 END,
+                 payload = COALESCE(payload, '{}'::jsonb) || $5::jsonb,
+                 occurred_at = COALESCE(occurred_at, $6),
+                 updated_at = now()
+             WHERE channel = 'SMS'
+               AND direction <> 'Incoming'
+               AND provider_message_id = $1
+             RETURNING *`,
+            [
+              providerMessageId,
+              Number(lead?.id) > 0 ? Number(lead.id) : null,
+              this.text(input.body),
+              JSON.stringify(this.stringList(input.mediaUrls).slice(0, 10)),
+              JSON.stringify(payload),
+              occurredAt,
+            ],
+          );
+          if (!result.rowCount) {
+            const idempotencyKey = this.hash(
+              `outbound|SMS|${this.text(input.provider)}|${providerMessageId}`,
+            );
+            result = await client.query<TenantOutreachJob>(
+              `INSERT INTO tenant_outreach_job(
+                 idempotency_key, lead_id, source_type, source_id, channel,
+                 direction, status, recipient_name, recipient_phone, title,
+                 body, media_urls, provider, provider_message_id, created_by,
+                 scheduled_at, next_attempt_at, max_attempts, is_read, payload,
+                 occurred_at, completed_at
+               ) VALUES (
+                 $1, $2, 'sms-inbox', $3, 'SMS',
+                 'Outgoing', 'sent', $4, $5, 'SMS message',
+                 $6, $7::jsonb, $8, $3, $8,
+                 $9, $9, 1, true, $10::jsonb, $9, $9
+               )
+               ON CONFLICT (idempotency_key) DO NOTHING
+               RETURNING *`,
+              [
+                idempotencyKey,
+                Number(lead?.id) > 0 ? Number(lead.id) : null,
+                providerMessageId.slice(0, 120),
+                this.text(lead?.full_name ?? lead?.fullName ?? recipient).slice(0, 200),
+                recipient.slice(0, 80),
+                this.text(input.body),
+                JSON.stringify(this.stringList(input.mediaUrls).slice(0, 10)),
+                this.text(input.provider, 'Tenant SMS provider').slice(0, 100),
+                occurredAt,
+                JSON.stringify(payload),
+              ],
+            );
+          }
+          let row = result.rows[0];
+          if (!row) {
+            const existing = await client.query<TenantOutreachJob>(
+              `SELECT * FROM tenant_outreach_job
+               WHERE channel = 'SMS' AND provider_message_id = $1
+               ORDER BY id DESC LIMIT 1`,
+              [providerMessageId],
+            );
+            row = existing.rows[0];
+          }
+          await client.query('COMMIT');
+          return this.mapJob(row);
+        } catch (error) {
+          await client.query('ROLLBACK');
+          throw error;
+        }
+      },
+    );
+  }
+
   async recoverStaleClaims(tenant: SaasTenant) {
     const staleMinutes = this.clampInt(
       process.env.TENANT_OUTREACH_STALE_MINUTES,

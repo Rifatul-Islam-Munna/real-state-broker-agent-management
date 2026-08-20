@@ -188,7 +188,7 @@ export class TenantSmsInboxService {
       const result = await this.syncProvider(
         tenant,
         config,
-        claim.cursor,
+        force ? { ...claim.cursor, lastSuccessfulScanAt: null } : claim.cursor,
         startedAt,
       );
       await this.finishSuccess(tenant, config, result, startedAt);
@@ -312,26 +312,46 @@ export class TenantSmsInboxService {
         retryCount: 0,
       },
     };
-    for (const raw of records) {
-      const message = this.normalizeProviderRecord(provider, raw);
-      if (!message || message.direction !== 'Incoming') {
+    const messages = records
+      .map((raw: any) => ({
+        message: this.normalizeProviderRecord(provider, raw),
+        raw,
+      }))
+      .filter((item: any) => Boolean(item.message))
+      .sort(
+        (left: any, right: any) =>
+          new Date(left.message.occurredAt).getTime() -
+          new Date(right.message.occurredAt).getTime(),
+      );
+    for (const { message, raw } of messages) {
+      const counterparty =
+        message.direction === 'Incoming'
+          ? message.fromNumber
+          : message.toNumber;
+      if (!message.providerMessageId || !counterparty) {
         result.skipped++;
         continue;
       }
-      if (!message.providerMessageId || !message.fromNumber) {
-        result.skipped++;
-        continue;
-      }
-      const saved: any = await this.outreach.recordInboundSms(tenant, {
-        senderPhone: message.fromNumber,
-        recipientPhone: message.toNumber,
+      const common = {
         body: message.body,
         messageId: message.providerMessageId,
         provider: message.provider,
+        sentAt: message.occurredAt,
         receivedAt: message.occurredAt,
         mediaUrls: message.mediaUrls,
         payload: raw && typeof raw === 'object' ? raw : { raw },
-      });
+      };
+      const saved: any = message.direction === 'Incoming'
+        ? await this.outreach.recordInboundSms(tenant, {
+            ...common,
+            senderPhone: message.fromNumber,
+            recipientPhone: message.toNumber,
+          })
+        : await this.outreach.recordOutboundSms(tenant, {
+            ...common,
+            senderPhone: message.fromNumber,
+            recipientPhone: message.toNumber,
+          });
       result.imported++;
       if (Number(saved?.leadId) > 0) result.matched++;
     }
@@ -452,15 +472,66 @@ export class TenantSmsInboxService {
       fromNumber,
       toNumber,
       body: `${record.subject ?? record.message ?? ''}`,
-      mediaUrls: Array.isArray(record.attachments)
-        ? record.attachments
-            .map((item: any) => item.uri ?? item.contentUri)
-            .filter(Boolean)
-        : [],
+      mediaUrls: this.ringCentralAttachments(record).map(
+        (item: any) => item.uri ?? item.contentUri,
+      ),
       direction: record.direction === 'Outbound' ? 'Outgoing' : 'Incoming',
       occurredAt: record.creationTime
         ? new Date(record.creationTime)
         : new Date(),
+    };
+  }
+
+  async attachment(tenant: SaasTenant, messageId: number, index: number) {
+    if (!Number.isInteger(messageId) || messageId <= 0 || !Number.isInteger(index) || index < 0) {
+      throw new BadRequestException('Valid message and attachment are required.');
+    }
+    const row = await this.databases.withTenantClient(
+      this.databaseName(tenant),
+      async (client) => {
+        const result = await client.query(
+          `SELECT provider, payload
+           FROM tenant_outreach_job
+           WHERE id = $1 AND channel = 'SMS'`,
+          [messageId],
+        );
+        return result.rows[0] ?? null;
+      },
+    );
+    if (!row || `${row.provider ?? ''}`.toLowerCase() !== 'ringcentral') {
+      throw new NotFoundException('RingCentral attachment was not found.');
+    }
+    const attachments = this.ringCentralAttachments(row.payload);
+    const attachment = attachments[index];
+    const uri = `${attachment?.uri ?? attachment?.contentUri ?? ''}`.trim();
+    if (!uri) throw new NotFoundException('RingCentral attachment was not found.');
+
+    const config: any = await this.settings.getRawCommunication(tenant);
+    const baseUrl = `${config.baseUrl || 'https://platform.ringcentral.com'}`;
+    const target = new URL(uri, baseUrl);
+    if (
+      target.protocol !== 'https:' ||
+      !/(^|\.)ringcentral\.com$/i.test(target.hostname)
+    ) {
+      throw new BadRequestException('Invalid RingCentral attachment URL.');
+    }
+    const RingCentralSdk =
+      require('@ringcentral/sdk').SDK ?? require('@ringcentral/sdk');
+    const sdk = new RingCentralSdk({
+      server: baseUrl.replace(/\/$/, ''),
+      clientId: `${config.accountId ?? ''}`.trim(),
+      clientSecret: `${config.clientSecret ?? ''}`.trim(),
+    });
+    const platform = sdk.platform();
+    await platform.login({ jwt: `${config.authToken ?? ''}`.trim() });
+    const response = await platform.get(target.toString());
+    return {
+      buffer: Buffer.from(await response.arrayBuffer()),
+      contentType:
+        response.headers.get('content-type') ||
+        `${attachment.contentType ?? 'application/octet-stream'}`,
+      filename: `${attachment.fileName ?? attachment.name ?? `attachment-${index + 1}`}`
+        .replace(/[^a-zA-Z0-9._-]+/g, '-'),
     };
   }
 
@@ -566,7 +637,15 @@ export class TenantSmsInboxService {
       fromNumber: incoming ? (row.recipient_phone ?? '') : '',
       toNumber: incoming ? '' : (row.recipient_phone ?? ''),
       body: row.body ?? '',
-      mediaUrls: Array.isArray(row.media_urls) ? row.media_urls : [],
+      mediaUrls:
+        `${row.provider ?? ''}`.toLowerCase() === 'ringcentral'
+          ? this.ringCentralAttachments(row.payload).map(
+              (_item: any, index: number) =>
+                `/api/proxy/sms-inbox/attachment?messageId=${Number(row.id)}&index=${index}`,
+            )
+          : Array.isArray(row.media_urls)
+            ? row.media_urls
+            : [],
       direction: incoming ? 'Incoming' : 'Outgoing',
       status:
         internalStatus === 'received'
@@ -584,6 +663,17 @@ export class TenantSmsInboxService {
       maxAttempts: Number(row.max_attempts) || 0,
       lastError: row.last_error ?? '',
     };
+  }
+
+  private ringCentralAttachments(record: any) {
+    return (Array.isArray(record?.attachments) ? record.attachments : []).filter(
+      (item: any) => {
+        const uri = `${item?.uri ?? item?.contentUri ?? ''}`.trim();
+        const type = `${item?.type ?? ''}`.trim().toLowerCase();
+        const contentType = `${item?.contentType ?? ''}`.trim().toLowerCase();
+        return Boolean(uri) && type !== 'text' && !contentType.startsWith('text/');
+      },
+    );
   }
   private async eligibleTenants() {
     const tenants = await this.tenants.find({
