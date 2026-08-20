@@ -1207,7 +1207,12 @@ export class TenantInboxSyncService {
             closingDate: this.text(this.jsonObject(row.payload)?.closingDate ?? this.jsonObject(row.payload)?.closing_date),
           };
           const propertyPayload = this.jsonObject(row.property_payload);
-          const mediaUrls = this.welcomeAttachmentUrls(template, propertyPayload);
+          const mediaUrls = await this.welcomeAttachmentUrls(
+            client,
+            template,
+            propertyPayload,
+            Number(row.property_id),
+          );
           const delayMinutes = this.clamp(
             agency?.firstMessageAutomation?.leadDelayMinutes ??
               agency?.firstMessageAutomation?.delayMinutes,
@@ -1505,7 +1510,12 @@ export class TenantInboxSyncService {
                   lead,
                   agency,
                 ),
-                mediaUrls: this.welcomeAttachmentUrls(template, propertyPayload),
+                mediaUrls: await this.welcomeAttachmentUrls(
+                  client,
+                  template,
+                  propertyPayload,
+                  Number(row.property_id),
+                ),
                 scheduledAt: dueAt,
                 createdBy,
                 idempotencyKey: `lead-followup:${Number(row.id)}:${this.text(template.id)}:${channel.toLowerCase()}`,
@@ -1562,16 +1572,42 @@ export class TenantInboxSyncService {
     );
   }
 
-  private welcomeAttachmentUrls(template: any, propertyPayload: any): string[] {
-    const wantsDocuments =
-      template?.attachmentMode === 'property' ||
-      template?.attachPropertyDocuments === true;
-    if (!wantsDocuments) return [];
-    const documents = Array.isArray(propertyPayload?.propertyDocuments)
-      ? propertyPayload.propertyDocuments
-      : [];
-    return documents
-      .map((doc: any) => this.text(doc?.fileUrl))
+  private async welcomeAttachmentUrls(
+    client: PoolClient,
+    template: any,
+    propertyPayload: any,
+    propertyId: number,
+  ): Promise<string[]> {
+    const mode = this.text(template?.attachmentMode);
+    if (mode === 'property' || template?.attachPropertyDocuments === true) {
+      const documents = Array.isArray(propertyPayload?.propertyDocuments)
+        ? propertyPayload.propertyDocuments
+        : [];
+      return documents
+        .map((doc: any) => this.text(doc?.fileUrl))
+        .filter(Boolean)
+        .slice(0, 5);
+    }
+    if (mode !== 'document') return [];
+
+    const category = this.text(template?.attachmentDocumentCategory);
+    const documentType = this.text(template?.attachmentDocumentType);
+    const result = await client.query(
+      `SELECT payload
+       FROM tenant_legacy_resource
+       WHERE resource = 'documents'
+         AND ($1 = '' OR payload->>'category' = $1)
+         AND ($2 = '' OR payload->>'documentType' = $2)
+       ORDER BY updated_at DESC`,
+      [category, documentType],
+    );
+    return result.rows
+      .map((row: any) => this.jsonObject(row.payload))
+      .filter((document: any) =>
+        this.text(document.documentType) !== 'Property' ||
+        Number(document.propertyId) === propertyId,
+      )
+      .map((document: any) => this.text(document.fileUrl))
       .filter(Boolean)
       .slice(0, 5);
   }

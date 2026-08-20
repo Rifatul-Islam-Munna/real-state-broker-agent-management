@@ -72,6 +72,28 @@ describe('TenantInboxSyncService property matching', () => {
 });
 
 describe('TenantInboxSyncService auto welcome send', () => {
+  test('uses the saved document category and keeps property documents scoped to the lead property', async () => {
+    const service = new TenantInboxSyncService({} as any, {} as any, {} as any);
+    const query = jest.fn().mockResolvedValue({
+      rowCount: 3,
+      rows: [
+        { payload: { category: 'Lead', documentType: 'Lead', fileUrl: 'https://cdn.example.com/lead.pdf' } },
+        { payload: { category: 'Lead', documentType: 'Property', propertyId: 3, fileUrl: 'https://cdn.example.com/right-property.pdf' } },
+        { payload: { category: 'Lead', documentType: 'Property', propertyId: 8, fileUrl: 'https://cdn.example.com/wrong-property.pdf' } },
+      ],
+    });
+
+    await expect((service as any).welcomeAttachmentUrls(
+      { query },
+      { attachmentMode: 'document', attachmentDocumentCategory: 'Lead' },
+      {},
+      3,
+    )).resolves.toEqual([
+      'https://cdn.example.com/lead.pdf',
+      'https://cdn.example.com/right-property.pdf',
+    ]);
+  });
+
   function freshLeadRow(overrides: Record<string, any> = {}) {
     return {
       id: 7,

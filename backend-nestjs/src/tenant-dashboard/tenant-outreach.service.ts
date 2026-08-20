@@ -74,7 +74,8 @@ export type TenantEnqueueInput = {
 };
 
 const SETTINGS = {
-  agency: 'agency_settings',
+  agency: 'agency_workspace_settings',
+  legacyAgency: 'agency_settings',
   email: 'outreach_email_provider',
   homepage: 'homepage_settings',
   marketing: 'marketing_settings',
@@ -831,7 +832,9 @@ export class TenantOutreachService {
 
   private async agencySettings(client: PoolClient) {
     const defaults = this.defaultAgencySettings();
-    const current = await this.readSetting(client, SETTINGS.agency, defaults);
+    const current =
+      (await this.readSetting(client, SETTINGS.agency, null)) ??
+      (await this.readSetting(client, SETTINGS.legacyAgency, defaults));
     return {
       ...defaults,
       ...(this.object(current) ?? {}),

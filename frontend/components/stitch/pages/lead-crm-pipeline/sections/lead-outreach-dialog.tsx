@@ -77,6 +77,16 @@ export function LeadOutreachDialog({
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    if (open && mode !== "call") {
+      void Promise.all([
+        templatesQuery.refetch(),
+        agencySettingsQuery.refetch(),
+        documentsQuery.refetch(),
+      ])
+    }
+  }, [agencySettingsQuery.refetch, documentsQuery.refetch, mode, open, templatesQuery.refetch])
+
+  useEffect(() => {
     if (!open) {
       return
     }
@@ -145,7 +155,7 @@ export function LeadOutreachDialog({
   }, [allDocuments, documentCategory, documentSearch])
 
   useEffect(() => {
-    if (!open || !lead || mode === "call" || filteredTemplates.length === 0) return
+    if (!open || !lead || mode === "call" || templatesQuery.isFetching || agencySettingsQuery.isFetching || filteredTemplates.length === 0) return
     if (defaultTemplateApplied && templateId === emptyTemplateValue) return
 
     const configuredId = agencySettingsQuery.data?.leadAutomation?.directTemplateId
@@ -174,7 +184,7 @@ export function LeadOutreachDialog({
       templateId: selectedTemplate.id,
     }))
     setDefaultTemplateApplied(true)
-  }, [agencySettingsQuery.data?.leadAutomation?.directTemplateId, agencySettingsQuery.data?.profile?.agencyName, currentUserQuery.data?.fullName, defaultTemplateApplied, deliveryMode, filteredTemplates, lead, mode, open, templateId])
+  }, [agencySettingsQuery.data?.leadAutomation?.directTemplateId, agencySettingsQuery.data?.profile?.agencyName, agencySettingsQuery.isFetching, currentUserQuery.data?.fullName, defaultTemplateApplied, deliveryMode, filteredTemplates, lead, mode, open, templateId, templatesQuery.isFetching])
 
   if (!lead || !mode) {
     return null

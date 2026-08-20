@@ -38,7 +38,7 @@ export function PropertyDocumentsSection({
             {"Important Property Documents"}
           </h4>
           <p className="mt-1 text-sm text-muted-foreground">
-            {"Upload multiple contracts, disclosures, plans, certificates, or other property files. Give every file a clear name."}
+            {"Upload contracts, disclosures, plans, or certificates here. Each file is automatically linked to this property and added to Document repository."}
           </p>
         </div>
         <Button onClick={() => fileInputRef.current?.click()} type="button" variant="outline">

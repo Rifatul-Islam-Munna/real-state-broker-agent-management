@@ -555,7 +555,12 @@ export function useDeleteAgentUser() {
 }
 
 export function useCreateProperty() {
-  const invalidate = useInvalidate(["properties", "managed-properties"])
+  const invalidate = useInvalidate([
+    "properties",
+    "managed-properties",
+    "documents",
+    "document-summary",
+  ])
 
   return useCommonMutationApi<PropertyItem, PropertySaveInput>({
     method: "POST",
@@ -566,7 +571,12 @@ export function useCreateProperty() {
 }
 
 export function useUpdateProperty() {
-  const invalidate = useInvalidate(["properties", "managed-properties"])
+  const invalidate = useInvalidate([
+    "properties",
+    "managed-properties",
+    "documents",
+    "document-summary",
+  ])
 
   return useCommonMutationApi<PropertyItem, PropertyItem>({
     method: "PATCH",

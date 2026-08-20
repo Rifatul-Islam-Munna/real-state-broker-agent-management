@@ -29,6 +29,31 @@ function createService(query: jest.Mock) {
 }
 
 describe('TenantOutreachService reliability', () => {
+  it('reads templates from the same workspace setting saved by Settings', async () => {
+    const query = jest.fn(async (_sql: string, params?: unknown[]) => {
+      if (params?.[0] === 'agency_workspace_settings') {
+        return {
+          rowCount: 1,
+          rows: [{ value: { communicationTemplates: [{ id: 'saved', name: 'Saved now', body: 'Fresh body' }] } }],
+        };
+      }
+      return { rowCount: 0, rows: [] };
+    });
+    const { service } = createService(query);
+
+    await expect(service.getTemplates(tenant)).resolves.toEqual([
+      expect.objectContaining({ id: 'saved', name: 'Saved now', body: 'Fresh body' }),
+    ]);
+    expect(query).toHaveBeenCalledWith(
+      'SELECT value FROM tenant_setting WHERE key = $1',
+      ['agency_workspace_settings'],
+    );
+    expect(query).not.toHaveBeenCalledWith(
+      expect.any(String),
+      ['agency_settings'],
+    );
+  });
+
   it('deduplicates queue writes by tenant-local idempotency key', async () => {
     const existing = {
       id: 41,

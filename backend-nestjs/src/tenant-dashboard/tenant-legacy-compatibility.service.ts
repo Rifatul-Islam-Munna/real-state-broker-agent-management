@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import type { PoolClient } from 'pg';
 import {
   buildLeadCollectionFingerprint,
   buildLeadCollectionMappings,
@@ -32,7 +33,24 @@ export class TenantLegacyCompatibilityService {
       { title: body?.title, status: this.storagePropertyStatus(body?.status), payload: body ?? {} },
       actorUserId,
     );
-    return this.propertyItem(row);
+    return this.databases.withTenantClient(this.databaseName(tenant), async (client) => {
+      const payload = row?.payload && typeof row.payload === 'object' ? row.payload : {};
+      const documentRepositoryItemIds = await this.syncPropertyDocuments(
+        client,
+        Number(row.id),
+        `${row.title ?? body?.title ?? ''}`.trim(),
+        payload.propertyDocuments,
+      );
+      const nextPayload = { ...payload, documentRepositoryItemIds };
+      const updated = await client.query(
+        `UPDATE tenant_property
+         SET payload = $2::jsonb, updated_at = now()
+         WHERE id = $1
+         RETURNING id, title, status, payload, created_at, updated_at`,
+        [Number(row.id), JSON.stringify(nextPayload)],
+      );
+      return this.propertyItem(updated.rows[0] ?? { ...row, payload: nextPayload });
+    });
   }
 
   async updateProperty(tenant: SaasTenant, body: any) {
@@ -41,6 +59,12 @@ export class TenantLegacyCompatibilityService {
       const current = await client.query('SELECT payload FROM tenant_property WHERE id = $1', [id]);
       if (!current.rowCount) throw new NotFoundException('Property not found');
       const payload = { ...(current.rows[0].payload ?? {}), ...(body ?? {}) };
+      payload.documentRepositoryItemIds = await this.syncPropertyDocuments(
+        client,
+        id,
+        `${body?.title ?? payload.title ?? ''}`.trim(),
+        payload.propertyDocuments,
+      );
       const result = await client.query(
         `UPDATE tenant_property SET title = $2, status = $3, payload = $4::jsonb, updated_at = now()
          WHERE id = $1 RETURNING id, title, status, payload, created_at, updated_at`,
@@ -48,6 +72,99 @@ export class TenantLegacyCompatibilityService {
       );
       return this.propertyItem(result.rows[0]);
     });
+  }
+
+  private async syncPropertyDocuments(
+    client: PoolClient,
+    propertyId: number,
+    propertyTitle: string,
+    input: unknown,
+  ) {
+    const documents = (Array.isArray(input) ? input : [])
+      .filter((item: any) => `${item?.fileUrl ?? ''}`.trim())
+      .slice(0, 100);
+    const documentKeys = new Set(
+      documents
+        .map((item: any) => `${item?.fileObjectName ?? item?.fileUrl ?? ''}`.trim())
+        .filter(Boolean),
+    );
+    const managed = await client.query(
+      `SELECT id, payload
+       FROM tenant_legacy_resource
+       WHERE resource = 'documents'
+         AND payload->>'propertyId' = $1
+         AND payload->>'managedByProperty' = 'true'`,
+      [String(propertyId)],
+    );
+    for (const row of managed.rows) {
+      const key = `${row.payload?.fileObjectName ?? row.payload?.fileUrl ?? ''}`.trim();
+      if (!documentKeys.has(key)) {
+        await client.query(
+          `DELETE FROM tenant_legacy_resource
+           WHERE resource = 'documents' AND id = $1`,
+          [Number(row.id)],
+        );
+      }
+    }
+
+    for (const document of documents) {
+      const fileObjectName = `${document?.fileObjectName ?? ''}`.trim();
+      const fileUrl = `${document?.fileUrl ?? ''}`.trim();
+      const existing = await client.query(
+        `SELECT id, payload
+         FROM tenant_legacy_resource
+         WHERE resource = 'documents'
+           AND (($1 <> '' AND payload->>'fileObjectName' = $1)
+             OR ($2 <> '' AND payload->>'fileUrl' = $2))
+         ORDER BY id DESC
+         LIMIT 1`,
+        [fileObjectName, fileUrl],
+      );
+      const current = existing.rows[0]?.payload ?? {};
+      const repositoryPayload = {
+        accessLevel: current.accessLevel ?? 'AdminOnly',
+        category: current.category ?? 'General',
+        description: current.description ?? `Uploaded from ${propertyTitle || 'property'}.`,
+        documentType: 'Property',
+        fileName: `${document?.fileName ?? current.fileName ?? ''}`.trim(),
+        fileObjectName: fileObjectName || current.fileObjectName || null,
+        fileUrl,
+        folder: current.folder ?? 'Properties',
+        isTemplate: current.isTemplate === true,
+        managedByProperty: current.managedByProperty !== false,
+        mimeType: `${document?.mimeType ?? current.mimeType ?? 'application/octet-stream'}`.trim(),
+        propertyId,
+        propertyTitle,
+        requiresSignature: current.requiresSignature === true,
+        sizeBytes: Math.max(0, Number(document?.sizeBytes ?? current.sizeBytes) || 0),
+        tags: Array.isArray(current.tags) ? current.tags : ['Property'],
+        title: `${document?.name ?? current.title ?? document?.fileName ?? 'Property document'}`.trim(),
+        versionLabel: current.versionLabel ?? 'v1.0',
+      };
+      if (existing.rowCount) {
+        await client.query(
+          `UPDATE tenant_legacy_resource
+           SET payload = $2::jsonb, updated_at = now()
+           WHERE resource = 'documents' AND id = $1`,
+          [Number(existing.rows[0].id), JSON.stringify(repositoryPayload)],
+        );
+      } else {
+        await client.query(
+          `INSERT INTO tenant_legacy_resource(resource, payload)
+           VALUES ('documents', $1::jsonb)`,
+          [JSON.stringify(repositoryPayload)],
+        );
+      }
+    }
+
+    const linked = await client.query(
+      `SELECT id
+       FROM tenant_legacy_resource
+       WHERE resource = 'documents' AND payload->>'propertyId' = $1
+       ORDER BY id ASC`,
+      [String(propertyId)],
+    );
+    return linked.rows.map((row) => Number(row.id)).filter((id) => id > 0);
   }
 
   async deleteProperty(tenant: SaasTenant, body: any) {
@@ -202,6 +319,13 @@ export class TenantLegacyCompatibilityService {
          RETURNING id, payload, created_at, updated_at`,
         [cleanResource, JSON.stringify(body ?? {})],
       );
+      if (cleanResource === 'documents') {
+        await this.syncRepositoryDocumentToProperty(
+          client,
+          Number(result.rows[0].id),
+          result.rows[0].payload ?? {},
+        );
+      }
       return cleanResource === 'deals'
         ? this.dealItem(result.rows[0])
         : this.genericItem(result.rows[0]);
@@ -223,6 +347,14 @@ export class TenantLegacyCompatibilityService {
          WHERE resource = $1 AND id = $2 RETURNING id, payload, created_at, updated_at`,
         [cleanResource, id, JSON.stringify(payload)],
       );
+      if (cleanResource === 'documents') {
+        await this.syncRepositoryDocumentToProperty(
+          client,
+          id,
+          payload,
+          current.rows[0].payload ?? {},
+        );
+      }
       return cleanResource === 'deals'
         ? this.dealItem(result.rows[0])
         : this.genericItem(result.rows[0]);
@@ -233,13 +365,120 @@ export class TenantLegacyCompatibilityService {
     const cleanResource = this.resource(resource);
     const id = this.id(body?.id);
     return this.databases.withTenantClient(this.databaseName(tenant), async (client) => {
+      const current = cleanResource === 'documents'
+        ? await client.query(
+            'SELECT payload FROM tenant_legacy_resource WHERE resource = $1 AND id = $2',
+            [cleanResource, id],
+          )
+        : null;
       const result = await client.query(
         'DELETE FROM tenant_legacy_resource WHERE resource = $1 AND id = $2 RETURNING id',
         [cleanResource, id],
       );
       if (!result.rowCount) throw new NotFoundException('Record not found');
+      if (cleanResource === 'documents' && current?.rows[0]?.payload) {
+        await this.removeRepositoryDocumentFromProperty(
+          client,
+          id,
+          current.rows[0].payload,
+        );
+      }
       return { id };
     });
+  }
+
+  private async syncRepositoryDocumentToProperty(
+    client: PoolClient,
+    documentId: number,
+    document: any,
+    previous: any = {},
+  ) {
+    const previousPropertyId = Number(previous?.propertyId) || 0;
+    const propertyId = Number(document?.propertyId) || 0;
+    if (previousPropertyId > 0 && previousPropertyId !== propertyId) {
+      await this.removeRepositoryDocumentFromProperty(client, documentId, previous);
+    }
+    if (document?.documentType !== 'Property' || propertyId <= 0) return;
+
+    const property = await client.query(
+      'SELECT title, payload FROM tenant_property WHERE id = $1',
+      [propertyId],
+    );
+    if (!property.rowCount) throw new NotFoundException('Property not found');
+    const payload = property.rows[0].payload ?? {};
+    const fileObjectName = `${document?.fileObjectName ?? ''}`.trim();
+    const fileUrl = `${document?.fileUrl ?? ''}`.trim();
+    const nextDocument = {
+      fileName: `${document?.fileName ?? ''}`.trim(),
+      fileObjectName,
+      fileUrl,
+      mimeType: `${document?.mimeType ?? 'application/octet-stream'}`.trim(),
+      name: `${document?.title ?? document?.fileName ?? 'Property document'}`.trim(),
+      sizeBytes: Math.max(0, Number(document?.sizeBytes) || 0),
+    };
+    const documents = Array.isArray(payload.propertyDocuments)
+      ? [...payload.propertyDocuments]
+      : [];
+    const documentIndex = documents.findIndex((item: any) =>
+      (fileObjectName && `${item?.fileObjectName ?? ''}` === fileObjectName) ||
+      (fileUrl && `${item?.fileUrl ?? ''}` === fileUrl),
+    );
+    if (documentIndex >= 0) documents[documentIndex] = nextDocument;
+    else documents.push(nextDocument);
+    const ids = [...new Set([
+      ...(Array.isArray(payload.documentRepositoryItemIds)
+        ? payload.documentRepositoryItemIds.map(Number)
+        : []),
+      documentId,
+    ])].filter((id) => id > 0);
+    await client.query(
+      `UPDATE tenant_property
+       SET payload = payload || $2::jsonb, updated_at = now()
+       WHERE id = $1`,
+      [propertyId, JSON.stringify({
+        documentRepositoryItemIds: ids,
+        propertyDocuments: documents,
+      })],
+    );
+  }
+
+  private async removeRepositoryDocumentFromProperty(
+    client: PoolClient,
+    documentId: number,
+    document: any,
+  ) {
+    const propertyId = Number(document?.propertyId) || 0;
+    if (propertyId <= 0) return;
+    const property = await client.query(
+      'SELECT payload FROM tenant_property WHERE id = $1',
+      [propertyId],
+    );
+    if (!property.rowCount) return;
+    const payload = property.rows[0].payload ?? {};
+    const fileObjectName = `${document?.fileObjectName ?? ''}`.trim();
+    const fileUrl = `${document?.fileUrl ?? ''}`.trim();
+    const documents = (Array.isArray(payload.propertyDocuments)
+      ? payload.propertyDocuments
+      : []
+    ).filter((item: any) =>
+      !(
+        (fileObjectName && `${item?.fileObjectName ?? ''}` === fileObjectName) ||
+        (fileUrl && `${item?.fileUrl ?? ''}` === fileUrl)
+      ),
+    );
+    const ids = (Array.isArray(payload.documentRepositoryItemIds)
+      ? payload.documentRepositoryItemIds.map(Number)
+      : []
+    ).filter((id: number) => id > 0 && id !== documentId);
+    await client.query(
+      `UPDATE tenant_property
+       SET payload = payload || $2::jsonb, updated_at = now()
+       WHERE id = $1`,
+      [propertyId, JSON.stringify({
+        documentRepositoryItemIds: ids,
+        propertyDocuments: documents,
+      })],
+    );
   }
 
   async singletonGet(tenant: SaasTenant, resource: string) {

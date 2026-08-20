@@ -57,9 +57,12 @@ export function useLeadOutreachTemplates() {
     "/lead-outreach/templates",
     {
       ...defaultQueryOptions,
-      gcTime: 10 * 60_000,
+      gcTime: 0,
       placeholderData: undefined,
-      staleTime: 5 * 60_000,
+      refetchOnMount: "always",
+      refetchOnReconnect: true,
+      refetchOnWindowFocus: true,
+      staleTime: 0,
     },
     0,
     "lead-outreach-templates"
