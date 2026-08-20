@@ -147,10 +147,12 @@ function TemplateCard({
 }
 
 export function CommunicationTemplateWorkspaceV2({
+  isSaving,
   onChange,
   templates,
 }: {
-  onChange: (templates: AgencyCommunicationTemplateItem[]) => void
+  isSaving: boolean
+  onChange: (templates: AgencyCommunicationTemplateItem[]) => Promise<boolean>
   templates: AgencyCommunicationTemplateItem[]
 }) {
   const [editor, setEditor] = useState<EditorState>(null)
@@ -228,12 +230,13 @@ export function CommunicationTemplateWorkspaceV2({
 
       <TemplateSheet
         editor={editor}
+        isSaving={isSaving}
         onClose={() => setEditor(null)}
-        onDelete={(id) => {
-          onChange(templates.filter((item) => item.id !== id))
-          setEditor(null)
+        onDelete={async (id) => {
+          const saved = await onChange(templates.filter((item) => item.id !== id))
+          if (saved) setEditor(null)
         }}
-        onDuplicate={(template) => {
+        onDuplicate={async (template) => {
           const duplicate = {
             ...template,
             channels: [...template.channels],
@@ -241,16 +244,16 @@ export function CommunicationTemplateWorkspaceV2({
             name: `${template.name} Copy`,
             variableTokens: [...template.variableTokens],
           }
-          onChange([duplicate, ...templates])
-          setEditor({ mode: "edit", id: duplicate.id })
+          const saved = await onChange([duplicate, ...templates])
+          if (saved) setEditor({ mode: "edit", id: duplicate.id })
         }}
-        onSave={(template) => {
-          onChange(
+        onSave={async (template) => {
+          const saved = await onChange(
             editor?.mode === "create"
               ? [template, ...templates]
               : templates.map((item) => (item.id === template.id ? template : item)),
           )
-          setEditor(null)
+          if (saved) setEditor(null)
         }}
         template={activeTemplate}
       />
@@ -260,6 +263,7 @@ export function CommunicationTemplateWorkspaceV2({
 
 function TemplateSheet({
   editor,
+  isSaving,
   onClose,
   onDelete,
   onDuplicate,
@@ -267,10 +271,11 @@ function TemplateSheet({
   template,
 }: {
   editor: EditorState
+  isSaving: boolean
   onClose: () => void
-  onDelete: (id: string) => void
-  onDuplicate: (template: AgencyCommunicationTemplateItem) => void
-  onSave: (template: AgencyCommunicationTemplateItem) => void
+  onDelete: (id: string) => Promise<void>
+  onDuplicate: (template: AgencyCommunicationTemplateItem) => Promise<void>
+  onSave: (template: AgencyCommunicationTemplateItem) => Promise<void>
   template: AgencyCommunicationTemplateItem | null
 }) {
   const [draft, setDraft] = useState<AgencyCommunicationTemplateItem | null>(template)
@@ -501,20 +506,39 @@ function TemplateSheet({
         <SheetFooter>
           {editor?.mode === "edit" && draft ? (
             <div className="flex gap-2">
-              <Button onClick={() => onDelete(draft.id)} type="button" variant="destructive">
-                {"Delete"}
+              <Button
+                disabled={isSaving}
+                onClick={() => void onDelete(draft.id)}
+                type="button"
+                variant="destructive"
+              >
+                {isSaving ? "Saving..." : "Delete"}
               </Button>
-              <Button onClick={() => onDuplicate(draft)} type="button" variant="outline">
+              <Button
+                disabled={isSaving}
+                onClick={() => void onDuplicate(draft)}
+                type="button"
+                variant="outline"
+              >
                 {"Duplicate"}
               </Button>
             </div>
           ) : null}
           <Button
-            disabled={!draft?.name.trim() || !draft?.body.trim() || (draft?.channels.length ?? 0) === 0}
-            onClick={() => draft && onSave(draft)}
+            disabled={
+              isSaving ||
+              !draft?.name.trim() ||
+              !draft?.body.trim() ||
+              (draft?.channels.length ?? 0) === 0
+            }
+            onClick={() => draft && void onSave(draft)}
             type="button"
           >
-            {editor?.mode === "create" ? "Add template" : "Apply changes"}
+            {isSaving
+              ? "Saving..."
+              : editor?.mode === "create"
+                ? "Save template"
+                : "Save changes"}
           </Button>
         </SheetFooter>
       </SheetContent>

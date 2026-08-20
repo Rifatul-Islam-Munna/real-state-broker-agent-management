@@ -141,6 +141,27 @@ export function MainContentSectionV2() {
     setSavedValues(cloneAgencySettings(next))
   }
 
+  async function saveCommunicationTemplates(
+    communicationTemplates: AgencyCommunicationTemplateItem[],
+  ) {
+    setError(null)
+    const nextValues = { ...values, communicationTemplates }
+    const response = await updateSettingsMutation.mutateAsync(nextValues)
+    if (response.error) {
+      setError(response.error.message)
+      return false
+    }
+    if (!response.data) {
+      setError("Template could not be saved. Please try again.")
+      return false
+    }
+
+    const next = cloneAgencySettings(response.data)
+    setValues(next)
+    setSavedValues(cloneAgencySettings(next))
+    return true
+  }
+
   async function saveScheduling() {
     setError(null)
     const response = await updateSchedulingMutation.mutateAsync({
@@ -305,10 +326,8 @@ export function MainContentSectionV2() {
         <SecureIntegrationsSectionV2 />
 
         <CommunicationTemplateWorkspaceV2
-          onChange={(communicationTemplates) => {
-            setValues((current) => ({ ...current, communicationTemplates }))
-            setError(null)
-          }}
+          isSaving={updateSettingsMutation.isPending}
+          onChange={saveCommunicationTemplates}
           templates={values.communicationTemplates}
         />
 
