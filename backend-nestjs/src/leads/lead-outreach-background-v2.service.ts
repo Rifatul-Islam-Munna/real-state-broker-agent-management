@@ -105,12 +105,14 @@ export class LeadOutreachBackgroundService {
       }
 
       const result = await this.outreachService.sendOutreach({
+        ...(item.outreachConfig ?? {}),
         leadId: item.leadId,
         kind: item.kind,
         title: item.title,
         message: item.body || originalSummary || item.title,
         createdBy: item.createdBy || 'Scheduler',
-        attachPropertyDocuments: true,
+        // Follow-ups were queued when this scheduled item was created.
+        templateId: undefined,
       });
       await this.finishItem(item.id, result.status, result.summary, result.provider, new Date());
       if (['Sent', 'Completed'].includes(result.status) && item.createdBy.startsWith('Morning Outreach ')) {

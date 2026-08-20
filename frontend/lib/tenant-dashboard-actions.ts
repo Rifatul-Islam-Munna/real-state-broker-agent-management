@@ -47,6 +47,7 @@ export type TenantActionState = {
   ok: boolean
   message: string
   publicUrl?: string | null
+  requestId?: number | null
 }
 
 export type TenantDashboardContext = {
@@ -116,6 +117,7 @@ export type TenantShowingFormField = {
   options: string[]
   description?: string
   imageUrl?: string
+  availability?: Array<{ date: string; times: string[] }>
 }
 
 export type TenantShowingTemplate = {
@@ -150,6 +152,7 @@ export type TenantShowingRequest = {
   deliveryChannels?: string[]
   deliveryResults?: Array<{ channel: string; status: string; message: string }>
   expiresAt: string
+  expiryHours?: number
   preferredShowingAt: string | null
   publicUrl?: string
   sentAt: string
@@ -353,6 +356,13 @@ export async function createTenantShowingTemplateAction(
   }
 }
 
+export async function deleteTenantShowingTemplateAction(formData: FormData) {
+  const templateId = numberValue(formData.get("templateId"))
+  if (!templateId) throw new Error("Template is required")
+  await request(`/tenant-dashboard/showing-form-templates/${templateId}`, { method: "DELETE" })
+  revalidatePath("/dashboard/showing-requests")
+}
+
 export async function getTenantShowingRequests() {
   return request<TenantShowingRequest[]>("/tenant-dashboard/showing-requests")
 }
@@ -379,6 +389,7 @@ export async function createTenantShowingRequestAction(
           message: stringValue(formData.get("message")),
           expiryHours: Number(formData.get("expiryHours") ?? 72),
           channels: formData.getAll("channels").map(String),
+          shareOnly: stringValue(formData.get("intent")) === "share",
         }),
       },
     )
@@ -390,10 +401,23 @@ export async function createTenantShowingRequestAction(
         ? created.publicUrl
         : "Showing request created. Open its detail page to copy the secure link.",
       publicUrl: created?.publicUrl ?? null,
+      requestId: created?.id ?? null,
     }
   } catch (error) {
     return { ok: false, message: errorMessage(error) }
   }
+}
+
+export async function copyTenantShowingRequestLink(requestId: number, expiryHours?: number) {
+  const result = await request<{ publicUrl: string; expiresAt: string }>(
+    `/tenant-dashboard/showing-requests/${requestId}/share-link`,
+    {
+      method: "POST",
+      body: JSON.stringify({ expiryHours }),
+    },
+  )
+  revalidatePath("/dashboard/showing-requests")
+  return result
 }
 
 export async function approveTenantShowingRequestAction(

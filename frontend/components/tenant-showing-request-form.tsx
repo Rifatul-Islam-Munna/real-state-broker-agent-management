@@ -79,7 +79,7 @@ export function TenantShowingRequestForm({ initialRequest, token }: TenantShowin
         if (field.type === "datetime" && typeof value === "string" && value) {
           const date = new Date(value)
           const iso = Number.isFinite(date.getTime()) ? date.toISOString() : value
-          normalizedAnswers[field.key] = iso
+          normalizedAnswers[field.key] = field.availability?.length ? value : iso
           if (!preferredShowingAt && (field.key.includes("preferred") || field.label.toLowerCase().includes("preferred"))) preferredShowingAt = iso
         } else {
           normalizedAnswers[field.key] = value
@@ -169,6 +169,15 @@ export function TenantShowingRequestForm({ initialRequest, token }: TenantShowin
               if (field.type === "radio") return <fieldset className="grid gap-3 rounded-2xl border border-slate-200 p-4" key={field.key}><legend className="px-1 text-sm font-bold">{field.label}{field.required ? " *" : ""}</legend>{field.options.map((option) => <label className="flex items-center gap-3 text-sm" key={option}><input checked={value === option} name={field.key} onChange={() => updateAnswer(field.key, option)} required={field.required} type="radio" value={option} /> {option}</label>)}</fieldset>
               if (field.type === "checkbox-group") return <fieldset className="grid gap-3 rounded-2xl border border-slate-200 p-4" key={field.key}><legend className="px-1 text-sm font-bold">{field.label}{field.required ? " *" : ""}</legend>{field.options.map((option) => { const selected = Array.isArray(value) ? value : []; return <label className="flex items-center gap-3 text-sm" key={option}><input checked={selected.includes(option)} onChange={(event) => updateAnswer(field.key, event.target.checked ? [...selected, option] : selected.filter((item) => item !== option))} type="checkbox" value={option} /> {option}</label> })}</fieldset>
               if (field.type === "checkbox") return <label className="flex items-start gap-3 rounded-2xl border border-slate-200 p-4 text-sm font-semibold" key={field.key}><input checked={value === true} className="mt-1" onChange={(event) => updateAnswer(field.key, event.target.checked)} required={field.required} type="checkbox" /> <span>{field.label}{field.required ? " *" : ""}</span></label>
+              if (field.type === "datetime" && field.availability?.length) {
+                const today = new Date().toLocaleDateString("en-CA")
+                const slots = field.availability.filter((slot) => slot.date >= today && slot.times.length)
+                const current = String(value ?? "")
+                const selectedDate = current.slice(0, 10)
+                const selectedTime = current.includes("T") ? current.slice(11, 16) : ""
+                const times = slots.find((slot) => slot.date === selectedDate)?.times ?? []
+                return <fieldset className="grid gap-3 rounded-2xl border border-slate-200 p-4" key={field.key}><legend className="px-1 text-sm font-bold">{field.label}{field.required ? " *" : ""}</legend><div className="grid gap-3 sm:grid-cols-2"><label className="grid gap-2 text-xs font-semibold text-slate-600">Available date<select className={commonClass} onChange={(event) => updateAnswer(field.key, event.target.value ? `${event.target.value}T` : "")} required={field.required} value={selectedDate}><option value="">Choose date</option>{slots.map((slot) => <option key={slot.date} value={slot.date}>{new Date(`${slot.date}T12:00:00`).toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}</option>)}</select></label><label className="grid gap-2 text-xs font-semibold text-slate-600">Available time<select className={commonClass} disabled={!selectedDate} onChange={(event) => updateAnswer(field.key, selectedDate && event.target.value ? `${selectedDate}T${event.target.value}` : `${selectedDate}T`)} required={field.required} value={selectedTime}><option value="">Choose time</option>{times.map((time) => <option key={time} value={time}>{new Date(`${selectedDate}T${time}`).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</option>)}</select></label></div>{slots.length === 0 ? <p className="text-xs text-rose-700">No future appointments are currently available.</p> : null}</fieldset>
+              }
               const inputType = field.type === "phone" ? "tel" : field.type === "datetime" ? "datetime-local" : field.type
               return <label className="grid gap-2 text-sm font-bold" key={field.key}>{field.label}{field.required ? " *" : ""}<input className={commonClass} onChange={(event) => updateAnswer(field.key, event.target.value)} required={field.required} type={inputType} value={String(value ?? "")} /></label>
             })}

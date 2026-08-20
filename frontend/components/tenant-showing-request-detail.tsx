@@ -21,6 +21,7 @@ import {
 
 import {
   approveTenantShowingRequestAction,
+  copyTenantShowingRequestLink,
   rejectTenantShowingRequestAction,
   type TenantActionState,
   type TenantProperty,
@@ -74,8 +75,8 @@ export function TenantShowingRequestDetail({ request, properties }: TenantShowin
   }, [localShowingAt])
 
   const copyPublicLink = async () => {
-    if (!request.publicUrl) return
-    await navigator.clipboard.writeText(request.publicUrl)
+    const link = await copyTenantShowingRequestLink(request.id, request.expiryHours)
+    await navigator.clipboard.writeText(link.publicUrl)
     setCopied(true)
     window.setTimeout(() => setCopied(false), 1800)
   }
@@ -103,9 +104,9 @@ export function TenantShowingRequestDetail({ request, properties }: TenantShowin
         <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><ShieldCheck className="size-5 text-[#946710]" /><p className="mt-4 text-xs font-bold uppercase tracking-wide text-slate-500">Link expiration</p><p className="mt-1 font-bold">{new Date(request.expiresAt).toLocaleString()}</p></article>
       </section>
 
-      {request.publicUrl ? (
+      {request.publicUrl && !["submitted", "approved", "rejected"].includes(request.status) ? (
         <section className="rounded-[22px] border border-sky-200 bg-sky-50 p-5">
-          <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center"><div><h2 className="font-bold text-sky-950">Secure public form</h2><p className="mt-1 break-all font-mono text-xs leading-6 text-sky-800">{request.publicUrl}</p></div><button className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl bg-sky-900 px-4 text-sm font-semibold text-white" onClick={copyPublicLink} type="button">{copied ? <Check className="size-4" /> : <Clipboard className="size-4" />} {copied ? "Copied" : "Copy link"}</button></div>
+          <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center"><div><h2 className="font-bold text-sky-950">Secure public form</h2><p className="mt-1 text-xs leading-6 text-sky-800">Copy creates a fresh secure link and starts a new {request.expiryHours ?? 72}-hour countdown.</p></div><button className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl bg-sky-900 px-4 text-sm font-semibold text-white" onClick={copyPublicLink} type="button">{copied ? <Check className="size-4" /> : <Clipboard className="size-4" />} {copied ? "Copied" : "Copy fresh link"}</button></div>
         </section>
       ) : null}
 

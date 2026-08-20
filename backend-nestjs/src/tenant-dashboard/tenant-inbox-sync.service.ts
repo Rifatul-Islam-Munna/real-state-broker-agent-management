@@ -1191,6 +1191,8 @@ export class TenantInboxSyncService {
             email: this.text(row.email).toLowerCase(),
             phone: this.text(row.phone),
             property: this.text(row.property_title),
+            showingTime: this.text(this.jsonObject(row.payload)?.showingTime ?? this.jsonObject(row.payload)?.showing_time),
+            closingDate: this.text(this.jsonObject(row.payload)?.closingDate ?? this.jsonObject(row.payload)?.closing_date),
           };
           const propertyPayload = this.jsonObject(row.property_payload);
           const mediaUrls = this.welcomeAttachmentUrls(template, propertyPayload);
@@ -1424,7 +1426,7 @@ export class TenantInboxSyncService {
         return { scanned: 0, enqueued: 0 };
       }
       const result = await client.query(
-        `SELECT l.id, l.full_name, l.email, l.phone,
+        `SELECT l.id, l.full_name, l.email, l.phone, l.payload,
                 p.id AS property_id, p.title AS property_title, p.payload AS property_payload,
                 w.sent_at
          FROM tenant_lead l
@@ -1448,6 +1450,8 @@ export class TenantInboxSyncService {
             email: this.text(row.email).toLowerCase(),
             phone: this.text(row.phone),
             property: this.text(row.property_title),
+            showingTime: this.text(this.jsonObject(row.payload)?.showingTime ?? this.jsonObject(row.payload)?.showing_time),
+            closingDate: this.text(this.jsonObject(row.payload)?.closingDate ?? this.jsonObject(row.payload)?.closing_date),
           };
           const welcomeSentAt = row.sent_at ? new Date(row.sent_at).getTime() : Date.now();
           const propertyPayload = this.jsonObject(row.property_payload);
@@ -1568,6 +1572,8 @@ export class TenantInboxSyncService {
         'your agent',
       ),
       '{{agency_name}}': this.text(agency?.profile?.agencyName, 'our agency'),
+      '{{showing_time}}': this.text(lead?.showingTime, 'the requested time'),
+      '{{closing_date}}': this.text(lead?.closingDate, 'the scheduled date'),
     };
     return Object.entries(replacements).reduce(
       (current, [token, value]) => current.replaceAll(token, value),

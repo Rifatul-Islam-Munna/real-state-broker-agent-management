@@ -1,6 +1,7 @@
 ﻿import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
@@ -148,6 +149,12 @@ export class TenantDashboardController {
     return this.workflows.createShowingTemplate(req.tenant, body, req.user);
   }
 
+  @Delete('showing-form-templates/:id')
+  @TenantPlanPermissions('normal-dashboard', 'property-management-dashboard')
+  deleteShowingTemplate(@Req() req: any, @Param('id') id: string) {
+    return this.workflows.deleteShowingTemplate(req.tenant, Number(id), req.user);
+  }
+
   @Get('showing-requests')
   @TenantPlanPermissions('normal-dashboard', 'property-management-dashboard')
   showingRequests(@Req() req: any) {
@@ -164,6 +171,12 @@ export class TenantDashboardController {
   @TenantPlanPermissions('normal-dashboard', 'property-management-dashboard')
   createShowingRequest(@Req() req: any, @Body() body: any) {
     return this.workflows.createShowingRequest(req.tenant, body, req.user);
+  }
+
+  @Post('showing-requests/:id/share-link')
+  @TenantPlanPermissions('normal-dashboard', 'property-management-dashboard')
+  createShowingRequestShareLink(@Req() req: any, @Param('id') id: string, @Body() body: any) {
+    return this.workflows.createShowingRequestShareLink(req.tenant, Number(id), body, req.user);
   }
 
   @Patch('showing-requests/:id/approve')

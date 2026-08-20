@@ -1,7 +1,7 @@
 ﻿"use client"
 
 import Link from "next/link"
-import { useActionState, useMemo, useState } from "react"
+import { useActionState, useEffect, useMemo, useState } from "react"
 import {
   ArrowUpRight,
   CalendarClock,
@@ -21,6 +21,8 @@ import {
 import {
   createTenantShowingRequestAction,
   createTenantShowingTemplateAction,
+  copyTenantShowingRequestLink,
+  deleteTenantShowingTemplateAction,
   type TenantActionState,
   type TenantLead,
   type TenantProperty,
@@ -65,6 +67,8 @@ export function TenantShowingRequestsWorkspace({ leads, properties, templates, r
   const [queueFilter, setQueueFilter] = useState<"all" | string>("all")
   const [queueSearch, setQueueSearch] = useState("")
   const [copiedLinkId, setCopiedLinkId] = useState<number | null>(null)
+  const [copyError, setCopyError] = useState("")
+  const [expiryHours, setExpiryHours] = useState("72")
   const [requestState, requestAction, requestPending] = useActionState(createTenantShowingRequestAction, initialState)
   const [templateState, templateAction, templatePending] = useActionState(createTenantShowingTemplateAction, initialState)
   const [selectedLeadId, setSelectedLeadId] = useState("")
@@ -76,6 +80,13 @@ export function TenantShowingRequestsWorkspace({ leads, properties, templates, r
   const [fields, setFields] = useState<BuilderField[]>([
     { ...createBuilderField(1), label: "Preferred showing time", key: "preferredShowingAt", type: "datetime", required: true },
   ])
+
+  useEffect(() => {
+    if (templates.some((template) => String(template.id) === selectedTemplateId)) return
+    const next = templates[0]
+    setSelectedTemplateId(next ? String(next.id) : "")
+    setPropertyMode(next?.propertyMode ?? "fixed")
+  }, [selectedTemplateId, templates])
 
   const selectedLead = useMemo(
     () => leads.find((lead) => String(lead.id) === selectedLeadId) ?? null,
@@ -118,9 +129,22 @@ export function TenantShowingRequestsWorkspace({ leads, properties, templates, r
   const updateField = (id: string, patch: Partial<BuilderField>) => {
     setFields((current) => current.map((field) => (field.id === id ? { ...field, ...patch } : field)))
   }
+  const addAvailabilityDate = (fieldId: string) => updateField(fieldId, {
+    availability: [...(fields.find((field) => field.id === fieldId)?.availability ?? []), { date: "", times: [""] }],
+  })
+  const updateAvailability = (fieldId: string, slotIndex: number, patch: Partial<{ date: string; times: string[] }>) => {
+    const field = fields.find((item) => item.id === fieldId)
+    if (!field) return
+    updateField(fieldId, { availability: (field.availability ?? []).map((slot, index) => index === slotIndex ? { ...slot, ...patch } : slot) })
+  }
+  const removeAvailabilityDate = (fieldId: string, slotIndex: number) => {
+    const field = fields.find((item) => item.id === fieldId)
+    if (!field) return
+    updateField(fieldId, { availability: (field.availability ?? []).filter((_, index) => index !== slotIndex) })
+  }
 
   const serializedFields = JSON.stringify(
-    fields.map((field) => ({ key: field.key, label: field.label, type: field.type, required: field.required, options: field.options, description: field.description, imageUrl: field.imageUrl })),
+    fields.map((field) => ({ key: field.key, label: field.label, type: field.type, required: field.required, options: field.options, description: field.description, imageUrl: field.imageUrl, availability: field.availability })),
   )
 
   const queueStatuses = [
@@ -147,14 +171,19 @@ export function TenantShowingRequestsWorkspace({ leads, properties, templates, r
         .some((value) => `${value}`.toLowerCase().includes(needle))
     })
 
-  async function copyPublicLink(request: TenantShowingRequest) {
-    if (!request.publicUrl) return
+  async function copyFreshLink(requestId: number, hours?: number) {
+    setCopyError("")
     try {
-      await navigator.clipboard.writeText(request.publicUrl)
-      setCopiedLinkId(request.id)
-      window.setTimeout(() => setCopiedLinkId((current) => (current === request.id ? null : current)), 1600)
-    } catch {
-      window.prompt("Copy showing request link", request.publicUrl)
+      const link = await copyTenantShowingRequestLink(requestId, hours)
+      try {
+        await navigator.clipboard.writeText(link.publicUrl)
+      } catch {
+        window.prompt("Copy showing request link", link.publicUrl)
+      }
+      setCopiedLinkId(requestId)
+      window.setTimeout(() => setCopiedLinkId((current) => (current === requestId ? null : current)), 1600)
+    } catch (error) {
+      setCopyError(error instanceof Error ? error.message : "Could not create share link")
     }
   }
 
@@ -241,7 +270,7 @@ export function TenantShowingRequestsWorkspace({ leads, properties, templates, r
 
               <label className="grid gap-2 text-sm font-semibold">Request title<input className="h-12 rounded-xl border border-slate-300 px-4 font-normal outline-none focus:border-[#17213b]" name="title" placeholder="Private showing request" /></label>
               <label className="grid gap-2 text-sm font-semibold">Intro message<textarea className="min-h-28 rounded-xl border border-slate-300 p-4 font-normal leading-6 outline-none focus:border-[#17213b]" name="message" placeholder="Invite the lead and explain what happens after submission." /></label>
-              <label className="grid gap-2 text-sm font-semibold">Link expires after<select className="h-12 rounded-xl border border-slate-300 bg-white px-4 font-normal outline-none focus:border-[#17213b]" defaultValue="72" name="expiryHours"><option value="24">24 hours</option><option value="48">48 hours</option><option value="72">3 days</option><option value="168">7 days</option><option value="336">14 days</option><option value="720">30 days</option></select></label>
+              <label className="grid gap-2 text-sm font-semibold">Link expires after<select className="h-12 rounded-xl border border-slate-300 bg-white px-4 font-normal outline-none focus:border-[#17213b]" name="expiryHours" onChange={(event) => setExpiryHours(event.target.value)} value={expiryHours}><option value="24">24 hours</option><option value="48">48 hours</option><option value="72">3 days</option><option value="168">7 days</option><option value="336">14 days</option><option value="720">30 days</option></select><span className="text-xs font-normal text-slate-500">Every Copy link click creates a fresh link and starts its own countdown.</span></label>
               <fieldset className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><legend className="px-1 text-sm font-semibold">Send through</legend><div className="mt-2 flex flex-wrap gap-5 text-sm"><label className="flex items-center gap-2"><input defaultChecked name="channels" type="checkbox" value="Email" /> Email</label><label className="flex items-center gap-2"><input name="channels" type="checkbox" value="SMS" /> SMS</label></div></fieldset>
               {requestState.message ? (
                 <div className={`flex flex-col gap-3 rounded-xl px-4 py-3 text-sm ${requestState.ok ? "bg-emerald-50 text-emerald-800" : "bg-rose-50 text-rose-800"}`} role="status">
@@ -251,14 +280,10 @@ export function TenantShowingRequestsWorkspace({ leads, properties, templates, r
                   </span>
                   {requestState.ok && requestState.publicUrl ? (
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                      <code className="min-w-0 flex-1 truncate rounded-lg border border-emerald-200 bg-white px-3 py-2 text-xs text-emerald-900">{requestState.publicUrl}</code>
+                      <span className="min-w-0 flex-1 rounded-lg border border-emerald-200 bg-white px-3 py-2 text-xs text-emerald-900">Fresh secure link + countdown created when copied.</span>
                       <button
                         className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-emerald-800 px-3 text-xs font-bold text-white transition hover:bg-emerald-900"
-                        onClick={() => {
-                          void navigator.clipboard.writeText(requestState.publicUrl ?? "")
-                          setCopiedLinkId(0)
-                          window.setTimeout(() => setCopiedLinkId((current) => (current === 0 ? null : current)), 1600)
-                        }}
+                        onClick={() => requestState.requestId ? void copyFreshLink(requestState.requestId, Number(expiryHours)) : undefined}
                         type="button"
                       >
                         {copiedLinkId === 0 ? <CheckCircle2 className="size-3.5" /> : <ClipboardList className="size-3.5" />}
@@ -268,7 +293,11 @@ export function TenantShowingRequestsWorkspace({ leads, properties, templates, r
                   ) : null}
                 </div>
               ) : null}
-              <button className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-[#17213b] px-5 font-semibold text-white shadow-lg shadow-[#17213b]/15 disabled:opacity-60" disabled={requestPending || !templates.length || !leads.length} type="submit"><Send className="size-4" /> {requestPending ? "Creating..." : "Create and send request"}</button>
+              {copyError ? <p className="rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-800" role="alert">{copyError}</p> : null}
+              <div className="grid gap-3 sm:grid-cols-2">
+                <button className="inline-flex h-12 items-center justify-center gap-2 rounded-xl border border-[#17213b] bg-white px-5 font-semibold text-[#17213b] disabled:opacity-60" disabled={requestPending || !templates.length || !leads.length} name="intent" type="submit" value="share"><ClipboardList className="size-4" /> {requestPending ? "Creating..." : "Create share link"}</button>
+                <button className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-[#17213b] px-5 font-semibold text-white shadow-lg shadow-[#17213b]/15 disabled:opacity-60" disabled={requestPending || !templates.length || !leads.length} name="intent" type="submit" value="send"><Send className="size-4" /> {requestPending ? "Creating..." : "Create and send"}</button>
+              </div>
             </form>
           </article>
 
@@ -330,9 +359,7 @@ export function TenantShowingRequestsWorkspace({ leads, properties, templates, r
                       </td>
                       <td className="px-6 py-5">
                         <div className="flex items-center justify-end gap-1.5">
-                          {request.publicUrl ? (
-                            <button className={`inline-flex h-9 items-center gap-1.5 rounded-xl border px-3 text-xs font-semibold transition ${copiedLinkId === request.id ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-slate-200 text-slate-600 hover:border-[#946710] hover:text-[#946710]"}`} onClick={() => void copyPublicLink(request)} title="Copy public link" type="button">{copiedLinkId === request.id ? <CheckCircle2 className="size-3.5" /> : <ClipboardList className="size-3.5" />}{copiedLinkId === request.id ? "Copied" : "Copy link"}</button>
-                          ) : null}
+                          {!['submitted', 'approved', 'rejected'].includes(request.status) ? <button className={`inline-flex h-9 items-center gap-1.5 rounded-xl border px-3 text-xs font-semibold transition ${copiedLinkId === request.id ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-slate-200 text-slate-600 hover:border-[#946710] hover:text-[#946710]"}`} onClick={() => void copyFreshLink(request.id, request.expiryHours)} title="Create and copy fresh public link" type="button">{copiedLinkId === request.id ? <CheckCircle2 className="size-3.5" /> : <ClipboardList className="size-3.5" />}{copiedLinkId === request.id ? "Copied" : "Copy link"}</button> : null}
                           <Link aria-label={`Open request for ${request.leadName}`} className="inline-flex size-9 items-center justify-center rounded-xl border border-slate-200 text-slate-600 transition hover:border-[#946710] hover:text-[#946710]" href={`/dashboard/showing-requests/${request.id}`}><ArrowUpRight className="size-4" /></Link>
                         </div>
                       </td>
@@ -360,13 +387,53 @@ export function TenantShowingRequestsWorkspace({ leads, properties, templates, r
               <label className="grid gap-2 text-sm font-semibold">Description<textarea className="min-h-24 rounded-xl border border-slate-300 p-4 font-normal leading-6 outline-none focus:border-[#17213b]" name="description" /></label>
               <label className="grid gap-2 text-sm font-semibold">Property behavior<select className="h-12 rounded-xl border border-slate-300 bg-white px-4 font-normal outline-none focus:border-[#17213b]" defaultValue="fixed" name="propertyMode"><option value="fixed">Realtor chooses property before sending</option><option value="respondent">Recipient chooses a published property</option></select></label>
               <div className="grid gap-3"><div className="flex items-center justify-between"><p className="text-sm font-bold">Form fields</p><button className="inline-flex items-center gap-2 text-sm font-semibold text-[#946710]" onClick={addField} type="button"><Plus className="size-4" /> Add field</button></div>{fields.map((field, index) => <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4" key={field.id}><div className="flex items-center gap-3"><GripVertical className="size-4 text-slate-400" /><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Field {index + 1}</p><button aria-label={`Remove field ${index + 1}`} className="ml-auto inline-flex size-8 items-center justify-center rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-600" disabled={fields.length === 1} onClick={() => removeField(field.id)} type="button"><Trash2 className="size-4" /></button></div><div className="mt-3 grid gap-3 sm:grid-cols-2"><label className="grid gap-1.5 text-xs font-semibold">Label<input className="h-10 rounded-lg border border-slate-300 bg-white px-3 font-normal" onChange={(event) => updateField(field.id, { label: event.target.value })} required={field.type !== "divider"} value={field.label} /></label><label className="grid gap-1.5 text-xs font-semibold">Type<select className="h-10 rounded-lg border border-slate-300 bg-white px-3 font-normal" onChange={(event) => updateField(field.id, { type: event.target.value as TenantShowingFormField["type"] })} value={field.type}><option value="text">Short text</option><option value="textarea">Long text</option><option value="email">Email</option><option value="phone">Phone</option><option value="number">Number</option><option value="date">Date</option><option value="datetime">Date and time</option><option value="select">Dropdown</option><option value="radio">Radio choices</option><option value="checkbox">Agreement checkbox</option><option value="checkbox-group">Multiple checkboxes</option><option value="heading">Section heading</option><option value="paragraph">Information text</option><option value="divider">Divider</option><option value="image">Image</option></select></label>{field.type === "select" || field.type === "radio" || field.type === "checkbox-group" ? <label className="grid gap-1.5 text-xs font-semibold sm:col-span-2">Options, separated by commas<input className="h-10 rounded-lg border border-slate-300 bg-white px-3 font-normal" onChange={(event) => updateField(field.id, { options: event.target.value.split(",").map((item) => item.trim()).filter(Boolean) })} value={field.options.join(", ")} /></label> : null}{field.type === "image" ? <label className="grid gap-1.5 text-xs font-semibold sm:col-span-2">Image URL<input className="h-10 rounded-lg border border-slate-300 bg-white px-3 font-normal" onChange={(event) => updateField(field.id, { imageUrl: event.target.value })} placeholder="https://..." required value={field.imageUrl ?? ""} /></label> : null}{field.type === "heading" || field.type === "paragraph" || field.type === "image" ? <label className="grid gap-1.5 text-xs font-semibold sm:col-span-2">Supporting text<textarea className="min-h-20 rounded-lg border border-slate-300 bg-white p-3 font-normal" onChange={(event) => updateField(field.id, { description: event.target.value })} value={field.description ?? ""} /></label> : null}{!["divider", "heading", "paragraph", "image"].includes(field.type) ? <label className="flex items-center gap-2 text-xs font-semibold sm:col-span-2"><input checked={field.required} onChange={(event) => updateField(field.id, { required: event.target.checked })} type="checkbox" /> Required response</label> : null}</div></div>)}</div>
+              {fields.filter((field) => field.type === "datetime").map((field) => (
+                <section className="rounded-2xl border border-sky-200 bg-sky-50 p-4" key={`${field.id}-availability`}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div><p className="text-sm font-bold text-sky-950">Availability: {field.label || "Date and time"}</p><p className="mt-1 text-xs leading-5 text-sky-800">Choose available dates, then enter available times for each date.</p></div>
+                    <button className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-white px-3 text-xs font-bold text-sky-800 shadow-sm" onClick={() => addAvailabilityDate(field.id)} type="button"><Plus className="size-3.5" /> Add date</button>
+                  </div>
+                  <div className="mt-4 grid gap-3">
+                    {(field.availability ?? []).map((slot, slotIndex) => (
+                      <div className="grid gap-2 rounded-xl border border-sky-100 bg-white p-3 sm:grid-cols-[170px_1fr_auto]" key={`${field.id}-slot-${slotIndex}`}>
+                        <label className="grid gap-1 text-xs font-semibold">Available date<input className="h-10 rounded-lg border border-slate-300 px-3 font-normal" min={new Date().toISOString().slice(0, 10)} onChange={(event) => updateAvailability(field.id, slotIndex, { date: event.target.value })} type="date" value={slot.date} /></label>
+                        <label className="grid gap-1 text-xs font-semibold">Available times, comma separated<input className="h-10 rounded-lg border border-slate-300 px-3 font-normal" onChange={(event) => updateAvailability(field.id, slotIndex, { times: event.target.value.split(",").map((time) => time.trim()) })} placeholder="09:00, 11:30, 15:00" value={slot.times.join(", ")} /></label>
+                        <button aria-label="Remove available date" className="mt-5 inline-flex size-10 items-center justify-center rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-600" onClick={() => removeAvailabilityDate(field.id, slotIndex)} type="button"><Trash2 className="size-4" /></button>
+                      </div>
+                    ))}
+                    {!field.availability?.length ? <p className="rounded-xl border border-dashed border-sky-200 p-4 text-center text-xs text-sky-800">No restricted slots. Recipient can currently choose any future date/time.</p> : null}
+                  </div>
+                </section>
+              ))}
               <input name="fields" type="hidden" value={serializedFields} />
               {templateState.message ? <div className={`flex items-start gap-3 rounded-xl px-4 py-3 text-sm ${templateState.ok ? "bg-emerald-50 text-emerald-800" : "bg-rose-50 text-rose-800"}`} role="status">{templateState.ok ? <CheckCircle2 className="mt-0.5 size-4 shrink-0" /> : <TriangleAlert className="mt-0.5 size-4 shrink-0" />}<span>{templateState.message}</span></div> : null}
               <button className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-[#17213b] px-5 font-semibold text-white disabled:opacity-60" disabled={templatePending} type="submit"><FilePlus2 className="size-4" /> {templatePending ? "Saving..." : "Save reusable template"}</button>
             </form>
           </article>
 
-          <article className="rounded-[24px] border border-slate-200 bg-white p-6 shadow-[0_16px_45px_rgba(15,23,42,0.06)] sm:p-7"><h2 className="text-xl font-bold">Template library</h2><p className="mt-1 text-sm text-slate-600">Choose a fixed-property template or let the lead select from live listings.</p><div className="mt-6 grid gap-4">{templates.map((template) => <article className="rounded-2xl border border-slate-200 p-5" key={template.id}><div className="flex items-start justify-between gap-4"><div><h3 className="font-bold">{template.name}</h3><p className="mt-1 text-sm leading-6 text-slate-600">{template.description || "No description"}</p></div><span className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold ${template.propertyMode === "respondent" ? "bg-sky-50 text-sky-700" : "bg-amber-50 text-amber-800"}`}>{template.propertyMode === "respondent" ? "Lead chooses" : "Fixed property"}</span></div><div className="mt-4 flex flex-wrap gap-2">{template.fields.map((field) => <span className="rounded-lg bg-slate-100 px-2.5 py-1.5 text-xs font-medium text-slate-600" key={field.key}>{field.label}{field.required ? " *" : ""}</span>)}</div></article>)}{!templates.length ? <div className="rounded-2xl border border-dashed border-slate-300 p-10 text-center text-sm text-slate-500">No templates have been created.</div> : null}</div></article>
+          <article className="rounded-[24px] border border-slate-200 bg-white p-6 shadow-[0_16px_45px_rgba(15,23,42,0.06)] sm:p-7">
+            <h2 className="text-xl font-bold">Template library</h2>
+            <p className="mt-1 text-sm text-slate-600">Use a template to create a fresh share link, or delete templates you no longer need.</p>
+            <div className="mt-6 grid gap-4">
+              {templates.map((template) => (
+                <article className="rounded-2xl border border-slate-200 p-5" key={template.id}>
+                  <div className="flex items-start justify-between gap-4">
+                    <div><h3 className="font-bold">{template.name}</h3><p className="mt-1 text-sm leading-6 text-slate-600">{template.description || "No description"}</p></div>
+                    <span className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold ${template.propertyMode === "respondent" ? "bg-sky-50 text-sky-700" : "bg-amber-50 text-amber-800"}`}>{template.propertyMode === "respondent" ? "Lead chooses" : "Fixed property"}</span>
+                  </div>
+                  <div className="mt-4 flex flex-wrap gap-2">{template.fields.map((field) => <span className="rounded-lg bg-slate-100 px-2.5 py-1.5 text-xs font-medium text-slate-600" key={field.key}>{field.label}{field.required ? " *" : ""}</span>)}</div>
+                  <div className="mt-4 flex items-center justify-end gap-2 border-t border-slate-100 pt-4">
+                    <button className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 px-3 text-xs font-bold text-slate-700 hover:border-[#946710] hover:text-[#946710]" onClick={() => { setSelectedTemplateId(String(template.id)); setPropertyMode(template.propertyMode); if (template.propertyMode === "respondent") setSelectedPropertyId(""); setTab("requests"); window.scrollTo({ top: 0, behavior: "smooth" }) }} type="button"><ClipboardList className="size-3.5" /> Use & share</button>
+                    <form action={deleteTenantShowingTemplateAction} onSubmit={(event) => { if (!window.confirm(`Delete ${template.name}? Existing sent forms stay available.`)) event.preventDefault() }}>
+                      <input name="templateId" type="hidden" value={template.id} />
+                      <button aria-label={`Delete ${template.name}`} className="inline-flex size-9 items-center justify-center rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50" type="submit"><Trash2 className="size-4" /></button>
+                    </form>
+                  </div>
+                </article>
+              ))}
+              {!templates.length ? <div className="rounded-2xl border border-dashed border-slate-300 p-10 text-center text-sm text-slate-500">No templates have been created.</div> : null}
+            </div>
+          </article>
         </section>
       )}
     </main>

@@ -13,7 +13,7 @@ import {
   SelectTrigger,
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { useDocumentRepository, usePortalCurrentUser, type LeadItem } from "@/hooks/use-real-estate-api"
+import { useAgencySettings, useDocumentRepository, usePortalCurrentUser, type LeadItem } from "@/hooks/use-real-estate-api"
 import { useLeadOutreachTemplates } from "@/hooks/use-lead-outreach-api"
 import { usePdfTemplates } from "@/hooks/use-pdfs-api"
 
@@ -22,12 +22,12 @@ import type { LeadOutreachComposerValues, LeadOutreachMode } from "./lead-outrea
 const emptyTemplateValue = "__none__"
 const sequenceRank: Record<string, number> = { Direct: 0, FollowUp1: 1, FollowUp2: 2, FollowUp3: 3 }
 
-function resolveTemplateTokens(templateText: string, lead: LeadItem, agentName?: string | null) {
+function resolveTemplateTokens(templateText: string, lead: LeadItem, agentName?: string | null, agencyName?: string | null) {
   const replacements: Record<string, string> = {
     "{{client_name}}": lead.name ?? "Client",
     "{{property_address}}": lead.property ?? "the property",
     "{{agent_name}}": (lead.agent || agentName || "our agent").trim(),
-    "{{agency_name}}": "EstateBlue",
+    "{{agency_name}}": agencyName?.trim() || "EstateBlue",
     "{{showing_time}}": lead.timeline ?? "the requested time",
     "{{closing_date}}": lead.timeline ?? "the scheduled date",
   }
@@ -54,6 +54,7 @@ export function LeadOutreachDialog({
   open: boolean
 }) {
   const currentUserQuery = usePortalCurrentUser()
+  const agencySettingsQuery = useAgencySettings()
   const templatesQuery = useLeadOutreachTemplates()
   const pdfTemplatesQuery = usePdfTemplates({ page: 1, pageSize: 200, isActive: true })
   const documentsQuery = useDocumentRepository({ page: 1, pageSize: 300 })
@@ -64,7 +65,11 @@ export function LeadOutreachDialog({
   const [documentCategory, setDocumentCategory] = useState("all")
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<number[]>([])
   const [deliveryMode, setDeliveryMode] = useState<LeadOutreachMode>("both")
+  const [composerView, setComposerView] = useState<"preview" | "edit">("preview")
+  const [defaultTemplateApplied, setDefaultTemplateApplied] = useState(false)
   const [values, setValues] = useState<LeadOutreachComposerValues>({
+    attachPropertyDocuments: false,
+    attachmentMode: "none",
     title: "",
     message: "",
     scheduledAt: "",
@@ -82,8 +87,14 @@ export function LeadOutreachDialog({
     setDocumentSearch("")
     setDocumentCategory("all")
     setSelectedDocumentIds([])
-    setDeliveryMode(mode ?? "both")
-    setValues({ title: "", message: "", scheduledAt: "" })
+    setDeliveryMode(mode === "both"
+      ? lead?.email?.trim()
+        ? lead.phone?.trim() ? "both" : "email"
+        : lead?.phone?.trim() ? "message" : "both"
+      : mode ?? "both")
+    setComposerView("preview")
+    setDefaultTemplateApplied(false)
+    setValues({ attachPropertyDocuments: false, attachmentMode: "none", title: "", message: "", scheduledAt: "" })
     setError(null)
   }, [lead?.id, mode, open])
 
@@ -138,6 +149,34 @@ export function LeadOutreachDialog({
     [allDocuments, selectedDocumentIds],
   )
 
+  useEffect(() => {
+    if (!open || !lead || mode === "call" || defaultTemplateApplied || filteredTemplates.length === 0) return
+
+    const configuredId = agencySettingsQuery.data?.leadAutomation?.directTemplateId
+    const selectedTemplate = filteredTemplates.find((template) => template.id === configuredId)
+      ?? filteredTemplates.find((template) => (template.sequenceType ?? "Direct") === "Direct")
+      ?? filteredTemplates[0]
+    const agentName = currentUserQuery.data?.fullName ?? null
+    const agencyName = agencySettingsQuery.data?.profile?.agencyName ?? null
+
+    setTemplateId(selectedTemplate.id)
+    setPdfTemplateId(selectedTemplate.pdfTemplateId ? String(selectedTemplate.pdfTemplateId) : emptyTemplateValue)
+    setValues((current) => ({
+      ...current,
+      attachmentDocumentCategory: selectedTemplate.attachmentDocumentCategory ?? "",
+      attachmentDocumentType: selectedTemplate.attachmentDocumentType ?? "",
+      attachmentMode: selectedTemplate.attachmentMode ?? (selectedTemplate.attachPropertyDocuments !== false ? "property" : "none"),
+      attachPropertyDocuments: selectedTemplate.attachPropertyDocuments !== false,
+      pdfTemplateId: selectedTemplate.pdfTemplateId,
+      title: deliveryMode === "email" || deliveryMode === "both"
+        ? resolveTemplateTokens(selectedTemplate.subject, lead, agentName, agencyName)
+        : selectedTemplate.name,
+      message: resolveTemplateTokens(selectedTemplate.body, lead, agentName, agencyName),
+      templateId: selectedTemplate.id,
+    }))
+    setDefaultTemplateApplied(true)
+  }, [agencySettingsQuery.data?.leadAutomation?.directTemplateId, agencySettingsQuery.data?.profile?.agencyName, currentUserQuery.data?.fullName, defaultTemplateApplied, deliveryMode, filteredTemplates, lead, mode, open])
+
   if (!lead || !mode) {
     return null
   }
@@ -149,6 +188,29 @@ export function LeadOutreachDialog({
       : lead.phone ?? "No phone"
   const title = deliveryMode === "both" ? "Send Email + SMS" : deliveryMode === "email" ? "Send Email" : deliveryMode === "call" ? "Call Lead" : "Send SMS"
   const selectedDocuments = allDocuments.filter((doc) => selectedDocumentIds.includes(doc.id))
+  const selectedTemplate = filteredTemplates.find((template) => template.id === templateId)
+  const automaticDocuments = allDocuments.filter((doc) => {
+    if (!selectedTemplate) return false
+    const attachmentMode = selectedTemplate.attachmentMode ?? (selectedTemplate.attachPropertyDocuments !== false ? "property" : "none")
+    if (attachmentMode === "document") {
+      const matchesConfig = (!selectedTemplate.attachmentDocumentCategory || doc.category === selectedTemplate.attachmentDocumentCategory)
+        && (!selectedTemplate.attachmentDocumentType || doc.documentType === selectedTemplate.attachmentDocumentType)
+      if (!matchesConfig) return false
+      if (doc.documentType !== "Property") return true
+      if (selectedTemplate.attachmentDocumentType && selectedTemplate.attachmentDocumentType !== "Property") return true
+      if (lead.propertyId) return doc.propertyId === lead.propertyId
+      const property = `${lead.property ?? ""}`.trim().toLowerCase()
+      const docProperty = `${doc.propertyTitle || doc.title || ""}`.trim().toLowerCase()
+      return Boolean(property && docProperty && property === docProperty)
+    }
+    if (attachmentMode !== "property") return false
+    if (lead.propertyId && doc.propertyId === lead.propertyId) return true
+    const property = `${lead.property ?? ""}`.trim().toLowerCase()
+    const docProperty = `${doc.propertyTitle || doc.title || ""}`.trim().toLowerCase()
+    return Boolean(property && docProperty && (property.includes(docProperty) || docProperty.includes(property)))
+  })
+  const previewDocuments = [...automaticDocuments, ...selectedDocuments]
+    .filter((doc, index, items) => items.findIndex((item) => item.id === doc.id) === index)
   const selectedTemplateLabel = templateId === emptyTemplateValue
     ? "No template"
     : filteredTemplates.find((template) => template.id === templateId)?.name ?? "No template"
@@ -215,7 +277,7 @@ export function LeadOutreachDialog({
     setTemplateId(emptyTemplateValue)
     setPdfTemplateId(emptyTemplateValue)
     setSelectedDocumentIds([])
-    setValues({ title: "", message: "", scheduledAt: "" })
+    setValues({ attachPropertyDocuments: false, attachmentMode: "none", title: "", message: "", scheduledAt: "" })
     setError(null)
     onOpenChange(false)
   }
@@ -267,6 +329,7 @@ export function LeadOutreachDialog({
                   onValueChange={(nextValue) => {
                     setDeliveryMode((nextValue ?? "both") as LeadOutreachMode)
                     setTemplateId(emptyTemplateValue)
+                    setDefaultTemplateApplied(false)
                     setError(null)
                   }}
                   value={deliveryMode}
@@ -318,13 +381,28 @@ export function LeadOutreachDialog({
                   modal={false}
                   onValueChange={(nextValue) => {
                     setTemplateId(nextValue ?? emptyTemplateValue)
+                    setDefaultTemplateApplied(true)
                     setError(null)
-                    if (!nextValue || nextValue === emptyTemplateValue) return
+                    if (!nextValue || nextValue === emptyTemplateValue) {
+                      setPdfTemplateId(emptyTemplateValue)
+                      setValues((current) => ({
+                        ...current,
+                        attachPropertyDocuments: false,
+                        attachmentDocumentCategory: "",
+                        attachmentDocumentType: "",
+                        attachmentMode: "none",
+                        templateId: undefined,
+                        pdfTemplateId: undefined,
+                      }))
+                      return
+                    }
                     const selectedTemplate = filteredTemplates.find((item) => item.id === nextValue)
                     if (!selectedTemplate) return
+                    setPdfTemplateId(selectedTemplate.pdfTemplateId ? String(selectedTemplate.pdfTemplateId) : emptyTemplateValue)
                     const agentName = currentUserQuery.data?.fullName ?? null
+                    const agencyName = agencySettingsQuery.data?.profile?.agencyName ?? null
                     const nextTitle = deliveryMode === "email" || deliveryMode === "both"
-                      ? resolveTemplateTokens(selectedTemplate.subject, lead, agentName)
+                      ? resolveTemplateTokens(selectedTemplate.subject, lead, agentName, agencyName)
                       : selectedTemplate.name
                     setValues((current) => ({
                       ...current,
@@ -334,7 +412,7 @@ export function LeadOutreachDialog({
                       attachPropertyDocuments: selectedTemplate.attachPropertyDocuments !== false,
                       pdfTemplateId: selectedTemplate.pdfTemplateId ?? current.pdfTemplateId,
                       title: nextTitle,
-                      message: resolveTemplateTokens(selectedTemplate.body, lead, agentName),
+                      message: resolveTemplateTokens(selectedTemplate.body, lead, agentName, agencyName),
                       templateId: selectedTemplate.id,
                     }))
                   }}
@@ -355,7 +433,43 @@ export function LeadOutreachDialog({
               </label>
             ) : null}
 
-            {deliveryMode !== "message" ? (
+            {deliveryMode !== "call" ? (
+              <div className="flex rounded-lg bg-[var(--ether-surface-container-low)] p-1" aria-label="Message view">
+                {(["preview", "edit"] as const).map((view) => (
+                  <button
+                    className={`flex-1 rounded-md px-4 py-2 text-sm font-semibold transition ${composerView === view ? "bg-white text-[var(--ether-primary)] shadow-sm" : "text-[var(--ether-on-surface-variant)] hover:text-[var(--ether-on-surface)]"}`}
+                    key={view}
+                    onClick={() => setComposerView(view)}
+                    type="button"
+                  >
+                    {view === "preview" ? "Preview" : "Edit message"}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+
+            {deliveryMode !== "call" && composerView === "preview" ? (
+              <section className="space-y-4 rounded-xl border border-[var(--ether-outline-variant)] bg-[var(--ether-surface-container-low)] p-5" aria-label="Resolved message preview">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="ether-label-caps text-[10px] text-[var(--ether-on-surface-variant)]">Ready-to-send preview</p>
+                    <p className="mt-1 text-xs text-[var(--ether-outline)]">Template variables replaced for {lead.name}.</p>
+                  </div>
+                  <span className="rounded-full bg-[var(--ether-primary-fixed)] px-2.5 py-1 text-[10px] font-bold text-[var(--ether-primary)]">{selectedTemplateLabel}</span>
+                </div>
+                {deliveryMode !== "message" ? (
+                  <div className="rounded-lg bg-white p-4">
+                    <p className="ether-label-caps text-[9px] text-[var(--ether-outline)]">Subject</p>
+                    <p className="mt-1 text-sm font-semibold text-[var(--ether-on-surface)]">{values.title || "No subject yet"}</p>
+                  </div>
+                ) : null}
+                <div className="min-h-48 whitespace-pre-wrap rounded-lg bg-white p-4 text-sm leading-6 text-[var(--ether-on-surface)]">
+                  {values.message || "No message yet. Choose a template or edit message."}
+                </div>
+              </section>
+            ) : null}
+
+            {composerView === "edit" && deliveryMode !== "message" ? (
               <label className="block space-y-2">
                 <span className="ether-label-caps text-[10px] text-[var(--ether-on-surface-variant)]">{deliveryMode === "email" || deliveryMode === "both" ? "Subject Line" : "Call Title"}</span>
                 <Input
@@ -370,7 +484,7 @@ export function LeadOutreachDialog({
               </label>
             ) : null}
 
-            {deliveryMode !== "call" ? (
+            {composerView === "edit" && deliveryMode !== "call" ? (
               <div>
                 <div className="flex items-center justify-between gap-3">
                   <span className="ether-label-caps text-[10px] text-[var(--ether-on-surface-variant)]">Fillable Variables</span>
@@ -392,7 +506,7 @@ export function LeadOutreachDialog({
               </div>
             ) : null}
 
-            <label className="block space-y-2">
+            {composerView === "edit" || deliveryMode === "call" ? <label className="block space-y-2">
               <span className="ether-label-caps text-[10px] text-[var(--ether-on-surface-variant)]">{deliveryMode === "call" ? "Call Notes" : "Message"}</span>
               <div className="overflow-hidden rounded-lg border border-[var(--ether-outline-variant)] bg-white">
                 {deliveryMode !== "call" ? (
@@ -413,7 +527,7 @@ export function LeadOutreachDialog({
                   value={values.message}
                 />
               </div>
-            </label>
+            </label> : null}
 
             {error ? <p className="rounded-lg bg-[var(--ether-error-container)] px-4 py-3 text-sm font-semibold text-[var(--ether-error)]">{error}</p> : null}
           </section>
@@ -431,10 +545,6 @@ export function LeadOutreachDialog({
                   onValueChange={(nextValue) => {
                     const category = nextValue ?? "all"
                     setDocumentCategory(category)
-                    setValues((current) => ({
-                      ...current,
-                      attachmentDocumentCategory: category === "all" ? "" : category,
-                    }))
                   }}
                   value={documentCategory}
                 >
@@ -479,7 +589,12 @@ export function LeadOutreachDialog({
               </div>
 
               <div className="mt-4 space-y-3">
-                <Select modal={false} onValueChange={(nextValue) => { setPdfTemplateId(nextValue ?? emptyTemplateValue); setError(null) }} value={pdfTemplateId}>
+                <Select modal={false} onValueChange={(nextValue) => {
+                  const value = nextValue ?? emptyTemplateValue
+                  setPdfTemplateId(value)
+                  setValues((current) => ({ ...current, pdfTemplateId: value === emptyTemplateValue ? undefined : value }))
+                  setError(null)
+                }} value={pdfTemplateId}>
                   <SelectTrigger className="h-10 rounded-lg border-[var(--ether-outline-variant)] bg-white"><span className="truncate">{selectedPdfTemplateLabel}</span></SelectTrigger>
                   <SelectContent>
                     <Input className="mb-2 h-8" onChange={(event) => setPdfSearch(event.target.value)} placeholder="Search PDF template" value={pdfSearch} />
@@ -487,6 +602,17 @@ export function LeadOutreachDialog({
                     {pdfTemplates.map((template) => <SelectItem key={template.id} value={String(template.id)}>{`${template.name} - ${template.category}`}</SelectItem>)}
                   </SelectContent>
                 </Select>
+                <div className="rounded-lg border border-[var(--ether-outline-variant)] bg-white p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs font-bold text-[var(--ether-on-surface)]">Will attach</p>
+                    <span className="text-[10px] text-[var(--ether-outline)]">{previewDocuments.length + (pdfTemplateId !== emptyTemplateValue ? 1 : 0)} item(s)</span>
+                  </div>
+                  <div className="mt-2 space-y-1.5 text-xs text-[var(--ether-on-surface-variant)]">
+                    {previewDocuments.map((doc) => <p className="truncate" key={doc.id}>• {doc.title}</p>)}
+                    {pdfTemplateId !== emptyTemplateValue ? <p className="truncate">• Generated PDF: {selectedPdfTemplateLabel}</p> : null}
+                    {previewDocuments.length === 0 && pdfTemplateId === emptyTemplateValue ? <p>No attachments selected.</p> : null}
+                  </div>
+                </div>
               </div>
             </aside>
           ) : null}
@@ -495,7 +621,7 @@ export function LeadOutreachDialog({
         <footer className="flex flex-col gap-3 border-t border-[var(--ether-outline-variant)] bg-white px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2 text-sm text-[var(--ether-on-surface-variant)]">
             <span className="flex size-7 items-center justify-center rounded-md bg-[var(--ether-primary-fixed)] text-[var(--ether-primary)]"><AppIcon name="description" /></span>
-            <span>{selectedDocuments.length} file{selectedDocuments.length === 1 ? "" : "s"} attached</span>
+            <span>{previewDocuments.length + (pdfTemplateId !== emptyTemplateValue ? 1 : 0)} attachment{previewDocuments.length + (pdfTemplateId !== emptyTemplateValue ? 1 : 0) === 1 ? "" : "s"} ready</span>
           </div>
           <div className="flex items-center justify-end gap-3">
             <button className="rounded-lg px-5 py-2 text-sm font-semibold text-[var(--ether-on-surface-variant)] transition hover:bg-[var(--ether-surface-container-high)]" onClick={() => onOpenChange(false)} type="button">Cancel</button>

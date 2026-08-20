@@ -92,11 +92,11 @@ export class LeadIntakeAutomationService {
           createdBy,
           kind,
           leadId: lead.id,
-          message: this.render(selectedTemplate.body, lead),
+          message: this.render(selectedTemplate.body, lead, agency.profile?.agencyName),
           pdfTemplateId: selectedTemplate.pdfTemplateId,
           scheduledAt: scheduledAt?.toISOString() ?? null,
           templateId: automation.followUpEnabled === false ? undefined : selectedTemplate.id,
-          title: this.render(selectedTemplate.subject || selectedTemplate.name, lead),
+          title: this.render(selectedTemplate.subject || selectedTemplate.name, lead, agency.profile?.agencyName),
         });
         if (result.status === 'Failed') failures.push(`${kind}: ${result.summary}`);
         else sent++;
@@ -120,13 +120,14 @@ export class LeadIntakeAutomationService {
     return [channels.includes('Email') ? 'Email' : null, channels.includes('SMS') ? 'Sms' : null].filter(Boolean) as Array<'Email' | 'Sms'>;
   }
 
-  private render(value: unknown, lead: Lead) {
+  private render(value: unknown, lead: Lead, agencyName?: string) {
     return `${value ?? ''}`
       .replaceAll('{{client_name}}', lead.name || 'Client')
       .replaceAll('{{property_address}}', lead.property || 'the property')
       .replaceAll('{{agent_name}}', lead.agent || 'our team')
-      .replaceAll('{{agency_name}}', 'EstateBlue')
-      .replaceAll('{{showing_time}}', lead.timeline || 'the requested time');
+      .replaceAll('{{agency_name}}', agencyName || 'EstateBlue')
+      .replaceAll('{{showing_time}}', lead.timeline || 'the requested time')
+      .replaceAll('{{closing_date}}', lead.timeline || 'the scheduled date');
   }
 
   private firstMessageDelayAt(delayMinutes: unknown) {

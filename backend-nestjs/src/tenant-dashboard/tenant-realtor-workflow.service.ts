@@ -39,6 +39,7 @@ type ShowingFormField = {
   options: string[];
   description?: string;
   imageUrl?: string;
+  availability?: Array<{ date: string; times: string[] }>;
 };
 
 @Injectable()
@@ -294,6 +295,20 @@ export class TenantRealtorWorkflowService {
     );
   }
 
+  async deleteShowingTemplate(tenant: SaasTenant, templateId: number, user: any) {
+    const id = this.positiveId(templateId, 'Template');
+    const actorUserId = Number(user?.id ?? user?.sub ?? 0) || null;
+    return this.databases.withTenantClient(this.databaseName(tenant), async (client) => {
+      const result = await client.query(
+        'DELETE FROM tenant_showing_form_template WHERE id = $1 RETURNING id, name',
+        [id],
+      );
+      if (!result.rowCount) throw new NotFoundException('Showing form template not found');
+      await this.audit(client, 'showing-template.deleted', actorUserId, `Deleted showing form template ${result.rows[0].name}`, { templateId: id });
+      return { id, deleted: true };
+    });
+  }
+
   async listShowingRequests(tenant: SaasTenant) {
     return this.databases.withTenantClient(
       this.databaseName(tenant),
@@ -312,7 +327,8 @@ export class TenantRealtorWorkflowService {
                r.property_mode AS "propertyMode",
                r.recipient_email AS "recipientEmail",
                r.recipient_phone AS "recipientPhone",
-               r.expires_at AS "expiresAt",
+               COALESCE(latest_link.expires_at, r.expires_at) AS "expiresAt",
+               r.expiry_hours AS "expiryHours",
                r.preferred_showing_at AS "preferredShowingAt",
                r.sent_at AS "sentAt",
                r.submitted_at AS "submittedAt",
@@ -323,6 +339,11 @@ export class TenantRealtorWorkflowService {
         JOIN tenant_lead l ON l.id = r.lead_id
         LEFT JOIN tenant_property p ON p.id = r.property_id
         LEFT JOIN tenant_property requested ON requested.id = r.requested_property_id
+        LEFT JOIN LATERAL (
+          SELECT expires_at FROM tenant_showing_request_link
+          WHERE showing_request_id = r.id
+          ORDER BY created_at DESC, id DESC LIMIT 1
+        ) latest_link ON true
         ORDER BY r.created_at DESC, r.id DESC
       `);
         return result.rows;
@@ -437,8 +458,9 @@ export class TenantRealtorWorkflowService {
       this.clean(dto.title, 240) ||
       `Showing request${property ? ` - ${property.title}` : ''}`;
     const message = this.clean(dto.message, 4000);
-    const channels = this.channels(dto.channels);
-    if (!channels.length) {
+    const shareOnly = dto.shareOnly === true;
+    const channels = shareOnly ? [] : this.channels(dto.channels);
+    if (!channels.length && !shareOnly) {
       throw new BadRequestException('Choose Email, SMS, or both');
     }
 
@@ -470,11 +492,11 @@ export class TenantRealtorWorkflowService {
                access_token, template_id, lead_id, property_id, title,
                message, recipient_name, recipient_email, recipient_phone,
                property_mode, fields, delivery_channels, delivery_results,
-               delivery_status, status, expires_at, created_by_master_user_id
+               delivery_status, status, expires_at, expiry_hours, created_by_master_user_id
              ) VALUES (
                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
                $11::jsonb, $12::jsonb, '[]'::jsonb,
-               'scheduled', 'sent', $13, $14
+               $13, 'sent', $14, $15, $16
              ) RETURNING id`,
             [
               token,
@@ -489,12 +511,14 @@ export class TenantRealtorWorkflowService {
               propertyMode,
               JSON.stringify(fields),
               JSON.stringify(channels),
+              channels.length ? 'scheduled' : 'share-ready',
               expiresAt,
+              expiryHours,
               actorUserId,
             ],
           );
           const savedRequestId = Number(result.rows[0].id);
-          const jobs = await this.outreach.enqueueWithClient(client, {
+          const jobs = channels.length ? await this.outreach.enqueueWithClient(client, {
             leadId,
             sourceType: 'showing-request',
             sourceId: savedRequestId,
@@ -512,7 +536,7 @@ export class TenantRealtorWorkflowService {
               publicUrl,
               expiresAt: expiresAt.toISOString(),
             },
-          });
+          }) : [];
           const deliveryResults = jobs.map((job: any) => ({
             channel: job.channel,
             status: 'scheduled',
@@ -522,9 +546,9 @@ export class TenantRealtorWorkflowService {
           await client.query(
             `UPDATE tenant_showing_request
              SET delivery_results = $2::jsonb,
-                 delivery_status = 'scheduled'
+                 delivery_status = $3
              WHERE id = $1`,
-            [savedRequestId, JSON.stringify(deliveryResults)],
+            [savedRequestId, JSON.stringify(deliveryResults), channels.length ? 'scheduled' : 'share-ready'],
           );
           await this.audit(
             client,
@@ -548,6 +572,35 @@ export class TenantRealtorWorkflowService {
       },
     );
     return this.showingRequest(tenant, requestId);
+  }
+
+  async createShowingRequestShareLink(tenant: SaasTenant, requestId: number, dto: any, user: any) {
+    const id = this.positiveId(requestId, 'Showing request');
+    const actorUserId = Number(user?.id ?? user?.sub ?? 0) || null;
+    return this.databases.withTenantClient(this.databaseName(tenant), async (client) => {
+      const request = await client.query(
+        `SELECT id, status, expiry_hours AS "expiryHours" FROM tenant_showing_request WHERE id = $1`,
+        [id],
+      );
+      if (!request.rowCount) throw new NotFoundException('Showing request not found');
+      if (['submitted', 'approved', 'rejected'].includes(request.rows[0].status)) {
+        throw new BadRequestException('Completed showing request cannot create another share link');
+      }
+      const expiryHours = Math.min(24 * 30, Math.max(1, Number(dto?.expiryHours) || Number(request.rows[0].expiryHours) || 72));
+      const token = randomBytes(36).toString('base64url');
+      const expiresAt = new Date(Date.now() + expiryHours * 3_600_000);
+      await client.query(
+        `INSERT INTO tenant_showing_request_link(showing_request_id, access_token, expires_at, created_by_master_user_id)
+         VALUES ($1, $2, $3, $4)`,
+        [id, token, expiresAt, actorUserId],
+      );
+      await client.query(
+        `UPDATE tenant_showing_request SET status = CASE WHEN status = 'expired' THEN 'sent' ELSE status END, updated_at = now() WHERE id = $1`,
+        [id],
+      );
+      await this.audit(client, 'showing-request.link-copied', actorUserId, 'Created fresh showing request share link', { requestId: id, expiresAt: expiresAt.toISOString() });
+      return { publicUrl: this.publicUrl(tenant, token), expiresAt: expiresAt.toISOString() };
+    });
   }
 
   async approveShowingRequest(
@@ -969,14 +1022,6 @@ export class TenantRealtorWorkflowService {
         const request = await this.requestByToken(client, token);
         if (!request) throw new NotFoundException('Showing request not found');
         if (new Date(request.expiresAt).getTime() <= Date.now()) {
-          if (request.status !== 'expired') {
-            await client.query(
-              `UPDATE tenant_showing_request
-             SET status = 'expired', updated_at = now()
-             WHERE id = $1`,
-              [request.id],
-            );
-          }
           throw new GoneException('This showing request has expired');
         }
         if (request.status === 'rejected') {
@@ -1057,12 +1102,6 @@ export class TenantRealtorWorkflowService {
           if (!request)
             throw new NotFoundException('Showing request not found');
           if (new Date(request.expiresAt).getTime() <= Date.now()) {
-            await client.query(
-              `UPDATE tenant_showing_request
-             SET status = 'expired', updated_at = now()
-             WHERE id = $1`,
-              [request.id],
-            );
             await client.query('COMMIT');
             transactionOpen = false;
             throw new GoneException('This showing request has expired');
@@ -1076,6 +1115,7 @@ export class TenantRealtorWorkflowService {
           const answers = this.sanitizeAnswers(dto.answers);
           const fields = this.normalizeFields(request.fields);
           this.validateRequiredAnswers(fields, answers);
+          this.validateAvailabilityAnswers(fields, answers);
           const propertyId =
             request.propertyMode === 'fixed'
               ? Number(request.propertyId)
@@ -1175,7 +1215,8 @@ export class TenantRealtorWorkflowService {
               r.delivery_results AS "deliveryResults",
               r.delivery_status AS "deliveryStatus",
               r.status,
-              r.expires_at AS "expiresAt",
+              COALESCE(latest_link.expires_at, r.expires_at) AS "expiresAt",
+              r.expiry_hours AS "expiryHours",
               r.preferred_showing_at AS "preferredShowingAt",
               r.sent_at AS "sentAt",
               r.viewed_at AS "viewedAt",
@@ -1192,6 +1233,11 @@ export class TenantRealtorWorkflowService {
        JOIN tenant_lead l ON l.id = r.lead_id
        LEFT JOIN tenant_property p ON p.id = r.property_id
        LEFT JOIN tenant_property requested ON requested.id = r.requested_property_id
+       LEFT JOIN LATERAL (
+         SELECT expires_at FROM tenant_showing_request_link
+         WHERE showing_request_id = r.id
+         ORDER BY created_at DESC, id DESC LIMIT 1
+       ) latest_link ON true
        WHERE r.id = $1`,
       [requestId],
     );
@@ -1213,12 +1259,14 @@ export class TenantRealtorWorkflowService {
               r.fields,
               r.answers,
               r.status,
-              r.expires_at AS "expiresAt",
+              COALESCE(link.expires_at, r.expires_at) AS "expiresAt",
               r.preferred_showing_at AS "preferredShowingAt"
        FROM tenant_showing_request r
        JOIN tenant_lead l ON l.id = r.lead_id
        LEFT JOIN tenant_property p ON p.id = r.property_id
-       WHERE r.access_token = $1`,
+       LEFT JOIN tenant_showing_request_link link
+         ON link.showing_request_id = r.id AND link.access_token = $1
+       WHERE r.access_token = $1 OR link.access_token = $1`,
       [cleanToken],
     );
     return result.rows[0] ?? null;
@@ -1314,6 +1362,19 @@ export class TenantRealtorWorkflowService {
         : [];
       const staticField = ['divider', 'heading', 'paragraph', 'image'].includes(type);
       const imageUrl = type === 'image' ? this.safeImageUrl(input.imageUrl) : '';
+      const availability = type === 'datetime' && Array.isArray(input.availability)
+        ? input.availability.slice(0, 31).map((rawSlot: unknown) => {
+            const slot = this.object(rawSlot);
+            const date = /^\d{4}-\d{2}-\d{2}$/.test(`${slot.date ?? ''}`) ? `${slot.date}` : '';
+            const times = Array.isArray(slot.times)
+              ? [...new Set(slot.times.map((time: unknown) => `${time ?? ''}`.trim()).filter((time: string) => /^([01]\d|2[0-3]):[0-5]\d$/.test(time)))].slice(0, 24)
+              : [];
+            return { date, times };
+          }).filter((slot: { date: string; times: string[] }) => slot.date && slot.times.length)
+        : [];
+      if (type === 'datetime' && Array.isArray(input.availability) && input.availability.length && availability.length !== input.availability.length) {
+        throw new BadRequestException(`${label} availability needs a valid date and times like 09:00, 13:30`);
+      }
       if (type === 'image' && !imageUrl) continue;
       fields.push({
         key,
@@ -1322,6 +1383,7 @@ export class TenantRealtorWorkflowService {
         required: staticField ? false : input.required === true,
         options: ['select', 'radio', 'checkbox-group'].includes(type) ? options : [],
         description: this.clean(input.description, 1000),
+        ...(availability.length ? { availability } : {}),
         ...(imageUrl ? { imageUrl } : {}),
       });
     }
@@ -1365,6 +1427,18 @@ export class TenantRealtorWorkflowService {
               : this.clean(value, 5000).length === 0);
       if (missing) {
         throw new BadRequestException(`${field.label} is required`);
+      }
+    }
+  }
+
+  private validateAvailabilityAnswers(fields: ShowingFormField[], answers: Record<string, unknown>) {
+    for (const field of fields) {
+      if (field.type !== 'datetime' || !field.availability?.length) continue;
+      const answer = `${answers[field.key] ?? ''}`.slice(0, 16);
+      if (!answer && !field.required) continue;
+      const allowed = new Set(field.availability.flatMap((slot) => slot.times.map((time) => `${slot.date}T${time}`)));
+      if (!allowed.has(answer)) {
+        throw new BadRequestException(`${field.label} must use one of the available date and time slots`);
       }
     }
   }

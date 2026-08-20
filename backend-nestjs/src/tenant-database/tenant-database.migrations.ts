@@ -390,4 +390,24 @@ export const TENANT_DATABASE_MIGRATIONS: TenantDatabaseMigration[] = [
          )`,
     ],
   },
+  {
+    version: 9,
+    name: 'showing_request_share_links',
+    statements: [
+      `ALTER TABLE tenant_showing_request
+       ADD COLUMN IF NOT EXISTS expiry_hours integer NOT NULL DEFAULT 72`,
+      `CREATE TABLE IF NOT EXISTS tenant_showing_request_link (
+        id bigserial PRIMARY KEY,
+        showing_request_id bigint NOT NULL REFERENCES tenant_showing_request(id) ON DELETE CASCADE,
+        access_token varchar(96) NOT NULL UNIQUE,
+        expires_at timestamptz NOT NULL,
+        created_by_master_user_id integer,
+        created_at timestamptz NOT NULL DEFAULT now()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_tenant_showing_request_link_request
+       ON tenant_showing_request_link(showing_request_id, created_at DESC)`,
+      `CREATE INDEX IF NOT EXISTS idx_tenant_showing_request_link_expiry
+       ON tenant_showing_request_link(expires_at)`,
+    ],
+  },
 ];

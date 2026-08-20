@@ -30,6 +30,7 @@ export class LeadHistoryEntry {
   @Column({ type: 'text', default: '' }) body: string = '';
   @Column({ type: 'text', default: '' }) provider: string = '';
   @Column({ type: 'text', default: '' }) createdBy: string = '';
+  @Column({ type: 'jsonb', default: () => "'{}'::jsonb" }) outreachConfig: Record<string, any> = {};
   @Column({ type: 'boolean', default: false }) isRead: boolean = false;
   @Column({ type: 'timestamptz', nullable: true }) scheduledAt: Date | null;
   @Column({ type: 'timestamptz', nullable: true }) occurredAt: Date | null;

@@ -132,10 +132,14 @@ export class LeadOutreachService {
       ? await this.generatePdfDocument(dto.pdfTemplateId, lead, dto.createdBy)
       : [];
     const configuredDocuments = attachmentMode === 'document' && !shouldSchedule && status !== 'Failed' && ['Email', 'Sms'].includes(kind)
-      ? await this.findConfiguredDocuments(dto.attachmentDocumentType, dto.attachmentDocumentCategory)
+      ? await this.findConfiguredDocuments(lead, dto.attachmentDocumentType, dto.attachmentDocumentCategory)
       : [];
-    const allDocuments = [...propertyDocuments, ...configuredDocuments, ...generatedPdfDocuments];
-    const mediaUrls = [...this.stringList(dto.mediaUrls), ...allDocuments.map((doc) => doc.fileUrl)];
+    const selectedDocuments = !shouldSchedule && status !== 'Failed' && ['Email', 'Sms'].includes(kind)
+      ? await this.findMediaDocuments(dto.mediaUrls)
+      : [];
+    const allDocuments = [...propertyDocuments, ...configuredDocuments, ...generatedPdfDocuments, ...selectedDocuments]
+      .filter((doc, index, documents) => documents.findIndex((item) => item.fileUrl === doc.fileUrl) === index);
+    const mediaUrls = [...new Set([...this.stringList(dto.mediaUrls), ...allDocuments.map((doc) => doc.fileUrl)])];
     if (!shouldSchedule && kind === 'Sms' && hasTarget) {
       const sms = status === 'Failed'
         ? { status }
@@ -166,6 +170,15 @@ export class LeadOutreachService {
       body: this.bodyWithDocuments(dto.message.trim(), allDocuments),
       provider,
       createdBy: dto.createdBy?.trim() || 'CRM',
+      outreachConfig: shouldSchedule ? {
+        attachPropertyDocuments: dto.attachPropertyDocuments !== false,
+        attachmentDocumentCategory: dto.attachmentDocumentCategory,
+        attachmentDocumentType: dto.attachmentDocumentType,
+        attachmentMode,
+        mediaUrls: this.stringList(dto.mediaUrls),
+        pdfTemplateId: dto.pdfTemplateId,
+        templateId: dto.templateId,
+      } : {},
       scheduledAt: shouldSchedule ? scheduledAt : null,
       occurredAt: shouldSchedule ? null : now,
     });
@@ -291,14 +304,45 @@ export class LeadOutreachService {
     return [...repositoryDocs, ...embeddedDocs];
   }
 
-  private async findConfiguredDocuments(documentType?: string, category?: string) {
+  private async findConfiguredDocuments(lead: Lead, documentType?: string, category?: string) {
     const qb = this.documentRepo.createQueryBuilder('doc');
     const cleanType = `${documentType ?? ''}`.trim();
     const cleanCategory = `${category ?? ''}`.trim();
     if (cleanType) qb.andWhere('doc.document_type = :documentType', { documentType: documentTypeDb(cleanType) });
     if (cleanCategory) qb.andWhere('LOWER(doc.category) = :category', { category: cleanCategory.toLowerCase() });
+    if (cleanType === 'Property') {
+      if (lead.propertyId) {
+        qb.andWhere('doc.property_id = :propertyId', { propertyId: lead.propertyId });
+      } else {
+        const property = `${lead.property ?? ''}`.trim().toLowerCase();
+        if (!property) return [];
+        qb.andWhere('(LOWER(doc.property_title) = :property OR LOWER(doc.title) = :property)', { property });
+      }
+    } else if (!cleanType) {
+      const propertyType = documentTypeDb('Property');
+      if (lead.propertyId) {
+        qb.andWhere('(doc.document_type <> :propertyType OR doc.property_id = :propertyId)', { propertyId: lead.propertyId, propertyType });
+      } else {
+        const property = `${lead.property ?? ''}`.trim().toLowerCase();
+        qb.andWhere('(doc.document_type <> :propertyType OR LOWER(doc.property_title) = :property OR LOWER(doc.title) = :property)', { property, propertyType });
+      }
+    }
     const docs = await qb.orderBy('doc.updatedAt', 'DESC').take(25).getMany();
     return docs.map((doc) => ({ title: doc.title, fileName: doc.fileName, fileUrl: doc.fileUrl }));
+  }
+
+  private async findMediaDocuments(mediaUrls: unknown) {
+    const urls = this.stringList(mediaUrls);
+    if (urls.length === 0) return [];
+    const docs = await this.documentRepo.createQueryBuilder('doc')
+      .where('doc.file_url IN (:...urls)', { urls })
+      .getMany();
+    const byUrl = new Map(docs.map((doc) => [doc.fileUrl, doc]));
+    return urls.map((url) => {
+      const doc = byUrl.get(url);
+      const fallbackName = decodeURIComponent(url.split('/').pop()?.split('?')[0] || 'attachment');
+      return { title: doc?.title || fallbackName, fileName: doc?.fileName || fallbackName, fileUrl: url };
+    });
   }
 
   private async sendEmailViaSmtp(to: string, subject: string, message: string, docs: OutreachDocument[]) {
@@ -393,11 +437,19 @@ export class LeadOutreachService {
         kind,
         direction: 'Scheduled',
         status: 'Scheduled',
-        title: kind === 'Email' ? this.resolveTemplateTokens(template.subject || template.name, lead) : template.name,
+        title: kind === 'Email' ? this.resolveTemplateTokens(template.subject || template.name, lead, settings.profile?.agencyName) : template.name,
         summary: this.scheduledSummary(lead, kind, scheduledAt),
-        body: this.resolveTemplateTokens(template.body || '', lead),
+        body: this.resolveTemplateTokens(template.body || '', lead, settings.profile?.agencyName),
         provider,
         createdBy,
+        outreachConfig: {
+          attachPropertyDocuments: template.attachPropertyDocuments !== false,
+          attachmentDocumentCategory: template.attachmentDocumentCategory,
+          attachmentDocumentType: template.attachmentDocumentType,
+          attachmentMode: template.attachmentMode ?? (template.attachPropertyDocuments !== false ? 'property' : 'none'),
+          pdfTemplateId: template.pdfTemplateId,
+          templateId: template.id,
+        },
         scheduledAt,
         occurredAt: null,
       }));
@@ -408,12 +460,12 @@ export class LeadOutreachService {
     return value === 'FollowUp1' ? 1 : value === 'FollowUp2' ? 2 : value === 'FollowUp3' ? 3 : 0;
   }
 
-  private resolveTemplateTokens(text: string, lead: Lead) {
+  private resolveTemplateTokens(text: string, lead: Lead, agencyName?: string) {
     return `${text ?? ''}`
       .replaceAll('{{client_name}}', lead.name || 'Client')
       .replaceAll('{{property_address}}', lead.property || 'the property')
       .replaceAll('{{agent_name}}', lead.agent || 'our agent')
-      .replaceAll('{{agency_name}}', 'EstateBlue')
+      .replaceAll('{{agency_name}}', agencyName || 'EstateBlue')
       .replaceAll('{{showing_time}}', lead.timeline || 'the requested time')
       .replaceAll('{{closing_date}}', lead.timeline || 'the scheduled date');
   }
