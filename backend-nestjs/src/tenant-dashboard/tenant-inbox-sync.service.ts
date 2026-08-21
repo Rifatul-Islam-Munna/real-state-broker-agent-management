@@ -1580,11 +1580,27 @@ export class TenantInboxSyncService {
   ): Promise<string[]> {
     const mode = this.text(template?.attachmentMode);
     if (mode === 'property' || template?.attachPropertyDocuments === true) {
-      const documents = Array.isArray(propertyPayload?.propertyDocuments)
+      const embeddedDocs = Array.isArray(propertyPayload?.propertyDocuments)
         ? propertyPayload.propertyDocuments
         : [];
-      return documents
+      const embeddedUrls = embeddedDocs
         .map((doc: any) => this.text(doc?.fileUrl))
+        .filter(Boolean)
+        .slice(0, 5);
+      if (embeddedUrls.length > 0) return embeddedUrls;
+      const result = await client.query(
+        `SELECT payload
+         FROM tenant_legacy_resource
+         WHERE resource = 'documents'
+           AND LOWER(payload->>'documentType') IN ('property', 'lead')
+           AND LOWER(payload->>'category') = 'lead'
+           AND ($1 = 0 OR (payload->>'propertyId')::bigint = $1)
+         ORDER BY updated_at DESC`,
+        [propertyId || 0],
+      );
+      return result.rows
+        .map((row: any) => this.jsonObject(row.payload))
+        .map((document: any) => this.text(document?.fileUrl))
         .filter(Boolean)
         .slice(0, 5);
     }

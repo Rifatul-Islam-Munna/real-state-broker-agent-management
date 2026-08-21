@@ -169,6 +169,11 @@ export class LeadOutreachBackgroundService {
       body,
       provider: kind === 'Email' ? 'SMTP Mail' : 'CRM SMS',
       createdBy,
+      outreachConfig: {
+        attachPropertyDocuments: true,
+        attachmentMode: 'property',
+        mediaUrls: [],
+      },
       scheduledAt: new Date(),
       occurredAt: null,
     }));

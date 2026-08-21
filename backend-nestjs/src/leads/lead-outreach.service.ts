@@ -118,8 +118,8 @@ export class LeadOutreachService {
     const attachmentMode = ['none', 'property', 'pdf', 'document'].includes(dto.attachmentMode)
       ? dto.attachmentMode
       : dto.attachPropertyDocuments !== false ? 'property' : 'none';
-    const propertyDocuments = attachmentMode === 'property' && !shouldSchedule && ['Email', 'Sms'].includes(kind)
-      ? await this.findPropertyDocuments(lead.property)
+    const propertyDocuments = attachmentMode === 'property' && ['Email', 'Sms'].includes(kind)
+      ? await this.findPropertyDocuments(lead.property, lead.propertyId)
       : [];
     const source = `${dto.createdBy ?? ''}`;
     const trustedSmsSequence = source.startsWith('Realtor Showing #') || source.startsWith('Lead Intake:');
@@ -128,13 +128,13 @@ export class LeadOutreachService {
       status = 'Failed';
       sendFailure = ' SMS auto-send canceled because lead is already on the board.';
     }
-    const generatedPdfDocuments = dto.pdfTemplateId && !shouldSchedule && status !== 'Failed' && ['Email', 'Sms'].includes(kind)
+    const generatedPdfDocuments = dto.pdfTemplateId && status !== 'Failed' && ['Email', 'Sms'].includes(kind)
       ? await this.generatePdfDocument(dto.pdfTemplateId, lead, dto.createdBy)
       : [];
-    const configuredDocuments = attachmentMode === 'document' && !shouldSchedule && status !== 'Failed' && ['Email', 'Sms'].includes(kind)
+    const configuredDocuments = attachmentMode === 'document' && status !== 'Failed' && ['Email', 'Sms'].includes(kind)
       ? await this.findConfiguredDocuments(lead, dto.attachmentDocumentType, dto.attachmentDocumentCategory)
       : [];
-    const selectedDocuments = !shouldSchedule && status !== 'Failed' && ['Email', 'Sms'].includes(kind)
+    const selectedDocuments = status !== 'Failed' && ['Email', 'Sms'].includes(kind)
       ? await this.findMediaDocuments(dto.mediaUrls)
       : [];
     const allDocuments = [...propertyDocuments, ...configuredDocuments, ...generatedPdfDocuments, ...selectedDocuments]
@@ -176,7 +176,7 @@ export class LeadOutreachService {
       status,
       title: status === 'Failed' ? `${dto.title || `${kind} outreach`} failed` : (dto.title || `${kind} outreach`),
       summary,
-      body: this.bodyWithDocuments(dto.message.trim(), allDocuments),
+      body: shouldSchedule ? dto.message.trim() : this.bodyWithDocuments(dto.message.trim(), allDocuments),
       provider,
       createdBy: dto.createdBy?.trim() || 'CRM',
       outreachConfig: shouldSchedule ? {
@@ -184,7 +184,7 @@ export class LeadOutreachService {
         attachmentDocumentCategory: dto.attachmentDocumentCategory,
         attachmentDocumentType: dto.attachmentDocumentType,
         attachmentMode,
-        mediaUrls: this.stringList(dto.mediaUrls),
+        mediaUrls: [...this.stringList(dto.mediaUrls), ...allDocuments.map((doc) => doc.fileUrl)],
         pdfTemplateId: dto.pdfTemplateId,
         templateId: dto.templateId,
       } : {},
@@ -289,19 +289,23 @@ export class LeadOutreachService {
     return kind === 'Email' ? 'SMTP Mail' : kind === 'Sms' ? 'CRM SMS' : 'CRM Call';
   }
 
-  private async findPropertyDocuments(propertyText: string) {
+  private async findPropertyDocuments(propertyText: string, propertyId?: number | null) {
     const normalized = `${propertyText ?? ''}`.trim().toLowerCase();
-    if (!normalized) return [];
-    const [docs, properties] = await Promise.all([
-      this.documentRepo.find({ where: { documentType: 'Property' as any } }),
+    if (!normalized && !propertyId) return [];
+    const [propertyDocs, leadDocs, properties] = await Promise.all([
+      this.documentRepo.find({ where: { documentType: documentTypeDb('Property') as any } }),
+      this.documentRepo.find({ where: { documentType: documentTypeDb('Lead') as any } }),
       this.propertyRepo.find(),
     ]);
-    const repositoryDocs = docs.filter((doc) => {
+    const allRepoDocs = [...propertyDocs, ...leadDocs];
+    const repositoryDocs = allRepoDocs.filter((doc) => {
+      if (propertyId && doc.propertyId === propertyId) return true;
       const title = `${doc.propertyTitle || doc.title || ''}`.trim().toLowerCase();
       return title && (normalized.includes(title) || title.includes(normalized));
     });
     const embeddedDocs = properties
       .filter((property) => {
+        if (propertyId && property.id === propertyId) return true;
         const title = `${property.title ?? ''}`.trim().toLowerCase();
         return title && (normalized.includes(title) || title.includes(normalized));
       })
