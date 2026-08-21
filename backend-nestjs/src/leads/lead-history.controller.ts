@@ -13,8 +13,9 @@ export class LeadHistoryController {
   @Get()
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Get lead history' })
-  async getHistory(@Query('leadId') leadId: number) {
-    return this.leadsService.getHistory(leadId);
+  async getHistory(@Query('leadId') leadId: number, @Query('limit') limit?: string) {
+    const parsedLimit = limit ? Math.min(Math.max(1, parseInt(limit, 10) || 0), 200) : undefined;
+    return this.leadsService.getHistory(leadId, parsedLimit);
   }
 
   @Post()

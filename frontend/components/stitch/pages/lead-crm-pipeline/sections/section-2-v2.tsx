@@ -123,12 +123,14 @@ type Section2SectionProps = {
   onCreateLead: (values: LeadFormValues) => Promise<string | null>
   onPageChange: (page: number) => void
   onSearchChange: (value: string) => void
+  onSortOrderChange: (value: string) => void
   onStageFilterChange: (value: LeadListFilter) => void
   onSetLeadBoard: (leadId: number, inBoard: boolean) => Promise<void>
   onStageChange: (leadId: number, stage: LeadStage) => Promise<void>
   onUpdateLead: (leadId: number, values: LeadFormValues) => Promise<string | null>
   propertyOptions: PropertyItem[]
   searchTerm?: string
+  sortOrder: string
   stageFilter: LeadListFilter
   totalPages: number
   totalResults: number
@@ -156,12 +158,14 @@ export function Section2Section({
   onCreateLead,
   onPageChange,
   onSearchChange,
+  onSortOrderChange,
   onStageFilterChange,
   onSetLeadBoard,
   onStageChange,
   onUpdateLead,
   propertyOptions,
   searchTerm,
+  sortOrder,
   stageFilter,
   totalPages,
   totalResults,
@@ -405,22 +409,12 @@ export function Section2Section({
 
   const orderedLeads = useMemo(
     () =>
-      [...leads]
-        .filter((lead) =>
-          stageFilter === "all" ||
-          (stageFilter === "not-listed"
-            ? lead.propertyListingStatus === "NotListed"
-            : lead.stage === stageFilter),
-        )
-        .sort((left, right) => {
-          const leftDate = new Date(left.lastActivityAt ?? left.createdAt ?? 0).getTime()
-          const rightDate = new Date(right.lastActivityAt ?? right.createdAt ?? 0).getTime()
-          const dateDelta =
-            (Number.isFinite(rightDate) ? rightDate : 0) -
-            (Number.isFinite(leftDate) ? leftDate : 0)
-          if (dateDelta !== 0) return dateDelta
-          return right.id - left.id
-        }),
+      leads.filter((lead) =>
+        stageFilter === "all" ||
+        (stageFilter === "not-listed"
+          ? lead.propertyListingStatus === "NotListed"
+          : lead.stage === stageFilter),
+      ),
     [leads, stageFilter],
   )
 
@@ -711,7 +705,16 @@ export function Section2Section({
           </div>
         ) : (
           <section className="overflow-hidden rounded-[24px] bg-white shadow-[var(--shadow-surface-1)]">
-            <div className="flex justify-end px-5 py-5 sm:px-6">
+            <div className="flex items-center gap-3 px-5 py-5 sm:px-6">
+              <Select onValueChange={(value) => onSortOrderChange(value ?? "newest")} value={sortOrder}>
+                <SelectTrigger className="h-10 w-full rounded-lg border-0 bg-[var(--ether-surface-container-low)] px-4 font-semibold shadow-none sm:w-44"><SelectValue placeholder="Sort by" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="newest">Newest first</SelectItem>
+                  <SelectItem value="oldest">Oldest first</SelectItem>
+                  <SelectItem value="name-asc">Name A → Z</SelectItem>
+                  <SelectItem value="name-desc">Name Z → A</SelectItem>
+                </SelectContent>
+              </Select>
               <Select onValueChange={(value) => onStageFilterChange((value ?? "all") as LeadListFilter)} value={stageFilter}>
                 <SelectTrigger className="h-10 w-full rounded-lg border-0 bg-[var(--ether-surface-container-low)] px-4 font-semibold shadow-none sm:w-48"><SelectValue placeholder="Filter by stage" /></SelectTrigger>
                 <SelectContent>

@@ -312,10 +312,10 @@ export function useUpdateAgencyIntegrationSettings() {
   })
 }
 
-export function useLeadHistory(leadId?: number) {
+export function useLeadHistory(leadId?: number, limit?: number) {
   return useQueryWrapper<LeadHistoryEntry[]>(
-    ["lead-history", leadId],
-    `/lead-history${buildQuery({ leadId })}`,
+    ["lead-history", leadId, limit],
+    `/lead-history${buildQuery({ leadId, limit })}`,
     {
       ...defaultQueryOptions,
       enabled: Boolean(leadId),

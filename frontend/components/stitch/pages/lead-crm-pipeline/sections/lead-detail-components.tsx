@@ -259,7 +259,7 @@ export function LeadDetailsPanel({
   const sourceLabel = displayText(lead.source)
   const schedulingQuery = useSchedulingSettings()
   const workspaceTimeZone = schedulingQuery.data?.timeZone || "UTC"
-  const historyQuery = useLeadHistory(lead.id)
+  const historyQuery = useLeadHistory(lead.id, 10)
   const historyEntries = Array.isArray(historyQuery.data) ? historyQuery.data : []
   const happenedEntries = historyEntries
     .filter((entry) => entry.status !== "Scheduled")

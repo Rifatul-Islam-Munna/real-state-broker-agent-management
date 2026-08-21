@@ -88,6 +88,7 @@ export function LeadCrmPipelinePage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [dateFilter, setDateFilter] = useState("")
   const [stageFilter, setStageFilter] = useState<LeadListFilter>("all")
+  const [sortOrder, setSortOrder] = useState<string>("newest")
   const [page, setPage] = useState(1)
   const [localLeads, setLocalLeads] = useState<LeadItem[]>([])
   const [localBoardLeads, setLocalBoardLeads] = useState<LeadItem[]>([])
@@ -97,6 +98,9 @@ export function LeadCrmPipelinePage() {
   const searchParams = useSearchParams()
   const portalRoutes = getPortalRoutes(pathname)
   const view = searchParams.get("view")
+
+  const sortBy = sortOrder === "name-asc" || sortOrder === "name-desc" ? "name" : sortOrder === "oldest" ? "createdAt" : "lastActivityAt";
+  const sortDir = sortOrder === "name-asc" || sortOrder === "oldest" ? "asc" : "desc";
 
   const leadsQuery = useLeads({
     page,
@@ -109,6 +113,8 @@ export function LeadCrmPipelinePage() {
         : undefined,
     propertyListingStatus:
       stageFilter === "not-listed" ? "NotListed" : undefined,
+    sortBy,
+    sortOrder: sortDir,
   })
   const boardLeadsQuery = useLeads({
     page: 1,
@@ -404,11 +410,13 @@ export function LeadCrmPipelinePage() {
           setSearchTerm(value)
           setPage(1)
         }}
+        onSortOrderChange={setSortOrder}
         onStageFilterChange={(value) => {
           setStageFilter(value)
           setPage(1)
         }}
         searchTerm={searchTerm}
+        sortOrder={sortOrder}
         stageFilter={stageFilter}
         onCancelLead={handleCancelLead}
         onCommunicate={handleCommunicate}
