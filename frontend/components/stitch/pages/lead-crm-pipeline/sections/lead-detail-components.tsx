@@ -5,7 +5,6 @@ import { useState } from "react"
 
 import { AppIcon } from "@/components/ui/app-icon"
 import { type LeadItem, useLeadHistory } from "@/hooks/use-real-estate-api"
-import { useLeadOutreachSchedule } from "@/hooks/use-lead-outreach-api"
 import { useSchedulingSettings } from "@/hooks/use-scheduling-settings"
 import { formatDateTimeInZone } from "@/lib/time-zone"
 import { formatDateTimeLabel, formatLeadPriority, formatRelativeTimeLabel } from "@/lib/admin-portal"
@@ -262,15 +261,14 @@ export function LeadDetailsPanel({
   const workspaceTimeZone = schedulingQuery.data?.timeZone || "UTC"
   const historyQuery = useLeadHistory(lead.id)
   const historyEntries = Array.isArray(historyQuery.data) ? historyQuery.data : []
-  const happenedEntries = historyEntries.filter((entry) => entry.status !== "Scheduled")
+  const happenedEntries = historyEntries
+    .filter((entry) => entry.status !== "Scheduled")
+    .sort((left, right) => new Date(right.occurredAt ?? right.createdAt).getTime() - new Date(left.occurredAt ?? left.createdAt).getTime())
+    .slice(0, 3)
   const nextStepEntries = historyEntries
     .filter((entry) => entry.status === "Scheduled")
     .sort((left, right) => new Date(left.scheduledAt ?? left.createdAt).getTime() - new Date(right.scheduledAt ?? right.createdAt).getTime())
-  const outreachQuery = useLeadOutreachSchedule({ leadId: lead.id })
-  const replyEntries = (outreachQuery.data ?? [])
-    .filter((entry) => entry.direction === "Incoming" && entry.isReply)
-    .sort((left, right) => new Date(right.occurredAt ?? right.createdAt).getTime() - new Date(left.occurredAt ?? left.createdAt).getTime())
-    .slice(0, 3)
+
   const agentInitials = displayText(lead.agent, "NA")
     .split(" ")
     .filter(Boolean)
@@ -406,23 +404,12 @@ export function LeadDetailsPanel({
             <h3 className="ether-label-caps flex items-center gap-2 text-[10px] text-[var(--ether-outline)]"><AppIcon name="analytics" /> Notes & Activity Feed</h3>
             <div className="relative ml-3 mt-5 space-y-6 border-l border-[var(--ether-outline-variant)] pl-6">
               
-              {replyEntries.map((entry) => (
-                <ActivityItem
-                  actionHref={entry.kind === "Sms" ? `/dashboard/text-messages/${entry.id}` : undefined}
-                  actionLabel={entry.kind === "Sms" ? "Open conversation" : undefined}
-                  date={entry.occurredAt ?? entry.createdAt}
-                  timeZone={workspaceTimeZone}
-                  description={cleanFeedText(entry.body || entry.summary || "Reply received without message text.")}
-                  key={`reply-${entry.id}`}
-                  title={`${entry.kind === "Sms" ? "SMS" : "Email"} · Received reply`}
-                />
-              ))}
-              
-
-              {historyQuery.isLoading || outreachQuery.isLoading ? <p className="text-xs text-[var(--ether-outline)]">Loading history...</p> : null}
-              {historyQuery.error || outreachQuery.error ? <p className="text-xs font-semibold text-[var(--ether-error)]">{historyQuery.error?.message ?? outreachQuery.error?.message}</p> : null}
+              {historyQuery.isLoading ? <p className="text-xs text-[var(--ether-outline)]">Loading history...</p> : null}
+              {historyQuery.error ? <p className="text-xs font-semibold text-[var(--ether-error)]">{historyQuery.error?.message}</p> : null}
               {happenedEntries.map((entry) => (
                 <ActivityItem
+                  actionHref={entry.kind === "Sms" && entry.direction === "Incoming" ? `/dashboard/text-messages/${entry.id}` : undefined}
+                  actionLabel={entry.kind === "Sms" && entry.direction === "Incoming" ? "Open conversation" : undefined}
                   key={`${lead.id}-${entry.id}-${entry.createdAt}`}
                   title={activityTitle(entry.title, entry.status, entry.kind, entry.direction)}
                   description={activityDescription(entry, workspaceTimeZone)}
