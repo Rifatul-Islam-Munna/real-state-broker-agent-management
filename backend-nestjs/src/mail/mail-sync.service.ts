@@ -132,6 +132,35 @@ export class MailInboxSyncBackgroundService {
     return this.getSyncStatus();
   }
 
+  async syncRange(fromDate: Date, toDate: Date) {
+    if (this.isRunning) throw new Error('A sync is already running. Please wait and try again.');
+    const settings = await this.integrationRepo.findOne({ where: { id: 1 } });
+    const config = this.readMailConfig(settings?.smtpPayload);
+    if (!config) throw new Error('Mail is not configured.');
+    this.validateConfig(config);
+    this.isRunning = true;
+    this.lastTrigger = 'Range';
+    this.lastStartedAt = new Date();
+    this.lastError = null;
+    try {
+      const aiConfig = this.readAiConfig(settings?.aiProviderPayload);
+      const result = await this.syncInbox(config, aiConfig, { fromDate, toDate });
+      this.lastImportedCount = result.importedCount;
+      this.lastMatchedLeadCount = result.matchedLeadCount;
+      this.lastCreatedLeadCount = result.createdLeadCount;
+      this.lastSkippedCount = result.skippedCount;
+      this.lastCompletedAt = new Date();
+      this.lastSucceededAt = this.lastCompletedAt;
+      return { ...result, fromDate, toDate };
+    } catch (error) {
+      this.lastCompletedAt = new Date();
+      this.lastError = this.errorMessage(error);
+      throw error;
+    } finally {
+      this.isRunning = false;
+    }
+  }
+
   async getSyncStatus() {
     const settings = await this.integrationRepo.findOne({ where: { id: 1 } });
     const config = this.readMailConfig(settings?.smtpPayload);
@@ -202,9 +231,9 @@ export class MailInboxSyncBackgroundService {
     }
   }
 
-  private async syncInbox(config: MailProviderConfig, aiConfig: AiProviderConfig | null): Promise<SyncRunResult> {
+  private async syncInbox(config: MailProviderConfig, aiConfig: AiProviderConfig | null, dateRange?: { fromDate: Date; toDate: Date }): Promise<SyncRunResult> {
     this.validateConfig(config);
-    if (config.authType === 'gmail-oauth') return this.syncGmailInbox(config, aiConfig);
+    if (config.authType === 'gmail-oauth') return this.syncGmailInbox(config, aiConfig, dateRange);
     const result: SyncRunResult = {
       importedCount: 0,
       matchedLeadCount: 0,
@@ -230,18 +259,22 @@ export class MailInboxSyncBackgroundService {
       await client.connect();
       const lock = await client.getMailboxLock(config.imapFolder, { description: 'mail-inbox-sync' });
       try {
-        const candidates = await client.search(
-          config.lastSuccessfulScanAt ? { since: new Date(config.lastSuccessfulScanAt) } : { seen: false },
-          { uid: true },
-        );
+        const imapSearchQuery = dateRange
+          ? { since: dateRange.fromDate }
+          : config.lastSuccessfulScanAt
+            ? { since: new Date(config.lastSuccessfulScanAt) }
+            : { seen: false };
+        const candidates = await client.search(imapSearchQuery, { uid: true });
         const uids = (candidates || []).slice(-config.maxMessagesPerSync);
         const messages = uids.length
           ? await client.fetchAll(uids, { uid: true, source: true, internalDate: true }, { uid: true })
           : [];
 
-        const cursorTime = config.lastSuccessfulScanAt ? new Date(config.lastSuccessfulScanAt).getTime() : null;
+        const cursorTime = !dateRange && config.lastSuccessfulScanAt ? new Date(config.lastSuccessfulScanAt).getTime() : null;
         for (const message of messages) {
-          if (cursorTime && message.internalDate && new Date(message.internalDate).getTime() <= cursorTime) continue;
+          const msgTime = message.internalDate ? new Date(message.internalDate).getTime() : null;
+          if (dateRange && msgTime && msgTime > dateRange.toDate.getTime()) continue;
+          if (!dateRange && cursorTime && msgTime && msgTime <= cursorTime) continue;
           if (!message.source || !message.uid) {
             result.skippedCount++;
             continue;
@@ -298,19 +331,19 @@ export class MailInboxSyncBackgroundService {
     return result;
   }
 
-  private async syncGmailInbox(config: MailProviderConfig, aiConfig: AiProviderConfig | null): Promise<SyncRunResult> {
+  private async syncGmailInbox(config: MailProviderConfig, aiConfig: AiProviderConfig | null, dateRange?: { fromDate: Date; toDate: Date }): Promise<SyncRunResult> {
     const result: SyncRunResult = { importedCount: 0, matchedLeadCount: 0, createdLeadCount: 0, skippedCount: 0 };
     const properties = await this.propertyRepo.find({ relations: ['agent'], order: { updatedAt: 'DESC' } });
     const accessToken = await this.getGmailAccessToken(config);
     const labels = config.gmailLabelIds.length ? config.gmailLabelIds : ['INBOX'];
     const listUrl = new URL('https://gmail.googleapis.com/gmail/v1/users/me/messages');
     listUrl.searchParams.set('maxResults', String(config.maxMessagesPerSync));
-    listUrl.searchParams.set(
-      'q',
-      config.lastSuccessfulScanAt
+    const gmailQ = dateRange
+      ? `after:${Math.floor(dateRange.fromDate.getTime() / 1000)} before:${Math.floor(dateRange.toDate.getTime() / 1000)}`
+      : config.lastSuccessfulScanAt
         ? `after:${Math.floor(new Date(config.lastSuccessfulScanAt).getTime() / 1000)}`
-        : 'is:unread',
-    );
+        : 'is:unread';
+    listUrl.searchParams.set('q', gmailQ);
     for (const label of labels) listUrl.searchParams.append('labelIds', label);
     const listResponse = await fetch(listUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
     if (!listResponse.ok) throw new Error(`Gmail list failed: ${listResponse.status} ${await this.safeErrorBody(listResponse)}`);
@@ -341,6 +374,14 @@ export class MailInboxSyncBackgroundService {
         mailboxTag: config.mailboxTag || 'gmail',
         receivedAt: parsed.date ?? new Date(Number(message.internalDate || Date.now())),
       };
+      // For range sync, filter out messages outside the toDate boundary
+      if (dateRange) {
+        const t = inbound.receivedAt.getTime();
+        if (t < dateRange.fromDate.getTime() || t > dateRange.toDate.getTime()) {
+          result.skippedCount++;
+          continue;
+        }
+      }
       if (!inbound.senderEmail || (!inbound.subject && !inbound.body)) {
         result.skippedCount++;
         if (config.markAsReadAfterSync) await this.markGmailRead(id, accessToken);
@@ -717,6 +758,9 @@ export class MailInboxSyncBackgroundService {
       'property', 'listing', 'apartment', 'flat', 'house', 'home', 'condo',
       'commercial', 'land', 'plot', 'office', 'shop', 'rent', 'buy', 'sale',
       'showing', 'viewing', 'bedroom', 'bathroom', 'real estate',
+      'inquiry', 'enquiry', 'interested', 'available', 'availability',
+      'price', 'unit', 'lease', 'tour', 'move', 'sqft', 'square feet',
+      'floor plan', 'mortgage', 'contact', 'schedule', 'visit', 'purchase',
     ].some((keyword) => text.includes(keyword));
   }
 

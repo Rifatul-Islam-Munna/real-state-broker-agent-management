@@ -39,6 +39,7 @@ import {
   useMailInboxItem,
   useMailInboxSyncStatus,
   useRunMailInboxSync,
+  useRunMailInboxSyncRange,
   useSendMailMessage,
   useUpdateMailInboxItem,
 } from "@/hooks/use-real-estate-api"
@@ -114,6 +115,10 @@ function ProfessionalMailWorkspace({ initialMailId }: { initialMailId?: number }
   const documentsQuery = useDocumentRepository({ page: 1, pageSize: 300 })
   const pdfQuery = usePdfTemplates({ page: 1, pageSize: 200, isActive: true })
   const syncMutation = useRunMailInboxSync()
+  const syncRangeMutation = useRunMailInboxSyncRange()
+  const [rangeFrom, setRangeFrom] = useState("")
+  const [rangeTo, setRangeTo] = useState("")
+  const [rangeResult, setRangeResult] = useState<string | null>(null)
   const sendMutation = useSendMailMessage()
   const createInboxMutation = useCreateMailInboxItem()
   const updateMailMutation = useUpdateMailInboxItem()
@@ -384,6 +389,61 @@ function ProfessionalMailWorkspace({ initialMailId }: { initialMailId?: number }
                 <AppIcon name="sync" />
                 {syncMutation.isPending ? "Syncing" : "Sync now"}
               </Button>
+              <div className="mt-3 space-y-2 border-t pt-3">
+                <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Sync by date range</p>
+                <div className="grid grid-cols-2 gap-1">
+                  <div>
+                    <label className="mb-1 block text-[10px] text-muted-foreground">From</label>
+                    <input
+                      className="w-full rounded-lg border bg-background px-2 py-1 text-[11px] focus:outline-none focus:ring-1 focus:ring-ring"
+                      max={rangeTo || undefined}
+                      onChange={(e) => setRangeFrom(e.target.value)}
+                      type="datetime-local"
+                      value={rangeFrom}
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-[10px] text-muted-foreground">To</label>
+                    <input
+                      className="w-full rounded-lg border bg-background px-2 py-1 text-[11px] focus:outline-none focus:ring-1 focus:ring-ring"
+                      min={rangeFrom || undefined}
+                      onChange={(e) => setRangeTo(e.target.value)}
+                      type="datetime-local"
+                      value={rangeTo}
+                    />
+                  </div>
+                </div>
+                <Button
+                  className="w-full"
+                  disabled={
+                    syncRangeMutation.isPending ||
+                    syncStatusQuery.data?.isRunning ||
+                    !syncStatusQuery.data?.isConfigured ||
+                    !rangeFrom ||
+                    !rangeTo
+                  }
+                  onClick={async () => {
+                    setRangeResult(null)
+                    const res = await syncRangeMutation.mutateAsync({
+                      fromDate: new Date(rangeFrom).toISOString(),
+                      toDate: new Date(rangeTo).toISOString(),
+                    })
+                    if (res.data) {
+                      setRangeResult(`✓ ${res.data.importedCount} imported, ${res.data.skippedCount} skipped`)
+                    } else if (res.error) {
+                      setRangeResult(`✗ ${res.error.message}`)
+                    }
+                  }}
+                  size="sm"
+                  variant="outline"
+                >
+                  <AppIcon name="date_range" />
+                  {syncRangeMutation.isPending ? "Syncing range..." : "Sync range"}
+                </Button>
+                {rangeResult ? (
+                  <p className={`text-[10px] ${rangeResult.startsWith("✓") ? "text-emerald-600" : "text-destructive"}`}>{rangeResult}</p>
+                ) : null}
+              </div>
             </div>
             <Button
               className="w-full justify-start"

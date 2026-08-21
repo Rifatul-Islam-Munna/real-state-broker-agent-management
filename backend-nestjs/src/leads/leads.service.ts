@@ -166,6 +166,8 @@ export class LeadsService {
     const nextActionDate = dto.nextActionDate ? new Date(dto.nextActionDate) : null;
     const settings = await this.settingsService.getAdminSettings();
     const defaultPhoneCountry = settings.profile?.defaultPhoneCountry ?? 'US';
+    // NOTE: do NOT set lastActivityAt here — that field is owned by mail-sync and history writes.
+    // Overwriting it on every form save would destroy the email-date-based sort order.
     return {
       ...dto,
       name: `${dto.name ?? ''}`.trim(),
@@ -186,7 +188,6 @@ export class LeadsService {
       nextActionDate,
       nextActionType: `${dto.nextActionType ?? ''}`.trim() || (nextActionDate ? 'Follow up' : ''),
       notes: Array.isArray(dto.notes) ? dto.notes : [],
-      lastActivityAt: new Date(),
     };
   }
 

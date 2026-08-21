@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Delete, Body, Query, UseGuards, Patch, HttpCode } from '@nestjs/common';
+import { BadRequestException, Controller, Get, Post, Delete, Body, Query, UseGuards, Patch, HttpCode } from '@nestjs/common';
 import { MailService } from './mail.service';
 import { MailInboxSyncBackgroundService } from './mail-sync.service';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
@@ -43,6 +43,19 @@ export class MailController {
     return this.syncService.sync();
   }
 
+  @Post('sync-range')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Sync mail within a specific date/time range' })
+  async syncRange(@Body() dto: { fromDate: string; toDate: string }) {
+    const fromDate = new Date(dto.fromDate);
+    const toDate = new Date(dto.toDate);
+    if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) {
+      throw new BadRequestException('fromDate and toDate must be valid ISO date strings.');
+    }
+    if (fromDate >= toDate) throw new BadRequestException('fromDate must be before toDate.');
+    return this.syncService.syncRange(fromDate, toDate);
+  }
+
   @Post('convert-to-lead')
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Convert mail to lead' })
@@ -60,7 +73,7 @@ export class MailController {
   @Post()
   @ApiOperation({ summary: 'Create mail item' })
   async create(@Body() dto: any) {
-      return this.mailService.create(dto);
+    return this.mailService.create(dto);
   }
 
   @Patch()
