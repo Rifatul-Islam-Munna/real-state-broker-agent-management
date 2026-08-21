@@ -410,7 +410,10 @@ export function LeadCrmPipelinePage() {
           setSearchTerm(value)
           setPage(1)
         }}
-        onSortOrderChange={setSortOrder}
+        onSortOrderChange={(value) => {
+          setSortOrder(value)
+          setPage(1)
+        }}
         onStageFilterChange={(value) => {
           setStageFilter(value)
           setPage(1)

@@ -259,12 +259,16 @@ export function LeadDetailsPanel({
   const sourceLabel = displayText(lead.source)
   const schedulingQuery = useSchedulingSettings()
   const workspaceTimeZone = schedulingQuery.data?.timeZone || "UTC"
-  const historyQuery = useLeadHistory(lead.id, 10)
+  const historyQuery = useLeadHistory(lead.id, 50)
   const historyEntries = Array.isArray(historyQuery.data) ? historyQuery.data : []
-  const happenedEntries = historyEntries
-    .filter((entry) => entry.status !== "Scheduled")
-    .sort((left, right) => new Date(right.occurredAt ?? right.createdAt).getTime() - new Date(left.occurredAt ?? left.createdAt).getTime())
-    .slice(0, 3)
+  const happenedEntries = (() => {
+    const nonScheduled = historyEntries
+      .filter((entry) => entry.status !== "Scheduled")
+      .sort((left, right) => new Date(right.occurredAt ?? right.createdAt).getTime() - new Date(left.occurredAt ?? left.createdAt).getTime())
+    const smsEntries = nonScheduled.filter((entry) => entry.kind === "Sms").slice(0, 3)
+    const otherEntries = nonScheduled.filter((entry) => entry.kind !== "Sms")
+    return [...smsEntries, ...otherEntries]
+  })()
   const nextStepEntries = historyEntries
     .filter((entry) => entry.status === "Scheduled")
     .sort((left, right) => new Date(left.scheduledAt ?? left.createdAt).getTime() - new Date(right.scheduledAt ?? right.createdAt).getTime())

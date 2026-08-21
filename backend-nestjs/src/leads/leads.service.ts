@@ -133,13 +133,14 @@ export class LeadsService {
     return lead ? this.mapLead(lead) : null;
   }
 
-  async getHistory(leadId: number, limit?: number) {
+  async getHistory(leadId: number, limit?: number, excludeStatus?: string[]) {
     const [stored, mail, contacts] = await Promise.all([this.historyRepository.find({ where: { leadId } }), this.mailRepository.find({ where: { leadId } }), this.contactRepository.find({ where: { leadId } })]);
-    const sorted = [
+    let sorted = [
       ...stored.map((item) => this.mapHistory(item)),
       ...mail.map((item) => ({ id: -item.id, leadId, kind: 'MailInbox', direction: 'Incoming', status: String(item.status) === 'Replied' ? 'Completed' : 'Received', title: item.subject || 'Incoming email', summary: item.subject || 'Inbound email linked to this lead.', body: item.message, provider: 'Mail Inbox', createdBy: item.name || item.email, scheduledAt: null, occurredAt: item.createdAt, createdAt: item.createdAt, updatedAt: item.updatedAt })),
       ...contacts.map((item) => ({ id: -(100000 + item.id), leadId, kind: 'ContactForm', direction: 'Incoming', status: 'Received', title: item.inquiryType || 'Contact form inquiry', summary: item.message || 'Contact form inquiry linked to this lead.', body: item.message, provider: 'Contact Form', createdBy: item.name || item.email, scheduledAt: null, occurredAt: item.createdAt, createdAt: item.createdAt, updatedAt: item.updatedAt })),
     ].sort((a, b) => Number(new Date(b.scheduledAt ?? b.occurredAt ?? b.createdAt)) - Number(new Date(a.scheduledAt ?? a.occurredAt ?? a.createdAt)) || Math.abs(b.id) - Math.abs(a.id));
+    if (excludeStatus?.length) sorted = sorted.filter((entry) => !excludeStatus.includes(entry.status));
     return limit ? sorted.slice(0, limit) : sorted;
   }
 
