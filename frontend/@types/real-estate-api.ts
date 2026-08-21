@@ -836,6 +836,7 @@ export type LeadItem = {
   createdAt: string
   updatedAt: string
   lastActivityAt: string
+  latestEmailAt?: string | null
   linkedDealId?: number | null
   linkedDealTitle?: string | null
 }

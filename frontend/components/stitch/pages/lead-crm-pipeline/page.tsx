@@ -99,7 +99,7 @@ export function LeadCrmPipelinePage() {
   const portalRoutes = getPortalRoutes(pathname)
   const view = searchParams.get("view")
 
-  const sortBy = sortOrder === "name-asc" || sortOrder === "name-desc" ? "name" : "lastActivityAt";
+  const sortBy = sortOrder === "name-asc" || sortOrder === "name-desc" ? "name" : "latestEmailAt";
   const sortDir = sortOrder === "name-asc" || sortOrder === "oldest" ? "asc" : "desc";
 
   const leadsQuery = useLeads({

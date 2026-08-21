@@ -1,4 +1,5 @@
-﻿import {
+import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -93,6 +94,16 @@ export class TenantInboxController {
   @Post('sync')
   sync(@Req() req: any) {
     return this.inbox.syncTenant(req.tenant, true);
+  }
+
+  @Post('sync-range')
+  syncRange(@Req() req: any, @Body() body: any) {
+    const fromDate = new Date(body?.fromDate);
+    const toDate = new Date(body?.toDate);
+    if (Number.isNaN(fromDate.getTime()) || Number.isNaN(toDate.getTime()) || fromDate >= toDate) {
+      throw new BadRequestException('A valid fromDate before toDate is required.');
+    }
+    return this.inbox.syncTenantRange(req.tenant, fromDate, toDate);
   }
 
   private actor(user: any) {

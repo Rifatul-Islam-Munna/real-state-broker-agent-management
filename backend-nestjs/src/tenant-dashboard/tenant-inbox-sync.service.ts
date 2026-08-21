@@ -204,6 +204,36 @@ export class TenantInboxSyncService {
     };
   }
 
+  async syncTenantRange(tenant: SaasTenant, fromDate: Date, toDate: Date) {
+    const databaseName = this.databaseName(tenant);
+    const config: any = await this.settings.getRawSmtp(tenant);
+    if (!config?.enableInboxSync) {
+      throw new Error('Tenant inbox sync is disabled.');
+    }
+    const range = { from: fromDate.getTime(), to: toDate.getTime() };
+    const authType = this.text(config.authType).toLowerCase();
+    const stats = authType === 'gmail-oauth' || config.gmailRefreshToken
+      ? await this.syncGmail(databaseName, config, tenant, false, range)
+      : await this.syncImap(databaseName, config, false, range);
+    const recovered = await this.recoverStoredInboundEmailsInRange(
+      tenant,
+      config,
+      fromDate,
+      toDate,
+    );
+    await this.removeInvalidAutoCreatedLeads(tenant);
+    await this.linkMissingLeadProperties(tenant);
+    await this.fixMissingLeadNames(tenant);
+    return {
+      importedCount: stats.imported,
+      matchedLeadCount: stats.matched + recovered.converted,
+      createdLeadCount: stats.created,
+      skippedCount: stats.skipped,
+      fromDate: fromDate.toISOString(),
+      toDate: toDate.toISOString(),
+    };
+  }
+
   async getStatus(tenant: SaasTenant) {
     const config: any = await this.settings.getRawSmtp(tenant);
     const authType = this.text(config?.authType).toLowerCase();
@@ -313,23 +343,34 @@ export class TenantInboxSyncService {
     config: any,
     tenant: SaasTenant,
     fullWindow = false,
+    dateRange?: { from: number; to: number },
   ) {
     const providerKey = `gmail:${this.text(config.gmailEmail, config.username)}`;
     const stats = this.emptyStats();
     const scanStartedAt = Date.now();
-    await this.markStarted(databaseName, providerKey);
+    if (!dateRange) await this.markStarted(databaseName, providerKey);
     try {
       const accessToken = await this.gmailAccessToken(databaseName, config, tenant);
       const maxMessages = this.clamp(config.maxMessagesPerSync, 100, 5, 500);
-      const lastScan = fullWindow
-        ? 0
-        : await this.lastSuccessfulScan(databaseName);
-      const selectedMessages = await this.gmailMessagesForConfiguredTags(
-        accessToken,
-        config.mailboxTag,
-        maxMessages,
-        lastScan,
-      );
+      const lastScan = dateRange
+        ? dateRange.from
+        : fullWindow
+          ? 0
+          : await this.lastSuccessfulScan(databaseName);
+      const selectedMessages = dateRange
+        ? await this.gmailMessagesForConfiguredTags(
+            accessToken,
+            config.mailboxTag,
+            maxMessages,
+            lastScan,
+            dateRange.to,
+          )
+        : await this.gmailMessagesForConfiguredTags(
+            accessToken,
+            config.mailboxTag,
+            maxMessages,
+            lastScan,
+          );
       let processingError: unknown = null;
       for (const selected of [...selectedMessages].reverse()) {
         try {
@@ -379,25 +420,27 @@ export class TenantInboxSyncService {
           })}`);
         }
       }
-      await this.markCompleted(
-        databaseName,
-        providerKey,
-        selectedMessages[0]?.id ?? null,
-        stats,
-        this.clamp(config.syncIntervalMinutes, 5, 1, 720) || 5,
-        processingError
-          ? lastScan || scanStartedAt - 14 * 24 * 60 * 60_000
-          : scanStartedAt - 60_000,
-      ).catch((error) => {
-        this.logger.warn(`Mailbox sync completion save failed ${JSON.stringify({
+      if (!dateRange) {
+        await this.markCompleted(
           databaseName,
-          error: this.message(error),
-        })}`);
-      });
+          providerKey,
+          selectedMessages[0]?.id ?? null,
+          stats,
+          this.clamp(config.syncIntervalMinutes, 5, 1, 720) || 5,
+          processingError
+            ? lastScan || scanStartedAt - 14 * 24 * 60 * 60_000
+            : scanStartedAt - 60_000,
+        ).catch((error) => {
+          this.logger.warn(`Mailbox sync completion save failed ${JSON.stringify({
+            databaseName,
+            error: this.message(error),
+          })}`);
+        });
+      }
       this.logger.log(`Mailbox sync ${databaseName}: ${JSON.stringify(stats)}`);
       return stats;
     } catch (error) {
-      await this.markFailed(databaseName, providerKey, error);
+      if (!dateRange) await this.markFailed(databaseName, providerKey, error);
       throw error;
     }
   }
@@ -407,8 +450,8 @@ export class TenantInboxSyncService {
     configuredTags: unknown,
     pageSize: number,
     lastScan = 0,
+    scanEndedAt = Date.now(),
   ) {
-    const scanStartedAt = Date.now();
     const requestedTags = this.syncTags(configuredTags, 'gmail');
     if (!requestedTags.length) {
       return this.listGmailMessagesForLabel(
@@ -417,7 +460,7 @@ export class TenantInboxSyncService {
         'gmail',
         pageSize,
         lastScan,
-        scanStartedAt,
+        scanEndedAt,
       );
     }
 
@@ -445,7 +488,7 @@ export class TenantInboxSyncService {
         labelName,
         pageSize,
         lastScan,
-        scanStartedAt,
+        scanEndedAt,
       );
       for (const message of messages) {
         if (!selected.has(message.id)) selected.set(message.id, message);
@@ -486,11 +529,11 @@ export class TenantInboxSyncService {
     return ids;
   }
 
-  private async syncImap(databaseName: string, config: any, fullWindow = false) {
+  private async syncImap(databaseName: string, config: any, fullWindow = false, dateRange?: { from: number; to: number }) {
     const providerKey = `imap:${this.text(config.mailboxTag, config.imapUsername ?? config.username)}`;
     const stats = this.emptyStats();
     const scanStartedAt = Date.now();
-    await this.markStarted(databaseName, providerKey);
+    if (!dateRange) await this.markStarted(databaseName, providerKey);
     let connection: any;
     try {
       const { host, user, pass } = this.imapConnectionConfig(config);
@@ -509,9 +552,11 @@ export class TenantInboxSyncService {
       await connection.connect();
       const lock = await connection.getMailboxLock(this.text(config.imapFolder, 'INBOX'));
       try {
-        const lastScan = fullWindow
-          ? 0
-          : await this.lastSuccessfulScan(databaseName);
+        const lastScan = dateRange
+          ? dateRange.from
+          : fullWindow
+            ? 0
+            : await this.lastSuccessfulScan(databaseName);
         const since = lastScan > 0
           ? new Date(lastScan)
           : new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
@@ -541,6 +586,7 @@ export class TenantInboxSyncService {
               const mailboxTag = this.matchImapTag(item.flags, syncTags) || 'imap';
               const received = item.internalDate ?? parsed.date ?? null;
               const receivedAt = received ? new Date(received) : new Date();
+              if (dateRange && receivedAt.getTime() > dateRange.to) continue;
               this.addStats(stats, await this.storeInbound(databaseName, {
                 channel: 'email',
                 providerKey,
@@ -572,28 +618,30 @@ export class TenantInboxSyncService {
             }
           }
         }
-        await this.markCompleted(
-          databaseName,
-          providerKey,
-          selected.length ? `${selected[selected.length - 1]}` : null,
-          stats,
-          this.clamp(config.syncIntervalMinutes, 5, 1, 720) || 5,
-          processingError
-            ? lastScan || scanStartedAt - 14 * 24 * 60 * 60_000
-            : scanStartedAt - 60_000,
-        ).catch((error) => {
-          this.logger.warn(`Mailbox sync completion save failed ${JSON.stringify({
+        if (!dateRange) {
+          await this.markCompleted(
             databaseName,
-            error: this.message(error),
-          })}`);
-        });
+            providerKey,
+            selected.length ? `${selected[selected.length - 1]}` : null,
+            stats,
+            this.clamp(config.syncIntervalMinutes, 5, 1, 720) || 5,
+            processingError
+              ? lastScan || scanStartedAt - 14 * 24 * 60 * 60_000
+              : scanStartedAt - 60_000,
+          ).catch((error) => {
+            this.logger.warn(`Mailbox sync completion save failed ${JSON.stringify({
+              databaseName,
+              error: this.message(error),
+            })}`);
+          });
+        }
         this.logger.log(`Mailbox sync ${databaseName}: ${JSON.stringify(stats)}`);
         return stats;
       } finally {
         lock.release();
       }
     } catch (error) {
-      await this.markFailed(databaseName, providerKey, error);
+      if (!dateRange) await this.markFailed(databaseName, providerKey, error);
       throw error;
     } finally {
       if (connection) await connection.logout().catch(() => undefined);
@@ -958,6 +1006,38 @@ export class TenantInboxSyncService {
         }
       },
     );
+  }
+
+  private async recoverStoredInboundEmailsInRange(
+    tenant: SaasTenant,
+    config: any,
+    fromDate: Date,
+    toDate: Date,
+  ) {
+    if (config?.autoCreateLeads === false) return { scanned: 0, converted: 0 };
+    const databaseName = this.databaseName(tenant);
+    const ids = await this.databases.withTenantClient(databaseName, async (client) => {
+      const result = await client.query(
+        `SELECT id
+         FROM tenant_outreach_job
+         WHERE channel = 'Email'
+           AND direction = 'Incoming'
+           AND source_type = 'mail-inbox'
+           AND lead_id IS NULL
+           AND COALESCE(occurred_at, created_at) >= $1
+           AND COALESCE(occurred_at, created_at) <= $2
+         ORDER BY COALESCE(occurred_at, created_at) ASC, id ASC`,
+        [fromDate, toDate],
+      );
+      return result.rows.map((row: any) => Number(row.id)).filter((id: number) => id > 0);
+    });
+    let converted = 0;
+    for (const id of ids) {
+      const lead = await this.convertStoredEmailWithTemplate(tenant, id);
+      if (lead) converted += 1;
+    }
+    this.logger.log(`Range lead recovery ${databaseName}: ${JSON.stringify({ scanned: ids.length, converted })}`);
+    return { scanned: ids.length, converted };
   }
 
   private async recoverSkippedInboundEmails(tenant: SaasTenant, config: any) {
@@ -1675,14 +1755,6 @@ export class TenantInboxSyncService {
          AND COALESCE(payload->>'isActive', 'false') = 'true'
        ORDER BY updated_at DESC, id DESC`,
     );
-    if (!savedTemplates.rowCount) {
-      return {
-        lead: null,
-        created: false,
-        result: this.parserFailure('No active lead parser is configured.'),
-      };
-    }
-
     const templates = savedTemplates.rows
       .map((row: any) => {
       const saved = row.payload && typeof row.payload === 'object' ? row.payload : {};
@@ -1719,9 +1791,16 @@ export class TenantInboxSyncService {
       textBody: this.text(input.body),
       mailboxTag: this.text(input.mailboxTag),
     };
+    if (!templates.length) {
+      return {
+        lead: null,
+        created: false,
+        result: this.parserFailure('No active lead parser is configured.'),
+      };
+    }
     let result = parseLeadCollectionTemplates(templates, emailInput);
-    let template = templates.find((item: any) => item.id === result.templateId);
-    if (!template || !result.matched) {
+    const template = templates.find((item: any) => item.id === result.templateId);
+    if (!result.matched || !template) {
       return { lead: null, created: false, result };
     } else {
       const linkedConfig = normalizeLinkedPageConfig(template.linkedPageConfig);
@@ -1735,11 +1814,10 @@ export class TenantInboxSyncService {
         }
       }
     }
-    if (
-      !result.matched ||
-      result.missingRequiredFields.length > 0 ||
-      result.confidence < result.threshold
-    ) {
+    // A structurally matched saved template is authoritative for inbox automation.
+    // This mirrors the working pre-regression flow: the template test and live sync
+    // use the same matcher/extractor, and confidence only describes extraction quality.
+    if (!result.matched) {
       return { lead: null, created: false, result };
     }
 
@@ -1885,6 +1963,45 @@ export class TenantInboxSyncService {
         confidence: parserResult.confidence,
         extractedFields: parserResult.extractedFields,
       },
+    };
+  }
+
+  private genericLeadParseResult(input: {
+    fromAddress: string;
+    subject: string;
+    htmlBody?: string;
+    textBody?: string;
+    mailboxTag?: string;
+  }, reason = 'No saved lead parser matched this email.') {
+    const basics = extractLeadBasicsFromEmail(input);
+    const name = sanitizeLeadName(basics.name, input.subject);
+    const email = basics.email && !isProviderSenderAddress(basics.email) ? basics.email : '';
+    const phone = basics.phone || '';
+    const text = `${input.subject}
+${input.textBody ?? ''}`.toLowerCase();
+    const highIntent = [
+      'new lead', 'lead -', 'lead:', 'inquiry', 'enquiry', 'interested in',
+      'requesting an application', 'requested an application', 'application request',
+      'would like to', 'wants to', 'schedule a tour', 'contact request', 'courtesy lead',
+    ].some((phrase) => text.includes(phrase));
+    const hasIdentity = Boolean(name || email || phone);
+    const values: Record<string, string> = {};
+    if (name) values.name = name;
+    if (email) values.email = email;
+    if (phone) values.phone = phone;
+    const matched = highIntent && hasIdentity;
+    return {
+      matched,
+      templateId: null,
+      templateName: matched ? 'Automatic email fallback' : '',
+      matchScore: matched ? 0.72 : 0,
+      confidence: matched ? 0.72 : 0,
+      threshold: 0.55,
+      values,
+      missingRequiredFields: [],
+      extractedFields: Object.keys(values),
+      diagnostics: [matched ? `fallback-parser: ${reason}` : reason],
+      scopeMatched: false,
     };
   }
 

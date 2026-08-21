@@ -257,14 +257,19 @@ export class TenantLegacyCompatibilityService {
     const items = rows.map((row: any) => this.leadItem(row));
     if (query?.id) return items.find((item: any) => item.id === Number(query.id)) ?? null;
     const filtered = this.filter(items, query);
+    const sortBy = `${query?.sortBy ?? "latestEmailAt"}`.trim().toLowerCase();
+    const direction = `${query?.sortOrder ?? "desc"}`.toLowerCase() === "asc" ? 1 : -1;
     filtered.sort((left: any, right: any) => {
-      const leftDate = new Date(left?.lastActivityAt ?? left?.createdAt ?? 0).getTime();
-      const rightDate = new Date(right?.lastActivityAt ?? right?.createdAt ?? 0).getTime();
-      const dateDelta =
-        (Number.isFinite(rightDate) ? rightDate : 0) -
-        (Number.isFinite(leftDate) ? leftDate : 0);
-      if (dateDelta !== 0) return dateDelta;
-      return Number(right?.id ?? 0) - Number(left?.id ?? 0);
+      if (sortBy === "name") {
+        const nameDelta = `${left?.name ?? ""}`.localeCompare(`${right?.name ?? ""}`, undefined, { sensitivity: "base" });
+        if (nameDelta !== 0) return nameDelta * direction;
+      } else {
+        const leftDate = new Date(left?.latestEmailAt ?? left?.lastActivityAt ?? left?.createdAt ?? 0).getTime();
+        const rightDate = new Date(right?.latestEmailAt ?? right?.lastActivityAt ?? right?.createdAt ?? 0).getTime();
+        const dateDelta = (Number.isFinite(leftDate) ? leftDate : 0) - (Number.isFinite(rightDate) ? rightDate : 0);
+        if (dateDelta !== 0) return dateDelta * direction;
+      }
+      return (Number(left?.id ?? 0) - Number(right?.id ?? 0)) * direction;
     });
     return this.paginate(filtered, query);
   }
@@ -860,6 +865,7 @@ export class TenantLegacyCompatibilityService {
       linkedDealTitle: payload.linkedDealTitle ?? null,
       nextFollowUpAt: payload.nextFollowUpAt ?? null,
       lastActivityAt: payload.lastActivityAt ?? row.updated_at ?? row.updatedAt,
+      latestEmailAt: payload.latestEmailAt ?? null,
       isFollowUpOverdue: Boolean(payload.isFollowUpOverdue),
       createdAt: row.created_at ?? row.createdAt,
       updatedAt: row.updated_at ?? row.updatedAt,

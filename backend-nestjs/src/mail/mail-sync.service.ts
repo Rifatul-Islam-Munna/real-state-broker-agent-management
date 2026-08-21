@@ -144,22 +144,14 @@ export class MailInboxSyncBackgroundService {
     this.lastError = null;
     try {
       const aiConfig = this.readAiConfig(settings?.aiProviderPayload);
-      // forceReimport=true bypasses duplicate check so already-seen emails are re-processed
-      const result = await this.syncInbox(config, aiConfig, { fromDate, toDate, forceReimport: true });
+      const result = await this.syncInbox(config, aiConfig, { fromDate, toDate });
       this.lastImportedCount = result.importedCount;
       this.lastMatchedLeadCount = result.matchedLeadCount;
       this.lastCreatedLeadCount = result.createdLeadCount;
       this.lastSkippedCount = result.skippedCount;
       this.lastCompletedAt = new Date();
       this.lastSucceededAt = this.lastCompletedAt;
-      return {
-        importedCount: result.importedCount,
-        matchedLeadCount: result.matchedLeadCount,
-        createdLeadCount: result.createdLeadCount,
-        skippedCount: result.skippedCount,
-        fromDate: fromDate.toISOString(),
-        toDate: toDate.toISOString(),
-      };
+      return { ...result, fromDate, toDate };
     } catch (error) {
       this.lastCompletedAt = new Date();
       this.lastError = this.errorMessage(error);
@@ -239,7 +231,7 @@ export class MailInboxSyncBackgroundService {
     }
   }
 
-  private async syncInbox(config: MailProviderConfig, aiConfig: AiProviderConfig | null, dateRange?: { fromDate: Date; toDate: Date; forceReimport?: boolean }): Promise<SyncRunResult> {
+  private async syncInbox(config: MailProviderConfig, aiConfig: AiProviderConfig | null, dateRange?: { fromDate: Date; toDate: Date }): Promise<SyncRunResult> {
     this.validateConfig(config);
     if (config.authType === 'gmail-oauth') return this.syncGmailInbox(config, aiConfig, dateRange);
     const result: SyncRunResult = {
@@ -273,7 +265,6 @@ export class MailInboxSyncBackgroundService {
             ? { since: new Date(config.lastSuccessfulScanAt) }
             : { seen: false };
         const candidates = await client.search(imapSearchQuery, { uid: true });
-        // For range sync: fetch ALL matching emails (no limit). For regular sync: respect maxMessagesPerSync.
         const uids = dateRange ? (candidates || []) : (candidates || []).slice(-config.maxMessagesPerSync);
         const messages = uids.length
           ? await client.fetchAll(uids, { uid: true, source: true, internalDate: true }, { uid: true })
@@ -307,36 +298,12 @@ export class MailInboxSyncBackgroundService {
           if (!inbound.senderEmail || (!inbound.subject && !inbound.body)) {
             result.skippedCount++;
             if (config.markAsReadAfterSync) {
-          if (!dateRange && cursorTime && msgTime && msgTime <= cursorTime) continue;
-          if (!message.source || !message.uid) {
-            result.skippedCount++;
-            continue;
-          }
-
-          const parsed = await simpleParser(message.source, { skipImageLinks: true });
-          const sender = parsed.from?.value?.[0];
-          const inbound: InboundEmail = {
-            senderEmail: (sender?.address ?? '').trim().toLowerCase(),
-            senderName: (sender?.name ?? '').trim(),
-            subject: (parsed.subject ?? '').trim(),
-            body: (parsed.text ?? '').trim(),
-            htmlBody: typeof parsed.html === 'string' ? parsed.html : '',
-            messageId: `${parsed.messageId ?? ''}`.trim(),
-            inReplyTo: `${parsed.inReplyTo ?? ''}`.trim(),
-            references: this.normalizeReferences(parsed.references),
-            mailboxTag: config.mailboxTag,
-            receivedAt: parsed.date ?? this.toDate(message.internalDate) ?? new Date(),
-          };
-
-          if (!inbound.senderEmail || (!inbound.subject && !inbound.body)) {
-            result.skippedCount++;
-            if (config.markAsReadAfterSync) {
               await client.messageFlagsAdd(message.uid, ['\\Seen'], { uid: true });
             }
             continue;
           }
 
-          const saved = await this.saveInbound(inbound, properties, config, aiConfig, dateRange?.forceReimport);
+          const saved = await this.saveInbound(inbound, properties, config, aiConfig);
           if (saved.skipped) result.skippedCount++;
           else result.importedCount++;
           if (saved.matchedLead) result.matchedLeadCount++;
@@ -364,24 +331,31 @@ export class MailInboxSyncBackgroundService {
     return result;
   }
 
-  private async syncGmailInbox(config: MailProviderConfig, aiConfig: AiProviderConfig | null, dateRange?: { fromDate: Date; toDate: Date; forceReimport?: boolean }): Promise<SyncRunResult> {
+  private async syncGmailInbox(config: MailProviderConfig, aiConfig: AiProviderConfig | null, dateRange?: { fromDate: Date; toDate: Date }): Promise<SyncRunResult> {
     const result: SyncRunResult = { importedCount: 0, matchedLeadCount: 0, createdLeadCount: 0, skippedCount: 0 };
     const properties = await this.propertyRepo.find({ relations: ['agent'], order: { updatedAt: 'DESC' } });
     const accessToken = await this.getGmailAccessToken(config);
     const labels = config.gmailLabelIds.length ? config.gmailLabelIds : ['INBOX'];
-    const listUrl = new URL('https://gmail.googleapis.com/gmail/v1/users/me/messages');
-    listUrl.searchParams.set('maxResults', String(config.maxMessagesPerSync));
     const gmailQ = dateRange
       ? `after:${Math.floor(dateRange.fromDate.getTime() / 1000)} before:${Math.floor(dateRange.toDate.getTime() / 1000)}`
       : config.lastSuccessfulScanAt
         ? `after:${Math.floor(new Date(config.lastSuccessfulScanAt).getTime() / 1000)}`
         : 'is:unread';
-    listUrl.searchParams.set('q', gmailQ);
-    for (const label of labels) listUrl.searchParams.append('labelIds', label);
-    const listResponse = await fetch(listUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
-    if (!listResponse.ok) throw new Error(`Gmail list failed: ${listResponse.status} ${await this.safeErrorBody(listResponse)}`);
-    const list: any = await listResponse.json();
-    for (const item of list.messages ?? []) {
+    const messages: any[] = [];
+    let pageToken = '';
+    do {
+      const listUrl = new URL('https://gmail.googleapis.com/gmail/v1/users/me/messages');
+      listUrl.searchParams.set('maxResults', String(dateRange ? 100 : config.maxMessagesPerSync));
+      listUrl.searchParams.set('q', gmailQ);
+      for (const label of labels) listUrl.searchParams.append('labelIds', label);
+      if (pageToken) listUrl.searchParams.set('pageToken', pageToken);
+      const listResponse = await fetch(listUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
+      if (!listResponse.ok) throw new Error(`Gmail list failed: ${listResponse.status} ${await this.safeErrorBody(listResponse)}`);
+      const list: any = await listResponse.json();
+      messages.push(...(list.messages ?? []));
+      pageToken = dateRange ? `${list.nextPageToken ?? ''}`.trim() : '';
+    } while (pageToken);
+    for (const item of messages) {
       const id = `${item.id ?? ''}`.trim();
       if (!id) continue;
       const messageResponse = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}?format=raw`, {
@@ -420,7 +394,7 @@ export class MailInboxSyncBackgroundService {
         if (config.markAsReadAfterSync) await this.markGmailRead(id, accessToken);
         continue;
       }
-      const saved = await this.saveInbound(inbound, properties, config, aiConfig, dateRange?.forceReimport);
+      const saved = await this.saveInbound(inbound, properties, config, aiConfig);
       if (saved.skipped) result.skippedCount++;
       else result.importedCount++;
       if (saved.matchedLead) result.matchedLeadCount++;
@@ -430,7 +404,7 @@ export class MailInboxSyncBackgroundService {
     return result;
   }
 
-  private async saveInbound(inbound: InboundEmail, properties: Property[], config: MailProviderConfig, aiConfig: AiProviderConfig | null, forceReimport = false) {
+  private async saveInbound(inbound: InboundEmail, properties: Property[], config: MailProviderConfig, aiConfig: AiProviderConfig | null) {
     const templateResult = await this.leadCollectionTemplates.extractFromEmail({
       fromAddress: inbound.senderEmail,
       subject: inbound.subject,
@@ -456,7 +430,7 @@ export class MailInboxSyncBackgroundService {
       const mailRepo = manager.getRepository(MailInboxItem);
       const leadRepo = manager.getRepository(Lead);
       const historyRepo = manager.getRepository(LeadHistoryEntry);
-      if (!forceReimport && config.duplicatePolicy === 'skip-exact-message') {
+      if (config.duplicatePolicy === 'skip-exact-message') {
         const duplicate = await this.findDuplicate(mailRepo, inbound);
         if (duplicate) return { skipped: true, matchedLead: false, createdLead: false, leadId: null, mailId: null };
       }

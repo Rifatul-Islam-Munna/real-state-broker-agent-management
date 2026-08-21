@@ -37,6 +37,7 @@ function tenantPath(path: string[]) {
     return "tenant-inbox/convert-to-lead"
   if (joined === "mail-inbox/sync-status") return "tenant-inbox/sync-status"
   if (joined === "mail-inbox/sync") return "tenant-inbox/sync"
+  if (joined === "mail-inbox/sync-range") return "tenant-inbox/sync-range"
   if (joined === "sms-inbox") return "tenant-sms-inbox"
   if (joined === "sms-inbox/send") return "tenant-sms-inbox/send"
   if (joined === "sms-inbox/sync") return "tenant-sms-inbox/sync"

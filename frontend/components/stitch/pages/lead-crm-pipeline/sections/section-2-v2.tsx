@@ -816,8 +816,8 @@ export function Section2Section({
                               </div>
                               <p className="mt-2 flex items-center gap-1.5 text-xs font-medium text-[var(--ether-on-surface-variant)]" title="Email received date">
                                 <AppIcon className="text-sm text-[var(--ether-outline)]" name="mail" />
-                                {(lead.lastActivityAt ?? lead.createdAt)
-                                  ? new Date(lead.lastActivityAt ?? lead.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })
+                                {(lead.latestEmailAt ?? lead.lastActivityAt ?? lead.createdAt)
+                                  ? new Date(lead.latestEmailAt ?? lead.lastActivityAt ?? lead.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })
                                   : "No date"}
                               </p>
                             </div>
