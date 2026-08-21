@@ -231,6 +231,9 @@ export class TenantInboxSyncService {
       matchedLeadCount: stats.matched + recovered.converted,
       createdLeadCount: stats.created,
       skippedCount: stats.skipped,
+      reprocessedStoredCount: recovered.scanned,
+      recoveredLeadCount: recovered.converted,
+      storedSkippedCount: Math.max(0, recovered.scanned - recovered.converted),
       fromDate: fromDate.toISOString(),
       toDate: toDate.toISOString(),
     };
@@ -984,7 +987,7 @@ export class TenantInboxSyncService {
           const nextPayload = {
             ...payload,
             ...parserPayload,
-            leadCreationStatus: parsed?.lead ? 'Matched' : 'Skipped',
+            leadCreationStatus: parsed?.lead ? (parsed?.created ? 'Created' : 'Matched') : 'Skipped',
             leadCreationSkipReason: parsed?.lead
               ? ''
               : this.parserSkipReason(parsed?.result),
@@ -1012,6 +1015,38 @@ export class TenantInboxSyncService {
         }
       },
     );
+  }
+
+  async recoverUnlinkedEmailsAfterTemplateChange(tenant: SaasTenant) {
+    const config: any = await this.settings.getRawSmtp(tenant);
+    if (config?.autoCreateLeads === false) return { scanned: 0, converted: 0 };
+    const databaseName = this.databaseName(tenant);
+    const ids = await this.databases.withTenantClient(databaseName, async (client) => {
+      const result = await client.query(
+        `SELECT id FROM tenant_outreach_job
+         WHERE channel = 'Email' AND direction = 'Incoming'
+           AND source_type = 'mail-inbox' AND lead_id IS NULL
+         ORDER BY COALESCE(occurred_at, created_at) DESC, id DESC LIMIT 250`,
+      );
+      return result.rows.map((row: any) => Number(row.id)).filter((id: number) => id > 0);
+    });
+    let converted = 0;
+    for (const id of ids) {
+      try {
+        const lead = await this.convertStoredEmailWithTemplate(tenant, id);
+        if (lead) converted += 1;
+      } catch (error) {
+        this.logger.warn(`Template-save email recovery failed ${JSON.stringify({ databaseName, mailInboxId: id, error: this.message(error) })}`);
+      }
+    }
+    if (converted) {
+      await this.linkMissingLeadProperties(tenant);
+      await this.fixMissingLeadNames(tenant);
+      await this.autoSendWelcomeForLeads(tenant);
+      await this.scheduleTenantFollowUps(tenant);
+    }
+    this.logger.log(`Template-save email recovery ${databaseName}: ${JSON.stringify({ scanned: ids.length, converted })}`);
+    return { scanned: ids.length, converted };
   }
 
   private async recoverStoredInboundEmailsInRange(

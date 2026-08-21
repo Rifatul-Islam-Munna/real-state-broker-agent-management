@@ -398,7 +398,7 @@ function ProfessionalMailWorkspace({ initialMailId }: { initialMailId?: number }
                       className="w-full rounded-lg border bg-background px-2 py-1 text-[11px] focus:outline-none focus:ring-1 focus:ring-ring"
                       max={rangeTo || undefined}
                       onChange={(e) => setRangeFrom(e.target.value)}
-                      type="datetime-local"
+                      type="date"
                       value={rangeFrom}
                     />
                   </div>
@@ -408,7 +408,7 @@ function ProfessionalMailWorkspace({ initialMailId }: { initialMailId?: number }
                       className="w-full rounded-lg border bg-background px-2 py-1 text-[11px] focus:outline-none focus:ring-1 focus:ring-ring"
                       min={rangeFrom || undefined}
                       onChange={(e) => setRangeTo(e.target.value)}
-                      type="datetime-local"
+                      type="date"
                       value={rangeTo}
                     />
                   </div>
@@ -424,10 +424,10 @@ function ProfessionalMailWorkspace({ initialMailId }: { initialMailId?: number }
                   }
                   onClick={async () => {
                     setRangeResult(null)
-                    const first = new Date(rangeFrom)
-                    const second = new Date(rangeTo)
-                    const from = first <= second ? first : second
-                    const to = first <= second ? second : first
+                    const first = rangeFrom <= rangeTo ? rangeFrom : rangeTo
+                    const second = rangeFrom <= rangeTo ? rangeTo : rangeFrom
+                    const from = new Date(`${first}T00:00:00`)
+                    const to = new Date(`${second}T23:59:59.999`)
                     const res = await syncRangeMutation.mutateAsync({
                       fromDate: from.toISOString(),
                       toDate: to.toISOString(),
@@ -436,7 +436,7 @@ function ProfessionalMailWorkspace({ initialMailId }: { initialMailId?: number }
                       setRangeResult(`✗ ${res.error.message}`)
                     } else if (res.data) {
                       const d = res.data
-                      setRangeResult(`✓ ${d.importedCount ?? 0} imported · ${d.createdLeadCount ?? 0} leads created · ${d.skippedCount ?? 0} skipped`)
+                      setRangeResult(`✓ ${d.importedCount ?? 0} imported · ${d.createdLeadCount ?? 0} new leads · ${d.recoveredLeadCount ?? 0} stored recovered · ${d.skippedCount ?? 0} skipped`)
                     } else {
                       setRangeResult(`✓ Sync completed`)
                     }

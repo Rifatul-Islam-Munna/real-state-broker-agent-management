@@ -1012,7 +1012,7 @@ export function useRunMailInboxSync() {
 export function useRunMailInboxSyncRange() {
   const invalidate = useInvalidate(["mail-inbox", "mail-inbox-sync-status", "leads", "lead-history", "dashboard"])
 
-  return useCommonMutationApi<{ importedCount: number; matchedLeadCount: number; createdLeadCount: number; skippedCount: number; fromDate: string; toDate: string }, { fromDate: string; toDate: string }>({
+  return useCommonMutationApi<{ importedCount: number; matchedLeadCount: number; createdLeadCount: number; skippedCount: number; reprocessedStoredCount?: number; recoveredLeadCount?: number; storedSkippedCount?: number; fromDate: string; toDate: string }, { fromDate: string; toDate: string }>({
     method: "POST",
     onSuccess: () => void invalidate(),
     successMessage: "Range sync completed",

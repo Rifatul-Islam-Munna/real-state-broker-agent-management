@@ -12,6 +12,7 @@ import { SaasTenant } from '../saas-admin/entities/saas-tenant.entity';
 import { TenantDatabaseService } from '../tenant-database/tenant-database.service';
 import { TenantDashboardService } from './tenant-dashboard.service';
 import { TenantRealtorWorkflowService } from './tenant-realtor-workflow.service';
+import { TenantInboxSyncService } from './tenant-inbox-sync.service';
 
 @Injectable()
 export class TenantLegacyCompatibilityService {
@@ -19,6 +20,7 @@ export class TenantLegacyCompatibilityService {
     private readonly databases: TenantDatabaseService,
     private readonly dashboard: TenantDashboardService,
     private readonly workflows: TenantRealtorWorkflowService,
+    private readonly inboxSync: TenantInboxSyncService,
   ) {}
 
   async listProperties(tenant: SaasTenant, query: any) {
@@ -428,7 +430,7 @@ export class TenantLegacyCompatibilityService {
 
   async genericCreate(tenant: SaasTenant, resource: string, body: any) {
     const cleanResource = this.resource(resource);
-    return this.databases.withTenantClient(this.databaseName(tenant), async (client) => {
+    const saved = await this.databases.withTenantClient(this.databaseName(tenant), async (client) => {
       const result = await client.query(
         `INSERT INTO tenant_legacy_resource(resource, payload) VALUES ($1, $2::jsonb)
          RETURNING id, payload, created_at, updated_at`,
@@ -445,12 +447,16 @@ export class TenantLegacyCompatibilityService {
         ? this.dealItem(result.rows[0])
         : this.genericItem(result.rows[0]);
     });
+    if (cleanResource === 'lead-collection-templates' && body?.isActive !== false) {
+      await this.inboxSync.recoverUnlinkedEmailsAfterTemplateChange(tenant);
+    }
+    return saved;
   }
 
   async genericUpdate(tenant: SaasTenant, resource: string, body: any) {
     const cleanResource = this.resource(resource);
     const id = this.id(body?.id);
-    return this.databases.withTenantClient(this.databaseName(tenant), async (client) => {
+    const saved = await this.databases.withTenantClient(this.databaseName(tenant), async (client) => {
       const current = await client.query(
         'SELECT payload FROM tenant_legacy_resource WHERE resource = $1 AND id = $2',
         [cleanResource, id],
@@ -474,6 +480,10 @@ export class TenantLegacyCompatibilityService {
         ? this.dealItem(result.rows[0])
         : this.genericItem(result.rows[0]);
     });
+    if (cleanResource === 'lead-collection-templates' && saved?.isActive !== false) {
+      await this.inboxSync.recoverUnlinkedEmailsAfterTemplateChange(tenant);
+    }
+    return saved;
   }
 
   async genericDelete(tenant: SaasTenant, resource: string, body: any) {
