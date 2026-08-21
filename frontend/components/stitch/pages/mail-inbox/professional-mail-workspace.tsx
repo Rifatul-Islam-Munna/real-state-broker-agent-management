@@ -428,10 +428,13 @@ function ProfessionalMailWorkspace({ initialMailId }: { initialMailId?: number }
                       fromDate: new Date(rangeFrom).toISOString(),
                       toDate: new Date(rangeTo).toISOString(),
                     })
-                    if (res.data) {
-                      setRangeResult(`✓ ${res.data.importedCount} imported, ${res.data.skippedCount} skipped`)
-                    } else if (res.error) {
+                    if (res.error) {
                       setRangeResult(`✗ ${res.error.message}`)
+                    } else if (res.data) {
+                      const d = res.data
+                      setRangeResult(`✓ ${d.importedCount ?? 0} imported · ${d.createdLeadCount ?? 0} leads created · ${d.skippedCount ?? 0} skipped`)
+                    } else {
+                      setRangeResult(`✓ Sync completed`)
                     }
                   }}
                   size="sm"
