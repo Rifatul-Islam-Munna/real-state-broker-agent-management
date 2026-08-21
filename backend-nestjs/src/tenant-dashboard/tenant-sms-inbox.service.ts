@@ -93,7 +93,7 @@ export class TenantSmsInboxService {
       this.databaseName(tenant),
       async (client) => {
         const values: unknown[] = [];
-        const conditions = [`j.channel = 'SMS'`];
+        const conditions = [`j.channel = 'SMS'`, `j.status NOT IN ('scheduled', 'processing')`];
         if (Number(options.id) > 0) {
           values.push(Number(options.id));
           conditions.push(`j.id = $${values.length}`);

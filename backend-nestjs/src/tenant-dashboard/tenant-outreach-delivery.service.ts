@@ -27,7 +27,7 @@ export class TenantOutreachDeliveryService implements OnModuleDestroy {
     tenant?: SaasTenant,
   ) {
     if (job.provider_message_id) {
-      return { providerMessageId: job.provider_message_id };
+      return { providerMessageId: job.provider_message_id, provider: job.provider };
     }
     if (job.channel === 'Email') return this.sendEmail(databaseName, job, tenant);
     if (job.channel === 'SMS') return this.sendSms(databaseName, job, tenant);
@@ -83,6 +83,7 @@ export class TenantOutreachDeliveryService implements OnModuleDestroy {
 
     return {
       providerMessageId: this.text(info?.messageId, job.idempotency_key),
+      provider: 'SMTP',
       accepted: Array.isArray(info?.accepted) ? info.accepted : [],
       rejected: Array.isArray(info?.rejected) ? info.rejected : [],
     };
@@ -199,9 +200,9 @@ export class TenantOutreachDeliveryService implements OnModuleDestroy {
       throw new PermanentTenantDeliveryError('This tenant has no SMS provider configured.');
     }
     const provider = this.text(config.providerName, 'Twilio').toLowerCase();
-    if (provider === 'twilio') return this.twilioMessage(config, job);
-    if (provider === 'plivo') return this.plivoMessage(config, job);
-    if (provider === 'ringcentral') return this.ringCentralMessage(config, job);
+    if (provider === 'twilio') return { ...(await this.twilioMessage(config, job)), provider: 'Twilio' };
+    if (provider === 'plivo') return { ...(await this.plivoMessage(config, job)), provider: 'Plivo' };
+    if (provider === 'ringcentral') return { ...(await this.ringCentralMessage(config, job)), provider: 'RingCentral' };
     throw new PermanentTenantDeliveryError(
       `Tenant SMS provider ${config.providerName ?? provider} is not supported.`,
     );
@@ -247,7 +248,7 @@ export class TenantOutreachDeliveryService implements OnModuleDestroy {
         body: form,
       },
     );
-    return { providerMessageId: this.text(result.sid, job.idempotency_key) };
+    return { providerMessageId: this.text(result.sid, job.idempotency_key), provider: 'Twilio' };
   }
 
   private async twilioMessage(config: any, job: TenantOutreachJob) {

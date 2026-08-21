@@ -811,10 +811,10 @@ export function Section2Section({
                                 {lead.inBoard ? <Badge className="rounded-full border-0 bg-[color-mix(in_srgb,var(--ether-secondary-container)_32%,white)] px-2.5 py-1 text-[10px] font-bold uppercase text-[var(--ether-secondary)]">On board</Badge> : null}
                                 {lead.isFollowUpOverdue ? <Badge className="rounded-full border-0 bg-[var(--ether-error-container)] px-2.5 py-1 text-[10px] font-bold uppercase text-[var(--ether-error)]">Overdue</Badge> : null}
                               </div>
-                              <p className="mt-2 flex items-center gap-1.5 text-xs font-medium text-[var(--ether-on-surface-variant)]" title="Latest mail date">
+                              <p className="mt-2 flex items-center gap-1.5 text-xs font-medium text-[var(--ether-on-surface-variant)]" title="Lead received date">
                                 <AppIcon className="text-sm text-[var(--ether-outline)]" name="mail" />
-                                {lead.lastActivityAt ?? lead.createdAt
-                                  ? new Date(lead.lastActivityAt ?? lead.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })
+                                {lead.createdAt
+                                  ? new Date(lead.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })
                                   : "No date"}
                               </p>
                             </div>

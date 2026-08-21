@@ -150,6 +150,7 @@ export class TenantOutreachSchedulerService implements OnModuleInit {
             `UPDATE tenant_outreach_job
              SET status = 'sent',
                  provider_message_id = COALESCE(provider_message_id, $3),
+                 provider = CASE WHEN $4::text <> '' THEN $4::text ELSE provider END,
                  last_error = '',
                  completed_at = now(),
                  locked_at = NULL,
@@ -157,7 +158,7 @@ export class TenantOutreachSchedulerService implements OnModuleInit {
                  updated_at = now()
              WHERE id = $1 AND status = 'processing' AND locked_by = $2
              RETURNING *`,
-            [job.id, this.workerId, result.providerMessageId],
+            [job.id, this.workerId, result.providerMessageId, result.provider ?? ''],
           );
           if (updated.rows[0]) {
             await this.recordEvent(
