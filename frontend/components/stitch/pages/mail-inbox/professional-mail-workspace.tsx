@@ -424,9 +424,13 @@ function ProfessionalMailWorkspace({ initialMailId }: { initialMailId?: number }
                   }
                   onClick={async () => {
                     setRangeResult(null)
+                    const first = new Date(rangeFrom)
+                    const second = new Date(rangeTo)
+                    const from = first <= second ? first : second
+                    const to = first <= second ? second : first
                     const res = await syncRangeMutation.mutateAsync({
-                      fromDate: new Date(rangeFrom).toISOString(),
-                      toDate: new Date(rangeTo).toISOString(),
+                      fromDate: from.toISOString(),
+                      toDate: to.toISOString(),
                     })
                     if (res.error) {
                       setRangeResult(`✗ ${res.error.message}`)

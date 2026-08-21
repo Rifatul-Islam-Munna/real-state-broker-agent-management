@@ -837,6 +837,11 @@ export type LeadItem = {
   updatedAt: string
   lastActivityAt: string
   latestEmailAt?: string | null
+  leadLifecycleId?: string | null
+  leadLifecyclePropertyId?: number | null
+  leadLifecycleStartedAt?: string | null
+  reEngagement?: { isReEngagement: boolean; previousPropertyId?: number | null; previousPropertyName?: string | null; currentPropertyId?: number | null; currentPropertyName?: string | null; restartedAt?: string | null; reason?: string | null } | null
+  propertyInterestHistory?: Array<{ previousPropertyId?: number | null; previousPropertyName?: string | null; currentPropertyId?: number | null; currentPropertyName?: string | null; changedAt?: string | null }>
   linkedDealId?: number | null
   linkedDealTitle?: string | null
 }

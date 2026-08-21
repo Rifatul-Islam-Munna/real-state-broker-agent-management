@@ -358,6 +358,13 @@ export function LeadDetailsPanel({
 
           <section>
             <h3 className="ether-label-caps flex items-center gap-2 text-[10px] text-[var(--ether-outline)]"><AppIcon name="real_estate_agent" /> Property Interest</h3>
+            {lead.reEngagement?.isReEngagement ? (
+              <div className="mt-4 rounded-lg border border-[var(--ether-primary)]/20 bg-[var(--ether-primary-fixed)]/35 p-4">
+                <p className="text-xs font-bold text-[var(--ether-on-surface)]">Re-engaged for a different property</p>
+                <p className="mt-1 text-[10px] leading-5 text-[var(--ether-on-surface-variant)]">Previous: <strong>{displayText(lead.reEngagement.previousPropertyName, "Previous property")}</strong>{" → "}Current: <strong>{displayText(lead.reEngagement.currentPropertyName, lead.property || "Current property")}</strong></p>
+                {lead.reEngagement.restartedAt ? <p className="mt-1 text-[9px] font-semibold text-[var(--ether-outline)]">Lifecycle restarted {formatDateTimeInZone(lead.reEngagement.restartedAt, workspaceTimeZone)}</p> : null}
+              </div>
+            ) : null}
             <div className="mt-4 grid grid-cols-2 gap-4 rounded-lg border border-[var(--ether-outline-variant)]/40 bg-[var(--ether-surface-container-low)]/60 p-4">
               <div className="col-span-2"><p className="ether-label-caps text-[9px] text-[var(--ether-outline)]">Primary Property</p><p className="mt-1 text-xs font-bold text-[var(--ether-on-surface)]">{displayText(lead.property)}</p></div>
               <div><p className="ether-label-caps text-[9px] text-[var(--ether-outline)]">Interest Type</p><p className="mt-1 text-xs font-semibold text-[var(--ether-on-surface)]">{displayText(lead.interest)}</p></div>

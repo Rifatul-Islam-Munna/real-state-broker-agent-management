@@ -224,6 +224,8 @@ export class TenantInboxSyncService {
     await this.removeInvalidAutoCreatedLeads(tenant);
     await this.linkMissingLeadProperties(tenant);
     await this.fixMissingLeadNames(tenant);
+    await this.autoSendWelcomeForLeads(tenant);
+    await this.scheduleTenantFollowUps(tenant);
     return {
       importedCount: stats.imported,
       matchedLeadCount: stats.matched + recovered.converted,
@@ -773,11 +775,13 @@ export class TenantInboxSyncService {
         let lead = storedLead.rows[0]?.value ?? null;
         let parserResult: any = null;
         let created = false;
+        let lifecycleRestarted = false;
         if (!lead && input.channel === 'email' && input.autoCreateLeads === true) {
           const parsed = await this.createOrMatchLeadFromTemplate(client, input);
           lead = parsed?.lead ?? null;
           parserResult = parsed?.result ?? null;
           created = parsed?.created === true;
+          lifecycleRestarted = parsed?.lifecycleRestarted === true;
           if (!lead) lead = await this.findLead(client, input.channel, input.sender);
         } else if (!lead && input.channel === 'email') {
           parserResult = this.parserFailure('Automatic lead creation is disabled.');
@@ -843,7 +847,7 @@ export class TenantInboxSyncService {
             JSON.stringify(payload),
           ],
         );
-        const isReply = inserted.rows[0]?.was_inserted && lead?.id && !created
+        const isReply = inserted.rows[0]?.was_inserted && lead?.id && !created && !lifecycleRestarted
           ? await this.hasPriorSentOutreach(
               client,
               Number(lead.id),
@@ -897,7 +901,9 @@ export class TenantInboxSyncService {
         const reason = lead
           ? created
             ? `Lead created with parser ${parserResult?.templateName || parserResult?.templateId || 'unknown'}.`
-            : 'Email matched an existing lead.'
+            : lifecycleRestarted
+              ? 'Existing lead started a new lifecycle for a different property.'
+              : 'Email matched an existing lead.'
           : this.parserSkipReason(parserResult);
         const outcome = {
           imported,
@@ -1249,28 +1255,42 @@ export class TenantInboxSyncService {
       }
       const result = await client.query(
         `SELECT l.id, l.full_name, l.email, l.phone, l.payload,
-                p.id AS property_id, p.title AS property_title, p.payload AS property_payload
+                p.id AS property_id, p.title AS property_title, p.payload AS property_payload,
+                COALESCE(l.payload->>'leadLifecycleId', '') AS lifecycle_id
          FROM tenant_lead l
          JOIN tenant_lead_property lp ON lp.lead_id = l.id
          JOIN tenant_property p ON p.id = lp.property_id
          WHERE (l.email IS NOT NULL OR l.phone IS NOT NULL)
            AND p.status = 'published'
+           AND (
+             COALESCE(l.payload->>'leadLifecyclePropertyId', '') = ''
+             OR p.id::text = l.payload->>'leadLifecyclePropertyId'
+           )
            AND EXISTS (
              SELECT 1 FROM tenant_outreach_job inc
              WHERE inc.lead_id = l.id
                AND inc.direction = 'Incoming'
                AND inc.source_type = 'mail-inbox'
            )
-           AND NOT EXISTS (
-             SELECT 1 FROM tenant_outreach_job out
-             WHERE out.lead_id = l.id AND out.direction <> 'Incoming'
+           AND (
+             (
+               COALESCE(l.payload->>'leadLifecycleId', '') <> ''
+               AND NOT EXISTS (
+                 SELECT 1 FROM tenant_outreach_job out
+                 WHERE out.lead_id = l.id
+                   AND out.direction <> 'Incoming'
+                   AND COALESCE(out.payload->>'leadLifecycleId', '') = l.payload->>'leadLifecycleId'
+               )
+             )
+             OR (
+               COALESCE(l.payload->>'leadLifecycleId', '') = ''
+               AND NOT EXISTS (
+                 SELECT 1 FROM tenant_outreach_job out
+                 WHERE out.lead_id = l.id AND out.direction <> 'Incoming'
+               )
+             )
            )
-           AND NOT EXISTS (
-             SELECT 1 FROM tenant_outreach_job out2
-             WHERE out2.lead_id = l.id
-               AND out2.created_by LIKE 'lead-auto-welcome:%'
-           )
-         ORDER BY l.created_at ASC, l.id ASC
+         ORDER BY COALESCE(l.payload->>'leadLifecycleStartedAt', l.created_at::text) ASC, l.id ASC
          LIMIT 50`,
       );
       let enqueued = 0;
@@ -1300,6 +1320,7 @@ export class TenantInboxSyncService {
             43_200,
           );
           const scheduledAt = new Date(Date.now() + delayMinutes * 60_000);
+          const lifecycleId = this.text(row.lifecycle_id, 'initial');
           for (const channel of channels) {
             const recipientMissing =
               channel === 'Email' ? !lead.email : !lead.phone;
@@ -1328,11 +1349,13 @@ export class TenantInboxSyncService {
               mediaUrls,
               scheduledAt,
               createdBy: `lead-auto-welcome:${this.text(template.id)}:${channel.toLowerCase()}`,
-              idempotencyKey: `lead-auto-welcome:${Number(row.id)}:${this.text(template.id)}:${channel.toLowerCase()}`,
+              idempotencyKey: `lead-auto-welcome:${Number(row.id)}:${lifecycleId}:${this.text(template.id)}:${channel.toLowerCase()}`,
               payload: {
                 templateId: this.text(template.id),
                 channel,
                 automatic: true,
+                leadLifecycleId: lifecycleId,
+                propertyId: Number(row.property_id),
               },
             });
             if (jobs[0]?.status !== 'failed') enqueued += 1;
@@ -1887,13 +1910,26 @@ export class TenantInboxSyncService {
       };
     }
     if (propertyMatch) values.property = propertyMatch.title;
+    const propertyId = propertyMatch?.id ?? null;
+    const previousPropertyId = Number(existing?.payload?.leadLifecyclePropertyId) || null;
+    const previousPropertyName = this.text(existing?.payload?.property);
+    const nextPropertyName = this.text(propertyMatch?.title, values.property);
+    const propertyAddressChanged = Boolean(existing && propertyId && ((previousPropertyId && previousPropertyId !== propertyId) || (!previousPropertyId && previousPropertyName && nextPropertyName && this.normalizeComparableProperty(previousPropertyName) !== this.normalizeComparableProperty(nextPropertyName))));
+    const lifecycleRestarted = propertyAddressChanged;
+    const lifecycleId = lifecycleRestarted || !existing
+      ? `${propertyId ?? 'unlisted'}:${input.receivedAt.toISOString()}`
+      : this.text(existing?.payload?.leadLifecycleId);
     const leadPayload = {
       ...values,
       name: name || 'Inbound lead',
-      stage: this.text(values.stage, 'New'),
+      stage: lifecycleRestarted
+        ? 'New'
+        : this.text(values.stage, existing?.payload?.stage || 'New'),
       source: this.text(values.source, result.templateName || 'Inbound email'),
-      priority: this.text(values.priority, 'Warm'),
-      followUpStatus: this.text(values.followUpStatus, 'Open'),
+      priority: this.text(values.priority, existing?.payload?.priority || 'Warm'),
+      followUpStatus: lifecycleRestarted
+        ? 'Open'
+        : this.text(values.followUpStatus, existing?.payload?.followUpStatus || 'Open'),
       inboundReplyAddress: this.text(input.sender).toLowerCase(),
       leadCollectionTemplateId: result.templateId,
       leadCollectionTemplateName: result.templateName,
@@ -1902,8 +1938,16 @@ export class TenantInboxSyncService {
       latestEmailBody: input.body,
       latestEmailAt: input.receivedAt.toISOString(),
       lastActivityAt: input.receivedAt.toISOString(),
-      inBoard: existing?.payload?.inBoard === true,
+      inBoard: lifecycleRestarted ? false : existing?.payload?.inBoard === true,
       propertyListingStatus: propertyMatch ? 'Listed' : 'NotListed',
+      ...(lifecycleId ? { leadLifecycleId: lifecycleId } : {}),
+      ...(propertyId ? { leadLifecyclePropertyId: propertyId } : {}),
+      ...(lifecycleRestarted || !existing ? { leadLifecycleStartedAt: input.receivedAt.toISOString() } : {}),
+      ...(lifecycleRestarted ? {
+        reEngagement: { isReEngagement: true, previousPropertyId, previousPropertyName: previousPropertyName || 'Previous property', currentPropertyId: propertyId, currentPropertyName: nextPropertyName || 'Current property', restartedAt: input.receivedAt.toISOString(), reason: 'Property address changed' },
+        propertyInterestHistory: [...(Array.isArray(existing?.payload?.propertyInterestHistory) ? existing.payload.propertyInterestHistory : []), { previousPropertyId, previousPropertyName: previousPropertyName || 'Previous property', currentPropertyId: propertyId, currentPropertyName: nextPropertyName || 'Current property', changedAt: input.receivedAt.toISOString() }],
+        notes: [...(Array.isArray(existing?.payload?.notes) ? existing.payload.notes : []), `Re-engagement: property changed from ${previousPropertyName || 'previous property'} to ${nextPropertyName || 'new property'}. Lead lifecycle restarted as New.`],
+      } : {}),
     };
 
     let lead: any;
@@ -1920,6 +1964,20 @@ export class TenantInboxSyncService {
         [existing.id, name, email, phone, JSON.stringify(leadPayload)],
       );
       lead = updated.rows[0];
+      if (lifecycleRestarted) {
+        await client.query(
+          `UPDATE tenant_outreach_job
+           SET status = 'cancelled',
+               last_error = 'Superseded by a new property inquiry.',
+               completed_at = now(), locked_at = NULL, locked_by = NULL,
+               updated_at = now()
+           WHERE lead_id = $1
+             AND direction <> 'Incoming'
+             AND status IN ('scheduled', 'retrying', 'paused')
+             AND (payload->>'automatic' = 'true' OR created_by LIKE 'lead-auto-%')`,
+          [existing.id],
+        );
+      }
     } else {
       const newLeadPayload = { ...leadPayload, inBoard: false };
       const inserted = await client.query(
@@ -1931,7 +1989,6 @@ export class TenantInboxSyncService {
       lead = inserted.rows[0];
     }
 
-    const propertyId = propertyMatch?.id ?? null;
     if (propertyId && lead?.id) {
       await client.query(
         `INSERT INTO tenant_lead_property(lead_id, property_id)
@@ -1940,7 +1997,7 @@ export class TenantInboxSyncService {
         [lead.id, propertyId],
       );
     }
-    return { lead, created: !existing, result };
+    return { lead, created: !existing, lifecycleRestarted, result };
   }
 
   private parserPayload(parserResult: any) {
@@ -2634,6 +2691,10 @@ ${input.textBody ?? ''}`.toLowerCase();
       .split(',')
       .map((item) => item.trim())
       .filter(Boolean);
+  }
+
+  private normalizeComparableProperty(value: unknown) {
+    return `${value ?? ''}`.toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
   }
 
   private text(value: any, fallback = '') {

@@ -98,11 +98,16 @@ export class TenantInboxController {
 
   @Post('sync-range')
   syncRange(@Req() req: any, @Body() body: any) {
-    const fromDate = new Date(body?.fromDate);
-    const toDate = new Date(body?.toDate);
-    if (Number.isNaN(fromDate.getTime()) || Number.isNaN(toDate.getTime()) || fromDate >= toDate) {
-      throw new BadRequestException('A valid fromDate before toDate is required.');
+    const first = new Date(body?.fromDate);
+    const second = new Date(body?.toDate);
+    if (Number.isNaN(first.getTime()) || Number.isNaN(second.getTime())) {
+      throw new BadRequestException('Valid fromDate and toDate values are required.');
     }
+    if (first.getTime() === second.getTime()) {
+      throw new BadRequestException('The sync range must include more than one instant.');
+    }
+    const fromDate = first < second ? first : second;
+    const toDate = first < second ? second : first;
     return this.inbox.syncTenantRange(req.tenant, fromDate, toDate);
   }
 
