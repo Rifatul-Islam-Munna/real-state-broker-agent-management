@@ -155,7 +155,7 @@ function ProfessionalMailWorkspace({ initialMailId }: { initialMailId?: number }
     if (!selected) return []
     return messages
       .filter((item) => sameMailThread(item, selected))
-      .sort((left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime())
+      .sort((left, right) => new Date(left.occurredAt ?? left.createdAt).getTime() - new Date(right.occurredAt ?? right.createdAt).getTime())
   }, [messages, selected])
 
   const stats = useMemo(
@@ -824,7 +824,7 @@ function ProfessionalMailWorkspace({ initialMailId }: { initialMailId?: number }
                       </div>
                       <div>
                         <p className="ether-label-caps text-[10px] text-[var(--ether-outline)]">Last Activity</p>
-                        <p className="mt-2 font-semibold text-[var(--ether-on-surface)]">{formatDateTimeLabel(selected.createdAt)}</p>
+                        <p className="mt-2 font-semibold text-[var(--ether-on-surface)]">{formatDateTimeLabel(selected.occurredAt ?? selected.createdAt)}</p>
                       </div>
                       <div>
                         <p className="ether-label-caps text-[10px] text-[var(--ether-outline)]">Thread</p>
@@ -1016,7 +1016,7 @@ function MailListRow({
             {item.name || item.email}
           </span>
           <span className="shrink-0 text-[11px] text-muted-foreground">
-            {shortDate(item.createdAt)}
+            {shortDate(item.occurredAt ?? item.createdAt)}
           </span>
         </span>
         <span className={`mt-0.5 block truncate text-sm ${unread ? "font-semibold" : ""}`}>
@@ -1101,7 +1101,7 @@ function MailMessageCard({ item }: { item: MailInboxItem }) {
                 <p className="text-xs text-muted-foreground">{item.email} · to me</p>
               </div>
               <p className="text-xs text-muted-foreground">
-                {formatDateTimeLabel(item.createdAt)}
+                {formatDateTimeLabel(item.occurredAt ?? item.createdAt)}
               </p>
             </div>
           </div>
@@ -1378,5 +1378,5 @@ function shortDate(value: string) {
   if (date.toDateString() === today.toDateString()) {
     return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
   }
-  return date.toLocaleDateString([], { month: "short", day: "numeric" })
+  return `${date.toLocaleDateString([], { month: "short", day: "numeric" })}, ${date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`
 }

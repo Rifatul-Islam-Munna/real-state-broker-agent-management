@@ -370,8 +370,8 @@ export class TenantInboxSyncService {
             accessToken,
             config.mailboxTag,
             maxMessages,
-            lastScan,
-            dateRange.to,
+            Math.max(0, lastScan - 24 * 60 * 60_000),
+            dateRange.to + 24 * 60 * 60_000,
           )
         : await this.gmailMessagesForConfiguredTags(
             accessToken,
@@ -397,6 +397,15 @@ export class TenantInboxSyncService {
           const recipient = this.extractAddress(headers.to);
           const bodies = this.gmailBodies(message.payload);
           const received = message.internalDate ? Number(message.internalDate) : 0;
+          const lowerBound = dateRange
+            ? dateRange.from
+            : fullWindow
+              ? scanStartedAt - 14 * 24 * 60 * 60_000
+              : lastScan;
+          const upperBound = dateRange ? dateRange.to : scanStartedAt;
+          if (received && (received < lowerBound || received > upperBound)) {
+            continue;
+          }
           this.addStats(stats, await this.storeInbound(databaseName, {
             channel: 'email',
             providerKey,
@@ -501,6 +510,49 @@ export class TenantInboxSyncService {
       for (const message of messages) {
         if (!selected.has(message.id)) selected.set(message.id, message);
       }
+      const threadMessages = await this.listGmailThreadMessagesForLabel(
+        accessToken, labelId, labelName, pageSize, lastScan, scanEndedAt,
+      );
+      for (const message of threadMessages) {
+        if (!selected.has(message.id)) selected.set(message.id, message);
+      }
+    }
+    return [...selected.values()];
+  }
+
+  private async listGmailThreadMessagesForLabel(
+    accessToken: string,
+    labelId: string,
+    mailboxTag: string,
+    pageSize: number,
+    lastScan = 0,
+    scanStartedAt = Date.now(),
+  ) {
+    const selected = new Map<string, { id: string; mailboxTag: string }>();
+    let pageToken = '';
+    while (true) {
+      const url = new URL('https://gmail.googleapis.com/gmail/v1/users/me/threads');
+      url.searchParams.append('labelIds', labelId);
+      url.searchParams.set('maxResults', String(Math.min(100, pageSize)));
+      url.searchParams.set('q', `${lastScan > 0 ? `after:${Math.floor(lastScan / 1000)}` : 'newer_than:14d'} before:${Math.floor(scanStartedAt / 1000) + 1}`);
+      if (pageToken) url.searchParams.set('pageToken', pageToken);
+      const list = await this.jsonRequest(url.toString(), {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      for (const thread of Array.isArray(list.threads) ? list.threads : []) {
+        const threadId = this.text(thread?.id);
+        if (!threadId) continue;
+        const detail = await this.jsonRequest(
+          `https://gmail.googleapis.com/gmail/v1/users/me/threads/${encodeURIComponent(threadId)}?format=minimal`,
+          { headers: { Authorization: `Bearer ${accessToken}` } },
+        );
+        for (const message of Array.isArray(detail.messages) ? detail.messages : []) {
+          const id = this.text(message?.id);
+          if (id && !selected.has(id)) selected.set(id, { id, mailboxTag });
+        }
+      }
+      pageToken = this.text(list.nextPageToken);
+      if (!pageToken) break;
     }
     return [...selected.values()];
   }
