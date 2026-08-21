@@ -376,7 +376,7 @@ export class MailInboxSyncBackgroundService {
     const matchedProperty = this.matchProperty(properties, inbound, extracted);
     const leadTemplateAllowed = templateResult.scopeMatched !== false && templateResult.matched === true;
     const combined = `${inbound.subject}\n${inbound.body}`.toLowerCase();
-    const isPropertyInquiry = leadTemplateAllowed;
+    const isPropertyInquiry = leadTemplateAllowed || this.isPropertyInquiry(combined);
 
     const outcome = await this.dataSource.transaction(async (manager) => {
       const mailRepo = manager.getRepository(MailInboxItem);

@@ -99,7 +99,7 @@ export function LeadCrmPipelinePage() {
   const portalRoutes = getPortalRoutes(pathname)
   const view = searchParams.get("view")
 
-  const sortBy = sortOrder === "name-asc" || sortOrder === "name-desc" ? "name" : sortOrder === "oldest" ? "createdAt" : "lastActivityAt";
+  const sortBy = sortOrder === "name-asc" || sortOrder === "name-desc" ? "name" : "lastActivityAt";
   const sortDir = sortOrder === "name-asc" || sortOrder === "oldest" ? "asc" : "desc";
 
   const leadsQuery = useLeads({
@@ -107,7 +107,7 @@ export function LeadCrmPipelinePage() {
     pageSize: PAGE_SIZE,
     search: deferredSearch || undefined,
     date: dateFilter || undefined,
-    status:
+    stage:
       stageFilter !== "all" && stageFilter !== "not-listed"
         ? stageFilter
         : undefined,

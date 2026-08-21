@@ -34,10 +34,10 @@ export class LeadsService {
       const start = new Date(`${date}T00:00:00.000Z`);
       const end = new Date(start);
       end.setUTCDate(end.getUTCDate() + 1);
-      qb.andWhere('lead.lastActivityAt >= :dateStart AND lead.lastActivityAt < :dateEnd', { dateStart: start, dateEnd: end });
+      qb.andWhere('(lead.lastActivityAt >= :dateStart AND lead.lastActivityAt < :dateEnd) OR (lead.createdAt >= :dateStart AND lead.createdAt < :dateEnd)', { dateStart: start, dateEnd: end });
     }
 
-    const sortField = sortBy === 'name' ? 'lead.name' : sortBy === 'createdAt' ? 'lead.createdAt' : 'lead.lastActivityAt';
+    const sortField = sortBy === 'name' ? 'lead.name' : 'lead.lastActivityAt';
     const sortDir = sortOrder === 'asc' ? 'ASC' : 'DESC';
 
     const [rows, total] = await qb.orderBy(sortField, sortDir).skip((page - 1) * pageSize).take(pageSize).getManyAndCount();
