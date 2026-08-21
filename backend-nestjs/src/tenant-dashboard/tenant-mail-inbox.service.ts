@@ -112,8 +112,7 @@ export class TenantMailInboxService {
          FROM tenant_outreach_job j
          LEFT JOIN tenant_lead l ON l.id = j.lead_id
          WHERE ${where}
-         ORDER BY j.is_read ASC,
-                  COALESCE(j.occurred_at, j.created_at) DESC,
+         ORDER BY COALESCE(j.occurred_at, j.created_at) DESC,
                   j.id DESC
          LIMIT $${values.length - 1} OFFSET $${values.length}`,
           values,

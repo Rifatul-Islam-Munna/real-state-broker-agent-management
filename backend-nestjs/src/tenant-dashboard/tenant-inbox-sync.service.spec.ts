@@ -1403,7 +1403,7 @@ describe('TenantInboxSyncService active parser processing', () => {
       'token',
       'Leads',
       50,
-      lastSucceededAt.getTime(),
+      lastSucceededAt.getTime() - 24 * 60 * 60_000,
     );
   });
 

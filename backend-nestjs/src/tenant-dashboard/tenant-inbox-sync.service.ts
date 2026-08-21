@@ -361,7 +361,10 @@ export class TenantInboxSyncService {
         ? dateRange.from
         : fullWindow
           ? 0
-          : await this.lastSuccessfulScan(databaseName);
+          : Math.max(
+              0,
+              (await this.lastSuccessfulScan(databaseName)) - 24 * 60 * 60_000,
+            );
       const selectedMessages = dateRange
         ? await this.gmailMessagesForConfiguredTags(
             accessToken,
