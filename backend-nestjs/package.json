@@ -24,6 +24,7 @@
     "@ai-sdk/google": "^4.0.44",
     "@ai-sdk/openai": "^4.0.42",
     "@ai-sdk/openai-compatible": "^3.0.30",
+    "@huggingface/transformers": "^4.2.0",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.4",
     "@nestjs/core": "^11.0.1",
@@ -105,5 +106,8 @@
     ],
     "coverageDirectory": "../coverage",
     "testEnvironment": "node"
+  },
+  "allowScripts": {
+    "onnxruntime-node@1.24.3": true
   }
 }
