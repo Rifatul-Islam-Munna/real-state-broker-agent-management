@@ -93,6 +93,30 @@ export class Property {
   @Column({ type: 'text', default: '' })
   ownerExtraInfo: string;
 
+  @Column({ type: 'int', nullable: true })
+  minimumCreditScore: number | null;
+
+  @Column({ type: 'float', nullable: true })
+  minimumMonthlyIncome: number | null;
+
+  @Column({ type: 'float', nullable: true })
+  securityDeposit: number | null;
+
+  @Column({ type: 'float', nullable: true })
+  applicationFee: number | null;
+
+  @Column({ type: 'date', nullable: true })
+  availableFrom: string | null;
+
+  @Column({ type: 'int', nullable: true })
+  minimumLeaseMonths: number | null;
+
+  @Column({ type: 'text', default: '' })
+  applicationInstructions: string;
+
+  @Column({ type: 'text', default: '' })
+  realtorShowingInstructions: string;
+
   @Column({ type: 'jsonb', default: [] })
   propertyDocuments: Array<{
     name: string;

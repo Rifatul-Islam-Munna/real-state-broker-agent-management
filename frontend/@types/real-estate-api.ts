@@ -721,6 +721,14 @@ export type PropertyItem = {
   width: string
   description: string
   extraDescription: string
+  minimumCreditScore?: number | null
+  minimumMonthlyIncome?: number | null
+  securityDeposit?: number | null
+  applicationFee?: number | null
+  availableFrom?: string | null
+  minimumLeaseMonths?: number | null
+  applicationInstructions?: string
+  realtorShowingInstructions?: string
   ownerName?: string
   ownerEmail?: string
   ownerPhone?: string
@@ -768,6 +776,14 @@ export type PropertySaveInput = {
   width: string
   description: string
   extraDescription: string
+  minimumCreditScore?: number | null
+  minimumMonthlyIncome?: number | null
+  securityDeposit?: number | null
+  applicationFee?: number | null
+  availableFrom?: string | null
+  minimumLeaseMonths?: number | null
+  applicationInstructions?: string
+  realtorShowingInstructions?: string
   ownerName: string
   ownerEmail: string
   ownerPhone: string

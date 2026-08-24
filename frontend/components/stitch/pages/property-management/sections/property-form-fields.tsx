@@ -336,6 +336,23 @@ export function PropertyFormFieldsSection({
         </div>
       </section>
 
+      <section className="rounded-[24px] border bg-white p-5 shadow-[var(--shadow-surface-1)] sm:p-6">
+        <div className="mb-6 flex items-center gap-3 border-b pb-4">
+          <span className="flex size-10 items-center justify-center rounded-xl bg-[var(--ether-primary-fixed)] text-[var(--ether-primary)]"><AppIcon name="verified_user" /></span>
+          <div><h4 className="text-xl font-semibold text-[var(--ether-on-surface)] sm:text-2xl">Applicant Requirements & Showing</h4><p className="mt-1 text-sm text-[var(--ether-on-surface-variant)]">Optional qualification rules plus private realtor access instructions.</p></div>
+        </div>
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+          <div className="flex flex-col gap-2"><label className="ether-label-caps text-[var(--ether-on-surface-variant)]">Minimum Credit Score</label><Input min="300" max="850" type="number" value={formValues.minimumCreditScore} onChange={(event) => updateField("minimumCreditScore", event.target.value)} placeholder="e.g. 680" /><FieldError error={errors.minimumCreditScore} /></div>
+          <div className="flex flex-col gap-2"><label className="ether-label-caps text-[var(--ether-on-surface-variant)]">Minimum Monthly Income</label><Input min="0" step="0.01" type="number" value={formValues.minimumMonthlyIncome} onChange={(event) => updateField("minimumMonthlyIncome", event.target.value)} placeholder="e.g. 7500" /><FieldError error={errors.minimumMonthlyIncome} /></div>
+          <div className="flex flex-col gap-2"><label className="ether-label-caps text-[var(--ether-on-surface-variant)]">Security Deposit</label><Input min="0" step="0.01" type="number" value={formValues.securityDeposit} onChange={(event) => updateField("securityDeposit", event.target.value)} placeholder="e.g. 2500" /><FieldError error={errors.securityDeposit} /></div>
+          <div className="flex flex-col gap-2"><label className="ether-label-caps text-[var(--ether-on-surface-variant)]">Application Fee</label><Input min="0" step="0.01" type="number" value={formValues.applicationFee} onChange={(event) => updateField("applicationFee", event.target.value)} placeholder="e.g. 50" /><FieldError error={errors.applicationFee} /></div>
+          <div className="flex flex-col gap-2"><label className="ether-label-caps text-[var(--ether-on-surface-variant)]">Available From</label><Input type="date" value={formValues.availableFrom} onChange={(event) => updateField("availableFrom", event.target.value)} /></div>
+          <div className="flex flex-col gap-2"><label className="ether-label-caps text-[var(--ether-on-surface-variant)]">Minimum Lease (Months)</label><Input min="1" type="number" value={formValues.minimumLeaseMonths} onChange={(event) => updateField("minimumLeaseMonths", event.target.value)} placeholder="e.g. 12" /><FieldError error={errors.minimumLeaseMonths} /></div>
+          <div className="flex flex-col gap-2 md:col-span-2"><label className="ether-label-caps text-[var(--ether-on-surface-variant)]">Application Instructions</label><Textarea className="min-h-24" value={formValues.applicationInstructions} onChange={(event) => updateField("applicationInstructions", event.target.value)} placeholder="Documents required, income proof, screening steps..." /></div>
+          <div className="flex flex-col gap-2 md:col-span-2"><label className="ether-label-caps text-[var(--ether-on-surface-variant)]">Realtor Property Showing Instructions</label><Textarea className="min-h-28" value={formValues.realtorShowingInstructions} onChange={(event) => updateField("realtorShowingInstructions", event.target.value)} placeholder="Private: notice required, lockbox/access steps, parking, alarm, showing restrictions..." /><p className="text-xs text-[var(--ether-outline)]">Private management information; it is not returned by the public property API.</p></div>
+        </div>
+      </section>
+
       <section className="rounded-[24px] bg-[var(--ether-surface-container-low)] p-5 sm:p-6">
         <div className="mb-6 flex items-center gap-3 border-b border-[color-mix(in_srgb,var(--ether-outline-variant)_35%,transparent)] pb-4">
           <span className="flex size-10 items-center justify-center rounded-xl bg-white text-[var(--ether-primary)] shadow-sm">

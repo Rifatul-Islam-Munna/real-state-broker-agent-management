@@ -262,6 +262,20 @@ function Overview({ property }: { property: PropertyItem }) {
       </section>
 
       <section className="rounded-[24px] bg-white p-6 shadow-[var(--shadow-surface-1)]">
+        <div className="mb-5 flex items-center gap-3"><AppIcon className="text-xl text-[var(--ether-primary)]" name="verified_user" /><h3 className="ether-headline-sm">Applicant Requirements & Showing</h3></div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Detail label="Minimum Credit Score" value={property.minimumCreditScore == null ? undefined : String(property.minimumCreditScore)} />
+          <Detail label="Minimum Monthly Income" value={property.minimumMonthlyIncome == null ? undefined : String(property.minimumMonthlyIncome)} />
+          <Detail label="Security Deposit" value={property.securityDeposit == null ? undefined : String(property.securityDeposit)} />
+          <Detail label="Application Fee" value={property.applicationFee == null ? undefined : String(property.applicationFee)} />
+          <Detail label="Available From" value={property.availableFrom || undefined} />
+          <Detail label="Minimum Lease" value={property.minimumLeaseMonths == null ? undefined : String(property.minimumLeaseMonths) + " months"} />
+        </div>
+        {property.applicationInstructions ? <div className="mt-5"><p className="ether-label-caps text-[10px] text-[var(--ether-outline)]">Application Instructions</p><p className="mt-2 text-sm leading-6 text-[var(--ether-on-surface-variant)]">{property.applicationInstructions}</p></div> : null}
+        {property.realtorShowingInstructions ? <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4"><p className="ether-label-caps text-[10px] text-amber-700">Private Realtor Showing Instructions</p><p className="mt-2 text-sm leading-6 text-amber-950">{property.realtorShowingInstructions}</p></div> : null}
+      </section>
+
+      <section className="rounded-[24px] bg-white p-6 shadow-[var(--shadow-surface-1)]">
         <div className="mb-5 flex items-center gap-3"><AppIcon className="text-xl text-[var(--ether-primary)]" name="person_pin" /><h3 className="ether-headline-sm">Owner Information</h3></div>
         <div className="rounded-2xl bg-[var(--ether-surface-container-low)] p-5">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">

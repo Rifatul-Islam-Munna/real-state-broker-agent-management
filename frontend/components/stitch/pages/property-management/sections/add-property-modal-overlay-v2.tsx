@@ -58,6 +58,14 @@ function validatePropertyForm(
   if (!values.bedRoom.trim()) errors.bedRoom = "Bedrooms are required."
   if (!values.bathRoom.trim()) errors.bathRoom = "Bathrooms are required."
   if (!values.width.trim()) errors.width = "Property size is required."
+  if (values.minimumCreditScore.trim()) {
+    const creditScore = Number(values.minimumCreditScore)
+    if (!Number.isFinite(creditScore) || creditScore < 300 || creditScore > 850) errors.minimumCreditScore = "Credit score must be between 300 and 850."
+  }
+  if (values.minimumMonthlyIncome.trim() && Number(values.minimumMonthlyIncome) < 0) errors.minimumMonthlyIncome = "Monthly income cannot be negative."
+  if (values.securityDeposit.trim() && Number(values.securityDeposit) < 0) errors.securityDeposit = "Security deposit cannot be negative."
+  if (values.applicationFee.trim() && Number(values.applicationFee) < 0) errors.applicationFee = "Application fee cannot be negative."
+  if (values.minimumLeaseMonths.trim() && Number(values.minimumLeaseMonths) <= 0) errors.minimumLeaseMonths = "Lease term must be at least 1 month."
   if (!values.description.trim() || values.description.trim().length < 20) {
     errors.description = "Description must be at least 20 characters."
   }

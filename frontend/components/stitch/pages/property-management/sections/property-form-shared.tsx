@@ -29,6 +29,14 @@ export type PropertyFormValues = {
   width: string
   description: string
   extraDescription: string
+  minimumCreditScore: string
+  minimumMonthlyIncome: string
+  securityDeposit: string
+  applicationFee: string
+  availableFrom: string
+  minimumLeaseMonths: string
+  applicationInstructions: string
+  realtorShowingInstructions: string
   ownerName: string
   ownerEmail: string
   ownerPhone: string
