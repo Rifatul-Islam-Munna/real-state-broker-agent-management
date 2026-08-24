@@ -421,4 +421,115 @@ export const TENANT_DATABASE_MIGRATIONS: TenantDatabaseMigration[] = [
          AND COALESCE(lower(payload->>'inBoard') = 'true', false) = false`,
     ],
   },
+  {
+    version: 11,
+    name: 'tenant_knowledge_chatbot',
+    statements: [
+      `CREATE TABLE IF NOT EXISTS tenant_chatbot_knowledge (
+        id bigserial PRIMARY KEY,
+        property_id bigint REFERENCES tenant_property(id) ON DELETE CASCADE,
+        scope varchar(20) NOT NULL DEFAULT 'TENANT',
+        audience varchar(20) NOT NULL DEFAULT 'LEAD',
+        source_type varchar(40) NOT NULL DEFAULT 'MANUAL',
+        title varchar(240) NOT NULL,
+        answer text NOT NULL,
+        question_examples jsonb NOT NULL DEFAULT '[]'::jsonb,
+        priority integer NOT NULL DEFAULT 50,
+        active boolean NOT NULL DEFAULT true,
+        source_hash varchar(64) NOT NULL,
+        qdrant_point_id varchar(80),
+        index_status varchar(24) NOT NULL DEFAULT 'pending',
+        last_error text NOT NULL DEFAULT '',
+        created_by_master_user_id integer,
+        created_at timestamptz NOT NULL DEFAULT now(),
+        updated_at timestamptz NOT NULL DEFAULT now(),
+        CONSTRAINT tenant_chatbot_knowledge_scope_check
+          CHECK (scope IN ('TENANT', 'PROPERTY')),
+        CONSTRAINT tenant_chatbot_knowledge_audience_check
+          CHECK (audience IN ('LEAD', 'REALTOR')),
+        CONSTRAINT tenant_chatbot_knowledge_index_status_check
+          CHECK (index_status IN ('pending', 'indexed', 'failed'))
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_tenant_chatbot_knowledge_search
+        ON tenant_chatbot_knowledge(active, audience, property_id, priority DESC)`,
+      `CREATE INDEX IF NOT EXISTS idx_tenant_chatbot_knowledge_hash
+        ON tenant_chatbot_knowledge(source_hash)`,
+      `CREATE TABLE IF NOT EXISTS tenant_chatbot_conversation (
+        id bigserial PRIMARY KEY,
+        lead_id bigint REFERENCES tenant_lead(id) ON DELETE SET NULL,
+        property_id bigint REFERENCES tenant_property(id) ON DELETE SET NULL,
+        channel varchar(20) NOT NULL,
+        audience varchar(20) NOT NULL DEFAULT 'LEAD',
+        session_id varchar(120) NOT NULL DEFAULT '',
+        status varchar(24) NOT NULL DEFAULT 'ACTIVE',
+        workflow_state varchar(40) NOT NULL DEFAULT 'ANSWERING',
+        stop_reason varchar(60),
+        turn_count integer NOT NULL DEFAULT 0,
+        human_intervened_at timestamptz,
+        stopped_by_master_user_id integer,
+        stopped_at timestamptz,
+        last_message_at timestamptz NOT NULL DEFAULT now(),
+        created_at timestamptz NOT NULL DEFAULT now(),
+        updated_at timestamptz NOT NULL DEFAULT now(),
+        CONSTRAINT tenant_chatbot_conversation_channel_check
+          CHECK (channel IN ('WEB', 'EMAIL', 'SMS')),
+        CONSTRAINT tenant_chatbot_conversation_audience_check
+          CHECK (audience IN ('LEAD', 'REALTOR')),
+        CONSTRAINT tenant_chatbot_conversation_status_check
+          CHECK (status IN ('ACTIVE', 'STOPPED', 'COMPLETED', 'HANDOFF'))
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_tenant_chatbot_conversation_lead
+        ON tenant_chatbot_conversation(lead_id, updated_at DESC)`,
+      `CREATE INDEX IF NOT EXISTS idx_tenant_chatbot_conversation_session
+        ON tenant_chatbot_conversation(session_id, channel, updated_at DESC)`,
+      `CREATE TABLE IF NOT EXISTS tenant_chatbot_message (
+        id bigserial PRIMARY KEY,
+        conversation_id bigint NOT NULL
+          REFERENCES tenant_chatbot_conversation(id) ON DELETE CASCADE,
+        outreach_job_id bigint
+          REFERENCES tenant_outreach_job(id) ON DELETE SET NULL,
+        role varchar(20) NOT NULL,
+        direction varchar(20) NOT NULL,
+        body text NOT NULL,
+        evidence jsonb NOT NULL DEFAULT '[]'::jsonb,
+        confidence numeric(6,5),
+        decision varchar(60) NOT NULL DEFAULT '',
+        idempotency_key varchar(200) NOT NULL,
+        created_at timestamptz NOT NULL DEFAULT now(),
+        CONSTRAINT tenant_chatbot_message_role_check
+          CHECK (role IN ('LEAD', 'BOT', 'HUMAN', 'SYSTEM')),
+        CONSTRAINT tenant_chatbot_message_direction_check
+          CHECK (direction IN ('INCOMING', 'OUTGOING', 'SYSTEM')),
+        UNIQUE(conversation_id, idempotency_key)
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_tenant_chatbot_message_conversation
+        ON tenant_chatbot_message(conversation_id, created_at, id)`,
+      `CREATE TABLE IF NOT EXISTS tenant_chatbot_event (
+        id bigserial PRIMARY KEY,
+        conversation_id bigint NOT NULL
+          REFERENCES tenant_chatbot_conversation(id) ON DELETE CASCADE,
+        lead_id bigint REFERENCES tenant_lead(id) ON DELETE SET NULL,
+        event_type varchar(60) NOT NULL,
+        reason varchar(60) NOT NULL DEFAULT '',
+        actor_master_user_id integer,
+        metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+        created_at timestamptz NOT NULL DEFAULT now()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_tenant_chatbot_event_lead
+        ON tenant_chatbot_event(lead_id, created_at DESC)`,
+      `CREATE TABLE IF NOT EXISTS tenant_chatbot_processed_inbound (
+        outreach_job_id bigint PRIMARY KEY
+          REFERENCES tenant_outreach_job(id) ON DELETE CASCADE,
+        conversation_id bigint
+          REFERENCES tenant_chatbot_conversation(id) ON DELETE SET NULL,
+        processed_at timestamptz NOT NULL DEFAULT now()
+      )`,
+      `INSERT INTO tenant_setting(key, value)
+       VALUES (
+         'chatbot_settings',
+         '{"enabled":false,"channels":{"web":false,"email":false,"sms":false},"minimumConfidence":0.82,"responseDelaySeconds":15,"maxTurns":20}'::jsonb
+       )
+       ON CONFLICT (key) DO NOTHING`,
+    ],
+  },
 ];

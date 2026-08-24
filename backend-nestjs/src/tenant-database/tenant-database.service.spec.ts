@@ -1,3 +1,4 @@
+import { TENANT_DATABASE_MIGRATIONS } from './tenant-database.migrations';
 import { TenantDatabaseService } from './tenant-database.service';
 
 describe('TenantDatabaseService', () => {
@@ -60,14 +61,9 @@ describe('TenantDatabaseService', () => {
       query: jest.fn(async (sql: string) => {
         if (sql.startsWith('SELECT version')) {
           return {
-            rows: [
-              { version: 1 },
-              { version: 2 },
-              { version: 3 },
-              { version: 4 },
-              { version: 5 },
-              { version: 6 },
-            ],
+            rows: TENANT_DATABASE_MIGRATIONS.map(({ version }) => ({
+              version,
+            })),
           };
         }
         return { rows: [] };
