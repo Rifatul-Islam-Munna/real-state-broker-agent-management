@@ -51,7 +51,12 @@ function createEmptyPropertyForm(): PropertyFormValues {
     availableFrom: "",
     minimumLeaseMonths: "",
     applicationInstructions: "",
+    realtorDescription: "",
     realtorShowingInstructions: "",
+    entryInstructions: "",
+    lockboxCode: "",
+    commissionInfo: "",
+    internalRemarks: "",
     ownerName: "",
     ownerEmail: "",
     ownerPhone: "",
@@ -83,14 +88,30 @@ function mapPropertyToFormValues(property: PropertyItem): PropertyFormValues {
     width: property.width ?? "",
     description: property.description ?? "",
     extraDescription: property.extraDescription ?? "",
-    minimumCreditScore: property.minimumCreditScore == null ? "" : String(property.minimumCreditScore),
-    minimumMonthlyIncome: property.minimumMonthlyIncome == null ? "" : String(property.minimumMonthlyIncome),
-    securityDeposit: property.securityDeposit == null ? "" : String(property.securityDeposit),
-    applicationFee: property.applicationFee == null ? "" : String(property.applicationFee),
+    minimumCreditScore:
+      property.minimumCreditScore == null
+        ? ""
+        : String(property.minimumCreditScore),
+    minimumMonthlyIncome:
+      property.minimumMonthlyIncome == null
+        ? ""
+        : String(property.minimumMonthlyIncome),
+    securityDeposit:
+      property.securityDeposit == null ? "" : String(property.securityDeposit),
+    applicationFee:
+      property.applicationFee == null ? "" : String(property.applicationFee),
     availableFrom: property.availableFrom ?? "",
-    minimumLeaseMonths: property.minimumLeaseMonths == null ? "" : String(property.minimumLeaseMonths),
+    minimumLeaseMonths:
+      property.minimumLeaseMonths == null
+        ? ""
+        : String(property.minimumLeaseMonths),
     applicationInstructions: property.applicationInstructions ?? "",
+    realtorDescription: property.realtorDescription ?? "",
     realtorShowingInstructions: property.realtorShowingInstructions ?? "",
+    entryInstructions: property.entryInstructions ?? "",
+    lockboxCode: property.lockboxCode ?? "",
+    commissionInfo: property.commissionInfo ?? "",
+    internalRemarks: property.internalRemarks ?? "",
     ownerName: property.ownerName ?? "",
     ownerEmail: property.ownerEmail ?? "",
     ownerPhone: property.ownerPhone ?? "",
@@ -123,7 +144,7 @@ function mapPropertyToFormValues(property: PropertyItem): PropertyFormValues {
 
 function buildPropertyPayload(
   values: PropertyFormValues,
-  property?: PropertyItem,
+  property?: PropertyItem
 ): PropertySaveInput | PropertyItem {
   const payload: PropertySaveInput = {
     agentId: values.agentId ?? null,
@@ -131,14 +152,29 @@ function buildPropertyPayload(
     bedRoom: values.bedRoom?.trim() ?? "",
     description: values.description?.trim() ?? "",
     extraDescription: values.extraDescription?.trim() ?? "",
-    minimumCreditScore: values.minimumCreditScore.trim() ? Number(values.minimumCreditScore) : null,
-    minimumMonthlyIncome: values.minimumMonthlyIncome.trim() ? Number(values.minimumMonthlyIncome) : null,
-    securityDeposit: values.securityDeposit.trim() ? Number(values.securityDeposit) : null,
-    applicationFee: values.applicationFee.trim() ? Number(values.applicationFee) : null,
+    minimumCreditScore: values.minimumCreditScore.trim()
+      ? Number(values.minimumCreditScore)
+      : null,
+    minimumMonthlyIncome: values.minimumMonthlyIncome.trim()
+      ? Number(values.minimumMonthlyIncome)
+      : null,
+    securityDeposit: values.securityDeposit.trim()
+      ? Number(values.securityDeposit)
+      : null,
+    applicationFee: values.applicationFee.trim()
+      ? Number(values.applicationFee)
+      : null,
     availableFrom: values.availableFrom.trim() || null,
-    minimumLeaseMonths: values.minimumLeaseMonths.trim() ? Number(values.minimumLeaseMonths) : null,
+    minimumLeaseMonths: values.minimumLeaseMonths.trim()
+      ? Number(values.minimumLeaseMonths)
+      : null,
     applicationInstructions: values.applicationInstructions.trim(),
+    realtorDescription: values.realtorDescription.trim(),
     realtorShowingInstructions: values.realtorShowingInstructions.trim(),
+    entryInstructions: values.entryInstructions.trim(),
+    lockboxCode: values.lockboxCode.trim(),
+    commissionInfo: values.commissionInfo.trim(),
+    internalRemarks: values.internalRemarks.trim(),
     ownerName: values.ownerName?.trim() ?? "",
     ownerEmail: values.ownerEmail?.trim().toLowerCase() ?? "",
     ownerPhone: values.ownerPhone?.trim() ?? "",
@@ -195,17 +231,25 @@ function getDaysOnMarket(createdAt: string) {
     return 0
   }
 
-  return Math.max(0, Math.ceil((Date.now() - createdDate.getTime()) / 86_400_000))
+  return Math.max(
+    0,
+    Math.ceil((Date.now() - createdDate.getTime()) / 86_400_000)
+  )
 }
 
 export function PropertyManagementPage() {
-  const [activeFilter, setActiveFilter] = useState<PropertyManagementFilter>("all")
-  const [activeType, setActiveType] = useState<"All" | "Residential" | "Commercial">("All")
+  const [activeFilter, setActiveFilter] =
+    useState<PropertyManagementFilter>("all")
+  const [activeType, setActiveType] = useState<
+    "All" | "Residential" | "Commercial"
+  >("All")
   const [activeAgent, setActiveAgent] = useState("")
   const [page, setPage] = useState(1)
   const [searchTerm, setSearchTerm] = useState("")
   const [modalState, setModalState] = useState<PropertyModalState>(null)
-  const [detailsProperty, setDetailsProperty] = useState<PropertyItem | null>(null)
+  const [detailsProperty, setDetailsProperty] = useState<PropertyItem | null>(
+    null
+  )
   const [submitError, setSubmitError] = useState<string | null>(null)
 
   const propertiesQuery = useManagedProperties({
@@ -223,39 +267,50 @@ export function PropertyManagementPage() {
 
   const rawProperties = useMemo(
     () => propertiesQuery.data?.items ?? [],
-    [propertiesQuery.data?.items],
+    [propertiesQuery.data?.items]
   )
-  const isInitialLoading = !propertiesQuery.data && (propertiesQuery.isLoading || propertiesQuery.isFetching)
+  const isInitialLoading =
+    !propertiesQuery.data &&
+    (propertiesQuery.isLoading || propertiesQuery.isFetching)
 
   const listings = useMemo<PropertyManagementListing[]>(
     () =>
       rawProperties
         .map((property) => ({
           addressLine1: property.title ?? "Untitled Property",
-          addressLine2: property.exactLocation ?? property.location ?? "Location pending",
+          addressLine2:
+            property.exactLocation ?? property.location ?? "Location pending",
           agent: property.agent?.fullName ?? "Unassigned",
           daysOnMarket: getDaysOnMarket(property.createdAt ?? ""),
           id: property.id,
           imageAlt: property.title ?? "Property",
           imageSrc: propertyHeroImage(property),
-          listingType:
-            (property.listingType === "ForRent" ? "For Rent" : "For Sale") as "For Sale" | "For Rent",
+          listingType: (property.listingType === "ForRent"
+            ? "For Rent"
+            : "For Sale") as "For Sale" | "For Rent",
           price: property.price ?? "",
           predictedSellDays: property.sellPrediction?.predictedDays ?? 0,
-          predictionLabel: property.sellPrediction?.isModelTrained ? "ML model" : "History fallback",
+          predictionLabel: property.sellPrediction?.isModelTrained
+            ? "ML model"
+            : "History fallback",
           propertyType: property.propertyType ?? "Residential",
           slug: property.slug ?? "",
           status: property.status ?? "Open",
         }))
         .filter((property) => {
-          if (activeFilter === "open") return ["Open", "Active", "UnderOffer"].includes(property.status)
-          if (activeFilter === "closed") return ["Closed", "Sold", "Rented"].includes(property.status)
+          if (activeFilter === "open")
+            return ["Open", "Active", "UnderOffer"].includes(property.status)
+          if (activeFilter === "closed")
+            return ["Closed", "Sold", "Rented"].includes(property.status)
           if (activeFilter === "long-open") {
-            return ["Open", "Active", "UnderOffer"].includes(property.status) && property.daysOnMarket >= 45
+            return (
+              ["Open", "Active", "UnderOffer"].includes(property.status) &&
+              property.daysOnMarket >= 45
+            )
           }
           return true
         }),
-    [activeFilter, rawProperties],
+    [activeFilter, rawProperties]
   )
 
   const statusCards = useMemo(
@@ -269,38 +324,49 @@ export function PropertyManagementPage() {
       {
         label: "Open Listings",
         icon: "verified",
-        value: rawProperties.filter((property) => ["Open", "Active", "UnderOffer"].includes(property.status ?? "Open")).length,
+        value: rawProperties.filter((property) =>
+          ["Open", "Active", "UnderOffer"].includes(property.status ?? "Open")
+        ).length,
         detail: "Visible on this page",
       },
       {
         label: "Closed Listings",
         icon: "inventory_2",
-        value: rawProperties.filter((property) => ["Closed", "Sold", "Rented"].includes(property.status ?? "Open")).length,
+        value: rawProperties.filter((property) =>
+          ["Closed", "Sold", "Rented"].includes(property.status ?? "Open")
+        ).length,
         detail: "Visible on this page",
       },
       {
         label: "Long Open",
         icon: "trending_up",
         value: rawProperties.filter(
-          (property) => ["Open", "Active", "UnderOffer"].includes(property.status ?? "Open") && getDaysOnMarket(property.createdAt ?? "") >= 45,
+          (property) =>
+            ["Open", "Active", "UnderOffer"].includes(
+              property.status ?? "Open"
+            ) && getDaysOnMarket(property.createdAt ?? "") >= 45
         ).length,
         detail: "Need follow-up now",
       },
     ],
-    [propertiesQuery.data?.totalCount, rawProperties],
+    [propertiesQuery.data?.totalCount, rawProperties]
   )
 
   const visibleAgents = useMemo(
     () =>
       Array.from(
-        new Set(rawProperties.map((property) => property.agent?.fullName ?? "").filter(Boolean)),
+        new Set(
+          rawProperties
+            .map((property) => property.agent?.fullName ?? "")
+            .filter(Boolean)
+        )
       ) as string[],
-    [rawProperties],
+    [rawProperties]
   )
 
   const agentOptions = useMemo<AgentUserOption[]>(
     () => agentUsersQuery.data ?? [],
-    [agentUsersQuery.data],
+    [agentUsersQuery.data]
   )
 
   const initialFormValues = useMemo(() => {
@@ -320,7 +386,7 @@ export function PropertyManagementPage() {
 
     if (modalState?.mode === "edit") {
       const response = await updatePropertyMutation.mutateAsync(
-        buildPropertyPayload(values, modalState.property) as PropertyItem,
+        buildPropertyPayload(values, modalState.property) as PropertyItem
       )
 
       if (response.error) {
@@ -329,7 +395,7 @@ export function PropertyManagementPage() {
       }
     } else {
       const response = await createPropertyMutation.mutateAsync(
-        buildPropertyPayload(values) as PropertySaveInput,
+        buildPropertyPayload(values) as PropertySaveInput
       )
 
       if (response.error) {
@@ -399,8 +465,12 @@ export function PropertyManagementPage() {
         <AddPropertyModalOverlaySection
           agentOptions={agentOptions}
           initialValues={initialFormValues}
-          isAgentOptionsLoading={agentUsersQuery.isLoading || agentUsersQuery.isFetching}
-          isSubmitting={createPropertyMutation.isPending || updatePropertyMutation.isPending}
+          isAgentOptionsLoading={
+            agentUsersQuery.isLoading || agentUsersQuery.isFetching
+          }
+          isSubmitting={
+            createPropertyMutation.isPending || updatePropertyMutation.isPending
+          }
           mode={modalState.mode}
           onClose={() => setModalState(null)}
           onSubmit={handlePropertySubmit}
@@ -424,4 +494,3 @@ export function PropertyManagementPage() {
     </>
   )
 }
-

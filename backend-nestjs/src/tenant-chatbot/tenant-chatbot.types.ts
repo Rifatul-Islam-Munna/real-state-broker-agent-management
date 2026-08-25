@@ -23,6 +23,7 @@ export type ChatbotDecisionReason =
   | 'TURN_LIMIT'
   | 'SHOWING_REQUESTED'
   | 'SYSTEM_UNAVAILABLE'
+  | 'REALTOR_VERIFICATION_REQUIRED'
   | 'EVIDENCE_VERIFIED';
 
 export type ChatbotSettings = {
@@ -38,6 +39,10 @@ export type ChatbotSettings = {
   fallbackMessage: string;
   creditRequiredMessage: string;
   creditRejectedMessage: string;
+  propertyUnavailableMessage: string;
+  evidenceConflictMessage: string;
+  turnLimitMessage: string;
+  realtorVerificationMessage: string;
   stopRules: {
     humanIntervention: boolean;
     doNotContact: boolean;

@@ -438,7 +438,7 @@ export class LeadOutreachService {
       .filter((item: any) => item.id !== templateId)
       .filter((item: any) => item.isActive !== false)
       .filter((item: any) => (item.channels ?? []).includes(channel))
-      .filter((item: any) => ['FollowUp1', 'FollowUp2', 'FollowUp3'].includes(item.sequenceType))
+      .filter((item: any) => ['FollowUp1', 'FollowUp2', 'FollowUp3', 'FollowUp4', 'FollowUp5', 'FollowUp6'].includes(item.sequenceType))
       .sort((left: any, right: any) => this.sequenceRank(left.sequenceType) - this.sequenceRank(right.sequenceType));
     for (const template of followUps) {
       const gapDays = Math.max(0, Number(template.gapDays ?? 0) || 0);
@@ -470,7 +470,7 @@ export class LeadOutreachService {
   }
 
   private sequenceRank(value: string) {
-    return value === 'FollowUp1' ? 1 : value === 'FollowUp2' ? 2 : value === 'FollowUp3' ? 3 : 0;
+    return value === 'FollowUp1' ? 1 : value === 'FollowUp2' ? 2 : value === 'FollowUp3' ? 3 : value === 'FollowUp4' ? 4 : value === 'FollowUp5' ? 5 : value === 'FollowUp6' ? 6 : 0;
   }
 
   private resolveTemplateTokens(text: string, lead: Lead, agencyName?: string) {

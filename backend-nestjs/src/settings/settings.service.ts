@@ -409,7 +409,7 @@ export class SettingsService {
         body: this.text(item?.body, fallbackItem.body),
         channels: this.communicationChannels(item?.channels, fallbackItem.channels),
         variableTokens: this.stringList(item?.variableTokens, fallbackItem.variableTokens),
-        sequenceType: ['Direct', 'FollowUp1', 'FollowUp2', 'FollowUp3'].includes(item?.sequenceType) ? item.sequenceType : (fallbackItem.sequenceType ?? 'Direct'),
+        sequenceType: ['Direct', 'FollowUp1', 'FollowUp2', 'FollowUp3', 'FollowUp4', 'FollowUp5', 'FollowUp6'].includes(item?.sequenceType) ? item.sequenceType : (fallbackItem.sequenceType ?? 'Direct'),
         gapDays: this.clampInt(item?.gapDays, fallbackItem.gapDays ?? 0, 0, 365),
         isActive: item?.isActive !== false,
         attachPropertyDocuments: item?.attachPropertyDocuments !== false,

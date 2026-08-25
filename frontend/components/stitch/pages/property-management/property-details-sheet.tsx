@@ -89,9 +89,11 @@ export function PropertyDetailsSheet({
   )
   const bookings = bookingQuery.data?.items ?? []
   const realtorShowingsData = realtorQuery.data
-  const realtorShowings = (Array.isArray(realtorShowingsData) ? realtorShowingsData : realtorShowingsData?.items ?? []).filter(
-    (showing) => showing.propertyId === propertyId
-  )
+  const realtorShowings = (
+    Array.isArray(realtorShowingsData)
+      ? realtorShowingsData
+      : (realtorShowingsData?.items ?? [])
+  ).filter((showing) => showing.propertyId === propertyId)
   const feedback = feedbackQuery.data?.items ?? []
   const documents = documentsQuery.data?.items ?? []
   const error =
@@ -104,7 +106,8 @@ export function PropertyDetailsSheet({
   if (!property) return null
 
   const heroImage = property.thumbnailUrl || property.imageUrls?.[0] || ""
-  const photoCount = (property.thumbnailUrl ? 1 : 0) + (property.imageUrls?.length ?? 0)
+  const photoCount =
+    (property.thumbnailUrl ? 1 : 0) + (property.imageUrls?.length ?? 0)
 
   return (
     <Sheet
@@ -115,48 +118,79 @@ export function PropertyDetailsSheet({
       }}
     >
       <SheetContent className="w-full overflow-hidden border-0 bg-[var(--ether-surface)] p-0 shadow-[-20px_0_60px_rgba(11,28,48,0.14)] sm:max-w-[46rem] lg:w-[40vw] lg:max-w-[40vw] xl:min-w-[42rem]">
-        <SheetHeader className="bg-white px-6 pb-6 pt-6 text-left sm:px-8">
+        <SheetHeader className="bg-white px-6 pt-6 pb-6 text-left sm:px-8">
           <div className="mb-6 flex items-start justify-between gap-4 pr-8">
             <div className="flex items-center gap-3">
-              <Badge className="rounded-full border-0 bg-[color-mix(in_srgb,var(--ether-secondary-container)_28%,white)] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--ether-secondary)]">
+              <Badge className="rounded-full border-0 bg-[color-mix(in_srgb,var(--ether-secondary-container)_28%,white)] px-3 py-1 text-[10px] font-bold tracking-[0.08em] text-[var(--ether-secondary)] uppercase">
                 <span className="mr-1.5 size-1.5 rounded-full bg-[var(--ether-secondary)]" />
                 {formatStatus(property.status)}
               </Badge>
-              <span className="text-[10px] font-semibold uppercase tracking-[0.06em] text-[var(--ether-outline)]">
+              <span className="text-[10px] font-semibold tracking-[0.06em] text-[var(--ether-outline)] uppercase">
                 Updated {formatDate(property.updatedAt)}
               </span>
             </div>
-            <Button className="h-10 rounded-lg border-[var(--ether-outline-variant)] px-5 font-semibold" onClick={() => onEdit(property)} type="button" variant="outline">
+            <Button
+              className="h-10 rounded-lg border-[var(--ether-outline-variant)] px-5 font-semibold"
+              onClick={() => onEdit(property)}
+              type="button"
+              variant="outline"
+            >
               Edit
             </Button>
           </div>
 
           <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
             <div className="min-w-0">
-              <SheetTitle className="truncate text-3xl font-bold tracking-[-0.03em] text-[var(--ether-on-surface)] sm:text-4xl">{property.title}</SheetTitle>
+              <SheetTitle className="truncate text-3xl font-bold tracking-[-0.03em] text-[var(--ether-on-surface)] sm:text-4xl">
+                {property.title}
+              </SheetTitle>
               <SheetDescription className="mt-2 flex items-center gap-1.5 text-base text-[var(--ether-on-surface-variant)]">
                 <AppIcon className="text-lg" name="location_on" />
-                {property.exactLocation || property.location || "Location pending"}
+                {property.exactLocation ||
+                  property.location ||
+                  "Location pending"}
               </SheetDescription>
             </div>
             <div className="shrink-0 sm:text-right">
-              <p className="ether-label-caps text-[10px] text-[var(--ether-on-surface-variant)]">Listing Price</p>
-              <p className="mt-2 text-3xl font-bold tracking-[-0.03em] text-[var(--ether-primary)]">{property.price || "Price pending"}</p>
-              <p className="mt-1 text-xs text-[var(--ether-outline)]">{property.propertyType} � {property.listingType === "ForRent" ? "For rent" : "For sale"}</p>
+              <p className="ether-label-caps text-[10px] text-[var(--ether-on-surface-variant)]">
+                Listing Price
+              </p>
+              <p className="mt-2 text-3xl font-bold tracking-[-0.03em] text-[var(--ether-primary)]">
+                {property.price || "Price pending"}
+              </p>
+              <p className="mt-1 text-xs text-[var(--ether-outline)]">
+                {property.propertyType} �{" "}
+                {property.listingType === "ForRent" ? "For rent" : "For sale"}
+              </p>
             </div>
           </div>
 
           <div className="group relative mt-7 h-52 overflow-hidden rounded-2xl bg-[var(--ether-surface-container)]">
             {heroImage ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img alt={property.title} className="h-full w-full object-cover transition duration-700 group-hover:scale-105" src={heroImage} />
+              <img
+                alt={property.title}
+                className="h-full w-full object-cover transition duration-700 group-hover:scale-105"
+                src={heroImage}
+              />
             ) : (
-              <div className="flex h-full items-center justify-center text-[var(--ether-outline-variant)]"><AppIcon className="text-6xl" name="home_work" /></div>
+              <div className="flex h-full items-center justify-center text-[var(--ether-outline-variant)]">
+                <AppIcon className="text-6xl" name="home_work" />
+              </div>
             )}
             <div className="absolute inset-0 flex items-end bg-gradient-to-t from-black/70 via-black/5 to-transparent p-5">
               <div className="flex w-full items-center justify-between gap-3 text-white">
-                <span className="inline-flex items-center gap-2 text-sm font-semibold"><AppIcon name="photo_library" />{photoCount} {photoCount === 1 ? "Photo" : "Photos"}</span>
-                <button className="rounded-full bg-white/20 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide backdrop-blur-md" onClick={() => setActiveTab("overview")} type="button">View gallery</button>
+                <span className="inline-flex items-center gap-2 text-sm font-semibold">
+                  <AppIcon name="photo_library" />
+                  {photoCount} {photoCount === 1 ? "Photo" : "Photos"}
+                </span>
+                <button
+                  className="rounded-full bg-white/20 px-3 py-1.5 text-[10px] font-bold tracking-wide uppercase backdrop-blur-md"
+                  onClick={() => setActiveTab("overview")}
+                  type="button"
+                >
+                  View gallery
+                </button>
               </div>
             </div>
           </div>
@@ -194,18 +228,33 @@ export function PropertyDetailsSheet({
               value={bookings.length + realtorShowings.length}
               icon="event"
             />
-            <Metric label="Feedback" value={feedback.length} icon="rate_review" />
-            <Metric label="Documents" value={documents.length} icon="description" />
+            <Metric
+              label="Feedback"
+              value={feedback.length}
+              icon="rate_review"
+            />
+            <Metric
+              label="Documents"
+              value={documents.length}
+              icon="description"
+            />
           </section>
 
           <div className="mt-5">
             {activeTab === "overview" ? <Overview property={property} /> : null}
             {activeTab === "leads" ? <LeadsList items={leads} /> : null}
             {activeTab === "showings" ? (
-              <ShowingsList bookings={bookings} realtorShowings={realtorShowings} />
+              <ShowingsList
+                bookings={bookings}
+                realtorShowings={realtorShowings}
+              />
             ) : null}
-            {activeTab === "feedback" ? <FeedbackList items={feedback} /> : null}
-            {activeTab === "documents" ? <DocumentsList items={documents} /> : null}
+            {activeTab === "feedback" ? (
+              <FeedbackList items={feedback} />
+            ) : null}
+            {activeTab === "documents" ? (
+              <DocumentsList items={documents} />
+            ) : null}
           </div>
         </div>
       </SheetContent>
@@ -213,7 +262,15 @@ export function PropertyDetailsSheet({
   )
 }
 
-function Metric({ icon, label, value }: { icon: string; label: string; value: number }) {
+function Metric({
+  icon,
+  label,
+  value,
+}: {
+  icon: string
+  label: string
+  value: number
+}) {
   return (
     <Card className="rounded-2xl border-0 bg-white shadow-[var(--shadow-surface-1)]">
       <CardContent className="flex items-center justify-between p-4">
@@ -228,13 +285,27 @@ function Metric({ icon, label, value }: { icon: string; label: string; value: nu
 }
 
 function Overview({ property }: { property: PropertyItem }) {
-  const initials = (property.ownerName || "Owner").split(" ").filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase()
+  const initials = (property.ownerName || "Owner")
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase()
   const details = [
     { label: "Bedrooms", value: property.bedRoom || "�", icon: "bed" },
     { label: "Bathrooms", value: property.bathRoom || "�", icon: "bathtub" },
     { label: "Total Size", value: property.width || "�", icon: "square_foot" },
-    { label: "Listing Agent", value: property.agent?.fullName || "Unassigned", icon: "badge" },
-    { label: "Created", value: formatDate(property.createdAt), icon: "calendar_today" },
+    {
+      label: "Listing Agent",
+      value: property.agent?.fullName || "Unassigned",
+      icon: "badge",
+    },
+    {
+      label: "Created",
+      value: formatDate(property.createdAt),
+      icon: "calendar_today",
+    },
     { label: "Updated", value: formatDate(property.updatedAt), icon: "update" },
   ]
 
@@ -242,56 +313,231 @@ function Overview({ property }: { property: PropertyItem }) {
     <div className="space-y-6">
       <section className="rounded-[24px] bg-white p-6 shadow-[var(--shadow-surface-1)]">
         <div className="mb-6 flex items-center gap-3 border-b border-[color-mix(in_srgb,var(--ether-outline-variant)_35%,transparent)] pb-4">
-          <AppIcon className="text-xl text-[var(--ether-primary)]" name="analytics" />
-          <h3 className="ether-headline-sm text-[var(--ether-on-surface)]">Listing Details</h3>
+          <AppIcon
+            className="text-xl text-[var(--ether-primary)]"
+            name="analytics"
+          />
+          <h3 className="ether-headline-sm text-[var(--ether-on-surface)]">
+            Listing Details
+          </h3>
         </div>
         <div className="grid gap-x-8 gap-y-6 sm:grid-cols-2">
           {details.map((item) => (
             <div className="flex items-start gap-3" key={item.label}>
-              <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[var(--ether-surface-container-low)] text-[var(--ether-primary)]"><AppIcon name={item.icon} /></span>
-              <div><p className="ether-label-caps text-[10px] text-[var(--ether-outline)]">{item.label}</p><p className="mt-1 font-semibold text-[var(--ether-on-surface)]">{item.value}</p></div>
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[var(--ether-surface-container-low)] text-[var(--ether-primary)]">
+                <AppIcon name={item.icon} />
+              </span>
+              <div>
+                <p className="ether-label-caps text-[10px] text-[var(--ether-outline)]">
+                  {item.label}
+                </p>
+                <p className="mt-1 font-semibold text-[var(--ether-on-surface)]">
+                  {item.value}
+                </p>
+              </div>
             </div>
           ))}
         </div>
       </section>
 
       <section className="rounded-[24px] bg-white p-6 shadow-[var(--shadow-surface-1)]">
-        <div className="mb-4 flex items-center gap-3"><AppIcon className="text-xl text-[var(--ether-primary)]" name="subject" /><h3 className="ether-headline-sm">Property Description</h3></div>
-        <div className="space-y-3 text-sm leading-7 text-[var(--ether-on-surface-variant)]"><p>{property.description || "No description provided."}</p>{property.extraDescription ? <p>{property.extraDescription}</p> : null}</div>
-        {property.keyAmenities?.length ? <div className="mt-5 flex flex-wrap gap-2">{property.keyAmenities.map((item) => <Badge className="rounded-full border-0 bg-[var(--ether-primary-fixed)] px-3 py-1 text-[var(--ether-primary)]" key={item}>{item}</Badge>)}</div> : null}
-      </section>
-
-      <section className="rounded-[24px] bg-white p-6 shadow-[var(--shadow-surface-1)]">
-        <div className="mb-5 flex items-center gap-3"><AppIcon className="text-xl text-[var(--ether-primary)]" name="verified_user" /><h3 className="ether-headline-sm">Applicant Requirements & Showing</h3></div>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Detail label="Minimum Credit Score" value={property.minimumCreditScore == null ? undefined : String(property.minimumCreditScore)} />
-          <Detail label="Minimum Monthly Income" value={property.minimumMonthlyIncome == null ? undefined : String(property.minimumMonthlyIncome)} />
-          <Detail label="Security Deposit" value={property.securityDeposit == null ? undefined : String(property.securityDeposit)} />
-          <Detail label="Application Fee" value={property.applicationFee == null ? undefined : String(property.applicationFee)} />
-          <Detail label="Available From" value={property.availableFrom || undefined} />
-          <Detail label="Minimum Lease" value={property.minimumLeaseMonths == null ? undefined : String(property.minimumLeaseMonths) + " months"} />
+        <div className="mb-4 flex items-center gap-3">
+          <AppIcon
+            className="text-xl text-[var(--ether-primary)]"
+            name="subject"
+          />
+          <h3 className="ether-headline-sm">Property Description</h3>
         </div>
-        {property.applicationInstructions ? <div className="mt-5"><p className="ether-label-caps text-[10px] text-[var(--ether-outline)]">Application Instructions</p><p className="mt-2 text-sm leading-6 text-[var(--ether-on-surface-variant)]">{property.applicationInstructions}</p></div> : null}
-        {property.realtorShowingInstructions ? <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4"><p className="ether-label-caps text-[10px] text-amber-700">Private Realtor Showing Instructions</p><p className="mt-2 text-sm leading-6 text-amber-950">{property.realtorShowingInstructions}</p></div> : null}
+        <div className="space-y-3 text-sm leading-7 text-[var(--ether-on-surface-variant)]">
+          <p>{property.description || "No description provided."}</p>
+          {property.extraDescription ? (
+            <p>{property.extraDescription}</p>
+          ) : null}
+        </div>
+        {property.keyAmenities?.length ? (
+          <div className="mt-5 flex flex-wrap gap-2">
+            {property.keyAmenities.map((item) => (
+              <Badge
+                className="rounded-full border-0 bg-[var(--ether-primary-fixed)] px-3 py-1 text-[var(--ether-primary)]"
+                key={item}
+              >
+                {item}
+              </Badge>
+            ))}
+          </div>
+        ) : null}
       </section>
 
       <section className="rounded-[24px] bg-white p-6 shadow-[var(--shadow-surface-1)]">
-        <div className="mb-5 flex items-center gap-3"><AppIcon className="text-xl text-[var(--ether-primary)]" name="person_pin" /><h3 className="ether-headline-sm">Owner Information</h3></div>
+        <div className="mb-5 flex items-center gap-3">
+          <AppIcon
+            className="text-xl text-[var(--ether-primary)]"
+            name="verified_user"
+          />
+          <h3 className="ether-headline-sm">
+            Applicant Requirements & Showing
+          </h3>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Detail
+            label="Minimum Credit Score"
+            value={
+              property.minimumCreditScore == null
+                ? undefined
+                : String(property.minimumCreditScore)
+            }
+          />
+          <Detail
+            label="Minimum Monthly Income"
+            value={
+              property.minimumMonthlyIncome == null
+                ? undefined
+                : String(property.minimumMonthlyIncome)
+            }
+          />
+          <Detail
+            label="Security Deposit"
+            value={
+              property.securityDeposit == null
+                ? undefined
+                : String(property.securityDeposit)
+            }
+          />
+          <Detail
+            label="Application Fee"
+            value={
+              property.applicationFee == null
+                ? undefined
+                : String(property.applicationFee)
+            }
+          />
+          <Detail
+            label="Available From"
+            value={property.availableFrom || undefined}
+          />
+          <Detail
+            label="Minimum Lease"
+            value={
+              property.minimumLeaseMonths == null
+                ? undefined
+                : String(property.minimumLeaseMonths) + " months"
+            }
+          />
+        </div>
+        {property.applicationInstructions ? (
+          <div className="mt-5">
+            <p className="ether-label-caps text-[10px] text-[var(--ether-outline)]">
+              Application Instructions
+            </p>
+            <p className="mt-2 text-sm leading-6 text-[var(--ether-on-surface-variant)]">
+              {property.applicationInstructions}
+            </p>
+          </div>
+        ) : null}
+        {property.realtorShowingInstructions ? (
+          <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4">
+            <p className="ether-label-caps text-[10px] text-amber-700">
+              Private Realtor Showing Instructions
+            </p>
+            <p className="mt-2 text-sm leading-6 text-amber-950">
+              {property.realtorShowingInstructions}
+            </p>
+          </div>
+        ) : null}
+        {property.realtorDescription ? (
+          <div className="mt-5 rounded-xl border bg-[var(--ether-surface-container-low)] p-4">
+            <p className="ether-label-caps text-[10px] text-[var(--ether-outline)]">
+              Private Realtor Description
+            </p>
+            <p className="mt-2 text-sm leading-6 text-[var(--ether-on-surface-variant)]">
+              {property.realtorDescription}
+            </p>
+          </div>
+        ) : null}
+        {property.entryInstructions ||
+        property.lockboxCode ||
+        property.commissionInfo ||
+        property.internalRemarks ? (
+          <div className="mt-5 grid gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 sm:grid-cols-2">
+            <Detail
+              label="Entry Instructions"
+              value={property.entryInstructions}
+            />
+            <Detail label="Lockbox Code" value={property.lockboxCode} />
+            <Detail
+              label="Commission Information"
+              value={property.commissionInfo}
+            />
+            <Detail label="Internal Remarks" value={property.internalRemarks} />
+          </div>
+        ) : null}
+      </section>
+
+      <section className="rounded-[24px] bg-white p-6 shadow-[var(--shadow-surface-1)]">
+        <div className="mb-5 flex items-center gap-3">
+          <AppIcon
+            className="text-xl text-[var(--ether-primary)]"
+            name="person_pin"
+          />
+          <h3 className="ether-headline-sm">Owner Information</h3>
+        </div>
         <div className="rounded-2xl bg-[var(--ether-surface-container-low)] p-5">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-4"><span className="flex size-14 items-center justify-center rounded-full bg-[var(--ether-primary)] text-lg font-bold text-white">{initials}</span><div><p className="text-lg font-bold">{property.ownerName || "Owner not provided"}</p><p className="mt-1 text-sm text-[var(--ether-on-surface-variant)]">Property owner contact</p></div></div>
-            <div className="flex gap-2">{property.ownerPhone ? <a className="flex size-10 items-center justify-center rounded-lg bg-white text-[var(--ether-primary)] shadow-sm" href={`tel:${property.ownerPhone}`}><AppIcon name="call" /></a> : null}{property.ownerEmail ? <a className="flex size-10 items-center justify-center rounded-lg bg-white text-[var(--ether-primary)] shadow-sm" href={`mailto:${property.ownerEmail}`}><AppIcon name="mail" /></a> : null}</div>
+            <div className="flex items-center gap-4">
+              <span className="flex size-14 items-center justify-center rounded-full bg-[var(--ether-primary)] text-lg font-bold text-white">
+                {initials}
+              </span>
+              <div>
+                <p className="text-lg font-bold">
+                  {property.ownerName || "Owner not provided"}
+                </p>
+                <p className="mt-1 text-sm text-[var(--ether-on-surface-variant)]">
+                  Property owner contact
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              {property.ownerPhone ? (
+                <a
+                  className="flex size-10 items-center justify-center rounded-lg bg-white text-[var(--ether-primary)] shadow-sm"
+                  href={`tel:${property.ownerPhone}`}
+                >
+                  <AppIcon name="call" />
+                </a>
+              ) : null}
+              {property.ownerEmail ? (
+                <a
+                  className="flex size-10 items-center justify-center rounded-lg bg-white text-[var(--ether-primary)] shadow-sm"
+                  href={`mailto:${property.ownerEmail}`}
+                >
+                  <AppIcon name="mail" />
+                </a>
+              ) : null}
+            </div>
           </div>
-          <div className="mt-5 grid gap-3 text-sm sm:grid-cols-2"><Detail label="Email" value={property.ownerEmail} /><Detail label="Phone" value={property.ownerPhone} /></div>
+          <div className="mt-5 grid gap-3 text-sm sm:grid-cols-2">
+            <Detail label="Email" value={property.ownerEmail} />
+            <Detail label="Phone" value={property.ownerPhone} />
+          </div>
         </div>
-        {property.ownerExtraInfo ? <div className="mt-5"><p className="ether-label-caps text-[10px] text-[var(--ether-outline)]">Internal Operations Note</p><div className="mt-3 rounded-r-xl border-l-4 border-[var(--ether-primary)]/40 bg-[var(--ether-surface)] p-4 text-sm italic leading-6 text-[var(--ether-on-surface-variant)]">{property.ownerExtraInfo}</div></div> : null}
+        {property.ownerExtraInfo ? (
+          <div className="mt-5">
+            <p className="ether-label-caps text-[10px] text-[var(--ether-outline)]">
+              Internal Operations Note
+            </p>
+            <div className="mt-3 rounded-r-xl border-l-4 border-[var(--ether-primary)]/40 bg-[var(--ether-surface)] p-4 text-sm leading-6 text-[var(--ether-on-surface-variant)] italic">
+              {property.ownerExtraInfo}
+            </div>
+          </div>
+        ) : null}
       </section>
     </div>
   )
 }
 
 function LeadsList({ items }: { items: any[] }) {
-  if (!items.length) return <Empty text="No leads are linked to this property." />
+  if (!items.length)
+    return <Empty text="No leads are linked to this property." />
   return (
     <div className="space-y-3">
       {items.map((lead) => (
@@ -304,9 +550,12 @@ function LeadsList({ items }: { items: any[] }) {
                 <Badge variant="secondary">{lead.priority}</Badge>
               </div>
               <p className="mt-1 text-sm text-muted-foreground">
-                {[lead.email, lead.phone].filter(Boolean).join(" · ") || "No contact details"}
+                {[lead.email, lead.phone].filter(Boolean).join(" · ") ||
+                  "No contact details"}
               </p>
-              <p className="mt-2 text-sm">{lead.summary || lead.interest || "No summary"}</p>
+              <p className="mt-2 text-sm">
+                {lead.summary || lead.interest || "No summary"}
+              </p>
             </div>
             <div className="text-sm text-muted-foreground sm:text-right">
               <p>{lead.assignedAgentName || lead.agent || "Unassigned"}</p>
@@ -319,7 +568,13 @@ function LeadsList({ items }: { items: any[] }) {
   )
 }
 
-function ShowingsList({ bookings, realtorShowings }: { bookings: any[]; realtorShowings: any[] }) {
+function ShowingsList({
+  bookings,
+  realtorShowings,
+}: {
+  bookings: any[]
+  realtorShowings: any[]
+}) {
   if (!bookings.length && !realtorShowings.length) {
     return <Empty text="No showing activity is linked to this property." />
   }
@@ -332,13 +587,21 @@ function ShowingsList({ bookings, realtorShowings }: { bookings: any[]; realtorS
             <Card className="shadow-none" key={`booking-${item.id}`}>
               <CardContent className="grid gap-2 p-4 sm:grid-cols-[1fr_auto]">
                 <div>
-                  <p className="font-semibold">{item.contactName || "Visitor"}</p>
-                  <p className="text-sm text-muted-foreground">{item.contactEmail || item.contactPhone}</p>
-                  {item.notes ? <p className="mt-2 text-sm">{item.notes}</p> : null}
+                  <p className="font-semibold">
+                    {item.contactName || "Visitor"}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    {item.contactEmail || item.contactPhone}
+                  </p>
+                  {item.notes ? (
+                    <p className="mt-2 text-sm">{item.notes}</p>
+                  ) : null}
                 </div>
                 <div className="sm:text-right">
                   <Badge variant="outline">{item.status}</Badge>
-                  <p className="mt-2 text-xs text-muted-foreground">{formatDate(item.startAt)}</p>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    {formatDate(item.startAt)}
+                  </p>
                 </div>
               </CardContent>
             </Card>
@@ -353,19 +616,27 @@ function ShowingsList({ bookings, realtorShowings }: { bookings: any[]; realtorS
             <Card className="shadow-none" key={`realtor-${item.id}`}>
               <CardContent className="grid gap-2 p-4 sm:grid-cols-[1fr_auto]">
                 <div>
-                  <p className="font-semibold">{item.realtorName || "Realtor"}</p>
+                  <p className="font-semibold">
+                    {item.realtorName || "Realtor"}
+                  </p>
                   <p className="text-sm text-muted-foreground">
-                    {[item.realtorEmail, item.realtorPhone].filter(Boolean).join(" · ")}
+                    {[item.realtorEmail, item.realtorPhone]
+                      .filter(Boolean)
+                      .join(" · ")}
                   </p>
                 </div>
                 <div className="sm:text-right">
                   <Badge variant="outline">{item.automationStatus}</Badge>
-                  <p className="mt-2 text-xs text-muted-foreground">{formatDate(item.showingAt)}</p>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    {formatDate(item.showingAt)}
+                  </p>
                 </div>
               </CardContent>
             </Card>
           ))}
-          {!realtorShowings.length ? <Empty text="No realtor showing outreach." /> : null}
+          {!realtorShowings.length ? (
+            <Empty text="No realtor showing outreach." />
+          ) : null}
         </div>
       </section>
     </div>
@@ -373,7 +644,8 @@ function ShowingsList({ bookings, realtorShowings }: { bookings: any[]; realtorS
 }
 
 function FeedbackList({ items }: { items: any[] }) {
-  if (!items.length) return <Empty text="No feedback has been received for this property." />
+  if (!items.length)
+    return <Empty text="No feedback has been received for this property." />
   return (
     <div className="space-y-3">
       {items.map((item) => (
@@ -383,13 +655,20 @@ function FeedbackList({ items }: { items: any[] }) {
               <div className="flex flex-wrap items-center gap-2">
                 <p className="font-semibold">{item.realtorName || "Realtor"}</p>
                 <SentimentBadge value={item.sentiment} />
-                <Badge variant="outline">{item.channel === "Sms" ? "SMS" : "Email"}</Badge>
+                <Badge variant="outline">
+                  {item.channel === "Sms" ? "SMS" : "Email"}
+                </Badge>
               </div>
-              <p className="text-xs text-muted-foreground">{formatDate(item.receivedAt)}</p>
+              <p className="text-xs text-muted-foreground">
+                {formatDate(item.receivedAt)}
+              </p>
             </div>
-            <p className="mt-3 whitespace-pre-wrap text-sm leading-6">{item.feedbackText}</p>
+            <p className="mt-3 text-sm leading-6 whitespace-pre-wrap">
+              {item.feedbackText}
+            </p>
             <p className="mt-2 text-xs text-muted-foreground">
-              {item.classifier || "Unknown classifier"} · {Math.round((item.confidence ?? 0) * 100)}% confidence
+              {item.classifier || "Unknown classifier"} ·{" "}
+              {Math.round((item.confidence ?? 0) * 100)}% confidence
             </p>
           </CardContent>
         </Card>
@@ -399,7 +678,8 @@ function FeedbackList({ items }: { items: any[] }) {
 }
 
 function DocumentsList({ items }: { items: any[] }) {
-  if (!items.length) return <Empty text="No repository documents are linked to this property." />
+  if (!items.length)
+    return <Empty text="No repository documents are linked to this property." />
   return (
     <div className="grid gap-3 md:grid-cols-2">
       {items.map((item) => (
@@ -413,13 +693,17 @@ function DocumentsList({ items }: { items: any[] }) {
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="font-semibold">{item.title}</p>
-              <p className="mt-1 text-xs text-muted-foreground">{item.fileName}</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {item.fileName}
+              </p>
             </div>
             <AppIcon name="open_in_new" />
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
             <Badge variant="outline">{item.documentType}</Badge>
-            <Badge variant="secondary">{item.category || "Uncategorized"}</Badge>
+            <Badge variant="secondary">
+              {item.category || "Uncategorized"}
+            </Badge>
           </div>
         </a>
       ))}
@@ -431,7 +715,7 @@ function Detail({ label, value }: { label: string; value?: string | null }) {
   return (
     <div>
       <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="mt-1 break-words font-medium">{value || "—"}</p>
+      <p className="mt-1 font-medium break-words">{value || "—"}</p>
     </div>
   )
 }
@@ -451,7 +735,10 @@ function SentimentBadge({ value }: { value: string }) {
 }
 
 function normalize(value: unknown) {
-  return `${value ?? ""}`.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()
+  return `${value ?? ""}`
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
 }
 
 function formatDate(value?: string | null) {
@@ -463,12 +750,3 @@ function formatDate(value?: string | null) {
 function formatStatus(value: string) {
   return `${value ?? ""}`.replace(/([A-Z])/g, " $1").trim()
 }
-
-
-
-
-
-
-
-
-

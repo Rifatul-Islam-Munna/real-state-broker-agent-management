@@ -223,6 +223,79 @@ describe('TenantChatbotService', () => {
     ).toBe(false);
   });
 
+  it('returns realtor-only lockbox knowledge when the trusted audience is REALTOR', async () => {
+    const query = jest.fn(async (sql: string) => {
+      if (sql.includes('SELECT value FROM tenant_setting'))
+        return { rows: [{ value: activeSettings }] };
+      if (sql.includes('FROM tenant_property'))
+        return {
+          rows: [
+            {
+              id: 41,
+              title: 'Oak',
+              status: 'published',
+              payload: { lockboxCode: '8472' },
+            },
+          ],
+        };
+      if (sql.includes('FROM tenant_chatbot_knowledge'))
+        return {
+          rows: [
+            {
+              id: '95',
+              propertyId: 41,
+              scope: 'PROPERTY',
+              audience: 'REALTOR',
+              title: 'Lockbox code',
+              answer: 'Lockbox code: 8472',
+              priority: 100,
+              active: true,
+              sourceType: 'PROPERTY_FIELD',
+            },
+          ],
+        };
+      return { rows: [] };
+    });
+    const search = jest
+      .fn()
+      .mockResolvedValueOnce([
+        {
+          pointId: 'lockbox-point',
+          score: 0.97,
+          scope: 'PROPERTY',
+          tenantId: 42,
+          audience: 'REALTOR',
+          propertyId: 41,
+          knowledgeId: '95',
+          sourceType: 'PROPERTY_FIELD',
+          sourceHash: 'lockbox-hash',
+          priority: 100,
+          active: true,
+        },
+      ])
+      .mockResolvedValueOnce([]);
+    const state = serviceWith(query, { search });
+
+    await expect(
+      state.service.testQuestion(tenant, {
+        propertyId: 41,
+        audience: 'REALTOR',
+        question: 'What is the lockbox code?',
+      }),
+    ).resolves.toMatchObject({
+      decision: 'ANSWER',
+      answer: 'Lockbox code: 8472',
+      confidence: 0.97,
+    });
+    expect(search).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        tenantId: 42,
+        audience: 'REALTOR',
+        propertyId: 41,
+      }),
+    );
+  });
   it('fails closed for low confidence and conflicting evidence', async () => {
     const query = jest.fn(async (sql: string) => {
       if (sql.includes('SELECT value FROM tenant_setting')) {
@@ -422,6 +495,9 @@ describe('TenantChatbotService', () => {
 
   it('cancels a queued bot reply when a human intervenes before delivery', async () => {
     const query = jest.fn(async (sql: string) => {
+      if (sql.includes('SELECT value FROM tenant_setting')) {
+        return { rows: [{ value: activeSettings }] };
+      }
       if (sql.includes('FROM tenant_chatbot_conversation')) {
         return {
           rows: [
@@ -465,6 +541,39 @@ describe('TenantChatbotService', () => {
     ).toBe(true);
   });
 
+  it('allows one final rule message for the matching stopped reason while retaining pre-send checks', async () => {
+    const query = jest.fn(async (sql: string) => {
+      if (sql.includes('FROM tenant_chatbot_conversation')) {
+        return {
+          rows: [
+            {
+              id: '31',
+              leadId: 70,
+              status: 'STOPPED',
+              stopReason: 'CREDIT_BELOW_MINIMUM',
+              createdAt: new Date('2026-08-24T10:00:00Z'),
+            },
+          ],
+        };
+      }
+      if (sql.includes('SELECT value FROM tenant_setting')) {
+        return { rows: [{ value: activeSettings }] };
+      }
+      return { rows: [] };
+    });
+    const state = serviceWith(query);
+
+    await expect(
+      state.service.authorizeOutboundJob(tenant, {
+        id: 501,
+        lead_id: 70,
+        source_type: 'tenant-chatbot-rule',
+        source_id: '31',
+        channel: 'SMS',
+        payload: { finalRuleReason: 'CREDIT_BELOW_MINIMUM' },
+      }),
+    ).resolves.toEqual({ allowed: true, reason: 'READY' });
+  });
   it('manually stops a lead and cancels only chatbot-owned queued jobs', async () => {
     const query = jest.fn(async (sql: string) => {
       if (
@@ -485,7 +594,9 @@ describe('TenantChatbotService', () => {
     const cancellation = query.mock.calls.find(([sql]) =>
       sql.includes('UPDATE tenant_outreach_job'),
     );
-    expect(cancellation?.[0]).toContain("source_type = 'tenant-chatbot'");
+    expect(cancellation?.[0]).toContain(
+      "source_type IN ('tenant-chatbot', 'tenant-chatbot-rule')",
+    );
     expect(cancellation?.[0]).toContain(
       "status IN ('scheduled', 'retrying', 'processing')",
     );
@@ -596,6 +707,75 @@ describe('TenantChatbotService', () => {
     );
   });
 
+  it('reindexes only the edited property and includes realtor-only lockbox knowledge', async () => {
+    let knowledgeId = 900;
+    const query = jest.fn(async (sql: string) => {
+      if (
+        sql.includes('FROM tenant_property') &&
+        sql.includes('WHERE id = $1')
+      ) {
+        return {
+          rows: [
+            {
+              id: 9,
+              title: 'Oak Home',
+              status: 'published',
+              payload: {
+                description: 'Updated public description',
+                lockboxCode: '8472',
+              },
+            },
+          ],
+        };
+      }
+      if (
+        sql.includes('SELECT source_hash') &&
+        sql.includes('property_id = $1')
+      ) {
+        return {
+          rows: [{ sourceHash: 'old-public' }, { sourceHash: 'old-private' }],
+        };
+      }
+      if (sql.includes('DELETE FROM tenant_chatbot_knowledge'))
+        return { rows: [] };
+      if (sql.includes('INSERT INTO tenant_chatbot_knowledge')) {
+        knowledgeId += 1;
+        return { rows: [{ id: String(knowledgeId) }] };
+      }
+      return { rows: [] };
+    });
+    const state = serviceWith(query);
+
+    await expect(
+      (state.service as any).reindexProperty(tenant, 9),
+    ).resolves.toMatchObject({
+      propertyId: 9,
+      indexed: expect.any(Number),
+    });
+
+    expect(state.vectors.deleteBySource).toHaveBeenCalledWith(
+      'PROPERTY',
+      'old-public',
+      42,
+    );
+    expect(state.vectors.deleteBySource).toHaveBeenCalledWith(
+      'PROPERTY',
+      'old-private',
+      42,
+    );
+    expect(state.vectors.upsert).toHaveBeenCalledWith([
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          propertyId: 9,
+          tenantId: 42,
+          audience: 'REALTOR',
+        }),
+      }),
+    ]);
+    expect(state.embeddings.embed).toHaveBeenCalledWith(
+      expect.stringContaining('Lockbox code: 8472'),
+    );
+  });
   it('reindexes property fields with tenant and audience metadata', async () => {
     const query = jest.fn(async (sql: string) => {
       if (sql.includes('FROM tenant_property')) {

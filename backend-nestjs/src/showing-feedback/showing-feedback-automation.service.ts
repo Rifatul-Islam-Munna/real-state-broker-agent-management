@@ -172,6 +172,9 @@ export class ShowingFeedbackAutomationService {
       FollowUp1: 1,
       FollowUp2: 2,
       FollowUp3: 3,
+      FollowUp4: 4,
+      FollowUp5: 5,
+      FollowUp6: 6,
     };
     const followUps = (settings.communicationTemplates ?? [])
       .filter(

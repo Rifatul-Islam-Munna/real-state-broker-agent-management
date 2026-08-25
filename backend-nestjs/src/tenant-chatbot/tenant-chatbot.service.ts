@@ -21,10 +21,7 @@ import {
 
 export const PLATFORM_KNOWLEDGE_READER = 'PLATFORM_KNOWLEDGE_READER';
 
-type TenantReference = Pick<
-  SaasTenant,
-  'id' | 'databaseName' | 'businessName'
->;
+type TenantReference = Pick<SaasTenant, 'id' | 'databaseName' | 'businessName'>;
 
 export type ChatbotSettingsPatch = Omit<
   Partial<ChatbotSettings>,
@@ -237,13 +234,15 @@ export class TenantChatbotService {
           .filter(Boolean)
           .slice(0, 20);
         const sourceHash = createHash('sha256')
-          .update(JSON.stringify({
-            propertyId: positiveInteger(input.propertyId),
-            audience: input.audience,
-            title,
-            answer,
-            examples,
-          }))
+          .update(
+            JSON.stringify({
+              propertyId: positiveInteger(input.propertyId),
+              audience: input.audience,
+              title,
+              answer,
+              examples,
+            }),
+          )
           .digest('hex');
         const pointId = randomUUID();
         const inserted = await client.query(
@@ -332,115 +331,197 @@ export class TenantChatbotService {
   ) {
     const knowledgeId = positiveInteger(knowledgeIdValue);
     if (!knowledgeId) throw new Error('A valid knowledge item is required.');
-    return this.databases.withTenantClient(this.databaseName(tenant), async (client) => {
-      const currentResult = await client.query(
-        [
-          'SELECT id::text AS id, property_id AS "propertyId", scope, audience,',
-          'source_type AS "sourceType", title, answer,',
-          'question_examples AS "questionExamples", priority, active,',
-          'source_hash AS "sourceHash", qdrant_point_id AS "qdrantPointId",',
-          'index_status AS "indexStatus", last_error AS "lastError"',
-          'FROM tenant_chatbot_knowledge',
-          "WHERE id = $1 AND source_type = 'MANUAL' LIMIT 1",
-        ].join(' '),
-        [knowledgeId],
-      );
-      const current = currentResult.rows[0] as KnowledgeRecord | undefined;
-      if (!current) throw new NotFoundException('Tenant knowledge was not found.');
-
-      const propertyId = patch.propertyId === undefined
-        ? positiveInteger(current.propertyId)
-        : positiveInteger(patch.propertyId);
-      const audience = patch.audience === undefined
-        ? validAudience(current.audience)
-        : validAudience(patch.audience);
-      const title = patch.title === undefined
-        ? requiredText(current.title, 'title', 240)
-        : requiredText(patch.title, 'title', 240);
-      const answer = patch.answer === undefined
-        ? requiredText(current.answer, 'answer', 10_000)
-        : requiredText(patch.answer, 'answer', 10_000);
-      const examples = patch.questionExamples === undefined
-        ? (current as any).questionExamples ?? []
-        : patch.questionExamples.map((value) => String(value).trim()).filter(Boolean).slice(0, 20);
-      const priority = patch.priority === undefined
-        ? clampInteger(current.priority, 50, 0, 100)
-        : clampInteger(patch.priority, 50, 0, 100);
-      const active = patch.active === undefined ? current.active : Boolean(patch.active);
-      const scope = propertyId ? 'PROPERTY' : 'TENANT';
-      const sourceHash = createHash('sha256').update(JSON.stringify({
-        propertyId, audience, title, answer, examples,
-      })).digest('hex');
-      const pointId = current.qdrantPointId || randomUUID();
-
-      const updated = await client.query(
-        [
-          'UPDATE tenant_chatbot_knowledge SET property_id = $2, scope = $3,',
-          'audience = $4, title = $5, answer = $6, question_examples = $7::jsonb,',
-          'priority = $8, active = $9, source_hash = $10, qdrant_point_id = $11,',
-          "index_status = 'pending', last_error = '', updated_at = now()",
-          "WHERE id = $1 AND source_type = 'MANUAL'",
-          KNOWLEDGE_RETURNING,
-        ].join(' '),
-        [knowledgeId, propertyId, scope, audience, title, answer, JSON.stringify(examples),
-          priority, active, sourceHash, pointId],
-      );
-      const row = (updated.rows[0] ?? { ...current, propertyId, scope, audience, title,
-        answer, questionExamples: examples, priority, active, sourceHash, qdrantPointId: pointId }) as KnowledgeRecord;
-      try {
-        if (current.sourceHash && this.vectors.isConfigured()) {
-          await this.vectors.deleteBySource(current.scope, current.sourceHash, tenant.id);
-        }
-        if (active) {
-          await this.vectors.ensureCollection();
-          const vector = await this.embeddings.embed([title, ...examples, answer].join('\n'));
-          await this.vectors.upsert([{ pointId, vector, metadata: {
-            scope, tenantId: tenant.id, audience, propertyId, knowledgeId: String(knowledgeId),
-            sourceType: 'MANUAL', sourceHash, priority, active,
-          } }]);
-        }
-        await client.query(
-          "UPDATE tenant_chatbot_knowledge SET index_status = 'indexed', last_error = '', updated_at = now() WHERE id = $1",
+    return this.databases.withTenantClient(
+      this.databaseName(tenant),
+      async (client) => {
+        const currentResult = await client.query(
+          [
+            'SELECT id::text AS id, property_id AS "propertyId", scope, audience,',
+            'source_type AS "sourceType", title, answer,',
+            'question_examples AS "questionExamples", priority, active,',
+            'source_hash AS "sourceHash", qdrant_point_id AS "qdrantPointId",',
+            'index_status AS "indexStatus", last_error AS "lastError"',
+            'FROM tenant_chatbot_knowledge',
+            "WHERE id = $1 AND source_type = 'MANUAL' LIMIT 1",
+          ].join(' '),
           [knowledgeId],
         );
-        await this.audit(client, 'chatbot.knowledge.updated', actorMasterUserId,
-          'Tenant chatbot knowledge updated', { knowledgeId: String(knowledgeId), audience });
-        return { ...row, indexStatus: 'indexed', lastError: '' };
-      } catch (error) {
-        await client.query(
-          "UPDATE tenant_chatbot_knowledge SET index_status = 'failed', last_error = $2, updated_at = now() WHERE id = $1",
-          [knowledgeId, errorMessage(error)],
+        const current = currentResult.rows[0] as KnowledgeRecord | undefined;
+        if (!current)
+          throw new NotFoundException('Tenant knowledge was not found.');
+
+        const propertyId =
+          patch.propertyId === undefined
+            ? positiveInteger(current.propertyId)
+            : positiveInteger(patch.propertyId);
+        const audience =
+          patch.audience === undefined
+            ? validAudience(current.audience)
+            : validAudience(patch.audience);
+        const title =
+          patch.title === undefined
+            ? requiredText(current.title, 'title', 240)
+            : requiredText(patch.title, 'title', 240);
+        const answer =
+          patch.answer === undefined
+            ? requiredText(current.answer, 'answer', 10_000)
+            : requiredText(patch.answer, 'answer', 10_000);
+        const examples =
+          patch.questionExamples === undefined
+            ? ((current as any).questionExamples ?? [])
+            : patch.questionExamples
+                .map((value) => String(value).trim())
+                .filter(Boolean)
+                .slice(0, 20);
+        const priority =
+          patch.priority === undefined
+            ? clampInteger(current.priority, 50, 0, 100)
+            : clampInteger(patch.priority, 50, 0, 100);
+        const active =
+          patch.active === undefined ? current.active : Boolean(patch.active);
+        const scope = propertyId ? 'PROPERTY' : 'TENANT';
+        const sourceHash = createHash('sha256')
+          .update(
+            JSON.stringify({
+              propertyId,
+              audience,
+              title,
+              answer,
+              examples,
+            }),
+          )
+          .digest('hex');
+        const pointId = current.qdrantPointId || randomUUID();
+
+        const updated = await client.query(
+          [
+            'UPDATE tenant_chatbot_knowledge SET property_id = $2, scope = $3,',
+            'audience = $4, title = $5, answer = $6, question_examples = $7::jsonb,',
+            'priority = $8, active = $9, source_hash = $10, qdrant_point_id = $11,',
+            "index_status = 'pending', last_error = '', updated_at = now()",
+            "WHERE id = $1 AND source_type = 'MANUAL'",
+            KNOWLEDGE_RETURNING,
+          ].join(' '),
+          [
+            knowledgeId,
+            propertyId,
+            scope,
+            audience,
+            title,
+            answer,
+            JSON.stringify(examples),
+            priority,
+            active,
+            sourceHash,
+            pointId,
+          ],
         );
-        throw error;
-      }
-    });
+        const row = (updated.rows[0] ?? {
+          ...current,
+          propertyId,
+          scope,
+          audience,
+          title,
+          answer,
+          questionExamples: examples,
+          priority,
+          active,
+          sourceHash,
+          qdrantPointId: pointId,
+        }) as KnowledgeRecord;
+        try {
+          if (current.sourceHash && this.vectors.isConfigured()) {
+            await this.vectors.deleteBySource(
+              current.scope,
+              current.sourceHash,
+              tenant.id,
+            );
+          }
+          if (active) {
+            await this.vectors.ensureCollection();
+            const vector = await this.embeddings.embed(
+              [title, ...examples, answer].join('\n'),
+            );
+            await this.vectors.upsert([
+              {
+                pointId,
+                vector,
+                metadata: {
+                  scope,
+                  tenantId: tenant.id,
+                  audience,
+                  propertyId,
+                  knowledgeId: String(knowledgeId),
+                  sourceType: 'MANUAL',
+                  sourceHash,
+                  priority,
+                  active,
+                },
+              },
+            ]);
+          }
+          await client.query(
+            "UPDATE tenant_chatbot_knowledge SET index_status = 'indexed', last_error = '', updated_at = now() WHERE id = $1",
+            [knowledgeId],
+          );
+          await this.audit(
+            client,
+            'chatbot.knowledge.updated',
+            actorMasterUserId,
+            'Tenant chatbot knowledge updated',
+            { knowledgeId: String(knowledgeId), audience },
+          );
+          return { ...row, indexStatus: 'indexed', lastError: '' };
+        } catch (error) {
+          await client.query(
+            "UPDATE tenant_chatbot_knowledge SET index_status = 'failed', last_error = $2, updated_at = now() WHERE id = $1",
+            [knowledgeId, errorMessage(error)],
+          );
+          throw error;
+        }
+      },
+    );
   }
 
-  async reindexKnowledge(tenant: TenantReference) {
-    if (!this.vectors.isConfigured()) throw new Error('Qdrant is not configured.');
-    return this.databases.withTenantClient(this.databaseName(tenant), async (client) => {
-      const properties = (
-        await client.query(
-          'SELECT id, title, status, payload FROM tenant_property ORDER BY id',
-        )
-      ).rows;
-      const previous = await client.query(
-        [
-          'SELECT source_hash AS "sourceHash" FROM tenant_chatbot_knowledge',
-          "WHERE source_type = 'PROPERTY_FIELD'",
-        ].join(' '),
-      );
-      for (const row of previous.rows) {
-        if (row.sourceHash) {
-          await this.vectors.deleteBySource('PROPERTY', row.sourceHash, tenant.id);
+  async reindexProperty(tenant: TenantReference, propertyIdValue: number) {
+    if (!this.vectors.isConfigured())
+      throw new Error('Qdrant is not configured.');
+    const propertyId = positiveInteger(propertyIdValue);
+    if (!propertyId) throw new Error('A valid property is required.');
+    return this.databases.withTenantClient(
+      this.databaseName(tenant),
+      async (client) => {
+        const property = (
+          await client.query(
+            'SELECT id, title, status, payload FROM tenant_property WHERE id = $1 LIMIT 1',
+            [propertyId],
+          )
+        ).rows[0];
+        if (!property) throw new NotFoundException('Property not found.');
+
+        const previous = await client.query(
+          [
+            'SELECT source_hash AS "sourceHash" FROM tenant_chatbot_knowledge',
+            "WHERE source_type = 'PROPERTY_FIELD' AND property_id = $1",
+          ].join(' '),
+          [propertyId],
+        );
+        for (const row of previous.rows) {
+          if (row.sourceHash) {
+            await this.vectors.deleteBySource(
+              'PROPERTY',
+              row.sourceHash,
+              tenant.id,
+            );
+          }
         }
-      }
-      await client.query(
-        "DELETE FROM tenant_chatbot_knowledge WHERE source_type = 'PROPERTY_FIELD'",
-      );
-      await this.vectors.ensureCollection();
-      let indexed = 0;
-      for (const property of properties) {
+        await client.query(
+          "DELETE FROM tenant_chatbot_knowledge WHERE source_type = 'PROPERTY_FIELD' AND property_id = $1",
+          [propertyId],
+        );
+        await this.vectors.ensureCollection();
+
+        let indexed = 0;
         for (const chunk of mapPropertyKnowledge(property)) {
           const pointId = randomUUID();
           const inserted = await client.query(
@@ -451,35 +532,130 @@ export class TenantChatbotService {
               "VALUES ($1, 'PROPERTY', $2, 'PROPERTY_FIELD', $3, $4, $5, $6, $7, 'pending')",
               'RETURNING id::text AS id',
             ].join(' '),
-            [chunk.propertyId, chunk.audience, chunk.title, chunk.content,
-              chunk.priority, chunk.sourceHash, pointId],
+            [
+              chunk.propertyId,
+              chunk.audience,
+              chunk.title,
+              chunk.content,
+              chunk.priority,
+              chunk.sourceHash,
+              pointId,
+            ],
           );
           const knowledgeId = String(inserted.rows[0]?.id);
-          const vector = await this.embeddings.embed(`${chunk.title}\n${chunk.content}`);
-          await this.vectors.upsert([{
-            pointId,
-            vector,
-            metadata: {
-              scope: 'PROPERTY',
-              tenantId: tenant.id,
-              audience: chunk.audience,
-              propertyId: chunk.propertyId,
-              knowledgeId,
-              sourceType: 'PROPERTY_FIELD',
-              sourceHash: chunk.sourceHash,
-              priority: chunk.priority,
-              active: true,
+          const vector = await this.embeddings.embed(
+            `${chunk.title}\n${chunk.content}`,
+          );
+          await this.vectors.upsert([
+            {
+              pointId,
+              vector,
+              metadata: {
+                scope: 'PROPERTY',
+                tenantId: tenant.id,
+                audience: chunk.audience,
+                propertyId: chunk.propertyId,
+                knowledgeId,
+                sourceType: 'PROPERTY_FIELD',
+                sourceHash: chunk.sourceHash,
+                priority: chunk.priority,
+                active: true,
+              },
             },
-          }]);
+          ]);
           await client.query(
             "UPDATE tenant_chatbot_knowledge SET index_status = 'indexed', updated_at = now() WHERE id = $1",
             [knowledgeId],
           );
           indexed += 1;
         }
-      }
-      return { properties: properties.length, indexed };
-    });
+        return { propertyId, indexed };
+      },
+    );
+  }
+  async reindexKnowledge(tenant: TenantReference) {
+    if (!this.vectors.isConfigured())
+      throw new Error('Qdrant is not configured.');
+    return this.databases.withTenantClient(
+      this.databaseName(tenant),
+      async (client) => {
+        const properties = (
+          await client.query(
+            'SELECT id, title, status, payload FROM tenant_property ORDER BY id',
+          )
+        ).rows;
+        const previous = await client.query(
+          [
+            'SELECT source_hash AS "sourceHash" FROM tenant_chatbot_knowledge',
+            "WHERE source_type = 'PROPERTY_FIELD'",
+          ].join(' '),
+        );
+        for (const row of previous.rows) {
+          if (row.sourceHash) {
+            await this.vectors.deleteBySource(
+              'PROPERTY',
+              row.sourceHash,
+              tenant.id,
+            );
+          }
+        }
+        await client.query(
+          "DELETE FROM tenant_chatbot_knowledge WHERE source_type = 'PROPERTY_FIELD'",
+        );
+        await this.vectors.ensureCollection();
+        let indexed = 0;
+        for (const property of properties) {
+          for (const chunk of mapPropertyKnowledge(property)) {
+            const pointId = randomUUID();
+            const inserted = await client.query(
+              [
+                'INSERT INTO tenant_chatbot_knowledge(',
+                'property_id, scope, audience, source_type, title, answer, priority,',
+                'source_hash, qdrant_point_id, index_status)',
+                "VALUES ($1, 'PROPERTY', $2, 'PROPERTY_FIELD', $3, $4, $5, $6, $7, 'pending')",
+                'RETURNING id::text AS id',
+              ].join(' '),
+              [
+                chunk.propertyId,
+                chunk.audience,
+                chunk.title,
+                chunk.content,
+                chunk.priority,
+                chunk.sourceHash,
+                pointId,
+              ],
+            );
+            const knowledgeId = String(inserted.rows[0]?.id);
+            const vector = await this.embeddings.embed(
+              `${chunk.title}\n${chunk.content}`,
+            );
+            await this.vectors.upsert([
+              {
+                pointId,
+                vector,
+                metadata: {
+                  scope: 'PROPERTY',
+                  tenantId: tenant.id,
+                  audience: chunk.audience,
+                  propertyId: chunk.propertyId,
+                  knowledgeId,
+                  sourceType: 'PROPERTY_FIELD',
+                  sourceHash: chunk.sourceHash,
+                  priority: chunk.priority,
+                  active: true,
+                },
+              },
+            ]);
+            await client.query(
+              "UPDATE tenant_chatbot_knowledge SET index_status = 'indexed', updated_at = now() WHERE id = $1",
+              [knowledgeId],
+            );
+            indexed += 1;
+          }
+        }
+        return { properties: properties.length, indexed };
+      },
+    );
   }
 
   async deleteKnowledge(
@@ -489,28 +665,35 @@ export class TenantChatbotService {
   ) {
     const knowledgeId = positiveInteger(knowledgeIdValue);
     if (!knowledgeId) throw new Error('A valid knowledge item is required.');
-    return this.databases.withTenantClient(this.databaseName(tenant), async (client) => {
-      const deleted = await client.query(
-        [
-          'DELETE FROM tenant_chatbot_knowledge WHERE id = $1',
-          'RETURNING id::text AS id, scope, source_hash AS "sourceHash"',
-        ].join(' '),
-        [knowledgeId],
-      );
-      const row = deleted.rows[0];
-      if (!row) return { deleted: false, id: String(knowledgeId) };
-      if (this.vectors.isConfigured() && row.sourceHash) {
-        await this.vectors.deleteBySource(row.scope, row.sourceHash, tenant.id);
-      }
-      await this.audit(
-        client,
-        'chatbot.knowledge.deleted',
-        actorMasterUserId,
-        'Tenant chatbot knowledge deleted',
-        { knowledgeId: row.id },
-      );
-      return { deleted: true, id: String(row.id) };
-    });
+    return this.databases.withTenantClient(
+      this.databaseName(tenant),
+      async (client) => {
+        const deleted = await client.query(
+          [
+            'DELETE FROM tenant_chatbot_knowledge WHERE id = $1',
+            'RETURNING id::text AS id, scope, source_hash AS "sourceHash"',
+          ].join(' '),
+          [knowledgeId],
+        );
+        const row = deleted.rows[0];
+        if (!row) return { deleted: false, id: String(knowledgeId) };
+        if (this.vectors.isConfigured() && row.sourceHash) {
+          await this.vectors.deleteBySource(
+            row.scope,
+            row.sourceHash,
+            tenant.id,
+          );
+        }
+        await this.audit(
+          client,
+          'chatbot.knowledge.deleted',
+          actorMasterUserId,
+          'Tenant chatbot knowledge deleted',
+          { knowledgeId: row.id },
+        );
+        return { deleted: true, id: String(row.id) };
+      },
+    );
   }
 
   async testQuestion(
@@ -567,7 +750,12 @@ export class TenantChatbotService {
             }),
           ]);
           matches = [...tenantMatches, ...platformMatches]
-            .filter((match) => !propertyId || !match.propertyId || match.propertyId === propertyId)
+            .filter(
+              (match) =>
+                !propertyId ||
+                !match.propertyId ||
+                match.propertyId === propertyId,
+            )
             .sort((left, right) => right.score - left.score);
         } catch {
           return stopped(settings, 'SYSTEM_UNAVAILABLE');
@@ -609,17 +797,18 @@ export class TenantChatbotService {
     const tokenHash = createHash('sha256').update(token).digest('hex');
     const session = await this.databases.withTenantClient(
       this.databaseName(tenant),
-      async (client) => (
-        await client.query(
-          [
-            'SELECT lead_id AS "leadId", property_id AS "propertyId"',
-            'FROM tenant_chatbot_web_session',
-            'WHERE token_hash = $1 AND revoked_at IS NULL AND expires_at > now()',
-            'LIMIT 1',
-          ].join(' '),
-          [tokenHash],
-        )
-      ).rows[0],
+      async (client) =>
+        (
+          await client.query(
+            [
+              'SELECT lead_id AS "leadId", property_id AS "propertyId"',
+              'FROM tenant_chatbot_web_session',
+              'WHERE token_hash = $1 AND revoked_at IS NULL AND expires_at > now()',
+              'LIMIT 1',
+            ].join(' '),
+            [tokenHash],
+          )
+        ).rows[0],
     );
     if (!session) throw new NotFoundException('Chat session was not found.');
     return this.handleMessage(tenant, {
@@ -648,15 +837,21 @@ export class TenantChatbotService {
     if (baseDecision.action !== 'ALLOW_RETRIEVAL') {
       return liveStopped(settings, baseDecision.reason);
     }
+    const audience = input.audience ?? 'LEAD';
+    if (audience !== 'REALTOR' && isSensitiveRealtorQuestion(input.body)) {
+      return this.persistLiveResponse(
+        tenant,
+        input,
+        settings,
+        stopped(settings, 'REALTOR_VERIFICATION_REQUIRED'),
+      );
+    }
     const result = await this.testQuestion(tenant, {
       propertyId: input.propertyId,
-      audience: input.audience ?? 'LEAD',
+      audience,
       question: input.body,
       channel: input.channel,
     });
-    if (result.decision !== 'ANSWER') {
-      return { ...result, conversationId: null, queued: false };
-    }
     return this.persistLiveResponse(tenant, input, settings, result);
   }
 
@@ -712,14 +907,16 @@ export class TenantChatbotService {
             ].join(' '),
             [leadId, positiveInteger(actorMasterUserId)],
           );
-          const conversationIds = stopped.rows.map((row: any) => String(row.id));
+          const conversationIds = stopped.rows.map((row: any) =>
+            String(row.id),
+          );
           if (conversationIds.length) {
             await client.query(
               [
                 'UPDATE tenant_outreach_job',
                 "SET status = 'cancelled', last_error = 'Chatbot stopped manually',",
                 'locked_at = NULL, locked_by = NULL, updated_at = now()',
-                "WHERE source_type = 'tenant-chatbot'",
+                "WHERE source_type IN ('tenant-chatbot', 'tenant-chatbot-rule')",
                 'AND source_id = ANY($1::text[])',
                 "AND status IN ('scheduled', 'retrying', 'processing')",
               ].join(' '),
@@ -794,9 +991,15 @@ export class TenantChatbotService {
       lead_id?: number | null;
       source_type?: string;
       source_id?: string;
+      channel?: string;
+      payload?: Record<string, unknown> | null;
     },
-  ): Promise<{ allowed: boolean; reason: ChatbotPolicyDecision['reason'] | 'NOT_CHATBOT' }> {
-    if (job.source_type !== 'tenant-chatbot') {
+  ): Promise<{
+    allowed: boolean;
+    reason: ChatbotPolicyDecision['reason'] | 'NOT_CHATBOT';
+  }> {
+    const isRuleJob = job.source_type === 'tenant-chatbot-rule';
+    if (job.source_type !== 'tenant-chatbot' && !isRuleJob) {
       return { allowed: true, reason: 'NOT_CHATBOT' };
     }
     const conversationId = positiveInteger(job.source_id);
@@ -817,7 +1020,16 @@ export class TenantChatbotService {
             [conversationId],
           );
           const conversation = result.rows[0];
-          if (!conversation || conversation.status !== 'ACTIVE') {
+          const expectedRuleReason = String(job.payload?.finalRuleReason ?? '');
+          const ruleStopMatches =
+            isRuleJob &&
+            conversation?.status === 'STOPPED' &&
+            expectedRuleReason &&
+            conversation?.stopReason === expectedRuleReason;
+          if (
+            !conversation ||
+            (conversation.status !== 'ACTIVE' && !ruleStopMatches)
+          ) {
             await this.cancelOutboundJob(
               client,
               job.id,
@@ -830,6 +1042,51 @@ export class TenantChatbotService {
             };
           }
           const leadId = positiveInteger(conversation.leadId ?? job.lead_id);
+          const currentSettingsRow = await client.query(
+            'SELECT value FROM tenant_setting WHERE key = $1 LIMIT 1',
+            ['chatbot_settings'],
+          );
+          const currentSettings = normalizeChatbotSettings(
+            parseSettings(currentSettingsRow.rows[0]?.value),
+          );
+          const outboundChannel =
+            String(job.channel ?? '').toUpperCase() === 'SMS' ? 'SMS' : 'EMAIL';
+          const channelAllowed =
+            outboundChannel === 'SMS'
+              ? currentSettings.channels.sms
+              : currentSettings.channels.email;
+          if (!currentSettings.enabled || !channelAllowed) {
+            const reason: ChatbotPolicyDecision['reason'] =
+              currentSettings.enabled ? 'CHANNEL_DISABLED' : 'BOT_DISABLED';
+            await this.cancelOutboundJob(client, job.id, reason);
+            await client.query('COMMIT');
+            return { allowed: false, reason };
+          }
+          const doNotContact = leadId
+            ? await client.query(
+                [
+                  'SELECT id FROM tenant_lead',
+                  'WHERE id = $1',
+                  "AND COALESCE((payload->>'doNotContact')::boolean, false) = true",
+                  'LIMIT 1',
+                ].join(' '),
+                [leadId],
+              )
+            : { rows: [] };
+          if (doNotContact.rows.length) {
+            await client.query(
+              [
+                'UPDATE tenant_chatbot_conversation',
+                "SET status = 'STOPPED', stop_reason = 'DO_NOT_CONTACT',",
+                'stopped_at = now(), updated_at = now()',
+                'WHERE id = $1',
+              ].join(' '),
+              [conversationId],
+            );
+            await this.cancelOutboundJob(client, job.id, 'DO_NOT_CONTACT');
+            await client.query('COMMIT');
+            return { allowed: false, reason: 'DO_NOT_CONTACT' };
+          }
           const human = leadId
             ? await client.query(
                 [
@@ -860,7 +1117,11 @@ export class TenantChatbotService {
                 'conversation_id, lead_id, event_type, reason, metadata)',
                 "VALUES ($1, $2, 'STOPPED', 'HUMAN_INTERVENED', $3::jsonb)",
               ].join(' '),
-              [conversationId, leadId, JSON.stringify({ outreachJobId: job.id })],
+              [
+                conversationId,
+                leadId,
+                JSON.stringify({ outreachJobId: job.id }),
+              ],
             );
             await client.query('COMMIT');
             return { allowed: false, reason: 'HUMAN_INTERVENED' };
@@ -885,120 +1146,242 @@ export class TenantChatbotService {
     if (!leadId) throw new Error('A valid lead is required.');
     const propertyId = positiveInteger(input.propertyId);
     const sessionId = requiredText(input.sessionId, 'session id', 120);
-    const idempotencyKey = requiredText(input.idempotencyKey, 'idempotency key', 180);
-    return this.databases.withTenantClient(this.databaseName(tenant), async (client) => {
-      await client.query('BEGIN');
-      try {
-        const leadResult = await client.query(
-          [
-            'SELECT l.id, l.full_name AS "fullName", l.email, l.phone, l.payload,',
-            "COALESCE((l.payload->>'doNotContact')::boolean, false) AS \"doNotContact\"",
-            'FROM tenant_lead l WHERE l.id = $1 LIMIT 1',
-          ].join(' '),
-          [leadId],
-        );
-        const lead = leadResult.rows[0];
-        if (!lead) throw new Error('Lead was not found.');
-        const propertyResult = propertyId
-          ? await client.query(
-              'SELECT id, title, status, payload FROM tenant_property WHERE id = $1 LIMIT 1',
-              [propertyId],
-            )
-          : { rows: [] };
-        const property = propertyResult.rows[0];
-        let conversation = (
-          await client.query(
+    const idempotencyKey = requiredText(
+      input.idempotencyKey,
+      'idempotency key',
+      180,
+    );
+    return this.databases.withTenantClient(
+      this.databaseName(tenant),
+      async (client) => {
+        await client.query('BEGIN');
+        try {
+          const leadResult = await client.query(
             [
-              'SELECT id::text AS id, status, stop_reason AS "stopReason",',
-              'turn_count AS "turnCount" FROM tenant_chatbot_conversation',
-              'WHERE session_id = $1 AND channel = $2 ORDER BY updated_at DESC LIMIT 1',
+              'SELECT l.id, l.full_name AS "fullName", l.email, l.phone, l.payload,',
+              'COALESCE((l.payload->>\'doNotContact\')::boolean, false) AS "doNotContact"',
+              'FROM tenant_lead l WHERE l.id = $1 LIMIT 1',
             ].join(' '),
-            [sessionId, input.channel],
-          )
-        ).rows[0];
-        if (!conversation) {
-          conversation = (
+            [leadId],
+          );
+          const lead = leadResult.rows[0];
+          if (!lead) throw new Error('Lead was not found.');
+          const propertyResult = propertyId
+            ? await client.query(
+                'SELECT id, title, status, payload FROM tenant_property WHERE id = $1 LIMIT 1',
+                [propertyId],
+              )
+            : { rows: [] };
+          const property = propertyResult.rows[0];
+          let conversation = (
             await client.query(
               [
-                'INSERT INTO tenant_chatbot_conversation(',
-                'lead_id, property_id, channel, audience, session_id)',
-                'VALUES ($1, $2, $3, $4, $5)',
-                'RETURNING id::text AS id, status, turn_count AS "turnCount"',
+                'SELECT id::text AS id, status, stop_reason AS "stopReason",',
+                'turn_count AS "turnCount" FROM tenant_chatbot_conversation',
+                'WHERE session_id = $1 AND channel = $2 ORDER BY updated_at DESC LIMIT 1',
               ].join(' '),
-              [leadId, propertyId, input.channel, input.audience ?? 'LEAD', sessionId],
+              [sessionId, input.channel],
             )
           ).rows[0];
-        }
-        const conversationId = String(conversation.id);
-        const incoming = await client.query(
-          [
-            'INSERT INTO tenant_chatbot_message(',
-            'conversation_id, role, direction, body, decision, idempotency_key)',
-            "VALUES ($1, 'LEAD', 'INCOMING', $2, 'RECEIVED', $3)",
-            'ON CONFLICT (conversation_id, idempotency_key) DO NOTHING RETURNING id',
-          ].join(' '),
-          [conversationId, requiredText(input.body, 'message', 4_000), `incoming:${idempotencyKey}`],
-        );
-        if (!incoming.rows.length) {
-          await client.query('COMMIT');
-          return { ...result, conversationId, queued: false };
-        }
-        const liveDecision = evaluateChatbotPolicy({
-          settings,
-          channel: input.channel,
-          conversationStatus: conversation.status ?? 'ACTIVE',
-          conversationStopReason: conversation.stopReason,
-          doNotContact: Boolean(lead.doNotContact),
-          propertyStatus: propertyId ? property?.status ?? 'unavailable' : null,
-          minimumCreditScore: property?.payload?.minimumCreditScore ?? property?.payload?.minCreditScore,
-          leadCreditScore: input.leadCreditScore ?? lead.payload?.creditScore,
-          turnCount: Number(conversation.turnCount ?? 0),
-          infrastructureReady: true,
-        });
-        if (liveDecision.action !== 'ALLOW_RETRIEVAL') {
-          if (liveDecision.terminal) {
+          if (!conversation) {
+            conversation = (
+              await client.query(
+                [
+                  'INSERT INTO tenant_chatbot_conversation(',
+                  'lead_id, property_id, channel, audience, session_id)',
+                  'VALUES ($1, $2, $3, $4, $5)',
+                  'RETURNING id::text AS id, status, turn_count AS "turnCount"',
+                ].join(' '),
+                [
+                  leadId,
+                  propertyId,
+                  input.channel,
+                  input.audience ?? 'LEAD',
+                  sessionId,
+                ],
+              )
+            ).rows[0];
+          }
+          const conversationId = String(conversation.id);
+          const incoming = await client.query(
+            [
+              'INSERT INTO tenant_chatbot_message(',
+              'conversation_id, role, direction, body, decision, idempotency_key)',
+              "VALUES ($1, 'LEAD', 'INCOMING', $2, 'RECEIVED', $3)",
+              'ON CONFLICT (conversation_id, idempotency_key) DO NOTHING RETURNING id',
+            ].join(' '),
+            [
+              conversationId,
+              requiredText(input.body, 'message', 4_000),
+              `incoming:${idempotencyKey}`,
+            ],
+          );
+          if (!incoming.rows.length) {
+            await client.query('COMMIT');
+            return { ...result, conversationId, queued: false };
+          }
+          const liveDecision = evaluateChatbotPolicy({
+            settings,
+            channel: input.channel,
+            conversationStatus: conversation.status ?? 'ACTIVE',
+            conversationStopReason: conversation.stopReason,
+            doNotContact: Boolean(lead.doNotContact),
+            propertyStatus: propertyId
+              ? (property?.status ?? 'unavailable')
+              : null,
+            minimumCreditScore:
+              property?.payload?.minimumCreditScore ??
+              property?.payload?.minCreditScore,
+            leadCreditScore: input.leadCreditScore ?? lead.payload?.creditScore,
+            turnCount: Number(conversation.turnCount ?? 0),
+            infrastructureReady: true,
+          });
+          if (liveDecision.action !== 'ALLOW_RETRIEVAL') {
+            const response = await this.persistRuleDecision(client, {
+              input,
+              settings,
+              result: stopped(settings, liveDecision.reason),
+              conversationId,
+              leadId,
+              lead,
+              property,
+              idempotencyKey,
+              terminal: liveDecision.terminal,
+            });
+            await client.query('COMMIT');
+            return response;
+          }
+          if (result.decision !== 'ANSWER') {
+            const response = await this.persistRuleDecision(client, {
+              input,
+              settings,
+              result,
+              conversationId,
+              leadId,
+              lead,
+              property,
+              idempotencyKey,
+              terminal: isTerminalRuleReason(result.reason),
+            });
+            await client.query('COMMIT');
+            return response;
+          }
+          const preferredAt = confirmedShowingAt(input.showing);
+          if (preferredAt && propertyId) {
+            const request = await client.query(
+              [
+                'INSERT INTO tenant_showing_request(',
+                'access_token, lead_id, property_id, requested_property_id, title, message,',
+                'recipient_name, recipient_email, recipient_phone, status, delivery_status,',
+                'expires_at, preferred_showing_at, submitted_at)',
+                "VALUES ($1, $2, $3, $3, $4, $5, $6, $7, $8, 'submitted', 'submitted',",
+                "now() + interval '7 days', $9, now()) RETURNING id",
+              ].join(' '),
+              [
+                randomUUID(),
+                leadId,
+                propertyId,
+                `Showing request - ${property?.title ?? 'Property'}`,
+                'Confirmed through the tenant chatbot.',
+                lead.fullName,
+                lead.email ?? '',
+                lead.phone ?? '',
+                preferredAt,
+              ],
+            );
             await client.query(
               [
                 'UPDATE tenant_chatbot_conversation',
-                "SET status = 'STOPPED', stop_reason = $2, stopped_at = now(), updated_at = now()",
+                "SET status = 'COMPLETED', stop_reason = 'SHOWING_REQUESTED', stopped_at = now(), updated_at = now()",
                 'WHERE id = $1',
               ].join(' '),
-              [conversationId, liveDecision.reason],
+              [conversationId],
             );
+            await client.query(
+              [
+                'INSERT INTO tenant_chatbot_event(conversation_id, lead_id, event_type, reason, metadata)',
+                "VALUES ($1, $2, 'SHOWING_REQUESTED', 'SHOWING_REQUESTED', $3::jsonb)",
+              ].join(' '),
+              [
+                conversationId,
+                leadId,
+                JSON.stringify({ showingRequestId: request.rows[0]?.id }),
+              ],
+            );
+            await client.query('COMMIT');
+            return {
+              answer:
+                'Your showing request was submitted for staff confirmation.',
+              decision: 'CREATE_SHOWING_REQUEST',
+              reason: 'SHOWING_REQUESTED',
+              confidence: null,
+              evidence: [],
+              conversationId,
+              queued: false,
+            };
+          }
+          let outreachJobId: number | null = null;
+          if (input.channel !== 'WEB') {
+            const channel = input.channel === 'EMAIL' ? 'Email' : 'SMS';
+            const scheduledAt = new Date(
+              Date.now() + settings.responseDelaySeconds * 1_000,
+            );
+            const queued = await client.query(
+              [
+                'INSERT INTO tenant_outreach_job(',
+                'idempotency_key, lead_id, source_type, source_id, channel, direction, status,',
+                'recipient_name, recipient_email, recipient_phone, title, body, created_by,',
+                'scheduled_at, next_attempt_at, payload)',
+                "VALUES ($1, $2, $3, $4, $5, 'Scheduled', 'scheduled', $6, $7, $8, $9, $10,",
+                "'tenant-chatbot', $11, $11, $12::jsonb)",
+                'ON CONFLICT (idempotency_key) DO NOTHING RETURNING id',
+              ].join(' '),
+              [
+                `chatbot:${conversationId}:${idempotencyKey}`.slice(0, 200),
+                leadId,
+                'tenant-chatbot',
+                conversationId,
+                channel,
+                lead.fullName ?? '',
+                lead.email ?? '',
+                lead.phone ?? '',
+                input.channel === 'EMAIL'
+                  ? `Re: ${property?.title ?? 'Your inquiry'}`
+                  : 'Chatbot reply',
+                result.answer,
+                scheduledAt,
+                JSON.stringify({
+                  chatbotConversationId: conversationId,
+                  evidence: result.evidence,
+                }),
+              ],
+            );
+            outreachJobId = queued.rows[0]?.id
+              ? Number(queued.rows[0].id)
+              : null;
           }
           await client.query(
             [
-              'INSERT INTO tenant_chatbot_event(conversation_id, lead_id, event_type, reason)',
-              "VALUES ($1, $2, 'STOPPED', $3)",
+              'INSERT INTO tenant_chatbot_message(',
+              'conversation_id, outreach_job_id, role, direction, body, evidence,',
+              'confidence, decision, idempotency_key)',
+              "VALUES ($1, $2, 'BOT', 'OUTGOING', $3, $4::jsonb, $5, $6, $7)",
+              'ON CONFLICT (conversation_id, idempotency_key) DO NOTHING',
             ].join(' '),
-            [conversationId, leadId, liveDecision.reason],
-          );
-          await client.query('COMMIT');
-          return {
-            ...stopped(settings, liveDecision.reason),
-            conversationId,
-            queued: false,
-          };
-        }
-        const preferredAt = confirmedShowingAt(input.showing);
-        if (preferredAt && propertyId) {
-          const request = await client.query(
             [
-              'INSERT INTO tenant_showing_request(',
-              'access_token, lead_id, property_id, requested_property_id, title, message,',
-              'recipient_name, recipient_email, recipient_phone, status, delivery_status,',
-              'expires_at, preferred_showing_at, submitted_at)',
-              "VALUES ($1, $2, $3, $3, $4, $5, $6, $7, $8, 'submitted', 'submitted',",
-              "now() + interval '7 days', $9, now()) RETURNING id",
-            ].join(' '),
-            [randomUUID(), leadId, propertyId, `Showing request - ${property?.title ?? 'Property'}`,
-              'Confirmed through the tenant chatbot.', lead.fullName, lead.email ?? '',
-              lead.phone ?? '', preferredAt],
+              conversationId,
+              outreachJobId,
+              result.answer,
+              JSON.stringify(result.evidence),
+              result.confidence,
+              result.reason,
+              `outgoing:${idempotencyKey}`,
+            ],
           );
           await client.query(
             [
               'UPDATE tenant_chatbot_conversation',
-              "SET status = 'COMPLETED', stop_reason = 'SHOWING_REQUESTED', stopped_at = now(), updated_at = now()",
+              'SET turn_count = turn_count + 1, last_message_at = now(), updated_at = now()',
               'WHERE id = $1',
             ].join(' '),
             [conversationId],
@@ -1006,79 +1389,163 @@ export class TenantChatbotService {
           await client.query(
             [
               'INSERT INTO tenant_chatbot_event(conversation_id, lead_id, event_type, reason, metadata)',
-              "VALUES ($1, $2, 'SHOWING_REQUESTED', 'SHOWING_REQUESTED', $3::jsonb)",
-            ].join(' '),
-            [conversationId, leadId, JSON.stringify({ showingRequestId: request.rows[0]?.id })],
-          );
-          await client.query('COMMIT');
-          return { answer: 'Your showing request was submitted for staff confirmation.', decision: 'CREATE_SHOWING_REQUEST', reason: 'SHOWING_REQUESTED', confidence: null, evidence: [], conversationId, queued: false };
-        }
-        let outreachJobId: number | null = null;
-        if (input.channel !== 'WEB') {
-          const channel = input.channel === 'EMAIL' ? 'Email' : 'SMS';
-          const scheduledAt = new Date(Date.now() + settings.responseDelaySeconds * 1_000);
-          const queued = await client.query(
-            [
-              'INSERT INTO tenant_outreach_job(',
-              'idempotency_key, lead_id, source_type, source_id, channel, direction, status,',
-              'recipient_name, recipient_email, recipient_phone, title, body, created_by,',
-              'scheduled_at, next_attempt_at, payload)',
-              "VALUES ($1, $2, $3, $4, $5, 'Scheduled', 'scheduled', $6, $7, $8, $9, $10,",
-              "'tenant-chatbot', $11, $11, $12::jsonb)",
-              'ON CONFLICT (idempotency_key) DO NOTHING RETURNING id',
+              "VALUES ($1, $2, 'REPLY_DECIDED', $3, $4::jsonb)",
             ].join(' '),
             [
-              `chatbot:${conversationId}:${idempotencyKey}`.slice(0, 200),
-              leadId,
-              'tenant-chatbot',
               conversationId,
-              channel,
-              lead.fullName ?? '',
-              lead.email ?? '',
-              lead.phone ?? '',
-              input.channel === 'EMAIL' ? `Re: ${property?.title ?? 'Your inquiry'}` : 'Chatbot reply',
-              result.answer,
-              scheduledAt,
-              JSON.stringify({ chatbotConversationId: conversationId, evidence: result.evidence }),
+              leadId,
+              result.reason,
+              JSON.stringify({ outreachJobId, channel: input.channel }),
             ],
           );
-          outreachJobId = queued.rows[0]?.id ? Number(queued.rows[0].id) : null;
+          await client.query('COMMIT');
+          return {
+            ...result,
+            conversationId,
+            queued: input.channel === 'WEB' || Boolean(outreachJobId),
+            outreachJobId,
+          };
+        } catch (error) {
+          await client.query('ROLLBACK');
+          throw error;
         }
-        await client.query(
-          [
-            'INSERT INTO tenant_chatbot_message(',
-            'conversation_id, outreach_job_id, role, direction, body, evidence,',
-            'confidence, decision, idempotency_key)',
-            "VALUES ($1, $2, 'BOT', 'OUTGOING', $3, $4::jsonb, $5, $6, $7)",
-            'ON CONFLICT (conversation_id, idempotency_key) DO NOTHING',
-          ].join(' '),
-          [conversationId, outreachJobId, result.answer, JSON.stringify(result.evidence),
-            result.confidence, result.reason, `outgoing:${idempotencyKey}`],
-        );
-        await client.query(
-          [
-            'UPDATE tenant_chatbot_conversation',
-            'SET turn_count = turn_count + 1, last_message_at = now(), updated_at = now()',
-            'WHERE id = $1',
-          ].join(' '),
-          [conversationId],
-        );
-        await client.query(
-          [
-            'INSERT INTO tenant_chatbot_event(conversation_id, lead_id, event_type, reason, metadata)',
-            "VALUES ($1, $2, 'REPLY_DECIDED', $3, $4::jsonb)",
-          ].join(' '),
-          [conversationId, leadId, result.reason, JSON.stringify({ outreachJobId, channel: input.channel })],
-        );
-        await client.query('COMMIT');
-        return { ...result, conversationId, queued: input.channel === 'WEB' || Boolean(outreachJobId), outreachJobId };
-      } catch (error) {
-        await client.query('ROLLBACK');
-        throw error;
-      }
-    });
+      },
+    );
   }
 
+  private async persistRuleDecision(
+    client: { query: (sql: string, values?: unknown[]) => Promise<any> },
+    context: {
+      input: HandleChatbotMessageInput;
+      settings: ChatbotSettings;
+      result: ChatbotTestResult;
+      conversationId: string;
+      leadId: number;
+      lead: any;
+      property: any;
+      idempotencyKey: string;
+      terminal: boolean;
+    },
+  ): Promise<ChatbotLiveResponse> {
+    const {
+      input,
+      settings,
+      result,
+      conversationId,
+      leadId,
+      lead,
+      property,
+      idempotencyKey,
+      terminal,
+    } = context;
+
+    if (terminal) {
+      await client.query(
+        [
+          'UPDATE tenant_chatbot_conversation',
+          "SET status = 'STOPPED', stop_reason = $2, stopped_at = now(), updated_at = now()",
+          'WHERE id = $1',
+        ].join(' '),
+        [conversationId, result.reason],
+      );
+    }
+
+    const sendMessage = shouldSendRuleMessage(result.reason);
+    let outreachJobId: number | null = null;
+    if (sendMessage && input.channel !== 'WEB') {
+      const channel = input.channel === 'EMAIL' ? 'Email' : 'SMS';
+      const scheduledAt = new Date(
+        Date.now() + settings.responseDelaySeconds * 1_000,
+      );
+      const queued = await client.query(
+        [
+          'INSERT INTO tenant_outreach_job(',
+          'idempotency_key, lead_id, source_type, source_id, channel, direction, status,',
+          'recipient_name, recipient_email, recipient_phone, title, body, created_by,',
+          'scheduled_at, next_attempt_at, payload)',
+          "VALUES ($1, $2, 'tenant-chatbot-rule', $3, $4, 'Scheduled', 'scheduled',",
+          "$5, $6, $7, $8, $9, 'tenant-chatbot', $10, $10, $11::jsonb)",
+          'ON CONFLICT (idempotency_key) DO NOTHING RETURNING id',
+        ].join(' '),
+        [
+          `chatbot-rule:${conversationId}:${idempotencyKey}:${result.reason}`.slice(
+            0,
+            200,
+          ),
+          leadId,
+          conversationId,
+          channel,
+          lead.fullName ?? '',
+          lead.email ?? '',
+          lead.phone ?? '',
+          input.channel === 'EMAIL'
+            ? `Re: ${property?.title ?? 'Your inquiry'}`
+            : 'Chatbot reply',
+          result.answer,
+          scheduledAt,
+          JSON.stringify({
+            chatbotConversationId: conversationId,
+            finalRuleReason: result.reason,
+          }),
+        ],
+      );
+      outreachJobId = queued.rows[0]?.id ? Number(queued.rows[0].id) : null;
+    }
+
+    if (sendMessage) {
+      await client.query(
+        [
+          'INSERT INTO tenant_chatbot_message(',
+          'conversation_id, outreach_job_id, role, direction, body, evidence,',
+          'confidence, decision, idempotency_key)',
+          "VALUES ($1, $2, 'BOT', 'OUTGOING', $3, $4::jsonb, $5, $6, $7)",
+          'ON CONFLICT (conversation_id, idempotency_key) DO NOTHING',
+        ].join(' '),
+        [
+          conversationId,
+          outreachJobId,
+          result.answer,
+          JSON.stringify(result.evidence),
+          result.confidence,
+          result.reason,
+          `outgoing:${idempotencyKey}`,
+        ],
+      );
+      await client.query(
+        [
+          'UPDATE tenant_chatbot_conversation',
+          'SET turn_count = turn_count + 1, last_message_at = now(), updated_at = now()',
+          'WHERE id = $1',
+        ].join(' '),
+        [conversationId],
+      );
+    }
+
+    await client.query(
+      [
+        'INSERT INTO tenant_chatbot_event(conversation_id, lead_id, event_type, reason, metadata)',
+        'VALUES ($1, $2, $3, $4, $5::jsonb)',
+      ].join(' '),
+      [
+        conversationId,
+        leadId,
+        terminal ? 'STOPPED' : 'RULE_MESSAGE',
+        result.reason,
+        JSON.stringify({
+          outreachJobId,
+          channel: input.channel,
+          messageSent: sendMessage,
+        }),
+      ],
+    );
+
+    return {
+      ...result,
+      conversationId,
+      queued: input.channel === 'WEB' ? false : Boolean(outreachJobId),
+      outreachJobId,
+    };
+  }
   private async cancelOutboundJob(
     client: { query: (sql: string, values?: unknown[]) => Promise<any> },
     jobId: number,
@@ -1209,12 +1676,7 @@ function stopped(
   hydrated: HydratedMatch[] = [],
 ): ChatbotTestResult {
   return {
-    answer:
-      reason === 'CREDIT_REQUIRED'
-        ? settings.creditRequiredMessage
-        : reason === 'CREDIT_BELOW_MINIMUM'
-          ? settings.creditRejectedMessage
-          : settings.fallbackMessage,
+    answer: messageForReason(settings, reason),
     decision: 'STOP',
     reason,
     confidence,
@@ -1222,6 +1684,42 @@ function stopped(
   };
 }
 
+function shouldSendRuleMessage(reason: ChatbotPolicyDecision['reason']) {
+  return [
+    'CREDIT_REQUIRED',
+    'CREDIT_BELOW_MINIMUM',
+    'PROPERTY_UNAVAILABLE',
+    'EVIDENCE_INSUFFICIENT',
+    'EVIDENCE_CONFLICT',
+    'TURN_LIMIT',
+    'REALTOR_VERIFICATION_REQUIRED',
+  ].includes(reason);
+}
+
+function isTerminalRuleReason(reason: ChatbotPolicyDecision['reason']) {
+  return [
+    'CREDIT_BELOW_MINIMUM',
+    'PROPERTY_UNAVAILABLE',
+    'EVIDENCE_INSUFFICIENT',
+    'EVIDENCE_CONFLICT',
+    'TURN_LIMIT',
+    'SYSTEM_UNAVAILABLE',
+  ].includes(reason);
+}
+function messageForReason(
+  settings: ChatbotSettings,
+  reason: ChatbotPolicyDecision['reason'],
+) {
+  if (reason === 'CREDIT_REQUIRED') return settings.creditRequiredMessage;
+  if (reason === 'CREDIT_BELOW_MINIMUM') return settings.creditRejectedMessage;
+  if (reason === 'PROPERTY_UNAVAILABLE')
+    return settings.propertyUnavailableMessage;
+  if (reason === 'EVIDENCE_CONFLICT') return settings.evidenceConflictMessage;
+  if (reason === 'TURN_LIMIT') return settings.turnLimitMessage;
+  if (reason === 'REALTOR_VERIFICATION_REQUIRED')
+    return settings.realtorVerificationMessage;
+  return settings.fallbackMessage;
+}
 function evidenceFrom(hydrated: HydratedMatch[]): ChatbotTestEvidence[] {
   return hydrated.map(({ match, record }) => ({
     knowledgeId: String(record.id),
@@ -1238,17 +1736,25 @@ function hasEvidenceConflict(hydrated: HydratedMatch[]) {
     ({ match }) => match.score >= hydrated[0].match.score - 0.05,
   );
   const normalized = significant.map(({ record }) =>
-    record.answer.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim(),
+    record.answer
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, ' ')
+      .trim(),
   );
-  return normalized.some((answer, index) =>
-    normalized.some(
-      (other, otherIndex) =>
-        index !== otherIndex &&
-        (answer.includes(`not ${other}`) || other.includes(`not ${answer}`)),
-    ),
-  ) || (
-    normalized.some((answer) => /\b(no|not|never|prohibited|disallowed)\b/.test(answer)) &&
-    normalized.some((answer) => /\b(yes|allowed|available|included)\b/.test(answer))
+  return (
+    normalized.some((answer, index) =>
+      normalized.some(
+        (other, otherIndex) =>
+          index !== otherIndex &&
+          (answer.includes(`not ${other}`) || other.includes(`not ${answer}`)),
+      ),
+    ) ||
+    (normalized.some((answer) =>
+      /\b(no|not|never|prohibited|disallowed)\b/.test(answer),
+    ) &&
+      normalized.some((answer) =>
+        /\b(yes|allowed|available|included)\b/.test(answer),
+      ))
   );
 }
 
@@ -1263,16 +1769,39 @@ function liveStopped(
   };
 }
 
+function isSensitiveRealtorQuestion(value: unknown) {
+  const text = String(value ?? '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ');
+  return [
+    'lockbox',
+    'lock box',
+    'access code',
+    'entry instruction',
+    'entry code',
+    'owner email',
+    'owner phone',
+    'owner contact',
+    'commission',
+    'internal remark',
+    'internal note',
+    'realtor showing instruction',
+    'private showing instruction',
+  ].some((phrase) => text.includes(phrase));
+}
 function confirmedShowingAt(
   showing?: HandleChatbotMessageInput['showing'],
 ): Date | null {
   if (showing?.confirmed !== true || !showing.preferredAt) return null;
   const preferredAt = new Date(showing.preferredAt);
-  return Number.isFinite(preferredAt.getTime()) && preferredAt.getTime() > Date.now()
+  return Number.isFinite(preferredAt.getTime()) &&
+    preferredAt.getTime() > Date.now()
     ? preferredAt
     : null;
 }
 
 function errorMessage(error: unknown) {
-  return error instanceof Error ? error.message.slice(0, 2_000) : 'Unknown indexing error';
+  return error instanceof Error
+    ? error.message.slice(0, 2_000)
+    : 'Unknown indexing error';
 }

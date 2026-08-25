@@ -307,6 +307,62 @@ describe('TenantRealtorWorkflowService showing confirmations', () => {
     expect(realtorEmail.body).toContain('Buyer One');
   });
 
+  it('schedules all six realtor follow-up templates in order', async () => {
+    const { service, enqueueWithClient } = build();
+    const settings = (service as any).settings;
+    settings.getAgencySettings.mockResolvedValue({
+      profile: { agencyName: 'Blue Realty' },
+      leadAutomation: {
+        enabled: true,
+        channels: ['Email'],
+        followUpEnabled: true,
+        leadShowingTemplateId: 'showing-confirm',
+        realtorShowingTemplateId: 'realtor-showing',
+      },
+      communicationTemplates: [
+        {
+          id: 'showing-confirm', name: 'Showing Confirmation', subject: 'Lead', body: 'Lead',
+          channels: ['Email'], sequenceType: 'Direct', audience: 'LeadShowing', isActive: true,
+        },
+        {
+          id: 'realtor-showing', name: 'Realtor Showing', subject: 'Showing', body: 'Showing',
+          channels: ['Email'], sequenceType: 'Direct', audience: 'Realtor', isActive: true,
+        },
+        ...Array.from({ length: 6 }, (_, index) => ({
+          id: `realtor-follow-up-${index + 1}`,
+          name: `Realtor Follow-up ${index + 1}`,
+          subject: `Step ${index + 1}`,
+          body: `Follow-up ${index + 1}`,
+          channels: ['Email'],
+          sequenceType: `FollowUp${index + 1}`,
+          audience: 'Realtor',
+          gapDays: 1,
+          isActive: true,
+        })),
+      ],
+    });
+
+    await (service as any).autoSendShowingConfirmations(tenant(), {
+      showingId: 88,
+      propertyId: 12,
+      propertyTitle: 'Live Home',
+      leadId: 9,
+      leadName: 'Buyer One',
+      recipientEmail: 'buyer@example.com',
+      realtorName: 'Rita Realtor',
+      realtorEmail: 'rita@example.com',
+      showingAt: new Date('2026-08-20T15:00:00Z'),
+    });
+
+    const realtorFollowUps = enqueueWithClient.mock.calls
+      .map((call: any[]) => call[1])
+      .filter((item: any) => item.sourceType === 'showing-followup');
+    expect(realtorFollowUps).toHaveLength(6);
+    expect(realtorFollowUps.map((item: any) => item.payload.sequenceType)).toEqual([
+      'FollowUp1', 'FollowUp2', 'FollowUp3', 'FollowUp4', 'FollowUp5', 'FollowUp6',
+    ]);
+  });
+
   it('sends nothing when automation is disabled', async () => {
     const { service, enqueueWithClient } = build();
     service;

@@ -32,6 +32,14 @@ export function defaultChatbotSettings(): ChatbotSettings {
       'What credit score should I use to check this property requirement?',
     creditRejectedMessage:
       'This property may not match the qualification information provided. A team member can help with other options.',
+    propertyUnavailableMessage:
+      'This property is no longer available. I can help you with another available property.',
+    evidenceConflictMessage:
+      'I found conflicting verified information, so I will not guess. A team member can confirm the correct details.',
+    turnLimitMessage:
+      'I am handing this conversation to a team member so they can continue helping you.',
+    realtorVerificationMessage:
+      'Private property access information is available only to a verified realtor.',
     stopRules: { ...DEFAULT_STOP_RULES },
   };
 }
@@ -74,6 +82,22 @@ export function normalizeChatbotSettings(
     creditRejectedMessage: cleanMessage(
       input?.creditRejectedMessage,
       defaults.creditRejectedMessage,
+    ),
+    propertyUnavailableMessage: cleanMessage(
+      input?.propertyUnavailableMessage,
+      defaults.propertyUnavailableMessage,
+    ),
+    evidenceConflictMessage: cleanMessage(
+      input?.evidenceConflictMessage,
+      defaults.evidenceConflictMessage,
+    ),
+    turnLimitMessage: cleanMessage(
+      input?.turnLimitMessage,
+      defaults.turnLimitMessage,
+    ),
+    realtorVerificationMessage: cleanMessage(
+      input?.realtorVerificationMessage,
+      defaults.realtorVerificationMessage,
     ),
     stopRules: {
       humanIntervention: rules.humanIntervention !== false,

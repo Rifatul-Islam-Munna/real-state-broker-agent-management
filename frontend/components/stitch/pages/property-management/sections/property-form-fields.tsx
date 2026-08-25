@@ -33,7 +33,10 @@ type PropertyFormFieldsSectionProps = {
   formValues: PropertyFormValues
   isAgentOptionsLoading?: boolean
   selectedAmenities: Set<string>
-  updateField: <K extends keyof PropertyFormValues>(key: K, value: PropertyFormValues[K]) => void
+  updateField: <K extends keyof PropertyFormValues>(
+    key: K,
+    value: PropertyFormValues[K]
+  ) => void
 }
 
 export function PropertyFormFieldsSection({
@@ -45,22 +48,29 @@ export function PropertyFormFieldsSection({
   updateField,
 }: PropertyFormFieldsSectionProps) {
   const [newAmenity, setNewAmenity] = useState("")
-  const [uploadingQuestionIndex, setUploadingQuestionIndex] = useState<number | null>(null)
+  const [uploadingQuestionIndex, setUploadingQuestionIndex] = useState<
+    number | null
+  >(null)
   const neighborhoodInsights = formValues.neighborhoodInsights ?? []
   const preQuestions = formValues.preQuestions ?? []
   const selectedAgentLabel = formValues.agentId
-    ? agentOptions.find((agent) => agent.id === formValues.agentId)?.fullName ?? `Agent #${formValues.agentId}`
+    ? (agentOptions.find((agent) => agent.id === formValues.agentId)
+        ?.fullName ?? `Agent #${formValues.agentId}`)
     : isAgentOptionsLoading
       ? "Loading agents..."
       : "Assign later"
-  const propertyTypeLabel = formValues.propertyType === "Commercial" ? "Commercial" : "Residential"
-  const listingTypeLabel = formValues.listingType === "ForRent" ? "For Rent" : "For Sale"
-  const listingStatusLabel = `${formValues.status ?? "Draft"}`.replace(/([A-Z])/g, " $1").trim()
+  const propertyTypeLabel =
+    formValues.propertyType === "Commercial" ? "Commercial" : "Residential"
+  const listingTypeLabel =
+    formValues.listingType === "ForRent" ? "For Rent" : "For Sale"
+  const listingStatusLabel = `${formValues.status ?? "Draft"}`
+    .replace(/([A-Z])/g, " $1")
+    .trim()
   const amenityOptions = useMemo(() => {
     const mergedAmenities = new Set(
       [...defaultAmenityOptions, ...(formValues.keyAmenities ?? [])]
         .map((item) => item.trim())
-        .filter(Boolean),
+        .filter(Boolean)
     )
 
     return Array.from(mergedAmenities)
@@ -70,7 +80,9 @@ export function PropertyFormFieldsSection({
     const currentAmenities = formValues.keyAmenities ?? []
 
     if (checked) {
-      const alreadyExists = currentAmenities.some((item) => item.toLowerCase() === amenity.toLowerCase())
+      const alreadyExists = currentAmenities.some(
+        (item) => item.toLowerCase() === amenity.toLowerCase()
+      )
 
       if (!alreadyExists) {
         updateField("keyAmenities", [...currentAmenities, amenity])
@@ -81,7 +93,9 @@ export function PropertyFormFieldsSection({
 
     updateField(
       "keyAmenities",
-      currentAmenities.filter((item) => item.toLowerCase() !== amenity.toLowerCase()),
+      currentAmenities.filter(
+        (item) => item.toLowerCase() !== amenity.toLowerCase()
+      )
     )
   }
 
@@ -93,38 +107,52 @@ export function PropertyFormFieldsSection({
     }
 
     const alreadyExists = (formValues.keyAmenities ?? []).some(
-      (item) => item.toLowerCase() === nextAmenity.toLowerCase(),
+      (item) => item.toLowerCase() === nextAmenity.toLowerCase()
     )
 
     if (!alreadyExists) {
-      updateField("keyAmenities", [...(formValues.keyAmenities ?? []), nextAmenity])
+      updateField("keyAmenities", [
+        ...(formValues.keyAmenities ?? []),
+        nextAmenity,
+      ])
     }
 
     setNewAmenity("")
   }
 
-  function updateNeighborhoodInsight(index: number, value: Partial<NeighborhoodInsightFormValue>) {
+  function updateNeighborhoodInsight(
+    index: number,
+    value: Partial<NeighborhoodInsightFormValue>
+  ) {
     const nextInsights = neighborhoodInsights.map((item, itemIndex) =>
-      itemIndex === index ? { ...item, ...value } : item,
+      itemIndex === index ? { ...item, ...value } : item
     )
     updateField("neighborhoodInsights", nextInsights)
   }
 
   function addNeighborhoodInsight() {
-    updateField("neighborhoodInsights", [...neighborhoodInsights, { type: "", description: "" }])
+    updateField("neighborhoodInsights", [
+      ...neighborhoodInsights,
+      { type: "", description: "" },
+    ])
   }
 
   function removeNeighborhoodInsight(index: number) {
-    const nextInsights = neighborhoodInsights.filter((_, itemIndex) => itemIndex !== index)
+    const nextInsights = neighborhoodInsights.filter(
+      (_, itemIndex) => itemIndex !== index
+    )
     updateField(
       "neighborhoodInsights",
-      nextInsights.length > 0 ? nextInsights : [{ type: "", description: "" }],
+      nextInsights.length > 0 ? nextInsights : [{ type: "", description: "" }]
     )
   }
 
-  function updatePreQuestion(index: number, value: Partial<PropertyPreQuestionFormValue>) {
+  function updatePreQuestion(
+    index: number,
+    value: Partial<PropertyPreQuestionFormValue>
+  ) {
     const nextQuestions = preQuestions.map((item, itemIndex) =>
-      itemIndex === index ? { ...item, ...value } : item,
+      itemIndex === index ? { ...item, ...value } : item
     )
     updateField("preQuestions", nextQuestions)
   }
@@ -143,7 +171,10 @@ export function PropertyFormFieldsSection({
     ])
   }
 
-  async function handlePreQuestionAttachment(index: number, event: ChangeEvent<HTMLInputElement>) {
+  async function handlePreQuestionAttachment(
+    index: number,
+    event: ChangeEvent<HTMLInputElement>
+  ) {
     const file = event.target.files?.[0]
     event.target.value = ""
 
@@ -172,14 +203,20 @@ export function PropertyFormFieldsSection({
   }
 
   function removePreQuestion(index: number) {
-    updateField("preQuestions", preQuestions.filter((_, itemIndex) => itemIndex !== index))
+    updateField(
+      "preQuestions",
+      preQuestions.filter((_, itemIndex) => itemIndex !== index)
+    )
   }
 
   return (
     <>
       <section>
         <h4 className="mb-6 flex items-center gap-2 text-xl font-semibold text-[var(--ether-on-surface)] sm:text-2xl">
-          <AppIcon className="text-[var(--ether-secondary)]" name="description" />
+          <AppIcon
+            className="text-[var(--ether-secondary)]"
+            name="description"
+          />
           {" Core Details "}
         </h4>
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
@@ -202,13 +239,18 @@ export function PropertyFormFieldsSection({
             </label>
             <Select
               modal={false}
-              onValueChange={(value) => updateField("agentId", value === emptySelectValue ? null : Number(value))}
-              value={formValues.agentId ? `${formValues.agentId}` : emptySelectValue}
+              onValueChange={(value) =>
+                updateField(
+                  "agentId",
+                  value === emptySelectValue ? null : Number(value)
+                )
+              }
+              value={
+                formValues.agentId ? `${formValues.agentId}` : emptySelectValue
+              }
             >
               <SelectTrigger className={formSelectClassName}>
-                <SelectValue>
-                  {selectedAgentLabel}
-                </SelectValue>
+                <SelectValue>{selectedAgentLabel}</SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value={emptySelectValue}>
@@ -229,13 +271,16 @@ export function PropertyFormFieldsSection({
             </label>
             <Select
               modal={false}
-              onValueChange={(value) => updateField("propertyType", value as PropertyItem["propertyType"])}
+              onValueChange={(value) =>
+                updateField(
+                  "propertyType",
+                  value as PropertyItem["propertyType"]
+                )
+              }
               value={formValues.propertyType}
             >
               <SelectTrigger className={formSelectClassName}>
-                <SelectValue>
-                  {propertyTypeLabel}
-                </SelectValue>
+                <SelectValue>{propertyTypeLabel}</SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="Residential">{"Residential"}</SelectItem>
@@ -249,13 +294,13 @@ export function PropertyFormFieldsSection({
             </label>
             <Select
               modal={false}
-              onValueChange={(value) => updateField("listingType", value as PropertyItem["listingType"])}
+              onValueChange={(value) =>
+                updateField("listingType", value as PropertyItem["listingType"])
+              }
               value={formValues.listingType}
             >
               <SelectTrigger className={formSelectClassName}>
-                <SelectValue>
-                  {listingTypeLabel}
-                </SelectValue>
+                <SelectValue>{listingTypeLabel}</SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="ForSale">{"For Sale"}</SelectItem>
@@ -282,19 +327,23 @@ export function PropertyFormFieldsSection({
             </label>
             <Select
               modal={false}
-              onValueChange={(value) => updateField("status", value as PropertyItem["status"])}
+              onValueChange={(value) =>
+                updateField("status", value as PropertyItem["status"])
+              }
               value={formValues.status}
             >
               <SelectTrigger className={formSelectClassName}>
-                <SelectValue>
-                  {listingStatusLabel}
-                </SelectValue>
+                <SelectValue>{listingStatusLabel}</SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="Draft">{"Draft"}</SelectItem>
-                <SelectItem value="PendingApproval">{"Pending Approval"}</SelectItem>
+                <SelectItem value="PendingApproval">
+                  {"Pending Approval"}
+                </SelectItem>
                 <SelectItem value="Active">{"Active"}</SelectItem>
-                <SelectItem value="Inactive">{"Inactive — no public leads"}</SelectItem>
+                <SelectItem value="Inactive">
+                  {"Inactive — no public leads"}
+                </SelectItem>
                 <SelectItem value="UnderOffer">{"Under Offer"}</SelectItem>
                 <SelectItem value="Sold">{"Sold"}</SelectItem>
                 <SelectItem value="Rented">{"Rented"}</SelectItem>
@@ -322,10 +371,15 @@ export function PropertyFormFieldsSection({
               {"Street Address"}
             </label>
             <div className="relative">
-              <AppIcon className="absolute left-4 top-2.5 text-slate-400" name="location_on" />
+              <AppIcon
+                className="absolute top-2.5 left-4 text-slate-400"
+                name="location_on"
+              />
               <Input
                 className="h-12 w-full rounded-lg border-0 bg-[var(--ether-surface-container-low)] pl-12 text-[var(--ether-on-surface)] shadow-none focus-visible:ring-2 focus-visible:ring-[var(--ether-primary)]/20"
-                onChange={(event) => updateField("exactLocation", event.target.value)}
+                onChange={(event) =>
+                  updateField("exactLocation", event.target.value)
+                }
                 placeholder="Street, area, and city details"
                 type="text"
                 value={formValues.exactLocation}
@@ -338,18 +392,211 @@ export function PropertyFormFieldsSection({
 
       <section className="rounded-[24px] border bg-white p-5 shadow-[var(--shadow-surface-1)] sm:p-6">
         <div className="mb-6 flex items-center gap-3 border-b pb-4">
-          <span className="flex size-10 items-center justify-center rounded-xl bg-[var(--ether-primary-fixed)] text-[var(--ether-primary)]"><AppIcon name="verified_user" /></span>
-          <div><h4 className="text-xl font-semibold text-[var(--ether-on-surface)] sm:text-2xl">Applicant Requirements & Showing</h4><p className="mt-1 text-sm text-[var(--ether-on-surface-variant)]">Optional qualification rules plus private realtor access instructions.</p></div>
+          <span className="flex size-10 items-center justify-center rounded-xl bg-[var(--ether-primary-fixed)] text-[var(--ether-primary)]">
+            <AppIcon name="verified_user" />
+          </span>
+          <div>
+            <h4 className="text-xl font-semibold text-[var(--ether-on-surface)] sm:text-2xl">
+              Applicant Requirements & Showing
+            </h4>
+            <p className="mt-1 text-sm text-[var(--ether-on-surface-variant)]">
+              Optional qualification rules plus private realtor access
+              instructions.
+            </p>
+          </div>
         </div>
         <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-          <div className="flex flex-col gap-2"><label className="ether-label-caps text-[var(--ether-on-surface-variant)]">Minimum Credit Score</label><Input min="300" max="850" type="number" value={formValues.minimumCreditScore} onChange={(event) => updateField("minimumCreditScore", event.target.value)} placeholder="e.g. 680" /><FieldError error={errors.minimumCreditScore} /></div>
-          <div className="flex flex-col gap-2"><label className="ether-label-caps text-[var(--ether-on-surface-variant)]">Minimum Monthly Income</label><Input min="0" step="0.01" type="number" value={formValues.minimumMonthlyIncome} onChange={(event) => updateField("minimumMonthlyIncome", event.target.value)} placeholder="e.g. 7500" /><FieldError error={errors.minimumMonthlyIncome} /></div>
-          <div className="flex flex-col gap-2"><label className="ether-label-caps text-[var(--ether-on-surface-variant)]">Security Deposit</label><Input min="0" step="0.01" type="number" value={formValues.securityDeposit} onChange={(event) => updateField("securityDeposit", event.target.value)} placeholder="e.g. 2500" /><FieldError error={errors.securityDeposit} /></div>
-          <div className="flex flex-col gap-2"><label className="ether-label-caps text-[var(--ether-on-surface-variant)]">Application Fee</label><Input min="0" step="0.01" type="number" value={formValues.applicationFee} onChange={(event) => updateField("applicationFee", event.target.value)} placeholder="e.g. 50" /><FieldError error={errors.applicationFee} /></div>
-          <div className="flex flex-col gap-2"><label className="ether-label-caps text-[var(--ether-on-surface-variant)]">Available From</label><Input type="date" value={formValues.availableFrom} onChange={(event) => updateField("availableFrom", event.target.value)} /></div>
-          <div className="flex flex-col gap-2"><label className="ether-label-caps text-[var(--ether-on-surface-variant)]">Minimum Lease (Months)</label><Input min="1" type="number" value={formValues.minimumLeaseMonths} onChange={(event) => updateField("minimumLeaseMonths", event.target.value)} placeholder="e.g. 12" /><FieldError error={errors.minimumLeaseMonths} /></div>
-          <div className="flex flex-col gap-2 md:col-span-2"><label className="ether-label-caps text-[var(--ether-on-surface-variant)]">Application Instructions</label><Textarea className="min-h-24" value={formValues.applicationInstructions} onChange={(event) => updateField("applicationInstructions", event.target.value)} placeholder="Documents required, income proof, screening steps..." /></div>
-          <div className="flex flex-col gap-2 md:col-span-2"><label className="ether-label-caps text-[var(--ether-on-surface-variant)]">Realtor Property Showing Instructions</label><Textarea className="min-h-28" value={formValues.realtorShowingInstructions} onChange={(event) => updateField("realtorShowingInstructions", event.target.value)} placeholder="Private: notice required, lockbox/access steps, parking, alarm, showing restrictions..." /><p className="text-xs text-[var(--ether-outline)]">Private management information; it is not returned by the public property API.</p></div>
+          <div className="flex flex-col gap-2">
+            <label className="ether-label-caps text-[var(--ether-on-surface-variant)]">
+              Minimum Credit Score
+            </label>
+            <Input
+              min="300"
+              max="850"
+              type="number"
+              value={formValues.minimumCreditScore}
+              onChange={(event) =>
+                updateField("minimumCreditScore", event.target.value)
+              }
+              placeholder="e.g. 680"
+            />
+            <FieldError error={errors.minimumCreditScore} />
+          </div>
+          <div className="flex flex-col gap-2">
+            <label className="ether-label-caps text-[var(--ether-on-surface-variant)]">
+              Minimum Monthly Income
+            </label>
+            <Input
+              min="0"
+              step="0.01"
+              type="number"
+              value={formValues.minimumMonthlyIncome}
+              onChange={(event) =>
+                updateField("minimumMonthlyIncome", event.target.value)
+              }
+              placeholder="e.g. 7500"
+            />
+            <FieldError error={errors.minimumMonthlyIncome} />
+          </div>
+          <div className="flex flex-col gap-2">
+            <label className="ether-label-caps text-[var(--ether-on-surface-variant)]">
+              Security Deposit
+            </label>
+            <Input
+              min="0"
+              step="0.01"
+              type="number"
+              value={formValues.securityDeposit}
+              onChange={(event) =>
+                updateField("securityDeposit", event.target.value)
+              }
+              placeholder="e.g. 2500"
+            />
+            <FieldError error={errors.securityDeposit} />
+          </div>
+          <div className="flex flex-col gap-2">
+            <label className="ether-label-caps text-[var(--ether-on-surface-variant)]">
+              Application Fee
+            </label>
+            <Input
+              min="0"
+              step="0.01"
+              type="number"
+              value={formValues.applicationFee}
+              onChange={(event) =>
+                updateField("applicationFee", event.target.value)
+              }
+              placeholder="e.g. 50"
+            />
+            <FieldError error={errors.applicationFee} />
+          </div>
+          <div className="flex flex-col gap-2">
+            <label className="ether-label-caps text-[var(--ether-on-surface-variant)]">
+              Available From
+            </label>
+            <Input
+              type="date"
+              value={formValues.availableFrom}
+              onChange={(event) =>
+                updateField("availableFrom", event.target.value)
+              }
+            />
+          </div>
+          <div className="flex flex-col gap-2">
+            <label className="ether-label-caps text-[var(--ether-on-surface-variant)]">
+              Minimum Lease (Months)
+            </label>
+            <Input
+              min="1"
+              type="number"
+              value={formValues.minimumLeaseMonths}
+              onChange={(event) =>
+                updateField("minimumLeaseMonths", event.target.value)
+              }
+              placeholder="e.g. 12"
+            />
+            <FieldError error={errors.minimumLeaseMonths} />
+          </div>
+          <div className="flex flex-col gap-2 md:col-span-2">
+            <label className="ether-label-caps text-[var(--ether-on-surface-variant)]">
+              Application Instructions
+            </label>
+            <Textarea
+              className="min-h-24"
+              value={formValues.applicationInstructions}
+              onChange={(event) =>
+                updateField("applicationInstructions", event.target.value)
+              }
+              placeholder="Documents required, income proof, screening steps..."
+            />
+          </div>
+          <div className="flex flex-col gap-2 md:col-span-2">
+            <label className="ether-label-caps text-[var(--ether-on-surface-variant)]">
+              Realtor Property Showing Instructions
+            </label>
+            <Textarea
+              className="min-h-28"
+              value={formValues.realtorShowingInstructions}
+              onChange={(event) =>
+                updateField("realtorShowingInstructions", event.target.value)
+              }
+              placeholder="Private: notice required, lockbox/access steps, parking, alarm, showing restrictions..."
+            />
+            <p className="text-xs text-[var(--ether-outline)]">
+              Private management information; it is not returned by the public
+              property API.
+            </p>
+          </div>
+          <div className="flex flex-col gap-2 md:col-span-2">
+            <label className="ether-label-caps text-[var(--ether-on-surface-variant)]">
+              Realtor Description
+            </label>
+            <Textarea
+              className="min-h-24"
+              value={formValues.realtorDescription}
+              onChange={(event) =>
+                updateField("realtorDescription", event.target.value)
+              }
+              placeholder="Private realtor-only description or context..."
+            />
+          </div>
+          <div className="flex flex-col gap-2 md:col-span-2">
+            <label className="ether-label-caps text-[var(--ether-on-surface-variant)]">
+              Entry Instructions
+            </label>
+            <Textarea
+              className="min-h-24"
+              value={formValues.entryInstructions}
+              onChange={(event) =>
+                updateField("entryInstructions", event.target.value)
+              }
+              placeholder="Private entry steps, alarm, gate, or access instructions..."
+            />
+          </div>
+          <div className="flex flex-col gap-2">
+            <label className="ether-label-caps text-[var(--ether-on-surface-variant)]">
+              Lockbox Code
+            </label>
+            <Input
+              type="text"
+              autoComplete="off"
+              value={formValues.lockboxCode}
+              onChange={(event) =>
+                updateField("lockboxCode", event.target.value)
+              }
+              placeholder="Private access code"
+            />
+            <p className="text-xs text-[var(--ether-outline)]">
+              Only a realtor verified in this tenant&apos;s Realtor directory
+              can receive this from the chatbot.
+            </p>
+          </div>
+          <div className="flex flex-col gap-2">
+            <label className="ether-label-caps text-[var(--ether-on-surface-variant)]">
+              Commission Information
+            </label>
+            <Input
+              type="text"
+              value={formValues.commissionInfo}
+              onChange={(event) =>
+                updateField("commissionInfo", event.target.value)
+              }
+              placeholder="Private commission terms"
+            />
+          </div>
+          <div className="flex flex-col gap-2 md:col-span-2">
+            <label className="ether-label-caps text-[var(--ether-on-surface-variant)]">
+              Internal Remarks
+            </label>
+            <Textarea
+              className="min-h-24"
+              value={formValues.internalRemarks}
+              onChange={(event) =>
+                updateField("internalRemarks", event.target.value)
+              }
+              placeholder="Private internal remarks for verified realtors only..."
+            />
+          </div>
         </div>
       </section>
 
@@ -359,39 +606,88 @@ export function PropertyFormFieldsSection({
             <AppIcon name="person_pin" />
           </span>
           <div>
-            <h4 className="text-xl font-semibold text-[var(--ether-on-surface)] sm:text-2xl">Property Owner</h4>
-            <p className="mt-1 text-sm text-[var(--ether-on-surface-variant)]">Primary owner contact and internal handling notes.</p>
+            <h4 className="text-xl font-semibold text-[var(--ether-on-surface)] sm:text-2xl">
+              Property Owner
+            </h4>
+            <p className="mt-1 text-sm text-[var(--ether-on-surface-variant)]">
+              Primary owner contact and internal handling notes.
+            </p>
           </div>
         </div>
         <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
           <div className="flex flex-col gap-2">
-            <label className="ether-label-caps text-[var(--ether-on-surface-variant)]">Owner Name</label>
-            <Input className="h-12 rounded-lg border-0 bg-white px-4 shadow-sm focus-visible:ring-2 focus-visible:ring-[var(--ether-primary)]/20" onChange={(event) => updateField("ownerName", event.target.value)} placeholder="Property owner full name" value={formValues.ownerName} />
+            <label className="ether-label-caps text-[var(--ether-on-surface-variant)]">
+              Owner Name
+            </label>
+            <Input
+              className="h-12 rounded-lg border-0 bg-white px-4 shadow-sm focus-visible:ring-2 focus-visible:ring-[var(--ether-primary)]/20"
+              onChange={(event) => updateField("ownerName", event.target.value)}
+              placeholder="Property owner full name"
+              value={formValues.ownerName}
+            />
           </div>
           <div className="flex flex-col gap-2">
-            <label className="ether-label-caps text-[var(--ether-on-surface-variant)]">Owner Phone</label>
+            <label className="ether-label-caps text-[var(--ether-on-surface-variant)]">
+              Owner Phone
+            </label>
             <div className="relative">
-              <AppIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--ether-outline)]" name="call" />
-              <Input className="h-12 rounded-lg border-0 bg-white pl-11 shadow-sm focus-visible:ring-2 focus-visible:ring-[var(--ether-primary)]/20" onChange={(event) => updateField("ownerPhone", event.target.value)} placeholder="+1 555 000 0000" type="tel" value={formValues.ownerPhone} />
+              <AppIcon
+                className="absolute top-1/2 left-4 -translate-y-1/2 text-[var(--ether-outline)]"
+                name="call"
+              />
+              <Input
+                className="h-12 rounded-lg border-0 bg-white pl-11 shadow-sm focus-visible:ring-2 focus-visible:ring-[var(--ether-primary)]/20"
+                onChange={(event) =>
+                  updateField("ownerPhone", event.target.value)
+                }
+                placeholder="+1 555 000 0000"
+                type="tel"
+                value={formValues.ownerPhone}
+              />
             </div>
           </div>
           <div className="flex flex-col gap-2 md:col-span-2">
-            <label className="ether-label-caps text-[var(--ether-on-surface-variant)]">Owner Email</label>
+            <label className="ether-label-caps text-[var(--ether-on-surface-variant)]">
+              Owner Email
+            </label>
             <div className="relative">
-              <AppIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--ether-outline)]" name="mail" />
-              <Input className="h-12 rounded-lg border-0 bg-white pl-11 shadow-sm focus-visible:ring-2 focus-visible:ring-[var(--ether-primary)]/20" onChange={(event) => updateField("ownerEmail", event.target.value)} placeholder="owner@example.com" type="email" value={formValues.ownerEmail} />
+              <AppIcon
+                className="absolute top-1/2 left-4 -translate-y-1/2 text-[var(--ether-outline)]"
+                name="mail"
+              />
+              <Input
+                className="h-12 rounded-lg border-0 bg-white pl-11 shadow-sm focus-visible:ring-2 focus-visible:ring-[var(--ether-primary)]/20"
+                onChange={(event) =>
+                  updateField("ownerEmail", event.target.value)
+                }
+                placeholder="owner@example.com"
+                type="email"
+                value={formValues.ownerEmail}
+              />
             </div>
           </div>
           <div className="flex flex-col gap-2 md:col-span-2">
-            <label className="ether-label-caps text-[var(--ether-on-surface-variant)]">Internal Operations Note</label>
-            <Textarea className="min-h-28 rounded-lg border-0 bg-white p-4 shadow-sm focus-visible:ring-2 focus-visible:ring-[var(--ether-primary)]/20" onChange={(event) => updateField("ownerExtraInfo", event.target.value)} placeholder="Preferred contact time, ownership notes, access instructions..." value={formValues.ownerExtraInfo} />
+            <label className="ether-label-caps text-[var(--ether-on-surface-variant)]">
+              Internal Operations Note
+            </label>
+            <Textarea
+              className="min-h-28 rounded-lg border-0 bg-white p-4 shadow-sm focus-visible:ring-2 focus-visible:ring-[var(--ether-primary)]/20"
+              onChange={(event) =>
+                updateField("ownerExtraInfo", event.target.value)
+              }
+              placeholder="Preferred contact time, ownership notes, access instructions..."
+              value={formValues.ownerExtraInfo}
+            />
           </div>
         </div>
       </section>
 
       <section>
         <h4 className="mb-6 flex items-center gap-2 text-xl font-semibold text-[var(--ether-on-surface)] sm:text-2xl">
-          <AppIcon className="text-[var(--ether-secondary)]" name="straighten" />
+          <AppIcon
+            className="text-[var(--ether-secondary)]"
+            name="straighten"
+          />
           {" Specifications & Layout "}
         </h4>
         <div className="grid grid-cols-2 gap-6 md:grid-cols-3">
@@ -439,11 +735,14 @@ export function PropertyFormFieldsSection({
 
       <section>
         <h4 className="mb-6 flex items-center gap-2 text-xl font-semibold text-[var(--ether-on-surface)] sm:text-2xl">
-          <AppIcon className="text-[var(--ether-secondary)]" name="description" />
+          <AppIcon
+            className="text-[var(--ether-secondary)]"
+            name="description"
+          />
           {" Property Description "}
         </h4>
         <Textarea
-          className="form-textarea min-h-36 w-full rounded-xl border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800 focus:ring-primary"
+          className="form-textarea min-h-36 w-full rounded-xl border-slate-200 bg-slate-50 p-4 focus:ring-primary dark:border-slate-700 dark:bg-slate-800"
           onChange={(event) => updateField("description", event.target.value)}
           placeholder="Write a compelling description of the property..."
           value={formValues.description}
@@ -455,7 +754,9 @@ export function PropertyFormFieldsSection({
           </label>
           <Textarea
             className="min-h-28"
-            onChange={(event) => updateField("extraDescription", event.target.value)}
+            onChange={(event) =>
+              updateField("extraDescription", event.target.value)
+            }
             placeholder="Internal or additional property details..."
             value={formValues.extraDescription}
           />
@@ -465,21 +766,61 @@ export function PropertyFormFieldsSection({
       <section className="rounded-[24px] bg-white p-5 shadow-[var(--shadow-surface-1)] sm:p-6">
         <div className="mb-6 flex items-center justify-between gap-4 border-b border-[color-mix(in_srgb,var(--ether-outline-variant)_35%,transparent)] pb-4">
           <div className="flex items-center gap-3">
-            <span className="flex size-10 items-center justify-center rounded-xl bg-[var(--ether-primary-fixed)] text-[var(--ether-primary)]"><AppIcon name="checklist" /></span>
-            <div><h4 className="text-xl font-semibold text-[var(--ether-on-surface)] sm:text-2xl">Amenities</h4><p className="mt-1 text-sm text-[var(--ether-on-surface-variant)]">Select features that should appear on the listing.</p></div>
+            <span className="flex size-10 items-center justify-center rounded-xl bg-[var(--ether-primary-fixed)] text-[var(--ether-primary)]">
+              <AppIcon name="checklist" />
+            </span>
+            <div>
+              <h4 className="text-xl font-semibold text-[var(--ether-on-surface)] sm:text-2xl">
+                Amenities
+              </h4>
+              <p className="mt-1 text-sm text-[var(--ether-on-surface-variant)]">
+                Select features that should appear on the listing.
+              </p>
+            </div>
           </div>
-          <span className="rounded-full bg-[var(--ether-surface-container-low)] px-3 py-1 text-xs font-semibold text-[var(--ether-on-surface-variant)]">{selectedAmenities.size} selected</span>
+          <span className="rounded-full bg-[var(--ether-surface-container-low)] px-3 py-1 text-xs font-semibold text-[var(--ether-on-surface-variant)]">
+            {selectedAmenities.size} selected
+          </span>
         </div>
         <div className="mb-6 flex flex-col gap-3 rounded-2xl bg-[var(--ether-surface-container-low)] p-4 md:flex-row md:items-center">
-          <Input className="h-11 rounded-lg border-0 bg-white px-4 shadow-sm focus-visible:ring-2 focus-visible:ring-[var(--ether-primary)]/20" onChange={(event) => setNewAmenity(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addAmenity() } }} placeholder="Add a custom amenity" type="text" value={newAmenity} />
-          <button className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-[var(--ether-primary)] px-5 text-sm font-bold text-white transition hover:bg-[var(--ether-primary-container)]" onClick={addAmenity} type="button"><AppIcon className="text-base" name="add" />Add Amenity</button>
+          <Input
+            className="h-11 rounded-lg border-0 bg-white px-4 shadow-sm focus-visible:ring-2 focus-visible:ring-[var(--ether-primary)]/20"
+            onChange={(event) => setNewAmenity(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault()
+                addAmenity()
+              }
+            }}
+            placeholder="Add a custom amenity"
+            type="text"
+            value={newAmenity}
+          />
+          <button
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-[var(--ether-primary)] px-5 text-sm font-bold text-white transition hover:bg-[var(--ether-primary-container)]"
+            onClick={addAmenity}
+            type="button"
+          >
+            <AppIcon className="text-base" name="add" />
+            Add Amenity
+          </button>
         </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {amenityOptions.map((amenity) => {
             const checked = selectedAmenities.has(amenity)
             return (
-              <label key={amenity} className={`flex cursor-pointer items-center gap-3 rounded-xl px-4 py-3 transition ${checked ? "bg-[var(--ether-primary-fixed)] text-[var(--ether-primary)] shadow-sm" : "bg-[var(--ether-surface-container-low)] text-[var(--ether-on-surface-variant)] hover:bg-[var(--ether-surface-container-high)]"}`}>
-                <input checked={checked} className="size-4 rounded border-[var(--ether-outline-variant)] text-[var(--ether-primary)] focus:ring-[var(--ether-primary)]" onChange={(event) => toggleAmenity(amenity, event.target.checked)} type="checkbox" />
+              <label
+                key={amenity}
+                className={`flex cursor-pointer items-center gap-3 rounded-xl px-4 py-3 transition ${checked ? "bg-[var(--ether-primary-fixed)] text-[var(--ether-primary)] shadow-sm" : "bg-[var(--ether-surface-container-low)] text-[var(--ether-on-surface-variant)] hover:bg-[var(--ether-surface-container-high)]"}`}
+              >
+                <input
+                  checked={checked}
+                  className="size-4 rounded border-[var(--ether-outline-variant)] text-[var(--ether-primary)] focus:ring-[var(--ether-primary)]"
+                  onChange={(event) =>
+                    toggleAmenity(amenity, event.target.checked)
+                  }
+                  type="checkbox"
+                />
                 <span className="text-sm font-semibold">{amenity}</span>
               </label>
             )
@@ -489,16 +830,22 @@ export function PropertyFormFieldsSection({
 
       <section>
         <h4 className="mb-6 flex items-center gap-2 text-xl font-semibold text-[var(--ether-on-surface)] sm:text-2xl">
-          <AppIcon className="text-[var(--ether-secondary)]" name="location_city" />
+          <AppIcon
+            className="text-[var(--ether-secondary)]"
+            name="location_city"
+          />
           {" Neighborhood Insights "}
         </h4>
         <div className="space-y-4">
           {neighborhoodInsights.map((insight, index) => (
-            <div key={`neighborhood-insight-${index}`} className="rounded-2xl border border-slate-200 bg-slate-50 p-5 dark:border-slate-700 dark:bg-slate-800/60">
+            <div
+              key={`neighborhood-insight-${index}`}
+              className="rounded-2xl border border-slate-200 bg-slate-50 p-5 dark:border-slate-700 dark:bg-slate-800/60"
+            >
               <div className="mb-4 flex items-center justify-between gap-4">
                 <p className="ether-label-caps text-[var(--ether-on-surface-variant)]">{`Insight ${index + 1}`}</p>
                 <button
-                  className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-rose-600"
+                  className="inline-flex items-center gap-2 text-xs font-bold tracking-wide text-rose-600 uppercase"
                   onClick={() => removeNeighborhoodInsight(index)}
                   type="button"
                 >
@@ -512,9 +859,13 @@ export function PropertyFormFieldsSection({
                     {"Insight Type"}
                   </label>
                   <Input
-                    className="form-input rounded-xl border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900 focus:ring-primary"
+                    className="form-input rounded-xl border-slate-200 bg-white focus:ring-primary dark:border-slate-700 dark:bg-slate-900"
                     list={`neighborhood-insight-types-${index}`}
-                    onChange={(event) => updateNeighborhoodInsight(index, { type: event.target.value })}
+                    onChange={(event) =>
+                      updateNeighborhoodInsight(index, {
+                        type: event.target.value,
+                      })
+                    }
                     placeholder="e.g. Walkability"
                     type="text"
                     value={insight.type}
@@ -535,8 +886,12 @@ export function PropertyFormFieldsSection({
                     {"Insight Description"}
                   </label>
                   <Textarea
-                    className="form-textarea min-h-24 rounded-xl border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900 focus:ring-primary"
-                    onChange={(event) => updateNeighborhoodInsight(index, { description: event.target.value })}
+                    className="form-textarea min-h-24 rounded-xl border-slate-200 bg-white p-4 focus:ring-primary dark:border-slate-700 dark:bg-slate-900"
+                    onChange={(event) =>
+                      updateNeighborhoodInsight(index, {
+                        description: event.target.value,
+                      })
+                    }
                     placeholder="Describe why this neighborhood detail matters for the property."
                     value={insight.description}
                   />
@@ -566,15 +921,20 @@ export function PropertyFormFieldsSection({
         <div className="space-y-4">
           {preQuestions.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-400">
-              {"No pre-questions added yet. Add one if the listing chat should collect details before the visitor shares contact information."}
+              {
+                "No pre-questions added yet. Add one if the listing chat should collect details before the visitor shares contact information."
+              }
             </div>
           ) : (
             preQuestions.map((question, index) => (
-              <div key={`pre-question-${question.id ?? index}`} className="rounded-2xl border border-slate-200 bg-slate-50 p-5 dark:border-slate-700 dark:bg-slate-800/60">
+              <div
+                key={`pre-question-${question.id ?? index}`}
+                className="rounded-2xl border border-slate-200 bg-slate-50 p-5 dark:border-slate-700 dark:bg-slate-800/60"
+              >
                 <div className="mb-4 flex items-center justify-between gap-4">
                   <p className="ether-label-caps text-[var(--ether-on-surface-variant)]">{`Pre-question ${index + 1}`}</p>
                   <button
-                    className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-rose-600"
+                    className="inline-flex items-center gap-2 text-xs font-bold tracking-wide text-rose-600 uppercase"
                     onClick={() => removePreQuestion(index)}
                     type="button"
                   >
@@ -588,8 +948,10 @@ export function PropertyFormFieldsSection({
                       {"Question Prompt"}
                     </label>
                     <Input
-                      className="form-input rounded-xl border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900 focus:ring-primary"
-                      onChange={(event) => updatePreQuestion(index, { prompt: event.target.value })}
+                      className="form-input rounded-xl border-slate-200 bg-white focus:ring-primary dark:border-slate-700 dark:bg-slate-900"
+                      onChange={(event) =>
+                        updatePreQuestion(index, { prompt: event.target.value })
+                      }
                       placeholder="e.g. What would you like to know before speaking to the agent?"
                       type="text"
                       value={question.prompt}
@@ -600,8 +962,12 @@ export function PropertyFormFieldsSection({
                       {"Helper Text"}
                     </label>
                     <Textarea
-                      className="form-textarea min-h-24 rounded-xl border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900 focus:ring-primary"
-                      onChange={(event) => updatePreQuestion(index, { helperText: event.target.value })}
+                      className="form-textarea min-h-24 rounded-xl border-slate-200 bg-white p-4 focus:ring-primary dark:border-slate-700 dark:bg-slate-900"
+                      onChange={(event) =>
+                        updatePreQuestion(index, {
+                          helperText: event.target.value,
+                        })
+                      }
                       placeholder="Optional instruction shown inside the chat prompt."
                       value={question.helperText}
                     />
@@ -610,7 +976,11 @@ export function PropertyFormFieldsSection({
                     <input
                       checked={question.isRequired}
                       className="form-checkbox rounded border-slate-300 text-primary focus:ring-primary"
-                      onChange={(event) => updatePreQuestion(index, { isRequired: event.target.checked })}
+                      onChange={(event) =>
+                        updatePreQuestion(index, {
+                          isRequired: event.target.checked,
+                        })
+                      }
                       type="checkbox"
                     />
                     {"Required before continuing"}
@@ -619,7 +989,11 @@ export function PropertyFormFieldsSection({
                     <input
                       checked={question.allowsFileUpload}
                       className="form-checkbox rounded border-slate-300 text-primary focus:ring-primary"
-                      onChange={(event) => updatePreQuestion(index, { allowsFileUpload: event.target.checked })}
+                      onChange={(event) =>
+                        updatePreQuestion(index, {
+                          allowsFileUpload: event.target.checked,
+                        })
+                      }
                       type="checkbox"
                     />
                     {"Allow visitor file upload"}
@@ -635,13 +1009,15 @@ export function PropertyFormFieldsSection({
                             : "Upload Reference File"}
                         <input
                           className="hidden"
-                          onChange={(event) => void handlePreQuestionAttachment(index, event)}
+                          onChange={(event) =>
+                            void handlePreQuestionAttachment(index, event)
+                          }
                           type="file"
                         />
                       </label>
                       {question.attachmentUrl ? (
                         <button
-                          className="text-xs font-bold uppercase tracking-wide text-rose-600"
+                          className="text-xs font-bold tracking-wide text-rose-600 uppercase"
                           onClick={() => removePreQuestionAttachment(index)}
                           type="button"
                         >
@@ -660,7 +1036,9 @@ export function PropertyFormFieldsSection({
                       </a>
                     ) : (
                       <p className="text-xs text-slate-500 dark:text-slate-400">
-                        {"Optional file the chat can show before the visitor answers."}
+                        {
+                          "Optional file the chat can show before the visitor answers."
+                        }
                       </p>
                     )}
                   </div>
@@ -684,5 +1062,3 @@ export function PropertyFormFieldsSection({
     </>
   )
 }
-
-

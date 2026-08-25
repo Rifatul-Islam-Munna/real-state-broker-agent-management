@@ -176,6 +176,34 @@ describe('TenantOutreachService reliability', () => {
     },
   );
 
+  it('records the configured final follow-up even when it is step 2', async () => {
+    const query = jest.fn(async () => ({ rowCount: 1, rows: [] }));
+    const { service } = createService(query);
+    const job = {
+      id: 61,
+      lead_id: 9,
+      source_type: 'lead-followup',
+      source_id: 'follow-up-2',
+      channel: 'Email',
+      provider: 'smtp',
+      payload: { sequenceType: 'FollowUp2', isFinalFollowUp: true },
+    } as any;
+
+    await (service as any).finishAttemptSuccess(
+      'tenant_11_alpha',
+      job,
+      101,
+      'provider-61',
+    );
+
+    const leadUpdate = query.mock.calls.find(([sql]) =>
+      sql.includes('UPDATE tenant_lead'),
+    );
+    expect(leadUpdate?.[0]).toContain("'followUpSequence'");
+    expect(leadUpdate?.[0]).toContain("'finalFollowUpSentAt'");
+    expect(leadUpdate?.[1]).toEqual(expect.arrayContaining([9, true, 2, true]));
+  });
+
   it('allows a user to manually send outreach for an unlisted-property lead', async () => {
     const query = jest.fn(async (sql: string) => {
       if (sql.includes('SELECT to_jsonb(lead)')) {
@@ -374,7 +402,7 @@ describe('TenantOutreachService reliability', () => {
 
     expect(query).toHaveBeenCalledWith(
       expect.stringContaining("'postVisitFollowUpSentAt'"),
-      [9, true, true],
+      expect.arrayContaining([9, true, true]),
     );
   });
 

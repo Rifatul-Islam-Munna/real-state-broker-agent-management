@@ -24,7 +24,11 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   })
   if (!response.ok) {
     const payload = await response.json().catch(() => ({}))
-    throw new Error(Array.isArray(payload.message) ? payload.message[0] : payload.message ?? "Chatbot request failed")
+    throw new Error(
+      Array.isArray(payload.message)
+        ? payload.message[0]
+        : (payload.message ?? "Chatbot request failed")
+    )
   }
   return response.json()
 }
@@ -38,6 +42,10 @@ export type ChatbotSettings = {
   fallbackMessage: string
   creditRequiredMessage: string
   creditRejectedMessage: string
+  propertyUnavailableMessage: string
+  evidenceConflictMessage: string
+  turnLimitMessage: string
+  realtorVerificationMessage: string
   stopRules: {
     humanIntervention: boolean
     doNotContact: boolean
@@ -133,28 +141,37 @@ export async function updateChatbotKnowledge(
     questionExamples: string[]
     priority: number
     active: boolean
-  }>,
+  }>
 ) {
-  const result = await request<ChatbotKnowledge>(`/tenant-chatbot/knowledge/${id}`, {
-    method: "PATCH",
-    body: JSON.stringify(input),
-  })
+  const result = await request<ChatbotKnowledge>(
+    `/tenant-chatbot/knowledge/${id}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    }
+  )
   revalidatePath("/dashboard/chatbot-settings")
   return result
 }
 
 export async function deleteChatbotKnowledge(id: string) {
-  const result = await request<{ deleted: boolean; id: string }>(`/tenant-chatbot/knowledge/${id}`, {
-    method: "DELETE",
-  })
+  const result = await request<{ deleted: boolean; id: string }>(
+    `/tenant-chatbot/knowledge/${id}`,
+    {
+      method: "DELETE",
+    }
+  )
   revalidatePath("/dashboard/chatbot-settings")
   return result
 }
 
 export async function reindexChatbotKnowledge() {
-  const result = await request<{ properties: number; indexed: number }>("/tenant-chatbot/reindex", {
-    method: "POST",
-  })
+  const result = await request<{ properties: number; indexed: number }>(
+    "/tenant-chatbot/reindex",
+    {
+      method: "POST",
+    }
+  )
   revalidatePath("/dashboard/chatbot-settings")
   return result
 }

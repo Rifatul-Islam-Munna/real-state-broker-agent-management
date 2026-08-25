@@ -40,7 +40,7 @@ export class TenantWorkspaceSettingsService {
         ...this.object(stored.leadAutomation),
       },
       communicationTemplates: Array.isArray(stored.communicationTemplates)
-        ? stored.communicationTemplates
+        ? this.mergeRequiredFollowUpTemplates(stored.communicationTemplates, defaults.communicationTemplates)
         : defaults.communicationTemplates,
       updatedAt: row?.updatedAt ?? null,
     };
@@ -694,6 +694,57 @@ export class TenantWorkspaceSettingsService {
     return Number.isFinite(parsed) ? Math.min(23, Math.max(0, parsed)) : 9;
   }
 
+  private mergeRequiredFollowUpTemplates(stored: any[], defaults: any[]) {
+    const merged = [...stored];
+    const required = defaults.filter((template: any) => {
+      const sequence = this.text(template?.sequenceType);
+      const audience = this.text(template?.audience) || 'Lead';
+      return (audience === 'Lead' && ['FollowUp4', 'FollowUp5', 'FollowUp6'].includes(sequence)) ||
+        (audience === 'Realtor' && /^FollowUp[1-6]$/.test(sequence));
+    });
+    for (const template of required) {
+      const audience = this.text(template?.audience) || 'Lead';
+      const sequence = this.text(template?.sequenceType);
+      const exists = merged.some((item: any) => (this.text(item?.audience) || 'Lead') === audience && this.text(item?.sequenceType) === sequence);
+      if (!exists) merged.push({ ...template, isActive: false });
+    }
+    return merged;
+  }
+
+  private defaultExtendedFollowUpTemplates(common: any) {
+    const lead = [4, 5, 6].map((step) => ({
+      ...common,
+      isActive: false,
+      id: `tenant-follow-up-${step}`,
+      name: `Lead Follow-up ${step}`,
+      subject: step === 6 ? 'Final check-in from {{agency_name}}' : `Follow-up ${step}: {{property_address}}`,
+      body: step === 6
+        ? 'Hi {{client_name}}, this is our final automatic check-in. Reply anytime if you would like us to continue helping.'
+        : 'Hi {{client_name}}, checking in again about {{property_address}}. Reply with any question and our team will help.',
+      channels: ['Email', 'SMS'],
+      variableTokens: ['{{client_name}}', '{{property_address}}', '{{agency_name}}'],
+      sequenceType: `FollowUp${step}`,
+      gapDays: 7,
+      audience: 'Lead',
+    }));
+    const realtor = [1, 2, 3, 4, 5, 6].map((step) => ({
+      ...common,
+      isActive: false,
+      id: `tenant-realtor-follow-up-${step}`,
+      name: `Realtor Follow-up ${step}`,
+      subject: step === 6 ? 'Final realtor check-in: {{property_address}}' : `Realtor follow-up ${step}: {{property_address}}`,
+      body: step === 6
+        ? 'Hi {{agent_name}}, this is the final automatic follow-up for {{property_address}}. Reply anytime with an update.'
+        : 'Hi {{agent_name}}, please share any update for {{client_name}} about {{property_address}} when available.',
+      channels: ['Email', 'SMS'],
+      variableTokens: ['{{agent_name}}', '{{client_name}}', '{{property_address}}'],
+      sequenceType: `FollowUp${step}`,
+      gapDays: step === 1 ? 1 : step === 2 ? 3 : 7,
+      audience: 'Realtor',
+    }));
+    return [...lead, ...realtor];
+  }
+
   private defaultAgencySettings(tenant: SaasTenant) {
     const common = {
       isActive: true,
@@ -800,13 +851,14 @@ export class TenantWorkspaceSettingsService {
           ...common,
           id: 'tenant-follow-up-3',
           name: 'Lead Follow-up 3',
-          subject: 'Last follow-up from {{agency_name}}',
-          body: 'Hi {{client_name}}, this is our final automatic follow-up. Reply anytime when you are ready.',
+          subject: 'Checking in again from {{agency_name}}',
+          body: 'Hi {{client_name}}, checking in again. Reply anytime with questions or when you are ready for the next step.',
           channels: ['Email', 'SMS'],
           variableTokens: ['{{client_name}}', '{{agency_name}}'],
           sequenceType: 'FollowUp3',
           gapDays: 7,
         },
+        ...this.defaultExtendedFollowUpTemplates(common),
         {
           ...common,
           id: 'tenant-owner-feedback',

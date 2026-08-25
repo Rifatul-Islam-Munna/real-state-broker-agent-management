@@ -108,6 +108,7 @@ export class TenantInboxSyncService {
             await this.autoSendWelcomeForLeads(tenant);
             await this.scheduleTenantFollowUps(tenant);
             await this.removeStalePostVisitFollowUps(tenant);
+            await this.removeUnansweredFinalFollowUps(tenant);
           } catch (error) {
             this.logger.error(
               `Tenant follow-up scheduling failed for ${tenant.databaseName}: ${this.message(error)}`,
@@ -175,6 +176,7 @@ export class TenantInboxSyncService {
     const welcomeSent = await this.autoSendWelcomeForLeads(tenant);
     await this.scheduleTenantFollowUps(tenant);
     await this.removeStalePostVisitFollowUps(tenant);
+    await this.removeUnansweredFinalFollowUps(tenant);
     const namesFixed = await this.fixMissingLeadNames(tenant);
     const recoveredNote = recovered.converted
       ? `, ${recovered.converted} previously skipped ${recovered.converted === 1 ? 'email was' : 'emails were'} recovered.`
@@ -1596,7 +1598,7 @@ export class TenantInboxSyncService {
   }
 
   /**
-   * Schedules the FollowUp1/2/3 templates after a welcome message has been
+   * Schedules the FollowUp1-6 templates after a welcome message has been
    * sent, at their configured gap days, when follow-ups are enabled. Queued
    * jobs wait until due and are auto-cancelled if the lead replies first.
    */
@@ -1619,6 +1621,9 @@ export class TenantInboxSyncService {
         FollowUp1: 0,
         FollowUp2: 1,
         FollowUp3: 2,
+        FollowUp4: 3,
+        FollowUp5: 4,
+        FollowUp6: 5,
       };
       const followUpTemplates = (agency?.communicationTemplates ?? [])
         .filter(
@@ -1716,6 +1721,8 @@ export class TenantInboxSyncService {
                   templateId: this.text(template.id),
                   channel,
                   sequenceType: this.text(template.sequenceType),
+                  isFinalFollowUp:
+                    template === followUpTemplates[followUpTemplates.length - 1],
                   automatic: true,
                 },
               });
@@ -1740,6 +1747,29 @@ export class TenantInboxSyncService {
     });
   }
 
+  private async removeUnansweredFinalFollowUps(tenant: SaasTenant) {
+    const days = this.clamp(process.env.TENANT_FINAL_FOLLOWUP_BOARD_DAYS, 2, 1, 30);
+    return this.databases.withTenantClient(this.databaseName(tenant), async (client) => {
+      const result = await client.query(
+        `UPDATE tenant_lead lead
+         SET payload = COALESCE(lead.payload, '{}'::jsonb) || jsonb_build_object(
+           'stage', 'NotResponded', 'inBoard', false, 'followUpStatus', 'Completed',
+           'notRespondedAt', now()::text, 'boardRemovedAt', now()::text,
+           'boardRemovalReason', 'FINAL_FOLLOW_UP_NO_REPLY'), updated_at = now()
+         WHERE COALESCE((lead.payload->>'inBoard')::boolean, false) = true
+           AND COALESCE(lead.payload->>'stage', '') = 'FollowUp'
+           AND NULLIF(lead.payload->>'finalFollowUpSentAt', '')::timestamptz <= now() - ($1::int * interval '1 day')
+           AND NOT EXISTS (SELECT 1 FROM tenant_outreach_job incoming
+             WHERE incoming.lead_id = lead.id AND incoming.direction = 'Incoming'
+               AND COALESCE(incoming.occurred_at, incoming.completed_at, incoming.created_at) > NULLIF(lead.payload->>'finalFollowUpSentAt', '')::timestamptz)
+           AND NOT EXISTS (SELECT 1 FROM tenant_outreach_job pending
+             WHERE pending.lead_id = lead.id AND pending.source_type = 'lead-followup'
+               AND pending.status IN ('scheduled', 'retrying', 'processing'))
+         RETURNING lead.id`, [days]);
+      return { removed: result.rowCount ?? 0 };
+    });
+  }
+
   private async removeStalePostVisitFollowUps(tenant: SaasTenant) {
     const days = this.clamp(process.env.TENANT_POST_VISIT_BOARD_DAYS, 2, 1, 30);
     return this.databases.withTenantClient(
@@ -1757,6 +1787,12 @@ export class TenantInboxSyncService {
              AND COALESCE(payload->>'stage', '') = 'FollowUp'
              AND NULLIF(payload->>'postVisitFollowUpSentAt', '')::timestamptz
                  <= now() - ($1::int * interval '1 day')
+             AND NOT EXISTS (
+               SELECT 1 FROM tenant_outreach_job pending
+               WHERE pending.lead_id = tenant_lead.id
+                 AND pending.source_type = 'lead-followup'
+                 AND pending.status IN ('scheduled', 'retrying', 'processing')
+             )
            RETURNING id`,
           [days],
         );

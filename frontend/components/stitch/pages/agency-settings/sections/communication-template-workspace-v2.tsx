@@ -50,7 +50,7 @@ type EditorState =
   | { mode: "edit"; id: string }
   | null
 
-const sequenceOptions = ["Direct", "FollowUp1", "FollowUp2", "FollowUp3"] as const
+const sequenceOptions = ["Direct", "FollowUp1", "FollowUp2", "FollowUp3", "FollowUp4", "FollowUp5", "FollowUp6"] as const
 const leadTokens = [
   "{{client_name}}",
   "{{property_address}}",
@@ -171,7 +171,7 @@ export function CommunicationTemplateWorkspaceV2({
             {"Communication templates"}
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            {"Cards show status and delivery channels. Full editing opens in a side sheet."}
+            {"Follow-ups support steps 1-6. Only active templates send; the last active lead follow-up starts the 2-day no-reply window."}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">

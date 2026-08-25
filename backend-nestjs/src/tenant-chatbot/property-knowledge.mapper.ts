@@ -38,8 +38,10 @@ const LEAD_FIELDS: FieldDefinition[] = [
   { key: 'exactLocation', label: 'Address', priority: 70 },
   { key: 'address', label: 'Address', priority: 70 },
   { key: 'bedroom', label: 'Bedrooms' },
+  { key: 'bedRoom', label: 'Bedrooms' },
   { key: 'bedrooms', label: 'Bedrooms' },
   { key: 'bathroom', label: 'Bathrooms' },
+  { key: 'bathRoom', label: 'Bathrooms' },
   { key: 'bathrooms', label: 'Bathrooms' },
   { key: 'width', label: 'Size' },
   { key: 'squareFeet', label: 'Square feet' },
@@ -67,6 +69,9 @@ const LEAD_FIELDS: FieldDefinition[] = [
     priority: 80,
   },
   { key: 'amenities', label: 'Amenities', priority: 70 },
+  { key: 'keyAmenities', label: 'Key amenities', priority: 70 },
+  { key: 'neighborhoodInsights', label: 'Neighborhood insights', priority: 60 },
+  { key: 'preQuestions', label: 'Application pre-questions', priority: 60 },
   { key: 'features', label: 'Features', priority: 70 },
   { key: 'parking', label: 'Parking', priority: 70 },
   { key: 'petPolicy', label: 'Pet policy', priority: 80 },
@@ -132,6 +137,16 @@ export function mapPropertyKnowledge(
     title,
   );
 
+  const status = text(property.status);
+  if (status) {
+    const statusField: FieldDefinition = {
+      key: 'status',
+      label: 'Listing status',
+      priority: 90,
+    };
+    addChunk(chunks, propertyId, title, 'LEAD', statusField, status);
+    addChunk(chunks, propertyId, title, 'REALTOR', statusField, status);
+  }
   for (const field of LEAD_FIELDS) {
     const value = displayValue(payload[field.key]);
     if (!value) continue;
@@ -165,7 +180,7 @@ function addChunk(
     sourceHash: createHash('sha256')
       .update(`${sourceKey}\n${content}`)
       .digest('hex'),
-    title: `${propertyTitle} — ${field.label}`,
+    title: `${propertyTitle} Ã¢â‚¬â€ ${field.label}`,
     content,
     priority: field.priority ?? 60,
   });

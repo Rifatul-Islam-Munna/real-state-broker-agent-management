@@ -23,6 +23,22 @@ function displayText(value?: string | null, fallback = "Not set") {
   return text.length > 0 ? text : fallback
 }
 
+const followUpCardTone: Record<number, { card: string; badge: string }> = {
+  1: { card: "border border-sky-200 bg-sky-50/80 dark:border-sky-800/70 dark:bg-sky-950/35", badge: "bg-sky-100 text-sky-800 dark:bg-sky-900/70 dark:text-sky-200" },
+  2: { card: "border border-cyan-200 bg-cyan-50/80 dark:border-cyan-800/70 dark:bg-cyan-950/35", badge: "bg-cyan-100 text-cyan-800 dark:bg-cyan-900/70 dark:text-cyan-200" },
+  3: { card: "border border-amber-200 bg-amber-50/80 dark:border-amber-800/70 dark:bg-amber-950/35", badge: "bg-amber-100 text-amber-800 dark:bg-amber-900/70 dark:text-amber-200" },
+  4: { card: "border border-orange-200 bg-orange-50/80 dark:border-orange-800/70 dark:bg-orange-950/35", badge: "bg-orange-100 text-orange-800 dark:bg-orange-900/70 dark:text-orange-200" },
+  5: { card: "border border-violet-200 bg-violet-50/80 dark:border-violet-800/70 dark:bg-violet-950/35", badge: "bg-violet-100 text-violet-800 dark:bg-violet-900/70 dark:text-violet-200" },
+  6: { card: "border border-rose-200 bg-rose-50/80 dark:border-rose-800/70 dark:bg-rose-950/35", badge: "bg-rose-100 text-rose-800 dark:bg-rose-900/70 dark:text-rose-200" },
+}
+
+function followUpStep(lead: LeadItem) {
+  const step = Number(lead.followUpSequence)
+  return lead.stage === "FollowUp" && Number.isInteger(step) && step >= 1 && step <= 6
+    ? step
+    : null
+}
+
 function getLeadNotes(notes?: string[] | null) {
   return (notes ?? []).filter((note) => (note?.trim() ?? "").length > 0)
 }
@@ -141,11 +157,16 @@ export function LeadKanbanCard({
   const lastActivityLabel = formatRelativeTimeLabel(
     lead.lastActivityAt ?? lead.updatedAt ?? lead.createdAt ?? new Date().toISOString(),
   )
+  const currentFollowUpStep = followUpStep(lead)
+  const currentFollowUpTone = currentFollowUpStep
+    ? followUpCardTone[currentFollowUpStep]
+    : null
 
   return (
     <article
       className={cn(
         "group overflow-hidden rounded-xl bg-white shadow-[var(--shadow-surface-1)] transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-surface-2)]",
+        currentFollowUpTone?.card,
         lead.isFollowUpOverdue && "border-l-4 border-l-[var(--ether-error)]",
         isActive && "ring-2 ring-[var(--ether-primary)]/25",
       )}
@@ -157,6 +178,14 @@ export function LeadKanbanCard({
           onClick={() => setIsExpanded((expanded) => !expanded)}
           type="button"
         >
+          {currentFollowUpStep && currentFollowUpTone ? (
+            <span className={cn(
+              "mb-2 inline-flex rounded-full px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.08em]",
+              currentFollowUpTone.badge,
+            )}>
+              {`Follow-up ${currentFollowUpStep}`}
+            </span>
+          ) : null}
           <h4 className="truncate text-lg font-bold text-[var(--ether-on-surface)]">{lead.name}</h4>
           <p className="mt-1 flex items-center gap-1 text-xs text-[var(--ether-on-surface-variant)]">
             <AppIcon className="text-sm" name="location_on" />

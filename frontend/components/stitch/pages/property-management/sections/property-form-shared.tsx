@@ -1,4 +1,7 @@
-import type { PropertyDocumentItem, PropertyItem } from "@/@types/real-estate-api"
+import type {
+  PropertyDocumentItem,
+  PropertyItem,
+} from "@/@types/real-estate-api"
 
 export type NeighborhoodInsightFormValue = {
   type: string
@@ -36,7 +39,12 @@ export type PropertyFormValues = {
   availableFrom: string
   minimumLeaseMonths: string
   applicationInstructions: string
+  realtorDescription: string
   realtorShowingInstructions: string
+  entryInstructions: string
+  lockboxCode: string
+  commissionInfo: string
+  internalRemarks: string
   ownerName: string
   ownerEmail: string
   ownerPhone: string
@@ -52,7 +60,9 @@ export type PropertyFormValues = {
   preQuestions: PropertyPreQuestionFormValue[]
 }
 
-export type PropertyFormErrors = Partial<Record<keyof PropertyFormValues | "form", string>>
+export type PropertyFormErrors = Partial<
+  Record<keyof PropertyFormValues | "form", string>
+>
 
 export type PendingUploadFile = {
   id: string

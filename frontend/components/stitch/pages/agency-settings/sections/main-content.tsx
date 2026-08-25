@@ -55,7 +55,7 @@ type AgentEditorFormValues = {
 }
 
 type AgentEditorFormErrors = Partial<Record<keyof AgentEditorFormValues | "form", string>>
-const templateSequenceOptions = ["Direct", "FollowUp1", "FollowUp2", "FollowUp3"] as const
+const templateSequenceOptions = ["Direct", "FollowUp1", "FollowUp2", "FollowUp3", "FollowUp4", "FollowUp5", "FollowUp6"] as const
 const communicationTemplateTokens = [
   "{{client_name}}",
   "{{property_address}}",

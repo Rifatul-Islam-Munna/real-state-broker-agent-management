@@ -909,11 +909,11 @@ export class TenantRealtorWorkflowService {
             .filter((item: any) =>
               item?.isActive !== false &&
               item?.audience === 'Realtor' &&
-              ['FollowUp1', 'FollowUp2', 'FollowUp3'].includes(item?.sequenceType),
+              ['FollowUp1', 'FollowUp2', 'FollowUp3', 'FollowUp4', 'FollowUp5', 'FollowUp6'].includes(item?.sequenceType),
             )
             .sort((left: any, right: any) =>
-              ['FollowUp1', 'FollowUp2', 'FollowUp3'].indexOf(left.sequenceType) -
-              ['FollowUp1', 'FollowUp2', 'FollowUp3'].indexOf(right.sequenceType),
+              ['FollowUp1', 'FollowUp2', 'FollowUp3', 'FollowUp4', 'FollowUp5', 'FollowUp6'].indexOf(left.sequenceType) -
+              ['FollowUp1', 'FollowUp2', 'FollowUp3', 'FollowUp4', 'FollowUp5', 'FollowUp6'].indexOf(right.sequenceType),
             );
           let cumulativeDays = 0;
           for (const template of followUps) {
@@ -1069,6 +1069,12 @@ export class TenantRealtorWorkflowService {
         const request = await this.requestByToken(client, token);
         if (!request) throw new NotFoundException('Showing request not found');
         if (new Date(request.expiresAt).getTime() <= Date.now()) {
+          await client.query(
+            `UPDATE tenant_showing_request
+             SET status = 'expired', updated_at = now()
+             WHERE id = $1`,
+            [request.id],
+          );
           throw new GoneException('This showing request has expired');
         }
         if (request.status === 'rejected') {

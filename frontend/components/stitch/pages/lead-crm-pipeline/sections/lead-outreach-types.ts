@@ -9,7 +9,7 @@ export type LeadOutreachComposerValues = {
   message: string
   scheduledAt: string
   templateId?: string
-  sequenceType?: "Direct" | "FollowUp1" | "FollowUp2" | "FollowUp3"
+  sequenceType?: "Direct" | "FollowUp1" | "FollowUp2" | "FollowUp3" | "FollowUp4" | "FollowUp5" | "FollowUp6"
   pdfTemplateId?: string
   mediaUrls?: string[]
 }
