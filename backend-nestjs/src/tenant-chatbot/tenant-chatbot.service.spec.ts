@@ -92,6 +92,44 @@ describe('TenantChatbotService', () => {
     ).toBe(true);
   });
 
+  it('keeps chatbot settings isolated per tenant database', async () => {
+    const values: Record<string, any> = {
+      tenant_42_alpha: normalizeChatbotSettings({
+        enabled: true,
+        channels: { web: true, email: false, sms: true },
+      }),
+      tenant_43_beta: normalizeChatbotSettings({
+        enabled: true,
+        channels: { web: false, email: true, sms: false },
+      }),
+    };
+    const databases = {
+      withTenantClient: jest.fn(async (name: string, callback: any) =>
+        callback({
+          query: jest.fn(async (sql: string) =>
+            sql.includes('SELECT value FROM tenant_setting')
+              ? { rows: [{ value: values[name] }] }
+              : { rows: [] },
+          ),
+        }),
+      ),
+    };
+    const service = new TenantChatbotService(
+      databases as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+    const alpha = await service.getSettings(tenant);
+    const beta = await service.getSettings({
+      ...tenant,
+      id: 43,
+      databaseName: 'tenant_43_beta',
+    });
+    expect(alpha.channels).toEqual({ web: true, email: false, sms: true });
+    expect(beta.channels).toEqual({ web: false, email: true, sms: false });
+  });
+
   it('answers in test mode from verified tenant evidence without writes', async () => {
     const query = jest.fn(async (sql: string) => {
       if (sql.includes('SELECT value FROM tenant_setting')) {
@@ -386,16 +424,21 @@ describe('TenantChatbotService', () => {
     const query = jest.fn(async (sql: string) => {
       if (sql.includes('FROM tenant_chatbot_conversation')) {
         return {
-          rows: [{
-            id: '31',
-            leadId: 70,
-            status: 'ACTIVE',
-            stopReason: null,
-            createdAt: new Date('2026-08-24T10:00:00Z'),
-          }],
+          rows: [
+            {
+              id: '31',
+              leadId: 70,
+              status: 'ACTIVE',
+              stopReason: null,
+              createdAt: new Date('2026-08-24T10:00:00Z'),
+            },
+          ],
         };
       }
-      if (sql.includes('FROM tenant_outreach_job') && sql.includes('created_by')) {
+      if (
+        sql.includes('FROM tenant_outreach_job') &&
+        sql.includes('created_by')
+      ) {
         return { rows: [{ id: 901 }] };
       }
       return { rows: [] };
@@ -417,15 +460,17 @@ describe('TenantChatbotService', () => {
     expect(
       query.mock.calls.some(
         ([sql, values]) =>
-          sql.includes('UPDATE tenant_outreach_job') &&
-          values?.[0] === 500,
+          sql.includes('UPDATE tenant_outreach_job') && values?.[0] === 500,
       ),
     ).toBe(true);
   });
 
   it('manually stops a lead and cancels only chatbot-owned queued jobs', async () => {
     const query = jest.fn(async (sql: string) => {
-      if (sql.includes('UPDATE tenant_chatbot_conversation') && sql.includes('RETURNING')) {
+      if (
+        sql.includes('UPDATE tenant_chatbot_conversation') &&
+        sql.includes('RETURNING')
+      ) {
         return { rows: [{ id: '31', leadId: 70 }] };
       }
       return { rows: [] };
@@ -441,36 +486,86 @@ describe('TenantChatbotService', () => {
       sql.includes('UPDATE tenant_outreach_job'),
     );
     expect(cancellation?.[0]).toContain("source_type = 'tenant-chatbot'");
-    expect(cancellation?.[0]).toContain("status IN ('scheduled', 'retrying', 'processing')");
+    expect(cancellation?.[0]).toContain(
+      "status IN ('scheduled', 'retrying', 'processing')",
+    );
     expect(cancellation?.[1]).toEqual([['31']]);
   });
 
   it('updates tenant knowledge and replaces the old Qdrant source', async () => {
     const current = {
-      id: '7', propertyId: null, scope: 'TENANT', audience: 'LEAD',
-      sourceType: 'MANUAL', title: 'Office hours', answer: 'Open until 5 PM.',
-      questionExamples: ['When are you open?'], priority: 60, active: true,
-      sourceHash: 'old-hash', qdrantPointId: 'point-7', indexStatus: 'indexed',
+      id: '7',
+      propertyId: null,
+      scope: 'TENANT',
+      audience: 'LEAD',
+      sourceType: 'MANUAL',
+      title: 'Office hours',
+      answer: 'Open until 5 PM.',
+      questionExamples: ['When are you open?'],
+      priority: 60,
+      active: true,
+      sourceHash: 'old-hash',
+      qdrantPointId: 'point-7',
+      indexStatus: 'indexed',
       lastError: '',
     };
     const query = jest.fn(async (sql: string) => {
-      if (sql.includes('FROM tenant_chatbot_knowledge') && sql.includes('WHERE id = $1')) {
+      if (
+        sql.includes('FROM tenant_chatbot_knowledge') &&
+        sql.includes('WHERE id = $1')
+      ) {
         return { rows: [current] };
       }
-      if (sql.includes('UPDATE tenant_chatbot_knowledge') && sql.includes('RETURNING')) {
-        return { rows: [{ ...current, answer: 'Open until 6 PM.', sourceHash: 'new-hash', indexStatus: 'pending' }] };
+      if (
+        sql.includes('UPDATE tenant_chatbot_knowledge') &&
+        sql.includes('RETURNING')
+      ) {
+        return {
+          rows: [
+            {
+              ...current,
+              answer: 'Open until 6 PM.',
+              sourceHash: 'new-hash',
+              indexStatus: 'pending',
+            },
+          ],
+        };
       }
       if (sql.includes("SET index_status = 'indexed'")) {
-        return { rows: [{ ...current, answer: 'Open until 6 PM.', sourceHash: 'new-hash', indexStatus: 'indexed' }] };
+        return {
+          rows: [
+            {
+              ...current,
+              answer: 'Open until 6 PM.',
+              sourceHash: 'new-hash',
+              indexStatus: 'indexed',
+            },
+          ],
+        };
       }
       return { rows: [] };
     });
     const state = serviceWith(query);
 
-    await expect(state.service.updateKnowledge(tenant, 7, {
+    await expect(
+      state.service.updateKnowledge(
+        tenant,
+        7,
+        {
+          answer: 'Open until 6 PM.',
+        },
+        8,
+      ),
+    ).resolves.toMatchObject({
+      id: '7',
       answer: 'Open until 6 PM.',
-    }, 8)).resolves.toMatchObject({ id: '7', answer: 'Open until 6 PM.', indexStatus: 'indexed' });
-    expect(state.vectors.deleteBySource).toHaveBeenCalledWith('TENANT', 'old-hash', 42);
+      indexStatus: 'indexed',
+    });
+    expect(state.vectors.deleteBySource).toHaveBeenCalledWith(
+      'TENANT',
+      'old-hash',
+      42,
+    );
     expect(state.vectors.upsert).toHaveBeenCalledWith([
       expect.objectContaining({
         metadata: expect.objectContaining({
@@ -494,16 +589,31 @@ describe('TenantChatbotService', () => {
       deleted: true,
       id: '7',
     });
-    expect(state.vectors.deleteBySource)
-      .toHaveBeenCalledWith('TENANT', 'old-hash', 42);
+    expect(state.vectors.deleteBySource).toHaveBeenCalledWith(
+      'TENANT',
+      'old-hash',
+      42,
+    );
   });
 
   it('reindexes property fields with tenant and audience metadata', async () => {
     const query = jest.fn(async (sql: string) => {
       if (sql.includes('FROM tenant_property')) {
-        return { rows: [{ id: 9, title: 'Oak Home', status: 'published', payload: { parking: 'Garage' } }] };
+        return {
+          rows: [
+            {
+              id: 9,
+              title: 'Oak Home',
+              status: 'published',
+              payload: { parking: 'Garage' },
+            },
+          ],
+        };
       }
-      if (sql.includes('SELECT source_hash') || sql.includes('DELETE FROM tenant_chatbot_knowledge')) {
+      if (
+        sql.includes('SELECT source_hash') ||
+        sql.includes('DELETE FROM tenant_chatbot_knowledge')
+      ) {
         return { rows: [] };
       }
       if (sql.includes('INSERT INTO tenant_chatbot_knowledge')) {
@@ -512,10 +622,12 @@ describe('TenantChatbotService', () => {
       return { rows: [] };
     });
     const state = serviceWith(query);
-    await expect(state.service.reindexKnowledge(tenant)).resolves.toMatchObject({
-      properties: 1,
-      indexed: expect.any(Number),
-    });
+    await expect(state.service.reindexKnowledge(tenant)).resolves.toMatchObject(
+      {
+        properties: 1,
+        indexed: expect.any(Number),
+      },
+    );
     expect(state.vectors.upsert).toHaveBeenCalledWith([
       expect.objectContaining({
         metadata: expect.objectContaining({ tenantId: 42, scope: 'PROPERTY' }),
@@ -536,8 +648,10 @@ describe('TenantChatbotService', () => {
       resumed: true,
       conversationId: '31',
     });
-    expect(query.mock.calls.find(([sql]) =>
-      sql.includes('UPDATE tenant_chatbot_conversation'),
-    )?.[0]).toContain("stop_reason = 'MANUAL_STOP'");
+    expect(
+      query.mock.calls.find(([sql]) =>
+        sql.includes('UPDATE tenant_chatbot_conversation'),
+      )?.[0],
+    ).toContain("stop_reason = 'MANUAL_STOP'");
   });
 });

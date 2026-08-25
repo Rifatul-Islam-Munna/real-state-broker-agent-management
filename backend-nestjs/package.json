@@ -37,6 +37,7 @@
     "@pdfme/common": "^6.0.0",
     "@pdfme/generator": "^6.0.0",
     "@pdfme/schemas": "^6.0.0",
+    "@qdrant/js-client-rest": "^1.19.0",
     "@ringcentral/sdk": "^5.0.11",
     "@scalar/nestjs-api-reference": "^1.1.14",
     "@types/bcrypt": "^6.0.0",

@@ -1,3 +1,5 @@
+import { Logger, OnApplicationBootstrap } from '@nestjs/common';
+import { QdrantClient } from '@qdrant/js-client-rest';
 import { ChatbotAudience } from './tenant-chatbot.types';
 
 export type KnowledgeScope = 'PLATFORM' | 'TENANT' | 'PROPERTY';
@@ -40,49 +42,72 @@ export type QdrantKnowledgeConfig = {
   collection: string;
 };
 
-type FetchLike = (input: string, init?: Record<string, any>) => Promise<any>;
+type QdrantSdkClient = {
+  getCollection(name: string): Promise<any>;
+  createCollection(name: string, args: any): Promise<any>;
+  upsert(name: string, args: any): Promise<any>;
+  query(name: string, args: any): Promise<any>;
+  delete(name: string, args: any): Promise<any>;
+};
 
-export class QdrantKnowledgeService {
+export class QdrantKnowledgeService implements OnApplicationBootstrap {
+  private readonly logger = new Logger(QdrantKnowledgeService.name);
   private readonly config: QdrantKnowledgeConfig;
-  private readonly fetchImpl: FetchLike;
+  private client?: QdrantSdkClient;
 
   constructor(
     config: QdrantKnowledgeConfig = environmentConfig(),
-    fetchImpl: FetchLike = globalThis.fetch.bind(globalThis) as FetchLike,
+    client?: QdrantSdkClient,
   ) {
     this.config = {
       url: config.url.trim().replace(/\/+$/, ''),
-      apiKey: config.apiKey?.trim(),
+      apiKey: config.apiKey?.trim() || undefined,
       collection: config.collection.trim(),
     };
-    this.fetchImpl = fetchImpl;
+    this.client = client;
   }
 
   isConfigured() {
     return Boolean(this.config.url && this.config.collection);
   }
 
+  async onApplicationBootstrap() {
+    if (!this.isConfigured()) {
+      this.logger.warn(
+        'Qdrant is not configured; chatbot vector retrieval will fail closed.',
+      );
+      return;
+    }
+    try {
+      await this.ensureCollection();
+      this.logger.log(`Qdrant collection ${this.config.collection} is ready.`);
+    } catch (error) {
+      this.logger.error(`Qdrant startup check failed: ${errorMessage(error)}`);
+    }
+  }
   async ensureCollection() {
     this.assertConfigured();
-    const url = this.collectionUrl();
-    const existing = await this.fetchImpl(url, {
-      method: 'GET',
-      headers: this.headers(),
-    });
-    if (existing.ok) return;
-    if (existing.status !== 404) {
-      throw await this.responseError(existing, 'inspect collection');
+    const client = this.sdk();
+    try {
+      const info = await client.getCollection(this.config.collection);
+      this.assertCompatibleCollection(info);
+      return;
+    } catch (error) {
+      if (!isNotFoundError(error)) {
+        throw new Error(
+          `Qdrant failed to inspect collection: ${errorMessage(error)}`,
+        );
+      }
     }
 
-    const created = await this.fetchImpl(url, {
-      method: 'PUT',
-      headers: this.headers(),
-      body: JSON.stringify({
+    try {
+      await client.createCollection(this.config.collection, {
         vectors: { size: 384, distance: 'Cosine' },
-      }),
-    });
-    if (!created.ok) {
-      throw await this.responseError(created, 'create collection');
+      });
+    } catch (error) {
+      throw new Error(
+        `Qdrant failed to create collection: ${errorMessage(error)}`,
+      );
     }
   }
 
@@ -95,16 +120,14 @@ export class QdrantKnowledgeService {
       vector: this.vector(point.vector),
       payload: this.safeMetadata(point.metadata),
     }));
-    const response = await this.fetchImpl(
-      `${this.collectionUrl()}/points?wait=true`,
-      {
-        method: 'PUT',
-        headers: this.headers(),
-        body: JSON.stringify({ points: safePoints }),
-      },
-    );
-    if (!response.ok) {
-      throw await this.responseError(response, 'upsert points');
+
+    try {
+      await this.sdk().upsert(this.config.collection, {
+        wait: true,
+        points: safePoints,
+      });
+    } catch (error) {
+      throw new Error(`Qdrant failed to upsert points: ${errorMessage(error)}`);
     }
   }
 
@@ -137,28 +160,20 @@ export class QdrantKnowledgeService {
       ];
     }
 
-    const response = await this.fetchImpl(
-      `${this.collectionUrl()}/points/query`,
-      {
-        method: 'POST',
-        headers: this.headers(),
-        body: JSON.stringify({
-          query: this.vector(input.vector),
-          filter,
-          limit: clampInteger(input.limit, 8, 1, 30),
-          with_payload: true,
-          with_vector: false,
-        }),
-      },
-    );
-    if (!response.ok) {
-      throw await this.responseError(response, 'search points');
+    let result: any;
+    try {
+      result = await this.sdk().query(this.config.collection, {
+        query: this.vector(input.vector),
+        filter,
+        limit: clampInteger(input.limit, 8, 1, 30),
+        with_payload: true,
+        with_vector: false,
+      });
+    } catch (error) {
+      throw new Error(`Qdrant failed to search points: ${errorMessage(error)}`);
     }
 
-    const body = await response.json();
-    const points = Array.isArray(body?.result?.points)
-      ? body.result.points
-      : [];
+    const points = Array.isArray(result?.points) ? result.points : [];
     return points
       .map((point: any) => this.match(point))
       .filter(
@@ -184,16 +199,14 @@ export class QdrantKnowledgeService {
       }
       must.push({ key: 'tenantId', match: { value: safeTenantId } });
     }
-    const response = await this.fetchImpl(
-      `${this.collectionUrl()}/points/delete?wait=true`,
-      {
-        method: 'POST',
-        headers: this.headers(),
-        body: JSON.stringify({ filter: { must } }),
-      },
-    );
-    if (!response.ok) {
-      throw await this.responseError(response, 'delete points');
+
+    try {
+      await this.sdk().delete(this.config.collection, {
+        wait: true,
+        filter: { must },
+      });
+    } catch (error) {
+      throw new Error(`Qdrant failed to delete points: ${errorMessage(error)}`);
     }
   }
 
@@ -246,35 +259,36 @@ export class QdrantKnowledgeService {
     return value;
   }
 
-  private headers() {
-    return {
-      'Content-Type': 'application/json',
-      ...(this.config.apiKey ? { 'api-key': this.config.apiKey } : {}),
-    };
+  private sdk(): QdrantSdkClient {
+    this.assertConfigured();
+    this.client ??= new QdrantClient({
+      url: this.config.url,
+      apiKey: this.config.apiKey,
+    }) as QdrantSdkClient;
+    return this.client;
   }
 
-  private collectionUrl() {
-    return `${this.config.url}/collections/${encodeURIComponent(
-      this.config.collection,
-    )}`;
+  private assertCompatibleCollection(info: any) {
+    const vectors = info?.config?.params?.vectors;
+    const params =
+      vectors && typeof vectors === 'object' && 'size' in vectors
+        ? vectors
+        : null;
+    if (
+      !params ||
+      Number(params.size) !== 384 ||
+      String(params.distance ?? '').toLowerCase() !== 'cosine'
+    ) {
+      throw new Error(
+        `Qdrant collection ${this.config.collection} must use a 384-dimensional Cosine vector.`,
+      );
+    }
   }
 
   private assertConfigured() {
     if (!this.isConfigured()) {
       throw new Error('Qdrant URL and collection must be configured.');
     }
-  }
-
-  private async responseError(response: any, operation: string) {
-    const detail =
-      typeof response?.text === 'function'
-        ? String(await response.text()).slice(0, 500)
-        : '';
-    return new Error(
-      `Qdrant failed to ${operation} (HTTP ${response?.status ?? 'unknown'})${
-        detail ? `: ${detail}` : ''
-      }`,
-    );
   }
 }
 
@@ -284,6 +298,24 @@ function environmentConfig(): QdrantKnowledgeConfig {
     apiKey: process.env.QDRANT_API_KEY,
     collection: process.env.QDRANT_COLLECTION ?? 'real_estate_knowledge',
   };
+}
+
+function isNotFoundError(error: unknown) {
+  return Number((error as { status?: unknown })?.status) === 404;
+}
+
+function errorMessage(error: unknown) {
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === 'object') {
+    const data = (error as { data?: unknown }).data;
+    if (typeof data === 'string' && data.trim()) return data.slice(0, 500);
+    try {
+      return JSON.stringify(error).slice(0, 500);
+    } catch {
+      return String(error);
+    }
+  }
+  return String(error);
 }
 
 function validScope(value: unknown): KnowledgeScope {

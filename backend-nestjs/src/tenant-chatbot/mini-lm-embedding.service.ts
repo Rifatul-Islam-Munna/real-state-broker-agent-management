@@ -1,3 +1,5 @@
+import { Logger, OnApplicationBootstrap } from '@nestjs/common';
+
 type TensorLike = {
   tolist(): unknown;
 };
@@ -9,23 +11,37 @@ export type MiniLmExtractor = (
 
 export type MiniLmLoader = () => Promise<MiniLmExtractor>;
 
-export class MiniLmEmbeddingService {
+export class MiniLmEmbeddingService implements OnApplicationBootstrap {
+  private readonly logger = new Logger(MiniLmEmbeddingService.name);
   private extractorPromise?: Promise<MiniLmExtractor>;
 
   constructor(private readonly loader: MiniLmLoader = defaultMiniLmLoader) {}
+
+  async onApplicationBootstrap() {
+    try {
+      await this.warmup();
+      this.logger.log('Chatbot embedding model is ready.');
+    } catch (error) {
+      this.logger.error(
+        `Chatbot embedding model startup failed: ${message(error)}`,
+      );
+    }
+  }
+
+  async warmup() {
+    await this.loadExtractor();
+  }
 
   async embed(text: string): Promise<number[]> {
     const input = text.trim();
     if (!input) throw new Error('Embedding text is required.');
 
-    this.extractorPromise ??= this.loader();
-    const extractor = await this.extractorPromise;
+    const extractor = await this.loadExtractor();
     const tensor = await extractor(input, {
       pooling: 'mean',
       normalize: true,
     });
-    const listed = tensor.tolist();
-    const vector = unwrapVector(listed);
+    const vector = unwrapVector(tensor.tolist());
 
     if (vector.length !== 384) {
       throw new Error(
@@ -37,6 +53,14 @@ export class MiniLmEmbeddingService {
     }
     return vector;
   }
+
+  private loadExtractor() {
+    this.extractorPromise ??= this.loader().catch((error) => {
+      this.extractorPromise = undefined;
+      throw error;
+    });
+    return this.extractorPromise;
+  }
 }
 
 async function defaultMiniLmLoader(): Promise<MiniLmExtractor> {
@@ -46,12 +70,10 @@ async function defaultMiniLmLoader(): Promise<MiniLmExtractor> {
   ) as (modulePath: string) => Promise<any>;
   const transformers = await dynamicImport('@huggingface/transformers');
 
-  const localModelPath = process.env.CHATBOT_MODEL_PATH?.trim();
-  if (localModelPath) {
-    transformers.env.localModelPath = localModelPath;
-  }
+  const cacheDir =
+    process.env.CHATBOT_MODEL_PATH?.trim() || '.cache/chatbot-models';
+  transformers.env.cacheDir = cacheDir;
   transformers.env.allowRemoteModels =
-    process.env.NODE_ENV !== 'production' &&
     process.env.CHATBOT_ALLOW_REMOTE_MODELS !== 'false';
 
   const model =
@@ -69,4 +91,8 @@ function unwrapVector(value: unknown): number[] {
     return (value[0] as unknown[]).map(Number);
   }
   return value.map(Number);
+}
+
+function message(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
 }

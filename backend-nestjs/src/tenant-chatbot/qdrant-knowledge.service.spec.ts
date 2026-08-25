@@ -1,3 +1,4 @@
+import { Test } from '@nestjs/testing';
 import { QdrantKnowledgeService } from './qdrant-knowledge.service';
 
 describe('QdrantKnowledgeService', () => {
@@ -8,54 +9,57 @@ describe('QdrantKnowledgeService', () => {
     collection: 'tenant_knowledge',
   };
 
-  it('creates a cosine collection with exactly 384 dimensions', async () => {
-    const fetchMock = jest
-      .fn()
-      .mockResolvedValueOnce({ ok: false, status: 404, text: async () => '' })
-      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({}) });
-    const service = new QdrantKnowledgeService(config, fetchMock as any);
+  it('uses the Qdrant SDK to create a cosine collection with exactly 384 dimensions', async () => {
+    const client = {
+      getCollection: jest.fn().mockRejectedValue({ status: 404 }),
+      createCollection: jest.fn().mockResolvedValue(true),
+    };
+    const service = new QdrantKnowledgeService(config, client as any);
 
     await service.ensureCollection();
 
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      2,
-      'http://qdrant:6333/collections/tenant_knowledge',
-      expect.objectContaining({
-        method: 'PUT',
-        body: JSON.stringify({
-          vectors: { size: 384, distance: 'Cosine' },
-        }),
+    expect(client.getCollection).toHaveBeenCalledWith('tenant_knowledge');
+    expect(client.createCollection).toHaveBeenCalledWith('tenant_knowledge', {
+      vectors: { size: 384, distance: 'Cosine' },
+    });
+  });
+
+  it('rejects an existing collection with the wrong vector configuration', async () => {
+    const client = {
+      getCollection: jest.fn().mockResolvedValue({
+        config: { params: { vectors: { size: 768, distance: 'Cosine' } } },
       }),
+    };
+    const service = new QdrantKnowledgeService(config, client as any);
+
+    await expect(service.ensureCollection()).rejects.toThrow(
+      '384-dimensional Cosine',
     );
   });
 
   it('filters tenant and audience before search and excludes other properties', async () => {
-    const fetchMock = jest.fn(async () => ({
-      ok: true,
-      status: 200,
-      json: async () => ({
-        result: {
-          points: [
-            {
-              id: 'point-1',
-              score: 0.93,
-              payload: {
-                knowledgeId: '91',
-                scope: 'PROPERTY',
-                tenantId: 42,
-                audience: 'LEAD',
-                propertyId: 41,
-                sourceType: 'PROPERTY_FIELD',
-                sourceHash: 'abc',
-                priority: 80,
-                active: true,
-              },
+    const client = {
+      query: jest.fn().mockResolvedValue({
+        points: [
+          {
+            id: 'point-1',
+            score: 0.93,
+            payload: {
+              knowledgeId: '91',
+              scope: 'PROPERTY',
+              tenantId: 42,
+              audience: 'LEAD',
+              propertyId: 41,
+              sourceType: 'PROPERTY_FIELD',
+              sourceHash: 'abc',
+              priority: 80,
+              active: true,
             },
-          ],
-        },
+          },
+        ],
       }),
-    }));
-    const service = new QdrantKnowledgeService(config, fetchMock as any);
+    };
+    const service = new QdrantKnowledgeService(config, client as any);
 
     const matches = await service.search({
       scope: 'TENANT',
@@ -74,10 +78,9 @@ describe('QdrantKnowledgeService', () => {
       audience: 'LEAD',
       propertyId: 41,
     });
-    const [, request] = fetchMock.mock.calls[0];
-    const body = JSON.parse(request.body);
-    expect(body.query).toHaveLength(384);
-    expect(body.filter.must).toEqual(
+    const [, request] = client.query.mock.calls[0];
+    expect(request.query).toHaveLength(384);
+    expect(request.filter.must).toEqual(
       expect.arrayContaining([
         { key: 'tenantId', match: { value: 42 } },
         { key: 'audience', match: { value: 'LEAD' } },
@@ -85,40 +88,36 @@ describe('QdrantKnowledgeService', () => {
         { key: 'scope', match: { any: ['TENANT', 'PROPERTY'] } },
       ]),
     );
-    expect(body.filter.should).toEqual([
+    expect(request.filter.should).toEqual([
       { key: 'propertyId', match: { value: 41 } },
       { is_empty: { key: 'propertyId' } },
     ]);
   });
 
   it('uses a separate platform scope and never adds a tenant filter', async () => {
-    const fetchMock = jest.fn(async () => ({
-      ok: true,
-      status: 200,
-      json: async () => ({ result: { points: [] } }),
-    }));
-    const service = new QdrantKnowledgeService(config, fetchMock as any);
+    const client = { query: jest.fn().mockResolvedValue({ points: [] }) };
+    const service = new QdrantKnowledgeService(config, client as any);
 
-    await service.search({
-      scope: 'PLATFORM',
-      audience: 'REALTOR',
-      vector,
-    });
+    await service.search({ scope: 'PLATFORM', audience: 'REALTOR', vector });
 
-    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
-    expect(body.filter.must).toEqual(
+    const request = client.query.mock.calls[0][1];
+    expect(request.filter.must).toEqual(
       expect.arrayContaining([
         { key: 'scope', match: { value: 'PLATFORM' } },
         { key: 'audience', match: { value: 'REALTOR' } },
       ]),
     );
     expect(
-      body.filter.must.some((condition: any) => condition.key === 'tenantId'),
+      request.filter.must.some(
+        (condition: any) => condition.key === 'tenantId',
+      ),
     ).toBe(false);
   });
 
   it('rejects a tenant query without a valid tenant id', async () => {
-    const service = new QdrantKnowledgeService(config, jest.fn() as any);
+    const service = new QdrantKnowledgeService(config, {
+      query: jest.fn(),
+    } as any);
 
     await expect(
       service.search({
@@ -130,16 +129,14 @@ describe('QdrantKnowledgeService', () => {
   });
 
   it('upserts only safe routing metadata and never source text', async () => {
-    const fetchMock = jest.fn(async () => ({
-      ok: true,
-      status: 200,
-      json: async () => ({ result: { status: 'completed' } }),
-    }));
-    const service = new QdrantKnowledgeService(config, fetchMock as any);
+    const client = {
+      upsert: jest.fn().mockResolvedValue({ status: 'completed' }),
+    };
+    const service = new QdrantKnowledgeService(config, client as any);
 
     await service.upsert([
       {
-        pointId: 'point-2',
+        pointId: 'aee6f192-fda3-4e1e-a59c-f1f15006eb15',
         vector,
         metadata: {
           scope: 'TENANT',
@@ -156,8 +153,9 @@ describe('QdrantKnowledgeService', () => {
       } as any,
     ]);
 
-    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
-    expect(body.points[0].payload).toEqual({
+    const request = client.upsert.mock.calls[0][1];
+    expect(request.wait).toBe(true);
+    expect(request.points[0].payload).toEqual({
       scope: 'TENANT',
       tenantId: 42,
       audience: 'LEAD',
@@ -168,6 +166,30 @@ describe('QdrantKnowledgeService', () => {
       priority: 50,
       active: true,
     });
-    expect(JSON.stringify(body)).not.toContain('owner secret');
+    expect(JSON.stringify(request)).not.toContain('owner secret');
+  });
+
+  it('checks Qdrant collection during Nest application bootstrap', async () => {
+    const client = {
+      getCollection: jest.fn().mockResolvedValue({
+        config: { params: { vectors: { size: 384, distance: 'Cosine' } } },
+      }),
+      createCollection: jest.fn(),
+    };
+    const service = new QdrantKnowledgeService(config, client as any);
+
+    await service.onApplicationBootstrap();
+
+    expect(client.getCollection).toHaveBeenCalledWith('tenant_knowledge');
+    expect(client.createCollection).not.toHaveBeenCalled();
+  });
+  it('can be instantiated by Nest without requiring a config injection token', async () => {
+    const moduleRef = await Test.createTestingModule({
+      providers: [QdrantKnowledgeService],
+    }).compile();
+    expect(moduleRef.get(QdrantKnowledgeService)).toBeInstanceOf(
+      QdrantKnowledgeService,
+    );
+    await moduleRef.close();
   });
 });

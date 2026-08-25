@@ -1,3 +1,4 @@
+import { Test } from '@nestjs/testing';
 import { MiniLmEmbeddingService } from './mini-lm-embedding.service';
 
 describe('MiniLmEmbeddingService', () => {
@@ -43,5 +44,39 @@ describe('MiniLmEmbeddingService', () => {
     );
 
     await expect(service.embed('bad number')).rejects.toThrow('finite numbers');
+  });
+  it('warms the model once so backend startup downloads or reuses the cached model', async () => {
+    const extractor = jest.fn(async () => ({
+      tolist: () => [Array.from({ length: 384 }, () => 0.2)],
+    }));
+    const loader = jest.fn(async () => extractor);
+    const service = new MiniLmEmbeddingService(loader);
+
+    await service.warmup();
+    await service.embed('cached after startup');
+
+    expect(loader).toHaveBeenCalledTimes(1);
+    expect(extractor).toHaveBeenCalledTimes(1);
+  });
+  it('warms automatically during Nest application bootstrap', async () => {
+    const loader = jest.fn(async () =>
+      jest.fn(async () => ({
+        tolist: () => [Array.from({ length: 384 }, () => 0.3)],
+      })),
+    );
+    const service = new MiniLmEmbeddingService(loader);
+
+    await service.onApplicationBootstrap();
+
+    expect(loader).toHaveBeenCalledTimes(1);
+  });
+  it('can be instantiated by Nest without a loader injection token', async () => {
+    const moduleRef = await Test.createTestingModule({
+      providers: [MiniLmEmbeddingService],
+    }).compile();
+    expect(moduleRef.get(MiniLmEmbeddingService)).toBeInstanceOf(
+      MiniLmEmbeddingService,
+    );
+    await moduleRef.close();
   });
 });
