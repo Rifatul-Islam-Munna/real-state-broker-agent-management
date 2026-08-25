@@ -25,6 +25,11 @@ import type {
 export class TenantChatbotController {
   constructor(private readonly chatbot: TenantChatbotService) {}
 
+  @Get('health')
+  health() {
+    return this.chatbot.getInfrastructureStatus();
+  }
+
   @Get('settings')
   settings(@Req() request: any) {
     return this.chatbot.getSettings(request.tenant);

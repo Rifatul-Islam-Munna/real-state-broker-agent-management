@@ -70,6 +70,10 @@ const routeGroups = [
     ],
   },
   {
+    label: "AI Chatbot",
+    hrefs: ["/dashboard/chatbot-settings", "/dashboard/test-chatbot"],
+  },
+  {
     label: "Tools",
     hrefs: [
       "/dashboard/homepage",

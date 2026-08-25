@@ -60,7 +60,8 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
       path.startsWith('/tenant-legacy') ||
       path.startsWith('/tenant-outreach') ||
       path.startsWith('/tenant-inbox') ||
-      path.startsWith('/tenant-sms-inbox')
+      path.startsWith('/tenant-sms-inbox') ||
+      path.startsWith('/tenant-chatbot')
     );
   }
 

@@ -550,4 +550,18 @@ export const TENANT_DATABASE_MIGRATIONS: TenantDatabaseMigration[] = [
         ON tenant_chatbot_web_session(expires_at) WHERE revoked_at IS NULL`,
     ],
   },
+  {
+    version: 13,
+    name: 'chatbot_lead_controls_and_activity_retention',
+    statements: [
+      `ALTER TABLE tenant_lead
+        ADD COLUMN IF NOT EXISTS chatbot_manually_stopped boolean NOT NULL DEFAULT false`,
+      `ALTER TABLE tenant_lead
+        ADD COLUMN IF NOT EXISTS chatbot_control_updated_at timestamptz`,
+      `CREATE INDEX IF NOT EXISTS idx_tenant_chatbot_message_created_at
+        ON tenant_chatbot_message(created_at)`,
+      `CREATE INDEX IF NOT EXISTS idx_tenant_chatbot_event_created_at
+        ON tenant_chatbot_event(created_at)`,
+    ],
+  },
 ];

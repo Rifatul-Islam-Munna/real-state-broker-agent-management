@@ -75,9 +75,9 @@ export class TenantDatabaseService
     try {
       await this.createDatabase(databaseName);
       created = true;
+      await this.runMigrationsForDatabase(databaseName);
       await this.ensureTenantDatabaseRole(databaseName);
       const pool = this.getPool(databaseName);
-      await this.runMigrations(pool);
       await this.seedDatabase(pool, seed);
       this.monitor?.record('tenant.database.provisioned', {
         tenantId: seed.tenantId,
@@ -92,6 +92,20 @@ export class TenantDatabaseService
       await this.closePool(databaseName).catch(() => undefined);
       if (created) await this.dropDatabase(databaseName).catch(() => undefined);
       throw error;
+    }
+  }
+
+  async runMigrationsForDatabase(databaseName: string) {
+    this.assertDatabaseName(databaseName);
+    const admin = new Pool({
+      ...this.basePoolConfig(),
+      database: databaseName,
+      max: 1,
+    });
+    try {
+      await this.runMigrations(admin);
+    } finally {
+      await admin.end();
     }
   }
 
@@ -270,8 +284,8 @@ export class TenantDatabaseService
             const tenant = tenants[index];
             const databaseName = tenant.databaseName!;
             try {
+              await this.runMigrationsForDatabase(databaseName);
               await this.ensureTenantDatabaseRole(databaseName);
-              await this.runMigrations(this.getPool(databaseName));
               results[index] = {
                 tenantId: tenant.id,
                 databaseName,

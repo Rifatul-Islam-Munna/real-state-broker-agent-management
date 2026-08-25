@@ -28,6 +28,7 @@ describe('TenantChatbotService', () => {
     };
     const vectors = {
       isConfigured: jest.fn(() => true),
+      healthCheck: jest.fn(async () => ({ configured: true, connected: true, error: null })),
       ensureCollection: jest.fn(async () => undefined),
       upsert: jest.fn(async () => undefined),
       deleteBySource: jest.fn(async () => undefined),
@@ -130,7 +131,7 @@ describe('TenantChatbotService', () => {
     expect(beta.channels).toEqual({ web: false, email: true, sms: false });
   });
 
-  it('answers in test mode from verified tenant evidence without writes', async () => {
+  it('defaults identity-free test mode to lead-safe evidence without writes', async () => {
     const query = jest.fn(async (sql: string) => {
       if (sql.includes('SELECT value FROM tenant_setting')) {
         return { rows: [{ value: activeSettings }] };
@@ -187,7 +188,6 @@ describe('TenantChatbotService', () => {
 
     const result = await state.service.testQuestion(tenant, {
       propertyId: 41,
-      audience: 'LEAD',
       question: 'Can I park an SUV there?',
     });
 
@@ -412,7 +412,7 @@ describe('TenantChatbotService', () => {
     });
   });
 
-  it('reports system unavailable without calling the model', async () => {
+  it('throws a clear Qdrant error in tenant test mode without calling the model', async () => {
     const query = jest.fn(async (sql: string) => {
       if (sql.includes('SELECT value FROM tenant_setting')) {
         return { rows: [{ value: activeSettings }] };
@@ -421,6 +421,11 @@ describe('TenantChatbotService', () => {
     });
     const state = serviceWith(query, {
       isConfigured: jest.fn(() => false),
+      healthCheck: jest.fn(async () => ({
+        configured: false,
+        connected: false,
+        error: 'Qdrant URL and collection must be configured.',
+      })),
     });
 
     await expect(
@@ -428,10 +433,7 @@ describe('TenantChatbotService', () => {
         audience: 'LEAD',
         question: 'What is the rent?',
       }),
-    ).resolves.toMatchObject({
-      decision: 'STOP',
-      reason: 'SYSTEM_UNAVAILABLE',
-    });
+    ).rejects.toThrow('Qdrant unavailable');
     expect(state.embeddings.embed).not.toHaveBeenCalled();
   });
 
@@ -576,6 +578,7 @@ describe('TenantChatbotService', () => {
   });
   it('manually stops a lead and cancels only chatbot-owned queued jobs', async () => {
     const query = jest.fn(async (sql: string) => {
+      if (sql.includes('UPDATE tenant_lead')) return { rows: [{ id: 70 }] };
       if (
         sql.includes('UPDATE tenant_chatbot_conversation') &&
         sql.includes('RETURNING')
@@ -817,6 +820,7 @@ describe('TenantChatbotService', () => {
 
   it('resumes only a manually stopped lead conversation', async () => {
     const query = jest.fn(async (sql: string) => {
+      if (sql.includes('UPDATE tenant_lead')) return { rows: [{ id: 70 }] };
       if (sql.includes('UPDATE tenant_chatbot_conversation')) {
         return { rows: [{ id: '31' }] };
       }
@@ -834,4 +838,65 @@ describe('TenantChatbotService', () => {
       )?.[0],
     ).toContain("stop_reason = 'MANUAL_STOP'");
   });
+
+  it('persists a lead-level manual chatbot stop even when no conversation exists yet', async () => {
+    const query = jest.fn(async (sql: string) => {
+      if (sql.includes('UPDATE tenant_lead') && sql.includes('chatbot_manually_stopped = true')) {
+        return { rows: [{ id: 70 }] };
+      }
+      if (sql.includes('UPDATE tenant_chatbot_conversation')) return { rows: [] };
+      return { rows: [] };
+    });
+    const state = serviceWith(query);
+
+    await expect(state.service.stopLead(tenant, 70, 9)).resolves.toEqual({
+      stopped: true,
+      conversationIds: [],
+    });
+  });
+
+  it('keeps a manually stopped lead silent before vector retrieval', async () => {
+    const query = jest.fn(async (sql: string) => {
+      if (sql.includes('SELECT value FROM tenant_setting')) return { rows: [{ value: activeSettings }] };
+      if (sql.includes('SELECT chatbot_manually_stopped')) {
+        return { rows: [{ chatbotManuallyStopped: true }] };
+      }
+      return { rows: [] };
+    });
+    const state = serviceWith(query, { search: jest.fn(async () => []) });
+
+    await expect(state.service.handleMessage(tenant, {
+      channel: 'SMS',
+      audience: 'LEAD',
+      leadId: 70,
+      sessionId: 'sms:70',
+      idempotencyKey: 'stopped-lead-1',
+      body: 'Is this still available?',
+    })).resolves.toMatchObject({
+      decision: 'STOP',
+      reason: 'MANUAL_STOP',
+      queued: false,
+    });
+    expect(state.vectors.search).not.toHaveBeenCalled();
+  });
+
+  it('lists only seven-day chatbot activity with lead and property context', async () => {
+    const query = jest.fn(async () => ({ rows: [{ id: 'm1', leadName: 'Sam', propertyTitle: 'Oak Home' }] }));
+    const state = serviceWith(query);
+
+    await expect(state.service.listActivity(tenant)).resolves.toHaveLength(1);
+    const sql = query.mock.calls[0]?.[0] ?? '';
+    expect(sql).toContain("interval '7 days'");
+    expect(sql).toContain('tenant_lead');
+    expect(sql).toContain('tenant_property');
+  });
+
+  it('physically removes chatbot messages and events older than seven days', async () => {
+    const query = jest.fn(async (sql: string) => ({ rows: [], rowCount: sql.includes('tenant_chatbot_message') ? 4 : 3 }));
+    const state = serviceWith(query);
+
+    await expect(state.service.cleanupExpiredActivity(tenant)).resolves.toEqual({ messagesDeleted: 4, eventsDeleted: 3 });
+    expect(query.mock.calls.map(([sql]) => sql).join('\n')).toContain("interval '7 days'");
+  });
+
 });

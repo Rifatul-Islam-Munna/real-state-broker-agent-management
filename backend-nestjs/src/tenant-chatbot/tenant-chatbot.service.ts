@@ -1,5 +1,10 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  NotFoundException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { SaasTenant } from '../saas-admin/entities/saas-tenant.entity';
 import { TenantDatabaseService } from '../tenant-database/tenant-database.service';
 import { MiniLmEmbeddingService } from './mini-lm-embedding.service';
@@ -142,6 +147,10 @@ export class TenantChatbotService {
     @Inject(PLATFORM_KNOWLEDGE_READER)
     private readonly platform: PlatformKnowledgeReader,
   ) {}
+
+  async getInfrastructureStatus() {
+    return { qdrant: await this.vectors.healthCheck() };
+  }
 
   async getSettings(tenant: TenantReference): Promise<ChatbotSettings> {
     return this.databases.withTenantClient(
@@ -704,10 +713,12 @@ export class TenantChatbotService {
     const channel = input.channel ?? 'WEB';
     const propertyId = positiveInteger(input.propertyId);
     const question = requiredText(input.question, 'question', 2_000);
-    const audience = validAudience(input.audience);
-
-    if (!this.vectors.isConfigured()) {
-      return stopped(settings, 'SYSTEM_UNAVAILABLE');
+    const audience = input.audience ? validAudience(input.audience) : 'LEAD';
+    const qdrant = await this.vectors.healthCheck();
+    if (!qdrant.connected) {
+      throw new ServiceUnavailableException(
+        `Qdrant unavailable: ${qdrant.error ?? 'connection failed'}`,
+      );
     }
 
     return this.databases.withTenantClient(
@@ -828,6 +839,18 @@ export class TenantChatbotService {
     input: HandleChatbotMessageInput,
   ): Promise<ChatbotLiveResponse> {
     const settings = await this.getSettings(tenant);
+    if (input.leadId) {
+      const control = await this.databases.withTenantClient(
+        this.databaseName(tenant),
+        async (client) => client.query(
+          'SELECT chatbot_manually_stopped AS "chatbotManuallyStopped" FROM tenant_lead WHERE id = $1 LIMIT 1',
+          [input.leadId],
+        ),
+      );
+      if (control.rows[0]?.chatbotManuallyStopped === true) {
+        return liveStopped(settings, 'MANUAL_STOP');
+      }
+    }
     const baseDecision = evaluateChatbotPolicy({
       settings,
       channel: input.channel,
@@ -853,6 +876,36 @@ export class TenantChatbotService {
       channel: input.channel,
     });
     return this.persistLiveResponse(tenant, input, settings, result);
+  }
+
+  async listActivity(tenant: TenantReference) {
+    return this.databases.withTenantClient(this.databaseName(tenant), async (client) => {
+      const result = await client.query([
+        "SELECT 'message' AS kind, m.id::text AS id, m.role AS type, m.decision AS reason,",
+        'm.body, m.direction, m.confidence, m.created_at AS "createdAt", c.id::text AS "conversationId",',
+        'c.lead_id AS "leadId", c.property_id AS "propertyId", c.channel, c.audience, c.status AS "conversationStatus",',
+        "COALESCE(l.full_name, l.email, l.phone, 'Unknown lead') AS \"leadName\", p.title AS \"propertyTitle\"",
+        'FROM tenant_chatbot_message m JOIN tenant_chatbot_conversation c ON c.id = m.conversation_id',
+        'LEFT JOIN tenant_lead l ON l.id = c.lead_id LEFT JOIN tenant_property p ON p.id = c.property_id',
+        "WHERE m.created_at >= now() - interval '7 days' UNION ALL",
+        "SELECT 'event' AS kind, e.id::text AS id, e.event_type AS type, e.reason, NULL::text AS body,",
+        'NULL::varchar AS direction, NULL::numeric AS confidence, e.created_at AS "createdAt", c.id::text AS "conversationId",',
+        'c.lead_id AS "leadId", c.property_id AS "propertyId", c.channel, c.audience, c.status AS "conversationStatus",',
+        "COALESCE(l.full_name, l.email, l.phone, 'Unknown lead') AS \"leadName\", p.title AS \"propertyTitle\"",
+        'FROM tenant_chatbot_event e JOIN tenant_chatbot_conversation c ON c.id = e.conversation_id',
+        'LEFT JOIN tenant_lead l ON l.id = c.lead_id LEFT JOIN tenant_property p ON p.id = c.property_id',
+        'WHERE e.created_at >= now() - interval \'7 days\' ORDER BY "createdAt" DESC LIMIT 500',
+      ].join(' '));
+      return result.rows;
+    });
+  }
+
+  async cleanupExpiredActivity(tenant: TenantReference) {
+    return this.databases.withTenantClient(this.databaseName(tenant), async (client) => {
+      const messages = await client.query("DELETE FROM tenant_chatbot_message WHERE created_at < now() - interval '7 days'");
+      const events = await client.query("DELETE FROM tenant_chatbot_event WHERE created_at < now() - interval '7 days'");
+      return { messagesDeleted: messages.rowCount ?? 0, eventsDeleted: events.rowCount ?? 0 };
+    });
   }
 
   async listLeadActivity(tenant: TenantReference, leadIdValue: number) {
@@ -897,6 +950,13 @@ export class TenantChatbotService {
       async (client) => {
         await client.query('BEGIN');
         try {
+          const leadControl = await client.query(
+            `UPDATE tenant_lead
+             SET chatbot_manually_stopped = true, chatbot_control_updated_at = now(), updated_at = now()
+             WHERE id = $1 RETURNING id`,
+            [leadId],
+          );
+          if (!leadControl.rows.length) throw new Error('Lead was not found.');
           const stopped = await client.query(
             [
               'UPDATE tenant_chatbot_conversation',
@@ -934,7 +994,7 @@ export class TenantChatbotService {
             }
           }
           await client.query('COMMIT');
-          return { stopped: conversationIds.length > 0, conversationIds };
+          return { stopped: true, conversationIds };
         } catch (error) {
           await client.query('ROLLBACK');
           throw error;
@@ -953,6 +1013,13 @@ export class TenantChatbotService {
     return this.databases.withTenantClient(
       this.databaseName(tenant),
       async (client) => {
+        const leadControl = await client.query(
+          `UPDATE tenant_lead
+           SET chatbot_manually_stopped = false, chatbot_control_updated_at = now(), updated_at = now()
+           WHERE id = $1 RETURNING id`,
+          [leadId],
+        );
+        if (!leadControl.rows.length) throw new Error('Lead was not found.');
         const resumed = await client.query(
           [
             'UPDATE tenant_chatbot_conversation',

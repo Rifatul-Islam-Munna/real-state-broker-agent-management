@@ -183,6 +183,18 @@ describe('QdrantKnowledgeService', () => {
     expect(client.getCollection).toHaveBeenCalledWith('tenant_knowledge');
     expect(client.createCollection).not.toHaveBeenCalled();
   });
+  it('reports a clear health error when configured Qdrant is unreachable', async () => {
+    const service = new QdrantKnowledgeService(config, {
+      getCollection: jest.fn().mockRejectedValue(new Error('connect ECONNREFUSED 127.0.0.1:6333')),
+    } as any);
+
+    await expect(service.healthCheck()).resolves.toEqual({
+      configured: true,
+      connected: false,
+      error: expect.stringContaining('ECONNREFUSED'),
+    });
+  });
+
   it('can be instantiated by Nest without requiring a config injection token', async () => {
     const moduleRef = await Test.createTestingModule({
       providers: [QdrantKnowledgeService],

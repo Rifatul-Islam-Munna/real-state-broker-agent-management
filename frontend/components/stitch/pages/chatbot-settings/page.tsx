@@ -2,6 +2,7 @@
 
 import {
   useCallback,
+  useMemo,
   useState,
   useTransition,
   type ChangeEvent,
@@ -10,16 +11,30 @@ import {
 import {
   BotIcon,
   BookOpenIcon,
+  Building2Icon,
+  CheckIcon,
+  ChevronsUpDownIcon,
+  GaugeIcon,
+  LockKeyholeIcon,
   RefreshCwIcon,
   SaveIcon,
   ShieldCheckIcon,
   SparklesIcon,
   Trash2Icon,
+  UserRoundIcon,
 } from "lucide-react"
 import { toast } from "sonner"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command"
 import {
   Card,
   CardContent,
@@ -35,6 +50,8 @@ import {
   FieldLabel,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Slider } from "@/components/ui/slider"
 import { Spinner } from "@/components/ui/spinner"
 import {
   Select,
@@ -55,10 +72,16 @@ import {
   type ChatbotKnowledge,
   type ChatbotSettings,
 } from "@/lib/tenant-chatbot-actions"
+import {
+  formatKnowledgeProperty,
+  priorityPreset,
+  type KnowledgePropertyLike,
+} from "@/lib/chatbot-knowledge-targeting"
 
 type Props = {
   initialSettings: ChatbotSettings
   initialKnowledge: ChatbotKnowledge[]
+  initialProperties: KnowledgePropertyLike[]
 }
 
 type BooleanGroup = "channels" | "stopRules"
@@ -99,12 +122,25 @@ function SettingSwitch({
 export function ChatbotSettingsPage({
   initialSettings,
   initialKnowledge,
+  initialProperties,
 }: Props) {
   const [settings, setSettings] = useState(initialSettings)
   const [knowledge, setKnowledge] = useState(initialKnowledge)
+  const [knowledgeAudience, setKnowledgeAudience] = useState<"LEAD" | "REALTOR">("LEAD")
+  const [knowledgePropertyId, setKnowledgePropertyId] = useState("")
+  const [knowledgePriority, setKnowledgePriority] = useState(50)
+  const [propertyPickerOpen, setPropertyPickerOpen] = useState(false)
   const [isSaving, startSaving] = useTransition()
   const [isAdding, startAdding] = useTransition()
   const [isManaging, startManaging] = useTransition()
+  const formattedProperties = useMemo(
+    () => initialProperties.map(formatKnowledgeProperty),
+    [initialProperties]
+  )
+  const selectedKnowledgeProperty = useMemo(
+    () => formattedProperties.find((item) => String(item.id) === knowledgePropertyId) ?? null,
+    [formattedProperties, knowledgePropertyId]
+  )
 
   const updateBoolean = useCallback(
     (group: BooleanGroup, id: string, checked: boolean) => {
@@ -135,6 +171,20 @@ export function ChatbotSettingsPage({
     },
     []
   )
+
+  const handleLeadAudience = useCallback(() => setKnowledgeAudience("LEAD"), [])
+  const handleRealtorAudience = useCallback(() => setKnowledgeAudience("REALTOR"), [])
+  const handlePropertySelect = useCallback((value: string) => {
+    const [id] = value.split(" ")
+    setKnowledgePropertyId(id === "0" ? "" : id)
+    setPropertyPickerOpen(false)
+  }, [])
+  const handlePriorityChange = useCallback((value: number | readonly number[]) => {
+    setKnowledgePriority(Array.isArray(value) ? (value[0] ?? 50) : value)
+  }, [])
+  const handlePriorityNormal = useCallback(() => setKnowledgePriority(priorityPreset("normal")), [])
+  const handlePriorityHigh = useCallback(() => setKnowledgePriority(priorityPreset("high")), [])
+  const handlePriorityHighest = useCallback(() => setKnowledgePriority(priorityPreset("highest")), [])
 
   const handleSave = useCallback(() => {
     startSaving(async () => {
@@ -171,6 +221,10 @@ export function ChatbotSettingsPage({
           })
           setKnowledge((current) => [created, ...current])
           form.reset()
+          setKnowledgeAudience("LEAD")
+          setKnowledgePropertyId("")
+          setKnowledgePriority(50)
+          setPropertyPickerOpen(false)
           toast.success("Knowledge added and indexed")
         } catch (error) {
           toast.error(
@@ -576,8 +630,7 @@ export function ChatbotSettingsPage({
                 <SparklesIcon /> Improve knowledge
               </CardTitle>
               <CardDescription>
-                Add verified tenant or property facts. Realtor-only answers
-                never reach leads.
+                Add a verified fact, choose where it applies, and control who may receive it.
               </CardDescription>
             </CardHeader>
             <form onSubmit={handleKnowledgeSubmit}>
@@ -619,44 +672,67 @@ export function ChatbotSettingsPage({
                   <div className="grid gap-4 sm:grid-cols-3">
                     <Field>
                       <FieldLabel>Audience</FieldLabel>
-                      <Select name="audience" defaultValue="LEAD">
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectGroup>
-                            <SelectItem value="LEAD">Lead</SelectItem>
-                            <SelectItem value="REALTOR">
-                              Realtor only
-                            </SelectItem>
-                          </SelectGroup>
-                        </SelectContent>
-                      </Select>
+                      <input type="hidden" name="audience" value={knowledgeAudience} />
+                      <div className="grid grid-cols-2 gap-2">
+                        <Button type="button" variant={knowledgeAudience === "LEAD" ? "default" : "outline"} onClick={handleLeadAudience} className="h-auto justify-start py-3">
+                          <UserRoundIcon className="size-4" />
+                          <span className="text-left"><span className="block">Lead-safe</span><span className="block text-xs font-normal opacity-80">Public facts</span></span>
+                        </Button>
+                        <Button type="button" variant={knowledgeAudience === "REALTOR" ? "default" : "outline"} onClick={handleRealtorAudience} className="h-auto justify-start py-3">
+                          <LockKeyholeIcon className="size-4" />
+                          <span className="text-left"><span className="block">Realtor-only</span><span className="block text-xs font-normal opacity-80">Verified only</span></span>
+                        </Button>
+                      </div>
+                      <FieldDescription>{knowledgeAudience === "REALTOR" ? "Only verified Realtors in this tenant's directory can receive this fact." : "Safe for normal lead and public chatbot answers."}</FieldDescription>
                     </Field>
                     <Field>
-                      <FieldLabel htmlFor="knowledge-property">
-                        Property ID
-                      </FieldLabel>
-                      <Input
-                        id="knowledge-property"
-                        name="propertyId"
-                        type="number"
-                        min="1"
-                        placeholder="All properties"
-                      />
+                      <FieldLabel>Property</FieldLabel>
+                      <input type="hidden" name="propertyId" value={knowledgePropertyId} />
+                      <Popover open={propertyPickerOpen} onOpenChange={setPropertyPickerOpen}>
+                        <PopoverTrigger render={<Button type="button" variant="outline" className="h-auto min-h-11 w-full justify-between px-3 py-2 shadow-none" />}>
+                          <span className="min-w-0 text-left">
+                            <span className="block truncate font-medium">{selectedKnowledgeProperty?.title ?? "All properties"}</span>
+                            <span className="block truncate text-xs font-normal text-muted-foreground">{selectedKnowledgeProperty ? `${selectedKnowledgeProperty.address} · ${selectedKnowledgeProperty.status}` : "Tenant-wide knowledge"}</span>
+                          </span>
+                          <ChevronsUpDownIcon className="size-4 shrink-0 opacity-60" />
+                        </PopoverTrigger>
+                        <PopoverContent align="start" className="w-[min(32rem,calc(100vw-2rem))] p-1">
+                          <Command>
+                            <CommandInput placeholder="Search title, address or status..." />
+                            <CommandList>
+                              <CommandEmpty>No matching property found.</CommandEmpty>
+                              <CommandGroup heading="Properties">
+                                <CommandItem value="0 all properties tenant wide" onSelect={handlePropertySelect}>
+                                  <Building2Icon className="size-4" />
+                                  <div><p className="font-medium">All properties</p><p className="text-xs text-muted-foreground">Use this fact tenant-wide</p></div>
+                                  {!knowledgePropertyId ? <CheckIcon className="ml-auto size-4" /> : null}
+                                </CommandItem>
+                                {formattedProperties.map((property) => (
+                                  <CommandItem key={property.id} value={`${property.id} ${property.title} ${property.address} ${property.status}`} onSelect={handlePropertySelect}>
+                                    <Building2Icon className="size-4" />
+                                    <div className="min-w-0"><p className="truncate font-medium">{property.title}</p><p className="truncate text-xs text-muted-foreground">{property.address}</p></div>
+                                    <Badge variant="outline" className="ml-auto shrink-0">{property.status}</Badge>
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
                     </Field>
                     <Field>
-                      <FieldLabel htmlFor="knowledge-priority">
-                        Priority
-                      </FieldLabel>
-                      <Input
-                        id="knowledge-priority"
-                        name="priority"
-                        type="number"
-                        min="0"
-                        max="100"
-                        defaultValue="50"
-                      />
+                      <FieldLabel className="flex items-center justify-between"><span>Priority</span><Badge variant="secondary">{knowledgePriority}/100</Badge></FieldLabel>
+                      <input type="hidden" name="priority" value={knowledgePriority} />
+                      <div className="rounded-xl border bg-background p-4">
+                        <div className="mb-4 flex items-center gap-2"><GaugeIcon className="size-4 text-primary" /><span className="text-sm font-medium">Evidence importance</span></div>
+                        <Slider min={0} max={100} step={5} value={knowledgePriority} onValueChange={handlePriorityChange} />
+                        <div className="mt-4 grid grid-cols-3 gap-2">
+                          <Button type="button" size="sm" variant={knowledgePriority === 50 ? "default" : "outline"} onClick={handlePriorityNormal}>Normal</Button>
+                          <Button type="button" size="sm" variant={knowledgePriority === 75 ? "default" : "outline"} onClick={handlePriorityHigh}>High</Button>
+                          <Button type="button" size="sm" variant={knowledgePriority === 100 ? "default" : "outline"} onClick={handlePriorityHighest}>Highest</Button>
+                        </div>
+                        <p className="mt-3 text-xs text-muted-foreground">Higher priority wins when equally relevant verified facts compete.</p>
+                      </div>
                     </Field>
                   </div>
                 </FieldGroup>

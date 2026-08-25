@@ -199,7 +199,10 @@ export class MailInboxSyncBackgroundService {
   private async runSync(trigger: string, forceRun: boolean) {
     const settings = await this.integrationRepo.findOne({ where: { id: 1 } });
     const config = this.readMailConfig(settings?.smtpPayload);
-    if (!config?.enableInboxSync || this.isRunning) return;
+    const gmailDisconnected =
+      config?.authType === 'gmail-oauth' &&
+      (!config.gmailRefreshToken || !config.gmailEmail);
+    if (!config?.enableInboxSync || gmailDisconnected || this.isRunning) return;
 
     if (!forceRun && this.lastStartedAt) {
       const nextRunAt = this.lastStartedAt.getTime() + config.syncIntervalMinutes * 60_000;
@@ -225,6 +228,21 @@ export class MailInboxSyncBackgroundService {
     } catch (error) {
       this.lastCompletedAt = new Date();
       this.lastError = this.errorMessage(error);
+      if (
+        settings &&
+        config.authType === 'gmail-oauth' &&
+        /Gmail token refresh failed:\s*(400|401)/i.test(this.lastError)
+      ) {
+        settings.smtpPayload = JSON.stringify({
+          ...config,
+          enableInboxSync: false,
+          gmailEmail: '',
+          gmailAccessToken: '',
+          gmailRefreshToken: '',
+          gmailTokenExpiresAt: null,
+        });
+        await this.integrationRepo.save(settings);
+      }
       throw error;
     } finally {
       this.isRunning = false;

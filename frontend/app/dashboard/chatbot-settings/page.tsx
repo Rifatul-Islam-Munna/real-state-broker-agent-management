@@ -1,5 +1,10 @@
 import { ChatbotSettingsPage } from "@/components/stitch/pages/chatbot-settings/page"
-import { getChatbotSettings, listChatbotKnowledge } from "@/lib/tenant-chatbot-actions"
+import {
+  getChatbotInfrastructureStatus,
+  getChatbotSettings,
+  listChatbotKnowledge,
+} from "@/lib/tenant-chatbot-actions"
+import { getTenantProperties } from "@/lib/tenant-dashboard-actions"
 import { requireDashboardAccess } from "@/lib/dashboard-auth"
 
 export const metadata = {
@@ -9,9 +14,16 @@ export const metadata = {
 
 export default async function Page() {
   await requireDashboardAccess("settings")
-  const [settings, knowledge] = await Promise.all([
+  const [settings, knowledge, properties] = await Promise.all([
     getChatbotSettings(),
     listChatbotKnowledge(),
+    getTenantProperties(),
   ])
-  return <ChatbotSettingsPage initialSettings={settings} initialKnowledge={knowledge} />
+  return (
+    <ChatbotSettingsPage
+      initialSettings={settings}
+      initialKnowledge={knowledge}
+      initialProperties={properties}
+    />
+  )
 }

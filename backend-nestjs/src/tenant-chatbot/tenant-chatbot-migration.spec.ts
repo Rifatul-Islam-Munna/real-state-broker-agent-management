@@ -25,4 +25,16 @@ describe('tenant chatbot migration', () => {
     expect(sql).toContain('UNIQUE(conversation_id, idempotency_key)');
     expect(sql).toContain("'chatbot_settings'");
   });
+
+  it('adds durable lead controls and activity retention indexes', () => {
+    const migration = TENANT_DATABASE_MIGRATIONS.find((candidate) => candidate.version === 13);
+    const sql = migration?.statements.join('\n') ?? '';
+
+    expect(migration?.name).toBe('chatbot_lead_controls_and_activity_retention');
+    expect(sql).toContain('chatbot_manually_stopped');
+    expect(sql).toContain('chatbot_control_updated_at');
+    expect(sql).toContain('idx_tenant_chatbot_message_created_at');
+    expect(sql).toContain('idx_tenant_chatbot_event_created_at');
+  });
+
 });

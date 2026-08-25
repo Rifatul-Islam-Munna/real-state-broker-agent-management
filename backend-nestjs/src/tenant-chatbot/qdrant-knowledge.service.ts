@@ -71,6 +71,26 @@ export class QdrantKnowledgeService implements OnApplicationBootstrap {
     return Boolean(this.config.url && this.config.collection);
   }
 
+  async healthCheck() {
+    if (!this.isConfigured()) {
+      return {
+        configured: false,
+        connected: false,
+        error: 'Qdrant URL and collection must be configured.',
+      };
+    }
+    try {
+      await this.ensureCollection();
+      return { configured: true, connected: true, error: null };
+    } catch (error) {
+      return {
+        configured: true,
+        connected: false,
+        error: errorMessage(error),
+      };
+    }
+  }
+
   async onApplicationBootstrap() {
     if (!this.isConfigured()) {
       this.logger.warn(

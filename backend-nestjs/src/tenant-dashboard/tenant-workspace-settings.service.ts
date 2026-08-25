@@ -40,7 +40,7 @@ export class TenantWorkspaceSettingsService {
         ...this.object(stored.leadAutomation),
       },
       communicationTemplates: Array.isArray(stored.communicationTemplates)
-        ? this.mergeRequiredFollowUpTemplates(stored.communicationTemplates, defaults.communicationTemplates)
+        ? stored.communicationTemplates
         : defaults.communicationTemplates,
       updatedAt: row?.updatedAt ?? null,
     };

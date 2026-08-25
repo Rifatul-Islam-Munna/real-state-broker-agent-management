@@ -57,6 +57,14 @@ export type ChatbotSettings = {
   }
 }
 
+export type ChatbotInfrastructureStatus = {
+  qdrant: {
+    configured: boolean
+    connected: boolean
+    error: string | null
+  }
+}
+
 export type ChatbotKnowledge = {
   id: string
   propertyId: number | null
@@ -88,6 +96,10 @@ export type ChatbotTestResult = {
 
 export async function getChatbotSettings() {
   return request<ChatbotSettings>("/tenant-chatbot/settings")
+}
+
+export async function getChatbotInfrastructureStatus() {
+  return request<ChatbotInfrastructureStatus>("/tenant-chatbot/health")
 }
 
 export async function listChatbotKnowledge() {
