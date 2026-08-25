@@ -1,6 +1,6 @@
 import type { ReactNode } from "react"
 import Link from "next/link"
-import { Activity, Building2, CreditCard, LayoutDashboard, LogOut, Settings, ShieldCheck, Users } from "lucide-react"
+import { Activity, BookOpenText, Building2, CreditCard, LayoutDashboard, LogOut, Settings, ShieldCheck, Users } from "lucide-react"
 
 import { requireSuperAdminSession, superAdminLogoutAction } from "@/lib/auth-actions"
 
@@ -8,6 +8,7 @@ const navigation = [
   { href: "/super-admin", label: "Overview", icon: LayoutDashboard },
   { href: "/super-admin/plans", label: "Plans", icon: CreditCard },
   { href: "/super-admin/tenants", label: "Tenants", icon: Users },
+  { href: "/super-admin/chatbot-knowledge", label: "Chatbot knowledge", icon: BookOpenText },
   { href: "/super-admin/activity", label: "Activity log", icon: Activity },
   { href: "/super-admin/settings", label: "Platform settings", icon: Settings },
 ]

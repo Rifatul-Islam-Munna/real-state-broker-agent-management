@@ -1167,6 +1167,7 @@ export type ContactRequestItem = {
   agentName?: string | null
   status: ContactRequestStatus
   leadId?: number | null
+  chatSessionToken?: string | null
   createdAt: string
   updatedAt: string
 }

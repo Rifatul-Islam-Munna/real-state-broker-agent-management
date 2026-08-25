@@ -29,6 +29,10 @@ export class TenantStaffPermissionGuard implements CanActivate {
     throw new ForbiddenException('Your staff permissions do not allow access to this tenant area.');
   }
   private permissionForPath(path: string): string | null {
+    if (path.startsWith('/tenant-chatbot')) {
+      if (path.includes('/settings') || path.includes('/knowledge') || path.endsWith('/reindex')) return 'settings';
+      return 'lead';
+    }
     if (path.startsWith('/tenant-property-operations')) return 'properties';
     if (path.startsWith('/tenant-inbox') || path.startsWith('/tenant-sms-inbox')) return 'mail';
     if (path.startsWith('/tenant-outreach')) return 'lead';

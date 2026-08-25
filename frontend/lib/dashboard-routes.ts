@@ -32,6 +32,7 @@ export const dashboardRoutes: readonly DashboardRoute[] = [
   { href: "/dashboard/showing-feedback-automation", label: "Feedback Automation", icon: "schedule_send", adminOnly: true },
   { href: "/dashboard/contact-inbox", label: "Contact Us", icon: "contact_phone", permission: "lead" },
   { href: "/dashboard/property-chat-inbox", label: "Property Chat", icon: "textsms", permission: "lead" },
+  { href: "/dashboard/test-chatbot", label: "Test Chatbot", icon: "science", permission: "lead" },
   { href: "/dashboard/text-messages", label: "Text Messages", icon: "sms", permission: "lead" },
   { href: "/dashboard/mail", label: "Mail", icon: "mail", permission: "mail" },
   { href: "/dashboard/marketing", label: "Marketing", icon: "campaign", adminOnly: true },
@@ -43,6 +44,7 @@ export const dashboardRoutes: readonly DashboardRoute[] = [
   { href: "/dashboard/subscription", label: "Subscription", icon: "payments", adminOnly: true },
   { href: "/dashboard/settings/tracking", label: "Tracking", icon: "monitoring", adminOnly: true },
   { href: "/dashboard/settings/tenant", label: "Business Profile", icon: "business", adminOnly: true },
+  { href: "/dashboard/chatbot-settings", label: "Chatbot Settings", icon: "smart_toy", permission: "settings" },
   { href: "/dashboard/settings", label: "Settings", icon: "settings", permission: "settings" },
 ] as const
 

@@ -532,4 +532,22 @@ export const TENANT_DATABASE_MIGRATIONS: TenantDatabaseMigration[] = [
        ON CONFLICT (key) DO NOTHING`,
     ],
   },
+  {
+    version: 12,
+    name: 'chatbot_web_session_tokens',
+    statements: [
+      `CREATE TABLE IF NOT EXISTS tenant_chatbot_web_session (
+        id bigserial PRIMARY KEY,
+        token_hash varchar(64) NOT NULL UNIQUE,
+        lead_id bigint NOT NULL REFERENCES tenant_lead(id) ON DELETE CASCADE,
+        property_id bigint NOT NULL REFERENCES tenant_property(id) ON DELETE CASCADE,
+        contact_request_id bigint,
+        expires_at timestamptz NOT NULL,
+        revoked_at timestamptz,
+        created_at timestamptz NOT NULL DEFAULT now()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_tenant_chatbot_web_session_expiry
+        ON tenant_chatbot_web_session(expires_at) WHERE revoked_at IS NULL`,
+    ],
+  },
 ];

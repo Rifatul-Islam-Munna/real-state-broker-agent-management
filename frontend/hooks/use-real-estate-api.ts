@@ -326,6 +326,53 @@ export function useLeadHistory(leadId?: number, limit?: number, excludeStatus?: 
   )
 }
 
+export type LeadChatbotActivityEntry = {
+  kind: "event" | "message"
+  id: string
+  type: string
+  reason?: string | null
+  metadata?: Record<string, unknown> | null
+  createdAt: string
+  conversationId: string
+  body?: string | null
+  direction?: string | null
+  confidence?: number | null
+}
+
+export function useLeadChatbotActivity(leadId?: number) {
+  return useQueryWrapper<LeadChatbotActivityEntry[]>(
+    ["lead-chatbot-activity", leadId],
+    `/tenant-chatbot/leads/${leadId ?? 0}/activity`,
+    {
+      ...defaultQueryOptions,
+      enabled: Boolean(leadId),
+      placeholderData: undefined,
+    },
+    0,
+    "lead-chatbot-activity",
+  )
+}
+
+export function useStopLeadChatbot(leadId: number) {
+  const invalidate = useInvalidate(["lead-chatbot-activity"])
+  return useCommonMutationApi<{ stopped: boolean }, Record<string, never>>({
+    method: "POST",
+    url: `/tenant-chatbot/leads/${leadId}/stop`,
+    successMessage: "Chatbot stopped",
+    onSuccess: () => void invalidate(),
+  })
+}
+
+export function useResumeLeadChatbot(leadId: number) {
+  const invalidate = useInvalidate(["lead-chatbot-activity"])
+  return useCommonMutationApi<{ resumed: boolean }, Record<string, never>>({
+    method: "POST",
+    url: `/tenant-chatbot/leads/${leadId}/resume`,
+    successMessage: "Chatbot resumed",
+    onSuccess: () => void invalidate(),
+  })
+}
+
 export function useCreateLeadHistory() {
   const invalidate = useInvalidate(["lead-history", "lead", "leads"])
 
@@ -924,11 +971,31 @@ export function useCreateContactRequest() {
 export function useCreateTenantPropertyInquiry() {
   return useCommonMutationApi<
     ContactRequestItem,
-    Omit<ContactRequestItem, "id" | "status" | "leadId" | "createdAt" | "updatedAt">
+    Omit<ContactRequestItem, "id" | "status" | "leadId" | "chatSessionToken" | "createdAt" | "updatedAt">
   >({
     method: "POST",
     successMessage: "Inquiry sent",
     url: "/tenant-public/property-inquiries",
+  })
+}
+
+export type PublicTenantChatbotResponse = {
+  answer: string
+  decision: "ANSWER" | "STOP" | "ASK_CREDIT" | "CREATE_SHOWING_REQUEST"
+  reason: string
+  confidence: number | null
+  conversationId: string | null
+  queued: boolean
+}
+
+export function usePublicTenantChatbot() {
+  return useCommonMutationApi<
+    PublicTenantChatbotResponse,
+    { accessToken: string; sessionId: string; idempotencyKey: string; body: string }
+  >({
+    method: "POST",
+    showSuccessToast: false,
+    url: "/tenant-public/chatbot/messages",
   })
 }
 

@@ -27,9 +27,10 @@ import { TenantSmsInboxController } from './tenant-sms-inbox.controller';
 import { TenantSmsInboxService } from './tenant-sms-inbox.service';
 import { TenantStaffPermissionGuard } from './tenant-staff-permission.guard';
 import { TenantStaffController } from './tenant-staff.controller';
+import { TenantChatbotModule } from '../tenant-chatbot/tenant-chatbot.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([SaasTenant]), UsersModule],
+  imports: [TypeOrmModule.forFeature([SaasTenant]), UsersModule, TenantChatbotModule],
   controllers: [
     TenantDashboardController,
     TenantShowingRequestPublicController,

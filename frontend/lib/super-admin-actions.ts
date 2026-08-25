@@ -1,4 +1,4 @@
-﻿"use server"
+"use server"
 
 import { cookies } from "next/headers"
 import { revalidatePath } from "next/cache"
@@ -157,4 +157,76 @@ export async function extendTenantSubscriptionAction(formData: FormData) {
   })
   revalidatePath("/super-admin/tenants")
   revalidatePath("/super-admin/activity")
+}
+
+export type PlatformChatbotKnowledge = {
+  id: string
+  audience: "LEAD" | "REALTOR"
+  title: string
+  answer: string
+  questionExamples?: string[]
+  priority: number
+  active: boolean
+  sourceHash?: string
+  indexStatus: string
+  lastError?: string
+}
+
+export async function getPlatformChatbotKnowledge() {
+  return request("/super-admin-management/chatbot-knowledge") as Promise<PlatformChatbotKnowledge[]>
+}
+
+export async function createPlatformChatbotKnowledgeAction(formData: FormData) {
+  await request("/super-admin-management/chatbot-knowledge", {
+    method: "POST",
+    body: JSON.stringify({
+      audience: formData.get("audience"),
+      title: formData.get("title"),
+      answer: formData.get("answer"),
+      questionExamples: String(formData.get("questionExamples") ?? "").split("\n").map((item) => item.trim()).filter(Boolean),
+      priority: Number(formData.get("priority") ?? 50),
+    }),
+  })
+  revalidatePath("/super-admin/chatbot-knowledge")
+}
+
+export async function updatePlatformChatbotKnowledgeAction(formData: FormData) {
+  const id = String(formData.get("id") ?? "")
+  await request(`/super-admin-management/chatbot-knowledge/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({
+      audience: formData.get("audience"),
+      title: formData.get("title"),
+      answer: formData.get("answer"),
+      questionExamples: String(formData.get("questionExamples") ?? "").split("\n").map((item) => item.trim()).filter(Boolean),
+      priority: Number(formData.get("priority") ?? 50),
+      active: formData.get("active") === "true",
+    }),
+  })
+  revalidatePath("/super-admin/chatbot-knowledge")
+  revalidatePath("/super-admin/activity")
+}
+
+export async function setPlatformChatbotKnowledgeStatusAction(formData: FormData) {
+  const id = String(formData.get("id") ?? "")
+  await request(`/super-admin-management/chatbot-knowledge/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ active: formData.get("active") === "true" }),
+  })
+  revalidatePath("/super-admin/chatbot-knowledge")
+  revalidatePath("/super-admin/activity")
+}
+
+export async function reindexPlatformChatbotKnowledgeAction() {
+  await request("/super-admin-management/chatbot-knowledge/reindex", { method: "POST" })
+  revalidatePath("/super-admin/chatbot-knowledge")
+  revalidatePath("/super-admin/activity")
+}
+
+export async function deletePlatformChatbotKnowledgeAction(formData: FormData) {
+  const id = String(formData.get("id") ?? "")
+  await request(`/super-admin-management/chatbot-knowledge/${id}`, {
+    method: "DELETE",
+  })
+  revalidatePath("/super-admin/chatbot-knowledge")
 }

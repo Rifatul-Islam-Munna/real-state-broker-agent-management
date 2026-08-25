@@ -13,6 +13,8 @@ import { Textarea } from "@/components/ui/textarea"
 import {
   useCreateContactRequest,
   useCreateTenantPropertyInquiry,
+  usePublicTenantChatbot,
+  type PublicTenantChatbotResponse,
 } from "@/hooks/use-real-estate-api"
 import { deleteUploadedAsset, uploadPropertyAsset } from "@/lib/upload-client"
 
@@ -158,6 +160,14 @@ function buildSteps(property: PropertyItem): ChatStep[] {
   ]
 }
 
+type LiveChatTurn = {
+  id: string
+  role: "visitor" | "bot"
+  body: string
+  decision?: PublicTenantChatbotResponse["decision"]
+  reason?: string
+}
+
 function formatVisitorAnswer(step: ChatStep, contactState: ContactFormState, preAnswers: PreQuestionAnswerDraft[]) {
   if (step.kind === "pre-question") {
     const answer = preAnswers.find((item) => item.questionPrompt === step.prompt)
@@ -171,6 +181,7 @@ function formatVisitorAnswer(step: ChatStep, contactState: ContactFormState, pre
 export function PropertyChatDialog({ open, onOpenChange, property }: PropertyChatDialogProps) {
   const createContactRequest = useCreateContactRequest()
   const createTenantPropertyInquiry = useCreateTenantPropertyInquiry()
+  const publicChatbot = usePublicTenantChatbot()
   const inquiryMutation = property.tenantScoped
     ? createTenantPropertyInquiry
     : createContactRequest
@@ -182,6 +193,12 @@ export function PropertyChatDialog({ open, onOpenChange, property }: PropertyCha
   const [preAnswers, setPreAnswers] = useState<PreQuestionAnswerDraft[]>([])
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [isSubmitted, setIsSubmitted] = useState(false)
+  const [chatAccessToken, setChatAccessToken] = useState("")
+  const [chatSessionId, setChatSessionId] = useState(() => crypto.randomUUID())
+  const [chatDraft, setChatDraft] = useState("")
+  const [chatTurns, setChatTurns] = useState<LiveChatTurn[]>([])
+  const [chatTerminal, setChatTerminal] = useState(false)
+  const [chatError, setChatError] = useState<string | null>(null)
 
   useEffect(() => {
     if (open) {
@@ -195,6 +212,12 @@ export function PropertyChatDialog({ open, onOpenChange, property }: PropertyCha
     setPreAnswers([])
     setSubmitError(null)
     setIsSubmitted(false)
+    setChatAccessToken("")
+    setChatSessionId(crypto.randomUUID())
+    setChatDraft("")
+    setChatTurns([])
+    setChatTerminal(false)
+    setChatError(null)
   }, [open])
 
   const currentStep = steps[currentStepIndex] ?? null
@@ -310,10 +333,53 @@ export function PropertyChatDialog({ open, onOpenChange, property }: PropertyCha
         throw response.error
       }
 
+      const issuedChatToken = response.data?.chatSessionToken ?? ""
+      setChatAccessToken(issuedChatToken)
       setIsSubmitted(true)
     } catch (error) {
       await Promise.allSettled(uploadedObjectNames.map((objectName) => deleteUploadedAsset(objectName)))
       setSubmitError(error instanceof Error ? error.message : "Failed to send the inquiry.")
+    }
+  }
+
+  async function handleChatSubmit() {
+    const body = chatDraft.trim()
+    if (!body || !chatAccessToken || chatTerminal || publicChatbot.isPending) return
+
+    const visitorTurn: LiveChatTurn = {
+      id: `visitor-${crypto.randomUUID()}`,
+      role: "visitor",
+      body,
+    }
+    setChatTurns((current) => [...current, visitorTurn])
+    setChatDraft("")
+    setChatError(null)
+
+    try {
+      const response = await publicChatbot.mutateAsync({
+        accessToken: chatAccessToken,
+        sessionId: chatSessionId,
+        idempotencyKey: crypto.randomUUID(),
+        body,
+      })
+      if (response.error) throw response.error
+      const result = response.data
+      if (!result) throw new Error("The chatbot did not return a decision.")
+
+      if (result.answer?.trim()) {
+        setChatTurns((current) => [...current, {
+          id: `bot-${crypto.randomUUID()}`,
+          role: "bot",
+          body: result.answer.trim(),
+          decision: result.decision,
+          reason: result.reason,
+        }])
+      }
+      if (result.decision === "STOP" || result.decision === "CREATE_SHOWING_REQUEST") {
+        setChatTerminal(true)
+      }
+    } catch (error) {
+      setChatError(error instanceof Error ? error.message : "The chatbot is unavailable right now.")
     }
   }
 
@@ -423,9 +489,38 @@ export function PropertyChatDialog({ open, onOpenChange, property }: PropertyCha
                       {"Your inquiry has been sent."}
                     </p>
                     <p className="mt-2 text-sm leading-6 text-slate-600">
-                      {"Admin and the assigned agent context are saved in Contact Us. Admin can convert this inquiry to a lead."}
+                      {chatAccessToken ? "You can now ask verified questions about this property below." : "Admin and the assigned agent context are saved in Contact Us."}
                     </p>
                   </div>
+                </div>
+              ) : null}
+
+              {chatTurns.length > 0 ? (
+                <div aria-live="polite" className="space-y-4">
+                  {chatTurns.map((turn) => turn.role === "visitor" ? (
+                    <div className="flex justify-end" key={turn.id}>
+                      <div className="max-w-[80%] rounded-3xl rounded-tr-md bg-primary px-4 py-3 text-white">
+                        <p className="whitespace-pre-wrap text-sm">{turn.body}</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex gap-3" key={turn.id}>
+                      <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-white">
+                        <AppIcon className="text-lg" name="smart_toy" />
+                      </div>
+                      <div className="max-w-[85%] rounded-3xl rounded-tl-md bg-white px-4 py-3 shadow-sm">
+                        <p className="whitespace-pre-wrap text-sm leading-6 text-slate-700">{turn.body}</p>
+                        {turn.reason ? <p className="mt-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">{turn.reason}</p> : null}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+
+              {publicChatbot.isPending ? (
+                <div aria-live="polite" className="flex gap-3">
+                  <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-white"><AppIcon className="text-lg" name="smart_toy" /></div>
+                  <div className="rounded-3xl rounded-tl-md bg-white px-4 py-3 text-sm font-semibold text-slate-500 shadow-sm">Checking verified knowledge...</div>
                 </div>
               ) : null}
             </div>
@@ -435,22 +530,55 @@ export function PropertyChatDialog({ open, onOpenChange, property }: PropertyCha
             {isSubmitted ? (
               <div className="space-y-4">
                 <div className="rounded-3xl border border-green-200 bg-green-50 p-5">
-                  <p className="text-xs font-bold uppercase tracking-[0.22em] text-green-700">
-                    {"Inquiry Submitted"}
-                  </p>
-                  <p className="mt-3 text-lg font-bold text-slate-900">
-                    {"Admin can review it now."}
-                  </p>
+                  <p className="text-xs font-bold uppercase tracking-[0.22em] text-green-700">Inquiry Submitted</p>
+                  <p className="mt-3 text-lg font-bold text-slate-900">Your details are saved.</p>
                   <p className="mt-2 text-sm leading-6 text-slate-600">
-                    {"You can close this window or continue browsing the property details."}
+                    {chatAccessToken ? "Ask the knowledge chatbot a property question. It will answer only from verified sources." : "The property team can review your inquiry now."}
                   </p>
                 </div>
+
+                {chatAccessToken ? (
+                  <div className="space-y-3 rounded-3xl border border-primary/15 bg-primary/5 p-4">
+                    {chatTerminal ? (
+                      <p className="rounded-2xl bg-white p-3 text-sm font-semibold text-slate-600">Automated chat has stopped for this conversation. The property team can continue with you directly.</p>
+                    ) : (
+                      <>
+                        <label className="text-xs font-bold uppercase tracking-[0.18em] text-primary" htmlFor={`property-chat-question-${property.id}`}>Ask a verified question</label>
+                        <Textarea
+                          id={`property-chat-question-${property.id}`}
+                          className="min-h-28 rounded-2xl border-slate-200 bg-white p-4"
+                          disabled={publicChatbot.isPending}
+                          maxLength={4000}
+                          onChange={(event) => setChatDraft(event.target.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" && !event.shiftKey) {
+                              event.preventDefault()
+                              void handleChatSubmit()
+                            }
+                          }}
+                          placeholder="Is parking included? Are pets allowed?"
+                          value={chatDraft}
+                        />
+                        {chatError ? <p className="text-sm font-semibold text-rose-600">{chatError}</p> : null}
+                        <button
+                          className="w-full rounded-2xl bg-primary px-5 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
+                          disabled={publicChatbot.isPending || !chatDraft.trim()}
+                          onClick={() => void handleChatSubmit()}
+                          type="button"
+                        >
+                          {publicChatbot.isPending ? "Checking verified knowledge..." : "Ask Chatbot"}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                ) : null}
+
                 <button
-                  className="w-full rounded-2xl bg-primary px-5 py-3 text-sm font-bold text-white"
+                  className="w-full rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700"
                   onClick={() => onOpenChange(false)}
                   type="button"
                 >
-                  {"Close"}
+                  Close
                 </button>
               </div>
             ) : currentStep ? (

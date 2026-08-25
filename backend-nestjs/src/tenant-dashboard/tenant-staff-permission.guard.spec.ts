@@ -30,6 +30,19 @@ describe('TenantStaffPermissionGuard', () => {
     expect(() => guard.canActivate(execution('/api/tenant-legacy/resource/documents', ['settings']))).toThrow('staff permissions');
   });
 
+  it('requires settings permission for chatbot settings, knowledge, and reindex routes', () => {
+    expect(guard.canActivate(execution('/api/tenant-chatbot/settings', ['settings']))).toBe(true);
+    expect(guard.canActivate(execution('/api/tenant-chatbot/knowledge', ['settings']))).toBe(true);
+    expect(guard.canActivate(execution('/api/tenant-chatbot/reindex', ['settings']))).toBe(true);
+    expect(() => guard.canActivate(execution('/api/tenant-chatbot/reindex', ['lead']))).toThrow('staff permissions');
+  });
+
+  it('requires lead permission for chatbot test and lead controls', () => {
+    expect(guard.canActivate(execution('/api/tenant-chatbot/test', ['lead']))).toBe(true);
+    expect(guard.canActivate(execution('/api/tenant-chatbot/leads/42/activity', ['lead']))).toBe(true);
+    expect(() => guard.canActivate(execution('/api/tenant-chatbot/test', ['settings']))).toThrow('staff permissions');
+  });
+
   it('allows the minimal tenant context needed to render permitted navigation', () => {
     expect(guard.canActivate(execution('/api/tenant-dashboard/context', []))).toBe(true);
   });

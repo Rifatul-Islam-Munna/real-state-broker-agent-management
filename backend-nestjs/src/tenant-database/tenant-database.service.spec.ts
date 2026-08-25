@@ -47,6 +47,9 @@ describe('TenantDatabaseService', () => {
         call.sql.includes('CREATE TABLE IF NOT EXISTS tenant_property'),
       ),
     ).toBe(true);
+    expect(calls.some((call) =>
+      call.sql.includes('CREATE TABLE IF NOT EXISTS tenant_chatbot_web_session'),
+    )).toBe(true);
     expect(
       calls.some((call) =>
         call.sql.startsWith('INSERT INTO tenant_schema_migration'),

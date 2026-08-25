@@ -15,6 +15,7 @@ import {
   TenantOutreachDeliveryService,
 } from './tenant-outreach-delivery.service';
 import { TenantWorkspaceSettingsService } from './tenant-workspace-settings.service';
+import { TenantChatbotService } from '../tenant-chatbot/tenant-chatbot.service';
 
 export type TenantOutreachStatus =
   | 'scheduled'
@@ -92,6 +93,7 @@ export class TenantOutreachService {
     private readonly databases: TenantDatabaseService,
     @Optional() private readonly workspaceSettings?: TenantWorkspaceSettingsService,
     @Optional() private readonly deliveryService?: TenantOutreachDeliveryService,
+    @Optional() private readonly chatbot?: TenantChatbotService,
   ) {}
 
   async getAgencySettings(tenant: SaasTenant) {
@@ -928,6 +930,18 @@ export class TenantOutreachService {
 
   async processClaimedJob(tenant: SaasTenant, job: TenantOutreachJob) {
     const normalized = this.normalizeClaimedJob(job as any);
+    if (normalized.source_type === 'tenant-chatbot') {
+      const authorization = this.chatbot
+        ? await this.chatbot.authorizeOutboundJob(tenant, normalized)
+        : { allowed: false, reason: 'SYSTEM_UNAVAILABLE' as const };
+      if (!authorization.allowed) {
+        return {
+          id: normalized.id,
+          status: 'cancelled' as const,
+          reason: authorization.reason,
+        };
+      }
+    }
     const databaseName = this.databaseName(tenant);
     const attemptId = await this.beginAttempt(databaseName, normalized);
     try {

@@ -1,3 +1,4 @@
+import { createHash, randomBytes } from 'node:crypto';
 import {
   BadRequestException,
   GoneException,
@@ -86,11 +87,44 @@ export class TenantPublicInquiryService {
            RETURNING id, payload, created_at, updated_at`,
           [JSON.stringify(payload)],
         );
-        await client.query('COMMIT');
         const saved = inserted.rows[0];
+        const existingLead = await client.query(
+          [
+            'SELECT id FROM tenant_lead',
+            'WHERE ($1 <> \'\' AND lower(email) = lower($1))',
+            'OR ($2 <> \'\' AND phone = $2)',
+            'ORDER BY updated_at DESC LIMIT 1',
+          ].join(' '),
+          [email, phone],
+        );
+        let leadId = Number(existingLead.rows[0]?.id) || null;
+        if (!leadId) {
+          const createdLead = await client.query(
+            [
+              'INSERT INTO tenant_lead(full_name, email, phone, status, payload)',
+              "VALUES ($1, NULLIF($2, ''), NULLIF($3, ''), 'new', $4::jsonb)",
+              'RETURNING id',
+            ].join(' '),
+            [name, email, phone, JSON.stringify({ source: payload.source })],
+          );
+          leadId = Number(createdLead.rows[0]?.id);
+        }
+        const chatSessionToken = randomBytes(32).toString('hex');
+        const tokenHash = createHash('sha256').update(chatSessionToken).digest('hex');
+        await client.query(
+          [
+            'INSERT INTO tenant_chatbot_web_session(',
+            'token_hash, lead_id, property_id, contact_request_id, expires_at)',
+            "VALUES ($1, $2, $3, $4, now() + interval '24 hours')",
+          ].join(' '),
+          [tokenHash, leadId, propertyId, Number(saved.id)],
+        );
+        await client.query('COMMIT');
         return {
           ...saved.payload,
           id: Number(saved.id),
+          leadId,
+          chatSessionToken,
           createdAt: saved.created_at,
           updatedAt: saved.updated_at,
         };
