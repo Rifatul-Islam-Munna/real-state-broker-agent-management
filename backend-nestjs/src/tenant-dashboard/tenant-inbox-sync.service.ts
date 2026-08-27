@@ -15,6 +15,10 @@ import {
   prepareLeadCollectionSource,
   sanitizeLeadName,
 } from '../mail/lead-collection-parser';
+import {
+  isGmailReconnectRequired,
+  refreshGmailAccessToken,
+} from '../common/gmail-oauth';
 import { normalizePhoneNumber } from '../common/phone-normalizer';
 import { normalizeLinkedPageConfig } from '../mail/linked-page-config';
 import {
@@ -245,8 +249,9 @@ export class TenantInboxSyncService {
     const config: any = await this.settings.getRawSmtp(tenant);
     const authType = this.text(config?.authType).toLowerCase();
     const imap = this.imapConnectionConfig(config);
+    const gmailReconnectRequired = config?.gmailReconnectRequired === true;
     const isConfigured = authType === 'gmail-oauth' || config?.gmailRefreshToken
-      ? Boolean(config?.gmailRefreshToken)
+      ? Boolean(config?.gmailRefreshToken) && !gmailReconnectRequired
       : Boolean(imap.host && imap.user && imap.pass);
     return this.databases.withTenantClient(this.databaseName(tenant), async (client) => {
       const result = await client.query(
@@ -274,8 +279,12 @@ export class TenantInboxSyncService {
         lastMatchedLeadCount: Number(row.matched_count) || 0,
         lastCreatedLeadCount: Number(row.created_count) || 0,
         lastSkippedCount: Number(row.skipped_count) || 0,
-        lastError: row.last_error ?? null,
-        statusMessage: row.status === 'processing' && !processingIsFresh
+        lastError: row.last_error ?? config?.gmailLastAuthError ?? null,
+        gmailReconnectRequired,
+        gmailAuthFailedAt: config?.gmailAuthFailedAt ?? null,
+        statusMessage: gmailReconnectRequired
+          ? 'Gmail authorization needs to be renewed. Reconnect Gmail to resume automatic inbox sync.'
+          : row.status === 'processing' && !processingIsFresh
           ? 'Previous sync was interrupted. Click Sync now to retry.'
           : row.last_error
           ? `Sync error: ${row.last_error}`
@@ -2520,24 +2529,36 @@ ${input.textBody ?? ''}`.toLowerCase();
     if (!clientId || !clientSecret || !refreshToken) {
       throw new Error('Tenant Gmail refresh configuration is incomplete.');
     }
-    const response = await this.jsonRequest('https://oauth2.googleapis.com/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        client_id: clientId,
-        client_secret: clientSecret,
-        refresh_token: refreshToken,
-        grant_type: 'refresh_token',
-      }),
-    });
-    const accessToken = this.text(response.access_token);
-    if (!accessToken) throw new Error('Gmail did not return an access token.');
-    config.gmailAccessToken = accessToken;
-    config.gmailTokenExpiresAt = new Date(
-      Date.now() + (Number(response.expires_in) || 3600) * 1000,
-    ).toISOString();
-    await this.settings.saveRawSmtp(tenant, config);
-    return accessToken;
+    try {
+      const refreshed = await refreshGmailAccessToken({
+        clientId,
+        clientSecret,
+        refreshToken,
+      });
+      config.gmailAccessToken = refreshed.accessToken;
+      config.gmailTokenExpiresAt = refreshed.accessTokenExpiresAt;
+      config.gmailLastTokenRefreshAt = new Date().toISOString();
+      config.gmailReconnectRequired = false;
+      config.gmailLastAuthError = '';
+      config.gmailAuthFailedAt = null;
+      if (refreshed.refreshTokenExpiresAt) {
+        config.gmailRefreshTokenExpiresAt = refreshed.refreshTokenExpiresAt;
+      }
+      await this.settings.saveRawSmtp(tenant, config);
+      return refreshed.accessToken;
+    } catch (error) {
+      if (isGmailReconnectRequired(error)) {
+        config.enableInboxSync = false;
+        config.gmailReconnectRequired = true;
+        config.gmailLastAuthError = this.message(error).slice(0, 500);
+        config.gmailAuthFailedAt = new Date().toISOString();
+        config.gmailAccessToken = '';
+        config.gmailTokenExpiresAt = null;
+        await this.settings.saveRawSmtp(tenant, config);
+        this.logger.warn(`Gmail authorization requires reconnect ${JSON.stringify({ databaseName })}`);
+      }
+      throw error;
+    }
   }
 
   private async markStarted(databaseName: string, providerKey: string) {

@@ -92,7 +92,7 @@ export function TenantShowingRequestDetail({ request, properties }: TenantShowin
       <header className="relative overflow-hidden rounded-[28px] bg-[#17213b] px-6 py-8 text-white shadow-[0_24px_70px_rgba(23,33,59,0.2)] sm:px-9">
         <div className="absolute right-0 top-0 size-64 bg-[radial-gradient(circle_at_center,rgba(242,192,80,0.18),transparent_65%)]" />
         <div className="relative flex flex-col justify-between gap-6 md:flex-row md:items-end">
-          <div><p className="text-xs font-bold uppercase tracking-[0.18em] text-[#f2c050]">Showing request #{request.id}</p><h1 className="mt-3 text-3xl font-bold tracking-[-0.045em]">{request.title}</h1><p className="mt-3 max-w-2xl text-sm leading-7 text-white/70">Review the lead&apos;s response, confirm the property and time, then manually assign the realtor who will conduct the showing.</p></div>
+          <div><p className="text-xs font-bold uppercase tracking-[0.18em] text-[#f2c050]">Showing request #{request.id}</p><h1 className="mt-3 text-3xl font-bold tracking-[-0.045em]">{request.title}</h1><p className="mt-3 max-w-2xl text-sm leading-7 text-white/70">Review the lead&apos;s response, confirm the property and time, then approve. Realtor details are optional and can be added when available.</p></div>
           <span className={`w-fit rounded-full px-3 py-1.5 text-xs font-bold capitalize ${statusClass(request.status)}`}>{request.status}</span>
         </div>
       </header>
@@ -106,7 +106,7 @@ export function TenantShowingRequestDetail({ request, properties }: TenantShowin
 
       {request.publicUrl && !["submitted", "approved", "rejected"].includes(request.status) ? (
         <section className="rounded-[22px] border border-sky-200 bg-sky-50 p-5">
-          <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center"><div><h2 className="font-bold text-sky-950">Secure public form</h2><p className="mt-1 text-xs leading-6 text-sky-800">Copy creates a fresh secure link and starts a new {request.expiryHours ?? 72}-hour countdown.</p></div><button className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl bg-sky-900 px-4 text-sm font-semibold text-white" onClick={copyPublicLink} type="button">{copied ? <Check className="size-4" /> : <Clipboard className="size-4" />} {copied ? "Copied" : "Copy fresh link"}</button></div>
+          <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center"><div><h2 className="font-bold text-sky-950">Secure public form</h2><p className="mt-1 text-xs leading-6 text-sky-800">Copy creates a fresh secure link and starts a new {request.expiryHours ?? 168}-hour countdown.</p></div><button className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl bg-sky-900 px-4 text-sm font-semibold text-white" onClick={copyPublicLink} type="button">{copied ? <Check className="size-4" /> : <Clipboard className="size-4" />} {copied ? "Copied" : "Copy fresh link"}</button></div>
         </section>
       ) : null}
 
@@ -120,13 +120,13 @@ export function TenantShowingRequestDetail({ request, properties }: TenantShowin
         <aside className="space-y-7">
           {request.status === "submitted" ? (
             <article className="rounded-[24px] border border-amber-200 bg-[#fffaf0] p-6 shadow-sm sm:p-7">
-              <div className="flex items-start gap-4"><span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-amber-100 text-amber-800"><UserRoundCog className="size-5" /></span><div><h2 className="text-xl font-bold">Approve and assign</h2><p className="mt-1 text-sm leading-6 text-slate-600">Approval creates the showing immediately. Realtor assignment is intentionally manual.</p></div></div>
+              <div className="flex items-start gap-4"><span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-amber-100 text-amber-800"><UserRoundCog className="size-5" /></span><div><h2 className="text-xl font-bold">Approve showing</h2><p className="mt-1 text-sm leading-6 text-slate-600">Approval creates the showing immediately. Realtor name, email, and phone are optional.</p></div></div>
               <form action={approveAction} className="mt-6 grid gap-4">
                 <input name="requestId" type="hidden" value={request.id} />
                 <input name="showingAt" type="hidden" value={showingAtIso} />
                 <label className="grid gap-2 text-sm font-semibold">Published property<select className="h-11 rounded-xl border border-slate-300 bg-white px-3 font-normal" name="propertyId" onChange={(event) => setPropertyId(event.target.value)} required value={propertyId}><option value="">Choose property</option>{publishedProperties.map((property) => <option key={property.id} value={property.id}>{property.title}</option>)}</select></label>
                 <label className="grid gap-2 text-sm font-semibold">Confirmed showing time<input className="h-11 rounded-xl border border-slate-300 bg-white px-3 font-normal" onChange={(event) => setLocalShowingAt(event.target.value)} required type="datetime-local" value={localShowingAt} /></label>
-                <label className="grid gap-2 text-sm font-semibold">Showing realtor<input className="h-11 rounded-xl border border-slate-300 bg-white px-3 font-normal" name="realtorName" placeholder="Realtor full name" required /></label>
+                <label className="grid gap-2 text-sm font-semibold">Showing realtor <span className="text-xs font-normal text-slate-500">(optional)</span><input className="h-11 rounded-xl border border-slate-300 bg-white px-3 font-normal" name="realtorName" placeholder="Realtor full name, if assigned" /></label>
                 <label className="grid gap-2 text-sm font-semibold">Realtor email<input className="h-11 rounded-xl border border-slate-300 bg-white px-3 font-normal" name="realtorEmail" type="email" /></label>
                 <label className="grid gap-2 text-sm font-semibold">Realtor phone<input className="h-11 rounded-xl border border-slate-300 bg-white px-3 font-normal" name="realtorPhone" /></label>
                 <label className="grid gap-2 text-sm font-semibold">Internal notes<textarea className="min-h-24 rounded-xl border border-slate-300 bg-white p-3 font-normal" name="notes" /></label>
@@ -135,7 +135,7 @@ export function TenantShowingRequestDetail({ request, properties }: TenantShowin
               </form>
             </article>
           ) : request.status === "approved" ? (
-            <article className="rounded-[24px] border border-emerald-200 bg-emerald-50 p-6"><CheckCircle2 className="size-7 text-emerald-700" /><h2 className="mt-4 text-xl font-bold text-emerald-950">Showing created</h2><p className="mt-2 text-sm leading-6 text-emerald-900">Assigned to {request.assignedRealtorName}. This appointment is now visible in Realtor Showings.</p><Link className="mt-5 inline-flex h-11 items-center justify-center rounded-xl bg-emerald-800 px-4 text-sm font-semibold text-white" href="/dashboard/realtor-showings">Open Realtor Showings</Link></article>
+            <article className="rounded-[24px] border border-emerald-200 bg-emerald-50 p-6"><CheckCircle2 className="size-7 text-emerald-700" /><h2 className="mt-4 text-xl font-bold text-emerald-950">Showing created</h2><p className="mt-2 text-sm leading-6 text-emerald-900">{request.assignedRealtorName ? `Assigned to ${request.assignedRealtorName}. ` : "No realtor has been assigned yet. "}This appointment is now visible in Realtor Showings.</p><Link className="mt-5 inline-flex h-11 items-center justify-center rounded-xl bg-emerald-800 px-4 text-sm font-semibold text-white" href="/dashboard/realtor-showings">Open Realtor Showings</Link></article>
           ) : null}
 
           {canReject ? (

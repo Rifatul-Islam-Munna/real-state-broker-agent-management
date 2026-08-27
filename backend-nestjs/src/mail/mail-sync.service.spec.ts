@@ -2,6 +2,7 @@ jest.mock('../showing-feedback/showing-feedback.service', () => ({
   ShowingFeedbackService: class ShowingFeedbackService {},
 }));
 
+import { GmailOAuthRefreshError } from '../common/gmail-oauth';
 import { MailInboxSyncBackgroundService } from './mail-sync.service';
 
 describe('MailInboxSyncBackgroundService Gmail disconnect handling', () => {
@@ -37,20 +38,30 @@ describe('MailInboxSyncBackgroundService Gmail disconnect handling', () => {
     expect(syncInbox).not.toHaveBeenCalled();
   });
 
-  it('disables stale Gmail sync after a rejected refresh token so cron does not retry forever', async () => {
+  it('pauses stale Gmail sync without erasing the refresh token after authorization is revoked', async () => {
     const state = makeService({
       providerName: 'Gmail', authType: 'gmail-oauth', enableInboxSync: true,
       syncIntervalMinutes: 5, gmailEmail: 'old@example.com',
       gmailRefreshToken: 'revoked-token', gmailAccessToken: '',
     });
-    jest.spyOn(state.service as any, 'syncInbox').mockRejectedValue(new Error('Gmail token refresh failed: 400'));
+    const error = new GmailOAuthRefreshError(
+      'Gmail authorization expired or was revoked. Reconnect Gmail to resume automation.',
+      400,
+      'invalid_grant',
+      'Token has been expired or revoked.',
+      true,
+    );
+    jest.spyOn(state.service as any, 'syncInbox').mockRejectedValue(error);
 
-    await expect((state.service as any).runSync('Scheduled', false)).rejects.toThrow('Gmail token refresh failed: 400');
+    await expect((state.service as any).runSync('Scheduled', false)).rejects.toThrow('Reconnect Gmail');
 
     expect(state.integrationRepo.save).toHaveBeenCalled();
     const saved = JSON.parse(state.row.smtpPayload);
     expect(saved.enableInboxSync).toBe(false);
-    expect(saved.gmailRefreshToken).toBe('');
+    expect(saved.gmailRefreshToken).toBe('revoked-token');
+    expect(saved.gmailEmail).toBe('old@example.com');
     expect(saved.gmailAccessToken).toBe('');
+    expect(saved.gmailReconnectRequired).toBe(true);
+    expect(saved.gmailLastAuthError).toContain('Reconnect Gmail');
   });
 });

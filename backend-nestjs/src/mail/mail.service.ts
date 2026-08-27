@@ -4,6 +4,10 @@ import { DeepPartial, Repository } from 'typeorm';
 import { MailInboxItem, MailInboxStatus, mailInboxStatusDbValue } from './entities/mail.entity';
 import { LeadsService } from '../leads/leads.service';
 import { paginated, toInt } from '../common/api-contract';
+import {
+  isGmailReconnectRequired,
+  refreshGmailAccessToken,
+} from '../common/gmail-oauth';
 import { SettingsService } from '../settings/settings.service';
 import { Lead, LeadFollowUpStatus } from '../leads/entities/lead.entity';
 import { LeadHistoryEntry, leadHistoryStatusDb } from '../leads/entities/lead-history.entity';
@@ -301,22 +305,43 @@ export class MailService {
     const clientId = `${process.env.GOOGLE_CLIENT_ID ?? ''}`.trim();
     const clientSecret = `${process.env.GOOGLE_CLIENT_SECRET ?? ''}`.trim();
     if (!clientId || !clientSecret || !config.gmailRefreshToken) throw new BadRequestException('Google OAuth credentials are missing.');
-    const response = await fetch('https://oauth2.googleapis.com/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        client_id: clientId,
-        client_secret: clientSecret,
-        refresh_token: config.gmailRefreshToken,
-        grant_type: 'refresh_token',
-      }),
-    });
-    if (!response.ok) throw new BadRequestException(`Gmail token refresh failed: ${response.status}`);
-    const token: any = await response.json();
-    config.gmailAccessToken = `${token.access_token ?? ''}`.trim();
-    config.gmailTokenExpiresAt = new Date(Date.now() + (Number(token.expires_in) || 3600) * 1000).toISOString();
-    await this.settingsService.saveSmtpConfig({ ...await this.settingsService.getSmtpConfig(), ...config });
-    return config.gmailAccessToken;
+    try {
+      const refreshed = await refreshGmailAccessToken({
+        clientId,
+        clientSecret,
+        refreshToken: config.gmailRefreshToken,
+      });
+      config.gmailAccessToken = refreshed.accessToken;
+      config.gmailTokenExpiresAt = refreshed.accessTokenExpiresAt;
+      config.gmailLastTokenRefreshAt = new Date().toISOString();
+      config.gmailReconnectRequired = false;
+      config.gmailLastAuthError = '';
+      config.gmailAuthFailedAt = null;
+      if (refreshed.refreshTokenExpiresAt) {
+        config.gmailRefreshTokenExpiresAt = refreshed.refreshTokenExpiresAt;
+      }
+      await this.settingsService.saveSmtpConfig({
+        ...await this.settingsService.getSmtpConfig(),
+        ...config,
+      });
+      return config.gmailAccessToken;
+    } catch (error) {
+      if (isGmailReconnectRequired(error)) {
+        const existing = await this.settingsService.getSmtpConfig();
+        await this.settingsService.saveSmtpConfig({
+          ...(existing ?? {}),
+          ...config,
+          enableInboxSync: false,
+          gmailAccessToken: '',
+          gmailTokenExpiresAt: null,
+          gmailReconnectRequired: true,
+          gmailLastAuthError: error instanceof Error ? error.message.slice(0, 500) : 'Gmail authorization expired.',
+          gmailAuthFailedAt: new Date().toISOString(),
+        });
+      }
+      if (error instanceof Error) throw new BadRequestException(error.message);
+      throw error;
+    }
   }
 
   private encodeHeader(value: string) {

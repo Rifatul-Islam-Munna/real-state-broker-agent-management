@@ -394,6 +394,14 @@ export class TenantWorkspaceSettingsService {
       gmailTokenExpiresAt: new Date(
         Date.now() + (Number(token.expires_in) || 3600) * 1000,
       ).toISOString(),
+      gmailRefreshTokenExpiresAt: Number(token.refresh_token_expires_in) > 0
+        ? new Date(Date.now() + Number(token.refresh_token_expires_in) * 1000).toISOString()
+        : (existing?.gmailRefreshTokenExpiresAt ?? null),
+      gmailConnectedAt: new Date().toISOString(),
+      gmailLastTokenRefreshAt: new Date().toISOString(),
+      gmailReconnectRequired: false,
+      gmailLastAuthError: '',
+      gmailAuthFailedAt: null,
       gmailLabelIds: ['INBOX'],
     });
     return {
@@ -542,7 +550,11 @@ export class TenantWorkspaceSettingsService {
 
   private smtpValid(value: any) {
     if (value?.authType === 'gmail-oauth')
-      return Boolean(value?.gmailEmail && value?.gmailRefreshToken);
+      return Boolean(
+        value?.gmailEmail &&
+        value?.gmailRefreshToken &&
+        value?.gmailReconnectRequired !== true,
+      );
     return Boolean(
       value?.host && value?.username && value?.password && value?.fromEmail,
     );

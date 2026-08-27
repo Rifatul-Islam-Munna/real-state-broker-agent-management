@@ -44,6 +44,11 @@ type Values = {
   mailboxTag: string
   leadTemplateTags: string
   gmailEmail: string
+  gmailReconnectRequired: boolean
+  gmailLastAuthError: string
+  gmailAuthFailedAt: string
+  gmailLastTokenRefreshAt: string
+  gmailRefreshTokenExpiresAt: string
   duplicatePolicy: "skip-exact-message" | "process-every-message"
   autoCreateLeads: boolean
   syncIntervalMinutes: string
@@ -75,6 +80,11 @@ const emptyValues = (): Values => ({
   mailboxTag: "",
   leadTemplateTags: "",
   gmailEmail: "",
+  gmailReconnectRequired: false,
+  gmailLastAuthError: "",
+  gmailAuthFailedAt: "",
+  gmailLastTokenRefreshAt: "",
+  gmailRefreshTokenExpiresAt: "",
   duplicatePolicy: "skip-exact-message",
   autoCreateLeads: true,
   syncIntervalMinutes: "10",
@@ -119,6 +129,11 @@ export function IntegrationMailSheet({
       imapFolder: String(config?.imapFolder ?? defaults.imapFolder),
       mailboxTag: String(config?.mailboxTag ?? defaults.mailboxTag),
       gmailEmail: String(config?.gmailEmail ?? defaults.gmailEmail),
+      gmailReconnectRequired: config?.gmailReconnectRequired === true,
+      gmailLastAuthError: String(config?.gmailLastAuthError ?? ''),
+      gmailAuthFailedAt: String(config?.gmailAuthFailedAt ?? ''),
+      gmailLastTokenRefreshAt: String(config?.gmailLastTokenRefreshAt ?? ''),
+      gmailRefreshTokenExpiresAt: String(config?.gmailRefreshTokenExpiresAt ?? ''),
       leadTemplateTags: Array.isArray(config?.leadTemplateTags)
         ? config.leadTemplateTags.join(", ")
         : String(config?.leadTemplateTags ?? defaults.leadTemplateTags),
@@ -252,13 +267,28 @@ export function IntegrationMailSheet({
               <div>
                 <p className="text-sm font-semibold text-foreground">{"Gmail one-click"}</p>
                 <p className="text-xs text-muted-foreground">
-                  {values.authType === "gmail-oauth" ? `Connected: ${values.gmailEmail || "Gmail"}` : "Connect Gmail for send + inbox sync."}
+                  {values.gmailReconnectRequired
+                    ? `Reconnect required: ${values.gmailEmail || "Gmail"}`
+                    : values.authType === "gmail-oauth"
+                      ? `Connected: ${values.gmailEmail || "Gmail"}`
+                      : "Connect Gmail for send + inbox sync."}
                 </p>
               </div>
               <Button disabled={gmailConnect.isPending} onClick={() => void connectGmail()} size="sm" type="button" variant="outline">
                 {gmailConnect.isPending ? "Opening..." : values.authType === "gmail-oauth" ? "Reconnect Gmail" : "Connect Gmail"}
               </Button>
             </div>
+            {values.gmailReconnectRequired ? (
+              <Alert variant="destructive">
+                <AlertDescription>
+                  {values.gmailLastAuthError || "Gmail authorization expired or was revoked. Reconnect Gmail to resume email automation."}
+                  {values.gmailAuthFailedAt ? ` Last detected ${new Date(values.gmailAuthFailedAt).toLocaleString()}.` : ""}
+                </AlertDescription>
+              </Alert>
+            ) : null}
+            <p className="rounded-lg border bg-background px-3 py-2 text-xs leading-5 text-muted-foreground">
+              {"For unattended long-running automation, publish the Google OAuth consent screen to Production. External apps left in Testing receive refresh tokens that expire after about 7 days. Access tokens are refreshed automatically in the background."}
+            </p>
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="Sync labels / tags">
                 <Input onChange={(event) => patch({ mailboxTag: event.target.value })} placeholder="Leads, Zillow" value={values.mailboxTag} />

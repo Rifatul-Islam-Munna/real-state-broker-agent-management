@@ -387,3 +387,47 @@ describe('TenantRealtorWorkflowService showing confirmations', () => {
     expect(enqueueWithClient).not.toHaveBeenCalled();
   });
 });
+
+
+describe('TenantRealtorWorkflowService showing request defaults', () => {
+  it('allows approval without a realtor name', async () => {
+    let approved = false;
+    const query = jest.fn(async (sql: string) => {
+      if (sql.includes('FROM tenant_showing_request r') && sql.includes('WHERE r.id = $1')) {
+        return { rowCount: 1, rows: [{
+          id: 88, accessToken: 'secure-token', leadId: 9, leadName: 'Buyer One',
+          recipientEmail: 'buyer@example.com', recipientPhone: '', propertyId: 12,
+          requestedPropertyId: 12, requestedPropertyTitle: 'Live Home', propertyMode: 'fixed',
+          status: approved ? 'approved' : 'submitted',
+          preferredShowingAt: new Date(Date.now() + 3_600_000).toISOString(),
+          assignedRealtorName: '', approvedShowingId: approved ? 99 : null,
+        }] };
+      }
+      if (sql.includes('SELECT id, title, status, payload FROM tenant_property')) {
+        return { rowCount: 1, rows: [{ id: 12, title: 'Live Home', status: 'published', payload: {} }] };
+      }
+      if (sql.includes('SELECT id FROM tenant_showing WHERE showing_request_id')) return { rowCount: 0, rows: [] };
+      if (sql.includes('INSERT INTO tenant_showing(')) return { rowCount: 1, rows: [{ id: 99 }] };
+      if (sql.includes("SET status = 'approved'")) approved = true;
+      return { rowCount: 1, rows: [] };
+    });    const state = setup(query);
+    await expect(state.service.approveShowingRequest(
+      tenant(),
+      88,
+      {
+        propertyId: 12,
+        showingAt: new Date(Date.now() + 7_200_000).toISOString(),
+        realtorName: '',
+        realtorEmail: '',
+        realtorPhone: '',
+        notes: '',
+      },
+      { id: 5, fullName: 'Tenant Owner' },
+    )).resolves.toMatchObject({ id: 88, status: 'approved', assignedRealtorName: '' });
+
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('INSERT INTO tenant_showing('),
+      expect.arrayContaining([88, 9, 12, 'Buyer One', '', '', '']),
+    );
+  });
+});

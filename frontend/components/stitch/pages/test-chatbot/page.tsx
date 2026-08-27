@@ -18,6 +18,7 @@ import {
   parseTestChatbotRole,
   parseTestCredit,
   parseTestMonthlyIncome,
+  parseTestShowingIntent,
   propertyQualification,
   qualificationMatchesProperty,
   shouldOfferPropertyIndex,
@@ -143,15 +144,25 @@ export function TestChatbotPage({ initialProperties }: Props) {
     let followUp = ""
     let audience: "LEAD" | "REALTOR" = workflow.role ?? "LEAD"
 
+    const showingIntent = parseTestShowingIntent(nextQuestion)
+    const declaredRole = parseTestChatbotRole(nextQuestion)
+
     if (!workflow.role) {
-      const role = parseTestChatbotRole(nextQuestion)
-      if (role) {
-        setWorkflow((current) => ({ ...current, role }))
+      if (declaredRole) {
+        setWorkflow((current) => ({ ...current, role: declaredRole }))
         appendAssistant(
           nextQuestion,
-          role === "REALTOR"
+          declaredRole === "REALTOR"
             ? workflowResult("Got it — you're a Realtor. I can use the Realtor-facing property details, but private access information stays hidden until the Realtor is verified.", "ANSWER", "ROLE_CAPTURED")
-            : workflowResult(`Got it — you're looking to rent the property. ${CREDIT_FOLLOW_UP}`, "ASK_CREDIT", "CREDIT_REQUIRED"),
+            : workflowResult(`Got it — you're interested in this property. ${CREDIT_FOLLOW_UP}`, "ASK_CREDIT", "CREDIT_REQUIRED"),
+          messageId
+        )
+        return
+      }
+      if (showingIntent) {
+        appendAssistant(
+          nextQuestion,
+          workflowResult("Absolutely — I can help you request a showing. First, are you looking to rent the property yourself, or are you a Realtor?", "ASK_ROLE", "ROLE_REQUIRED"),
           messageId
         )
         return
@@ -161,6 +172,16 @@ export function TestChatbotPage({ initialProperties }: Props) {
       const qualification = qualificationReply(nextQuestion)
       if (qualification) {
         appendAssistant(nextQuestion, qualification, messageId)
+        return
+      }
+      if (showingIntent || declaredRole === "LEAD") {
+        appendAssistant(
+          nextQuestion,
+          workflow.creditScore === null
+            ? workflowResult("Absolutely — I can help with that. Before I unlock the showing form, what's your approximate credit score?", "ASK_CREDIT", "CREDIT_REQUIRED")
+            : workflowResult("Thanks. One last basic check before I unlock the showing form: about how much is your monthly income before taxes?", "ASK_INCOME", "INCOME_REQUIRED"),
+          messageId
+        )
         return
       }
       followUp = workflow.creditScore === null ? CREDIT_FOLLOW_UP : INCOME_FOLLOW_UP

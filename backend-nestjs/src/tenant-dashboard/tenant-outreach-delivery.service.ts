@@ -1,5 +1,9 @@
 import { Injectable, OnModuleDestroy } from '@nestjs/common';
 import { createHash } from 'crypto';
+import {
+  isGmailReconnectRequired,
+  refreshGmailAccessToken,
+} from '../common/gmail-oauth';
 import { SaasTenant } from '../saas-admin/entities/saas-tenant.entity';
 import { TenantDatabaseService } from '../tenant-database/tenant-database.service';
 import { TenantWorkspaceSettingsService } from './tenant-workspace-settings.service';
@@ -52,11 +56,14 @@ export class TenantOutreachDeliveryService implements OnModuleDestroy {
     if (!job.recipient_email) {
       throw new PermanentTenantDeliveryError('Recipient email is missing.');
     }
-    const config = tenant
+    let config = tenant
       ? await this.settings.getRawSmtp(tenant)
       : await this.setting(databaseName, 'outreach_email_provider');
     if (!config) {
       throw new PermanentTenantDeliveryError('This tenant has no email provider configured.');
+    }
+    if (tenant && this.text(config.authType).toLowerCase() === 'gmail-oauth') {
+      config = await this.ensureTenantGmailAccessToken(tenant, config);
     }
 
     const transport = this.mailTransport(databaseName, config);
@@ -87,6 +94,45 @@ export class TenantOutreachDeliveryService implements OnModuleDestroy {
       accepted: Array.isArray(info?.accepted) ? info.accepted : [],
       rejected: Array.isArray(info?.rejected) ? info.rejected : [],
     };
+  }
+
+  private async ensureTenantGmailAccessToken(tenant: SaasTenant, config: any) {
+    const expiresAt = config.gmailTokenExpiresAt
+      ? new Date(config.gmailTokenExpiresAt).getTime()
+      : 0;
+    if (config.gmailAccessToken && expiresAt > Date.now() + 60_000) return config;
+    const clientId = this.text(config.gmailClientId, process.env.GOOGLE_CLIENT_ID);
+    const clientSecret = this.text(config.gmailClientSecret, process.env.GOOGLE_CLIENT_SECRET);
+    const refreshToken = this.text(config.gmailRefreshToken);
+    if (!clientId || !clientSecret || !refreshToken) {
+      throw new PermanentTenantDeliveryError('Tenant Gmail OAuth configuration is incomplete.');
+    }
+    try {
+      const refreshed = await refreshGmailAccessToken({ clientId, clientSecret, refreshToken });
+      config.gmailAccessToken = refreshed.accessToken;
+      config.gmailTokenExpiresAt = refreshed.accessTokenExpiresAt;
+      config.gmailLastTokenRefreshAt = new Date().toISOString();
+      config.gmailReconnectRequired = false;
+      config.gmailLastAuthError = '';
+      config.gmailAuthFailedAt = null;
+      if (refreshed.refreshTokenExpiresAt) {
+        config.gmailRefreshTokenExpiresAt = refreshed.refreshTokenExpiresAt;
+      }
+      await this.settings.saveRawSmtp(tenant, config);
+      return config;
+    } catch (error) {
+      if (isGmailReconnectRequired(error)) {
+        config.enableInboxSync = false;
+        config.gmailAccessToken = '';
+        config.gmailTokenExpiresAt = null;
+        config.gmailReconnectRequired = true;
+        config.gmailLastAuthError = error instanceof Error ? error.message.slice(0, 500) : 'Gmail authorization expired.';
+        config.gmailAuthFailedAt = new Date().toISOString();
+        await this.settings.saveRawSmtp(tenant, config);
+        throw new PermanentTenantDeliveryError(config.gmailLastAuthError);
+      }
+      throw error;
+    }
   }
 
   private mailTransport(databaseName: string, config: any) {

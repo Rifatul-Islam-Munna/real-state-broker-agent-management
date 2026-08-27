@@ -376,7 +376,7 @@ export class TenantRealtorWorkflowService {
     );
     const expiryHours = Math.min(
       24 * 30,
-      Math.max(1, Number(dto.expiryHours) || 72),
+      Math.max(1, Number(dto.expiryHours) || 168),
     );
 
     const context = await this.databases.withTenantClient(
@@ -586,7 +586,7 @@ export class TenantRealtorWorkflowService {
       if (['submitted', 'approved', 'rejected'].includes(request.rows[0].status)) {
         throw new BadRequestException('Completed showing request cannot create another share link');
       }
-      const expiryHours = Math.min(24 * 30, Math.max(1, Number(dto?.expiryHours) || Number(request.rows[0].expiryHours) || 72));
+      const expiryHours = Math.min(24 * 30, Math.max(1, Number(dto?.expiryHours) || Number(request.rows[0].expiryHours) || 168));
       const token = randomBytes(36).toString('base64url');
       const expiresAt = new Date(Date.now() + expiryHours * 3_600_000);
       await client.query(
@@ -613,11 +613,6 @@ export class TenantRealtorWorkflowService {
     const realtorEmail = this.clean(dto.realtorEmail, 240).toLowerCase();
     const realtorPhone = this.clean(dto.realtorPhone, 80);
     const notes = this.clean(dto.notes, 4000);
-    if (!realtorName) {
-      throw new BadRequestException(
-        'Assign the showing realtor before approval',
-      );
-    }
     const actorUserId = Number(user?.id ?? user?.sub ?? 0) || null;
     let confirmationContext: any = null;
 

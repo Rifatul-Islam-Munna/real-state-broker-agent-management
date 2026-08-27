@@ -123,10 +123,25 @@ export function splitQuestionExamples(examples?: string[]) {
 }
 
 export function parseTestChatbotRole(value: string) {
-  const text = value.trim().toLowerCase()
-  if (/\b(realtor|real estate agent|broker|listing agent|buyer'?s agent)\b/.test(text)) return "REALTOR" as const
-  if (/\b(tenant|renter|applicant|renting|want to rent|looking to rent)\b/.test(text)) return "LEAD" as const
+  const text = value.trim().toLowerCase().replace(/[’']/g, "'")
+  if (/\b(realtor|real estate agent|broker|listing agent|buyers? agent|buyer'?s agent|represent(?:ing)? (?:a |my )?(?:buyer|client|tenant))\b/.test(text)) return "REALTOR" as const
+  if (/\b(tenant|renter|applicant|renting|rent this|rent it|want to rent|wanna rent|looking to rent|live here|move in|for myself|for us|my family|my spouse|my partner|buy this|buy it|wanna buy|want to buy)\b/.test(text)) return "LEAD" as const
   return null
+}
+
+export function parseTestShowingIntent(value: string) {
+  const text = value.trim().toLowerCase()
+    .replace(/shwoing|showng|shoing|showwing/g, "showing")
+    .replace(/vewing|viewng|veiwng|veiw/g, "viewing")
+    .replace(/tomm?or+ow|tomorow|tmrw/g, "tomorrow")
+  return Boolean(
+    /\b(showing|viewing|tour|walkthrough|open house)\b/.test(text) ||
+    /\bshow me (?:around|the (?:place|property|home|house|apartment|condo))\b/.test(text) ||
+    /\b(see|view|visit|check out|look at)\b.{0,28}\b(place|property|home|house|apartment|condo|unit)\b/.test(text) ||
+    /\b(come by|come over|see it in person|physically see|meet there|book|schedule|reserve|appointment|slot)\b/.test(text) ||
+    /\bwhen\b.{0,28}\b(showing|viewing|visit|tour|see|come by|come over)\b/.test(text) ||
+    /\b(showing|viewing|visit|tour)\b.{0,28}\b(possible|available|tomorrow|today|weekend|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/.test(text)
+  )
 }
 
 export function parseTestCredit(value: string) {

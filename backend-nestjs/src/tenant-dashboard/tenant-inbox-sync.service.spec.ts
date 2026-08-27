@@ -1669,3 +1669,55 @@ describe('TenantInboxSyncService active parser processing', () => {
     );
   });
 });
+
+describe('TenantInboxSyncService Gmail OAuth durability', () => {
+  const originalClientId = process.env.GOOGLE_CLIENT_ID;
+  const originalClientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  const originalFetch = global.fetch;
+
+  afterEach(() => {
+    process.env.GOOGLE_CLIENT_ID = originalClientId;
+    process.env.GOOGLE_CLIENT_SECRET = originalClientSecret;
+    global.fetch = originalFetch;
+    jest.restoreAllMocks();
+  });
+
+  test('preserves the refresh token and marks reconnect required when Google revokes authorization', async () => {
+    process.env.GOOGLE_CLIENT_ID = 'client-id';
+    process.env.GOOGLE_CLIENT_SECRET = 'client-secret';
+    global.fetch = jest.fn().mockResolvedValue(new Response(JSON.stringify({
+      error: 'invalid_grant',
+      error_description: 'Token has been expired or revoked.',
+    }), { status: 400 })) as any;
+    const settings = { saveRawSmtp: jest.fn().mockResolvedValue(undefined) };
+    const service = new TenantInboxSyncService(
+      {} as any,
+      {} as any,
+      settings as any,
+    );
+    const config = {
+      authType: 'gmail-oauth',
+      enableInboxSync: true,
+      gmailEmail: 'agent@example.com',
+      gmailAccessToken: 'expired-access',
+      gmailRefreshToken: 'refresh-token-to-preserve',
+      gmailTokenExpiresAt: '2020-01-01T00:00:00.000Z',
+    };
+
+    await expect((service as any).gmailAccessToken(
+      'tenant_1_demo',
+      config,
+      { databaseName: 'tenant_1_demo' } as any,
+    )).rejects.toMatchObject({ code: 'invalid_grant', reconnectRequired: true });
+    expect(settings.saveRawSmtp).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        enableInboxSync: false,
+        gmailEmail: 'agent@example.com',
+        gmailRefreshToken: 'refresh-token-to-preserve',
+        gmailReconnectRequired: true,
+        gmailAccessToken: '',
+      }),
+    );
+  });
+});

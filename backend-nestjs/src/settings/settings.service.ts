@@ -217,6 +217,7 @@ export class SettingsService {
     url.searchParams.set('response_type', 'code');
     url.searchParams.set('access_type', 'offline');
     url.searchParams.set('prompt', 'consent');
+    url.searchParams.set('include_granted_scopes', 'true');
     url.searchParams.set('scope', [
       'openid',
       'email',
@@ -237,6 +238,7 @@ export class SettingsService {
       throw new BadRequestException('GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_GMAIL_REDIRECT_URI are required.');
     }
     const parsedState = this.parseOauthState(state);
+    const existing = await this.getSmtpConfig();
     const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -251,14 +253,15 @@ export class SettingsService {
     if (!tokenResponse.ok) throw new BadRequestException('Gmail connection failed.');
     const token: any = await tokenResponse.json();
     const accessToken = this.loose(token.access_token);
-    const refreshToken = this.loose(token.refresh_token);
+    const refreshToken = this.loose(token.refresh_token, existing?.gmailRefreshToken);
     if (!accessToken || !refreshToken) throw new BadRequestException('Gmail did not return a refresh token. Reconnect and allow offline access.');
     const profileResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
     const profile: any = profileResponse.ok ? await profileResponse.json() : {};
-    const email = this.loose(profile.email);
+    const email = this.loose(profile.email, existing?.gmailEmail ?? existing?.username);
     await this.saveSmtpConfig({
+      ...(existing ?? {}),
       providerName: 'Gmail',
       authType: 'gmail-oauth',
       host: 'smtp.gmail.com',
@@ -285,6 +288,11 @@ export class SettingsService {
       gmailAccessToken: accessToken,
       gmailRefreshToken: refreshToken,
       gmailTokenExpiresAt: new Date(Date.now() + (Number(token.expires_in) || 3600) * 1000).toISOString(),
+      gmailRefreshTokenExpiresAt: Number(token.refresh_token_expires_in) > 0 ? new Date(Date.now() + Number(token.refresh_token_expires_in) * 1000).toISOString() : (existing?.gmailRefreshTokenExpiresAt ?? null),
+      gmailLastTokenRefreshAt: new Date().toISOString(),
+      gmailReconnectRequired: false,
+      gmailLastAuthError: '',
+      gmailAuthFailedAt: null,
       gmailLabelIds: ['INBOX'],
     });
     const base = this.loose(process.env.FRONTEND_URL, 'http://localhost:3000').replace(/\/+$/, '');
@@ -349,6 +357,11 @@ export class SettingsService {
       gmailAccessToken: this.loose(input?.gmailAccessToken),
       gmailRefreshToken: this.loose(input?.gmailRefreshToken),
       gmailTokenExpiresAt: this.nullText(input?.gmailTokenExpiresAt),
+      gmailRefreshTokenExpiresAt: this.nullText(input?.gmailRefreshTokenExpiresAt),
+      gmailLastTokenRefreshAt: this.nullText(input?.gmailLastTokenRefreshAt),
+      gmailReconnectRequired: input?.gmailReconnectRequired === true,
+      gmailLastAuthError: this.loose(input?.gmailLastAuthError),
+      gmailAuthFailedAt: this.nullText(input?.gmailAuthFailedAt),
       gmailLabelIds: this.stringList(input?.gmailLabelIds, ['INBOX']),
     };
   }
