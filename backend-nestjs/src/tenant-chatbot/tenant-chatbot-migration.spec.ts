@@ -26,6 +26,14 @@ describe('tenant chatbot migration', () => {
     expect(sql).toContain("'chatbot_settings'");
   });
 
+  it('backfills chatbot conversation workflow state for existing tenant databases', () => {
+    const migration = TENANT_DATABASE_MIGRATIONS.find((candidate) => candidate.version === 14);
+    const sql = migration?.statements.join('\n') ?? '';
+
+    expect(migration?.name).toBe('chatbot_conversation_workflow_state');
+    expect(sql).toContain('ADD COLUMN IF NOT EXISTS workflow_state');
+    expect(sql).toContain("DEFAULT 'ANSWERING'");
+  });
   it('adds durable lead controls and activity retention indexes', () => {
     const migration = TENANT_DATABASE_MIGRATIONS.find((candidate) => candidate.version === 13);
     const sql = migration?.statements.join('\n') ?? '';

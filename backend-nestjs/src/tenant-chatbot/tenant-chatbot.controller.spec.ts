@@ -91,4 +91,16 @@ describe('TenantChatbotController', () => {
     expect(service.stopLead).toHaveBeenCalledWith(tenant, 70, 9);
     expect(service.resumeLead).toHaveBeenCalledWith(tenant, 70, 9);
   });
+
+  it('returns the tenant-wide seven-day bot activity feed', async () => {
+    const service = {
+      listActivity: jest.fn().mockResolvedValue([{ id: 'event-1' }]),
+    };
+    const controller = new TenantChatbotController(service as any);
+
+    await expect(controller.botActivity(request)).resolves.toEqual([
+      { id: 'event-1' },
+    ]);
+    expect(service.listActivity).toHaveBeenCalledWith(tenant);
+  });
 });

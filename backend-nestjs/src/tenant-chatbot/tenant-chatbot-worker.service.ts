@@ -38,6 +38,13 @@ export class TenantChatbotWorkerService {
             `Chatbot inbound processing failed for ${tenant.databaseName}: ${message(error)}`,
           );
         }
+        try {
+          await this.chatbot.cleanupExpiredActivity(tenant);
+        } catch (error) {
+          this.logger.warn(
+            `Chatbot activity cleanup failed for ${tenant.databaseName}: ${message(error)}`,
+          );
+        }
       }
     } finally {
       this.running = false;
@@ -98,6 +105,8 @@ export class TenantChatbotWorkerService {
           sessionId: `${String(row.channel).toLowerCase()}:${row.leadId}`,
           idempotencyKey: `inbound:${row.id}`,
           body: String(row.body ?? '').slice(0, 4_000),
+          realtorVerified: row.verifiedRealtor === true,
+          requireRoleConfirmation: true,
         });
         processed += 1;
       } catch (error) {

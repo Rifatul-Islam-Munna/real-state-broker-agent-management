@@ -3,6 +3,7 @@ import { QdrantKnowledgeService } from './qdrant-knowledge.service';
 
 describe('QdrantKnowledgeService', () => {
   const vector = Array.from({ length: 384 }, () => 0.01);
+  const modelSignature = 'snowflake/snowflake-arctic-embed-xs|q8|384|cls|arctic-query-v1';
   const config = {
     url: 'http://qdrant:6333',
     apiKey: 'secret-key',
@@ -54,6 +55,7 @@ describe('QdrantKnowledgeService', () => {
               sourceHash: 'abc',
               priority: 80,
               active: true,
+              embeddingModelSignature: modelSignature,
             },
           },
         ],
@@ -68,6 +70,7 @@ describe('QdrantKnowledgeService', () => {
       propertyId: 41,
       vector,
       limit: 5,
+      modelSignature,
     });
 
     expect(matches[0]).toMatchObject({
@@ -98,7 +101,7 @@ describe('QdrantKnowledgeService', () => {
     const client = { query: jest.fn().mockResolvedValue({ points: [] }) };
     const service = new QdrantKnowledgeService(config, client as any);
 
-    await service.search({ scope: 'PLATFORM', audience: 'REALTOR', vector });
+    await service.search({ scope: 'PLATFORM', audience: 'REALTOR', vector, modelSignature });
 
     const request = client.query.mock.calls[0][1];
     expect(request.filter.must).toEqual(
@@ -124,6 +127,7 @@ describe('QdrantKnowledgeService', () => {
         scope: 'TENANT',
         audience: 'LEAD',
         vector,
+        modelSignature,
       }),
     ).rejects.toThrow('tenantId');
   });
@@ -148,6 +152,7 @@ describe('QdrantKnowledgeService', () => {
           sourceHash: 'safe-hash',
           priority: 50,
           active: true,
+          embeddingModelSignature: modelSignature,
         },
         sourceText: 'owner secret should never be sent',
       } as any,
@@ -165,6 +170,7 @@ describe('QdrantKnowledgeService', () => {
       sourceHash: 'safe-hash',
       priority: 50,
       active: true,
+      embeddingModelSignature: modelSignature,
     });
     expect(JSON.stringify(request)).not.toContain('owner secret');
   });

@@ -18,6 +18,7 @@ const DEFAULT_STOP_RULES: ChatbotSettings['stopRules'] = {
 export function defaultChatbotSettings(): ChatbotSettings {
   return {
     enabled: false,
+    showingRequestTemplateId: null,
     channels: {
       web: false,
       email: false,
@@ -53,6 +54,7 @@ export function normalizeChatbotSettings(
 
   return {
     enabled: input?.enabled === true,
+    showingRequestTemplateId: templateId(input?.showingRequestTemplateId),
     channels: {
       web: channels.web === true,
       email: channels.email === true,
@@ -109,6 +111,12 @@ export function normalizeChatbotSettings(
       turnLimit: rules.turnLimit !== false,
     },
   };
+}
+
+function templateId(value: unknown) {
+  if (typeof value !== 'string') return null;
+  const id = value.trim();
+  return id ? id.slice(0, 160) : null;
 }
 
 export function evaluateChatbotPolicy(

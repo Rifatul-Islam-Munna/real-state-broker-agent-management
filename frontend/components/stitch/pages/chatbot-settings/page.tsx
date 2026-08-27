@@ -8,12 +8,10 @@ import {
   type ChangeEvent,
   type FormEvent,
 } from "react"
+import type { AgencyCommunicationTemplateItem } from "@/@types/real-estate-api"
 import {
   BotIcon,
   BookOpenIcon,
-  Building2Icon,
-  CheckIcon,
-  ChevronsUpDownIcon,
   GaugeIcon,
   LockKeyholeIcon,
   RefreshCwIcon,
@@ -27,14 +25,6 @@ import { toast } from "sonner"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command"
 import {
   Card,
   CardContent,
@@ -50,7 +40,7 @@ import {
   FieldLabel,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { ChatbotPropertyPicker } from "@/components/chatbot-property-picker"
 import { Slider } from "@/components/ui/slider"
 import { Spinner } from "@/components/ui/spinner"
 import {
@@ -77,11 +67,13 @@ import {
   priorityPreset,
   type KnowledgePropertyLike,
 } from "@/lib/chatbot-knowledge-targeting"
+import { composeQuestionExamples, splitIndexedKnowledge } from "@/lib/chatbot-operations"
 
 type Props = {
   initialSettings: ChatbotSettings
   initialKnowledge: ChatbotKnowledge[]
   initialProperties: KnowledgePropertyLike[]
+  showingTemplates: AgencyCommunicationTemplateItem[]
 }
 
 type BooleanGroup = "channels" | "stopRules"
@@ -123,13 +115,13 @@ export function ChatbotSettingsPage({
   initialSettings,
   initialKnowledge,
   initialProperties,
+  showingTemplates,
 }: Props) {
   const [settings, setSettings] = useState(initialSettings)
   const [knowledge, setKnowledge] = useState(initialKnowledge)
   const [knowledgeAudience, setKnowledgeAudience] = useState<"LEAD" | "REALTOR">("LEAD")
   const [knowledgePropertyId, setKnowledgePropertyId] = useState("")
   const [knowledgePriority, setKnowledgePriority] = useState(50)
-  const [propertyPickerOpen, setPropertyPickerOpen] = useState(false)
   const [isSaving, startSaving] = useTransition()
   const [isAdding, startAdding] = useTransition()
   const [isManaging, startManaging] = useTransition()
@@ -137,9 +129,9 @@ export function ChatbotSettingsPage({
     () => initialProperties.map(formatKnowledgeProperty),
     [initialProperties]
   )
-  const selectedKnowledgeProperty = useMemo(
-    () => formattedProperties.find((item) => String(item.id) === knowledgePropertyId) ?? null,
-    [formattedProperties, knowledgePropertyId]
+  const indexedKnowledge = useMemo(
+    () => splitIndexedKnowledge(knowledge),
+    [knowledge]
   )
 
   const updateBoolean = useCallback(
@@ -154,6 +146,13 @@ export function ChatbotSettingsPage({
 
   const handleEnabledChange = useCallback((checked: boolean) => {
     setSettings((current) => ({ ...current, enabled: checked }))
+  }, [])
+
+  const handleShowingTemplateChange = useCallback((value: string) => {
+    setSettings((current) => ({
+      ...current,
+      showingRequestTemplateId: value === "none" ? null : value,
+    }))
   }, [])
 
   const handleNumberChange = useCallback(
@@ -174,10 +173,8 @@ export function ChatbotSettingsPage({
 
   const handleLeadAudience = useCallback(() => setKnowledgeAudience("LEAD"), [])
   const handleRealtorAudience = useCallback(() => setKnowledgeAudience("REALTOR"), [])
-  const handlePropertySelect = useCallback((value: string) => {
-    const [id] = value.split(" ")
-    setKnowledgePropertyId(id === "0" ? "" : id)
-    setPropertyPickerOpen(false)
+  const handlePropertySelect = useCallback((value: number | null) => {
+    setKnowledgePropertyId(value ? String(value) : "")
   }, [])
   const handlePriorityChange = useCallback((value: number | readonly number[]) => {
     setKnowledgePriority(Array.isArray(value) ? (value[0] ?? 50) : value)
@@ -213,10 +210,10 @@ export function ChatbotSettingsPage({
               String(data.get("audience")) === "REALTOR" ? "REALTOR" : "LEAD",
             title: String(data.get("title") ?? ""),
             answer: String(data.get("answer") ?? ""),
-            questionExamples: String(data.get("questionExamples") ?? "")
-              .split("\n")
-              .map((item) => item.trim())
-              .filter(Boolean),
+            questionExamples: composeQuestionExamples(
+              String(data.get("mainQuestion") ?? ""),
+              String(data.get("similarQuestions") ?? "")
+            ),
             priority: Number(data.get("priority")) || 50,
           })
           setKnowledge((current) => [created, ...current])
@@ -224,7 +221,6 @@ export function ChatbotSettingsPage({
           setKnowledgeAudience("LEAD")
           setKnowledgePropertyId("")
           setKnowledgePriority(50)
-          setPropertyPickerOpen(false)
           toast.success("Knowledge added and indexed")
         } catch (error) {
           toast.error(
@@ -248,10 +244,10 @@ export function ChatbotSettingsPage({
               String(data.get("audience")) === "REALTOR" ? "REALTOR" : "LEAD",
             title: String(data.get("title") ?? ""),
             answer: String(data.get("answer") ?? ""),
-            questionExamples: String(data.get("questionExamples") ?? "")
-              .split("\n")
-              .map((item) => item.trim())
-              .filter(Boolean),
+            questionExamples: composeQuestionExamples(
+              String(data.get("mainQuestion") ?? ""),
+              String(data.get("similarQuestions") ?? "")
+            ),
             priority: Number(data.get("priority")) || 50,
           })
           setKnowledge((current) =>
@@ -407,6 +403,30 @@ export function ChatbotSettingsPage({
                   label="SMS"
                   onChange={updateBoolean}
                 />
+                <Field>
+                  <FieldLabel>Showing request template</FieldLabel>
+                  <Select
+                    value={settings.showingRequestTemplateId ?? "none"}
+                    onValueChange={handleShowingTemplateChange}
+                  >
+                    <SelectTrigger aria-label="Showing request template">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
+                        <SelectItem value="none">Built-in confirmation</SelectItem>
+                        {showingTemplates.map((template) => (
+                          <SelectItem key={template.id} value={template.id}>
+                            {template.name}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                  <FieldDescription>
+                    Used only after property, date/time, contact, and explicit confirmation checks pass.
+                  </FieldDescription>
+                </Field>
               </FieldGroup>
             </CardContent>
           </Card>
@@ -660,17 +680,26 @@ export function ChatbotSettingsPage({
                     />
                   </Field>
                   <Field>
-                    <FieldLabel htmlFor="knowledge-questions">
-                      Example questions
-                    </FieldLabel>
-                    <Textarea
-                      id="knowledge-questions"
-                      name="questionExamples"
-                      placeholder={"Is parking included?\nCan I park an SUV?"}
+                    <FieldLabel htmlFor="knowledge-main-question">Main question</FieldLabel>
+                    <Input
+                      id="knowledge-main-question"
+                      name="mainQuestion"
+                      required
+                      placeholder="Can I park my car?"
                     />
+                    <FieldDescription>Write the clearest version of the question this answer should handle.</FieldDescription>
                   </Field>
-                  <div className="grid gap-4 sm:grid-cols-3">
-                    <Field>
+                  <Field>
+                    <FieldLabel htmlFor="knowledge-similar-questions">Similar ways people may ask</FieldLabel>
+                    <Textarea
+                      id="knowledge-similar-questions"
+                      name="similarQuestions"
+                      placeholder={"Is parking included?\nWhere do I park?\nCan I park an SUV?\nDo I get a guest parking spot?"}
+                    />
+                    <FieldDescription>One phrase per line. Add slang, short versions, spelling variations, and natural wording.</FieldDescription>
+                  </Field>
+                  <div className="grid gap-4 lg:grid-cols-2">
+                    <Field className="lg:col-span-2">
                       <FieldLabel>Audience</FieldLabel>
                       <input type="hidden" name="audience" value={knowledgeAudience} />
                       <div className="grid grid-cols-2 gap-2">
@@ -688,37 +717,15 @@ export function ChatbotSettingsPage({
                     <Field>
                       <FieldLabel>Property</FieldLabel>
                       <input type="hidden" name="propertyId" value={knowledgePropertyId} />
-                      <Popover open={propertyPickerOpen} onOpenChange={setPropertyPickerOpen}>
-                        <PopoverTrigger render={<Button type="button" variant="outline" className="h-auto min-h-11 w-full justify-between px-3 py-2 shadow-none" />}>
-                          <span className="min-w-0 text-left">
-                            <span className="block truncate font-medium">{selectedKnowledgeProperty?.title ?? "All properties"}</span>
-                            <span className="block truncate text-xs font-normal text-muted-foreground">{selectedKnowledgeProperty ? `${selectedKnowledgeProperty.address} · ${selectedKnowledgeProperty.status}` : "Tenant-wide knowledge"}</span>
-                          </span>
-                          <ChevronsUpDownIcon className="size-4 shrink-0 opacity-60" />
-                        </PopoverTrigger>
-                        <PopoverContent align="start" className="w-[min(32rem,calc(100vw-2rem))] p-1">
-                          <Command>
-                            <CommandInput placeholder="Search title, address or status..." />
-                            <CommandList>
-                              <CommandEmpty>No matching property found.</CommandEmpty>
-                              <CommandGroup heading="Properties">
-                                <CommandItem value="0 all properties tenant wide" onSelect={handlePropertySelect}>
-                                  <Building2Icon className="size-4" />
-                                  <div><p className="font-medium">All properties</p><p className="text-xs text-muted-foreground">Use this fact tenant-wide</p></div>
-                                  {!knowledgePropertyId ? <CheckIcon className="ml-auto size-4" /> : null}
-                                </CommandItem>
-                                {formattedProperties.map((property) => (
-                                  <CommandItem key={property.id} value={`${property.id} ${property.title} ${property.address} ${property.status}`} onSelect={handlePropertySelect}>
-                                    <Building2Icon className="size-4" />
-                                    <div className="min-w-0"><p className="truncate font-medium">{property.title}</p><p className="truncate text-xs text-muted-foreground">{property.address}</p></div>
-                                    <Badge variant="outline" className="ml-auto shrink-0">{property.status}</Badge>
-                                  </CommandItem>
-                                ))}
-                              </CommandGroup>
-                            </CommandList>
-                          </Command>
-                        </PopoverContent>
-                      </Popover>
+                      <ChatbotPropertyPicker
+                        id="knowledge-property"
+                        properties={formattedProperties}
+                        value={Number(knowledgePropertyId) || null}
+                        onValueChange={handlePropertySelect}
+                      />
+                      <FieldDescription>
+                        Search by property title or address. Leave empty for tenant-wide knowledge.
+                      </FieldDescription>
                     </Field>
                     <Field>
                       <FieldLabel className="flex items-center justify-between"><span>Priority</span><Badge variant="secondary">{knowledgePriority}/100</Badge></FieldLabel>
@@ -757,8 +764,8 @@ export function ChatbotSettingsPage({
                   <BookOpenIcon /> Indexed knowledge
                 </CardTitle>
                 <CardDescription>
-                  {knowledge.length} verified knowledge item
-                  {knowledge.length === 1 ? "" : "s"}.
+                  {indexedKnowledge.manual.length} custom item
+                  {indexedKnowledge.manual.length === 1 ? "" : "s"} · {indexedKnowledge.propertyCount} property facts synced privately.
                 </CardDescription>
               </div>
               <Button
@@ -777,13 +784,12 @@ export function ChatbotSettingsPage({
               </Button>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
-              {knowledge.length === 0 ? (
+              {indexedKnowledge.manual.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
-                  No tenant knowledge has been added yet. Property fields are
-                  indexed separately.
+                  No custom knowledge added. Property facts remain indexed for chatbot answers.
                 </p>
               ) : (
-                knowledge.map((item) => (
+                indexedKnowledge.manual.map((item) => (
                   <article
                     key={item.id}
                     className="flex flex-col gap-3 rounded-xl border p-4"
@@ -826,14 +832,17 @@ export function ChatbotSettingsPage({
                               maxLength={240}
                               aria-label="Knowledge title"
                             />
-                            <Input
-                              name="propertyId"
-                              type="number"
-                              min="1"
-                              defaultValue={item.propertyId ?? ""}
-                              placeholder="All properties"
-                              aria-label="Property ID"
-                            />
+                            <Select name="propertyId" defaultValue={String(item.propertyId ?? "all")}>
+                              <SelectTrigger aria-label="Knowledge property"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectGroup>
+                                  <SelectItem value="all">All properties</SelectItem>
+                                  {formattedProperties.map((property) => (
+                                    <SelectItem key={property.id} value={String(property.id)}>{property.title}</SelectItem>
+                                  ))}
+                                </SelectGroup>
+                              </SelectContent>
+                            </Select>
                           </div>
                           <Textarea
                             name="answer"
@@ -841,13 +850,17 @@ export function ChatbotSettingsPage({
                             required
                             aria-label="Verified answer"
                           />
+                          <Input
+                            name="mainQuestion"
+                            defaultValue={item.questionExamples?.[0] ?? ""}
+                            placeholder="Main question"
+                            aria-label="Main question"
+                          />
                           <Textarea
-                            name="questionExamples"
-                            defaultValue={(item.questionExamples ?? []).join(
-                              "\n"
-                            )}
-                            placeholder="One example question per line"
-                            aria-label="Example questions"
+                            name="similarQuestions"
+                            defaultValue={(item.questionExamples ?? []).slice(1).join("\n")}
+                            placeholder="Similar ways people may ask — one per line"
+                            aria-label="Similar questions"
                           />
                           <div className="grid gap-3 sm:grid-cols-2">
                             <Select
@@ -858,10 +871,10 @@ export function ChatbotSettingsPage({
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="LEAD">Lead</SelectItem>
-                                <SelectItem value="REALTOR">
-                                  Realtor only
-                                </SelectItem>
+                                <SelectGroup>
+                                  <SelectItem value="LEAD">Lead</SelectItem>
+                                  <SelectItem value="REALTOR">Realtor only</SelectItem>
+                                </SelectGroup>
                               </SelectContent>
                             </Select>
                             <Input

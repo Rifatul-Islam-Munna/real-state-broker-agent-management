@@ -16,8 +16,13 @@ export type ChatbotDecisionReason =
   | 'HUMAN_INTERVENED'
   | 'DO_NOT_CONTACT'
   | 'PROPERTY_UNAVAILABLE'
+  | 'ROLE_REQUIRED'
+  | 'ROLE_CAPTURED'
   | 'CREDIT_REQUIRED'
   | 'CREDIT_BELOW_MINIMUM'
+  | 'INCOME_REQUIRED'
+  | 'INCOME_BELOW_MINIMUM'
+  | 'QUALIFIED'
   | 'EVIDENCE_INSUFFICIENT'
   | 'EVIDENCE_CONFLICT'
   | 'TURN_LIMIT'
@@ -28,6 +33,7 @@ export type ChatbotDecisionReason =
 
 export type ChatbotSettings = {
   enabled: boolean;
+  showingRequestTemplateId: string | null;
   channels: {
     web: boolean;
     email: boolean;
@@ -75,7 +81,9 @@ export type ChatbotPolicyContext = {
 export type ChatbotPolicyDecision = {
   action:
     | 'ALLOW_RETRIEVAL'
+    | 'ASK_ROLE'
     | 'ASK_CREDIT'
+    | 'ASK_INCOME'
     | 'ANSWER'
     | 'CREATE_SHOWING_REQUEST'
     | 'STOP';

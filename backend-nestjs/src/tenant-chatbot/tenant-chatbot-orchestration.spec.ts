@@ -19,9 +19,14 @@ describe('Tenant chatbot message orchestration', () => {
         work({ query }),
       ),
     };
-    const embeddings = { embed: jest.fn(async () => Array(384).fill(0.01)) };
+    const embeddings = { embed: jest.fn(async () => Array(384).fill(0.01)), modelSignature: jest.fn(() => 'Snowflake/snowflake-arctic-embed-xs|q8|cls|384') };
     const vectors = {
       isConfigured: jest.fn(() => configured),
+      healthCheck: jest.fn(async () => ({
+        configured,
+        connected: configured,
+        error: configured ? null : 'not configured',
+      })),
       search: jest
         .fn()
         .mockResolvedValueOnce([
@@ -150,7 +155,7 @@ describe('Tenant chatbot message orchestration', () => {
       ),
     ).toHaveLength(1);
   });
-  it('queues the tenant credit-rejection message once before stopping automation', async () => {
+  it('answers a safe property question first even when the saved credit is below minimum', async () => {
     const creditSettings = normalizeChatbotSettings({
       ...settings,
       creditRejectedMessage:
@@ -229,17 +234,17 @@ describe('Tenant chatbot message orchestration', () => {
         body: 'Is parking included?',
       }),
     ).resolves.toMatchObject({
-      decision: 'STOP',
-      reason: 'CREDIT_BELOW_MINIMUM',
+      decision: 'ANSWER',
+      reason: 'EVIDENCE_VERIFIED',
       queued: true,
-      answer: creditSettings.creditRejectedMessage,
+      answer: 'Parking is included.',
     });
 
     const enqueue = query.mock.calls.find(([sql]) =>
       sql.includes('INSERT INTO tenant_outreach_job'),
     );
     expect(enqueue?.[1]).toEqual(
-      expect.arrayContaining([creditSettings.creditRejectedMessage]),
+      expect.arrayContaining(['Parking is included.']),
     );
     expect(
       query.mock.calls.filter(([sql]) =>
@@ -414,9 +419,36 @@ describe('Tenant chatbot message orchestration', () => {
   });
 
   it('creates one submitted showing request only after explicit confirmation', async () => {
-    const query = jest.fn(async (sql: string) => {
+    const selectedSettings = normalizeChatbotSettings({
+      ...settings,
+      showingRequestTemplateId: 'lead-showing-confirmation',
+    });
+    const query = jest.fn(async (sql: string, params?: unknown[]) => {
+      if (
+        sql.includes('SELECT value FROM tenant_setting') &&
+        params?.[0] === 'agency_workspace_settings'
+      )
+        return {
+          rows: [
+            {
+              value: {
+                profile: { agencyName: 'Alpha Realty' },
+                communicationTemplates: [
+                  {
+                    id: 'lead-showing-confirmation',
+                    name: 'Lead Showing Confirmation',
+                    audience: 'LeadShowing',
+                    isActive: true,
+                    subject: 'Tour request: {{property_address}}',
+                    body: 'Hi {{client_name}}, requested {{property_address}} at {{showing_time}} with {{agency_name}}.',
+                  },
+                ],
+              },
+            },
+          ],
+        };
       if (sql.includes('SELECT value FROM tenant_setting'))
-        return { rows: [{ value: settings }] };
+        return { rows: [{ value: selectedSettings }] };
       if (
         sql.includes('FROM tenant_property') &&
         !sql.includes('tenant_chatbot_knowledge')
@@ -451,7 +483,7 @@ describe('Tenant chatbot message orchestration', () => {
               fullName: 'Sam Lead',
               email: 'sam@example.com',
               phone: '555',
-              payload: {},
+              payload: { creditScore: 720, monthlyEarning: 6000 },
               doNotContact: false,
             },
           ],
@@ -495,6 +527,12 @@ describe('Tenant chatbot message orchestration', () => {
       sql.includes('INSERT INTO tenant_showing_request'),
     );
     expect(insert?.[0]).toContain("'submitted', 'submitted'");
+    expect(insert?.[1]).toEqual(
+      expect.arrayContaining([
+        'Tour request: Oak Home',
+        expect.stringContaining('Hi Sam Lead, requested Oak Home at'),
+      ]),
+    );
     expect(
       query.mock.calls.filter(([sql]) =>
         sql.includes('INSERT INTO tenant_showing_request'),
@@ -503,5 +541,56 @@ describe('Tenant chatbot message orchestration', () => {
     expect(
       query.mock.calls.some(([sql]) => sql.includes("'SHOWING_REQUESTED'")),
     ).toBe(true);
+  });
+
+  it('does not create a confirmed showing without lead contact details', async () => {
+    const query = jest.fn(async (sql: string) => {
+      if (sql.includes('SELECT value FROM tenant_setting'))
+        return { rows: [{ value: settings }] };
+      if (sql.includes('FROM tenant_property'))
+        return {
+          rows: [
+            { id: 9, title: 'Oak Home', status: 'published', payload: {} },
+          ],
+        };
+      if (sql.includes('FROM tenant_chatbot_knowledge')) return { rows: [] };
+      if (sql.includes('FROM tenant_lead l'))
+        return {
+          rows: [
+            {
+              id: 7,
+              fullName: 'Sam Lead',
+              email: '',
+              phone: '',
+              payload: {},
+              doNotContact: false,
+            },
+          ],
+        };
+      if (sql.includes('FROM tenant_chatbot_conversation'))
+        return { rows: [] };
+      if (sql.includes('INSERT INTO tenant_chatbot_conversation'))
+        return { rows: [{ id: '32', status: 'ACTIVE', turnCount: 0 }] };
+      if (sql.includes('INSERT INTO tenant_chatbot_message'))
+        return { rows: [{ id: '101' }] };
+      return { rows: [] };
+    });
+    const { service } = build(query);
+
+    await service.handleMessage(tenant, {
+      channel: 'WEB',
+      leadId: 7,
+      propertyId: 9,
+      sessionId: 'web-3',
+      idempotencyKey: 'web-message-3',
+      body: 'Yes, book the tour.',
+      showing: { confirmed: true, preferredAt: '2026-09-01T10:00:00Z' },
+    });
+
+    expect(
+      query.mock.calls.some(([sql]) =>
+        sql.includes('INSERT INTO tenant_showing_request'),
+      ),
+    ).toBe(false);
   });
 });

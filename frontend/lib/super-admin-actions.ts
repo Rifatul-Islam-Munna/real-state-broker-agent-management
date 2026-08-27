@@ -183,7 +183,7 @@ export async function createPlatformChatbotKnowledgeAction(formData: FormData) {
       audience: formData.get("audience"),
       title: formData.get("title"),
       answer: formData.get("answer"),
-      questionExamples: String(formData.get("questionExamples") ?? "").split("\n").map((item) => item.trim()).filter(Boolean),
+      questionExamples: [String(formData.get("mainQuestion") ?? ""), ...String(formData.get("similarQuestions") ?? "").split("\n")].map((item) => item.trim()).filter(Boolean),
       priority: Number(formData.get("priority") ?? 50),
     }),
   })
@@ -198,7 +198,7 @@ export async function updatePlatformChatbotKnowledgeAction(formData: FormData) {
       audience: formData.get("audience"),
       title: formData.get("title"),
       answer: formData.get("answer"),
-      questionExamples: String(formData.get("questionExamples") ?? "").split("\n").map((item) => item.trim()).filter(Boolean),
+      questionExamples: [String(formData.get("mainQuestion") ?? ""), ...String(formData.get("similarQuestions") ?? "").split("\n")].map((item) => item.trim()).filter(Boolean),
       priority: Number(formData.get("priority") ?? 50),
       active: formData.get("active") === "true",
     }),

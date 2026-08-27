@@ -2,6 +2,8 @@
 
 import { cookies, headers } from "next/headers"
 import { revalidatePath } from "next/cache"
+import type { AgencyCommunicationTemplateItem } from "@/@types/real-estate-api"
+import { leadShowingTemplates, type BotActivityItem } from "@/lib/chatbot-operations"
 
 const baseUrl = process.env.BASE_URL ?? "http://localhost:4000/api"
 
@@ -35,6 +37,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 export type ChatbotSettings = {
   enabled: boolean
+  showingRequestTemplateId: string | null
   channels: { web: boolean; email: boolean; sms: boolean }
   minimumConfidence: number
   responseDelaySeconds: number
@@ -82,7 +85,7 @@ export type ChatbotKnowledge = {
 
 export type ChatbotTestResult = {
   answer: string
-  decision: "ANSWER" | "STOP" | "ASK_CREDIT" | "CREATE_SHOWING_REQUEST"
+  decision: "ANSWER" | "STOP" | "ASK_ROLE" | "ASK_CREDIT" | "ASK_INCOME" | "CREATE_SHOWING_REQUEST"
   reason: string
   confidence: number | null
   evidence: Array<{
@@ -104,6 +107,17 @@ export async function getChatbotInfrastructureStatus() {
 
 export async function listChatbotKnowledge() {
   return request<ChatbotKnowledge[]>("/tenant-chatbot/knowledge")
+}
+
+export async function listBotActivity() {
+  return request<BotActivityItem[]>("/tenant-chatbot/activity")
+}
+
+export async function listChatbotShowingTemplates() {
+  const settings = await request<{
+    communicationTemplates: AgencyCommunicationTemplateItem[]
+  }>("/tenant-workspace/agency-settings")
+  return leadShowingTemplates(settings.communicationTemplates ?? [])
 }
 
 export async function saveChatbotSettings(input: ChatbotSettings) {
@@ -136,6 +150,7 @@ export async function testChatbot(input: {
   audience: "LEAD" | "REALTOR"
   channel?: "WEB" | "EMAIL" | "SMS"
   question: string
+  allowSensitiveRealtorEvidence?: boolean
 }) {
   return request<ChatbotTestResult>("/tenant-chatbot/test", {
     method: "POST",

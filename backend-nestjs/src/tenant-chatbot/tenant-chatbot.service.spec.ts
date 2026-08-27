@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { normalizeChatbotSettings } from './tenant-chatbot-policy';
 import { TenantChatbotService } from './tenant-chatbot.service';
 
@@ -25,6 +26,7 @@ describe('TenantChatbotService', () => {
     };
     const embeddings = {
       embed: jest.fn(async () => vector),
+      modelSignature: jest.fn(() => 'snowflake/snowflake-arctic-embed-xs|q8|384|cls|arctic-query-v1'),
     };
     const vectors = {
       isConfigured: jest.fn(() => true),
@@ -91,6 +93,13 @@ describe('TenantChatbotService', () => {
         sql.includes('INSERT INTO tenant_audit_log'),
       ),
     ).toBe(true);
+    const auditSql = query.mock.calls.find(([sql]) =>
+      sql.includes('INSERT INTO tenant_audit_log'),
+    )?.[0];
+    expect(auditSql).toContain(
+      'tenant_audit_log(action, actor_master_user_id, summary, metadata)',
+    );
+    expect(auditSql).not.toContain('resource_type');
   });
 
   it('keeps chatbot settings isolated per tenant database', async () => {
@@ -195,7 +204,7 @@ describe('TenantChatbotService', () => {
       answer: 'The property includes a private driveway.',
       decision: 'ANSWER',
       reason: 'EVIDENCE_VERIFIED',
-      confidence: 0.93,
+      confidence: 0.95,
     });
     expect(result.evidence[0]).toMatchObject({
       knowledgeId: '91',
@@ -223,7 +232,7 @@ describe('TenantChatbotService', () => {
     ).toBe(false);
   });
 
-  it('returns realtor-only lockbox knowledge when the trusted audience is REALTOR', async () => {
+  it('keeps lockbox knowledge blocked in safe test mode even for REALTOR audience', async () => {
     const query = jest.fn(async (sql: string) => {
       if (sql.includes('SELECT value FROM tenant_setting'))
         return { rows: [{ value: activeSettings }] };
@@ -247,7 +256,7 @@ describe('TenantChatbotService', () => {
               scope: 'PROPERTY',
               audience: 'REALTOR',
               title: 'Lockbox code',
-              answer: 'Lockbox code: 8472',
+              answer: 'The lockbox code is 8472.',
               priority: 100,
               active: true,
               sourceType: 'PROPERTY_FIELD',
@@ -283,9 +292,9 @@ describe('TenantChatbotService', () => {
         question: 'What is the lockbox code?',
       }),
     ).resolves.toMatchObject({
-      decision: 'ANSWER',
-      answer: 'Lockbox code: 8472',
-      confidence: 0.97,
+      decision: 'STOP',
+      answer: 'I do not have enough verified information to answer that. A team member can help.',
+      confidence: null,
     });
     expect(search).toHaveBeenNthCalledWith(
       1,
@@ -359,7 +368,7 @@ describe('TenantChatbotService', () => {
       low.service.testQuestion(tenant, {
         propertyId: 41,
         audience: 'LEAD',
-        question: 'Are pets allowed?',
+        question: 'What is the monthly rent?',
       }),
     ).resolves.toMatchObject({
       decision: 'STOP',
@@ -409,6 +418,329 @@ describe('TenantChatbotService', () => {
     ).resolves.toMatchObject({
       decision: 'STOP',
       reason: 'EVIDENCE_CONFLICT',
+    });
+  });
+
+  it('does not call unrelated words inside listing text conflicting evidence', async () => {
+    const query = jest.fn(async (sql: string) => {
+      if (sql.includes('SELECT value FROM tenant_setting')) {
+        return { rows: [{ value: activeSettings }] };
+      }
+      if (sql.includes('FROM tenant_property')) {
+        return {
+          rows: [{ id: 41, title: 'Lime Bay', status: 'published', payload: {} }],
+        };
+      }
+      if (sql.includes('FROM tenant_chatbot_knowledge')) {
+        return {
+          rows: [
+            {
+              id: 'credit', propertyId: 41, scope: 'PROPERTY', audience: 'LEAD',
+              sourceType: 'PROPERTY_FIELD', title: 'Minimum credit score',
+              answer: 'The minimum credit score is 720.', priority: 90, active: true,
+            },
+            {
+              id: 'description', propertyId: 41, scope: 'PROPERTY', audience: 'LEAD',
+              sourceType: 'PROPERTY_FIELD', title: 'Description',
+              answer: 'No co-signers allowed. Smoking is not allowed.', priority: 80, active: true,
+            },
+          ],
+        };
+      }
+      return { rows: [] };
+    });
+    const state = serviceWith(query, {
+      search: jest.fn()
+        .mockResolvedValueOnce([
+          {
+            pointId: 'credit', score: 0.91, scope: 'PROPERTY', tenantId: 42,
+            audience: 'LEAD', propertyId: 41, knowledgeId: 'credit',
+            sourceType: 'PROPERTY_FIELD', sourceHash: 'credit', priority: 90, active: true,
+          },
+          {
+            pointId: 'description', score: 0.89, scope: 'PROPERTY', tenantId: 42,
+            audience: 'LEAD', propertyId: 41, knowledgeId: 'description',
+            sourceType: 'PROPERTY_FIELD', sourceHash: 'description', priority: 80, active: true,
+          },
+        ])
+        .mockResolvedValueOnce([]),
+    });
+
+    await expect(state.service.testQuestion(tenant, {
+      propertyId: 41,
+      audience: 'LEAD',
+      question: 'What is the minimum credit score?',
+    })).resolves.toMatchObject({
+      decision: 'ANSWER',
+      answer: 'The minimum credit score is 720.',
+    });
+  });
+
+  it('accepts a lexical field match when MiniLM scores a misspelled question weakly', async () => {
+    const query = jest.fn(async (sql: string) => {
+      if (sql.includes('SELECT value FROM tenant_setting')) {
+        return { rows: [{ value: activeSettings }] };
+      }
+      if (sql.includes('FROM tenant_property')) {
+        return {
+          rows: [{ id: 41, title: 'Lime Bay', status: 'published', payload: {} }],
+        };
+      }
+      if (sql.includes('FROM tenant_chatbot_knowledge')) {
+        return {
+          rows: [{
+            id: 'credit', propertyId: 41, scope: 'PROPERTY', audience: 'LEAD',
+            sourceType: 'PROPERTY_FIELD', title: 'Minimum credit score',
+            answer: 'Minimum credit score: 720', priority: 50, active: true,
+          }],
+        };
+      }
+      return { rows: [] };
+    });
+    const state = serviceWith(query, {
+      search: jest.fn()
+        .mockResolvedValueOnce([{
+          pointId: 'credit', score: 0.5, scope: 'PROPERTY', tenantId: 42,
+          audience: 'LEAD', propertyId: 41, knowledgeId: 'credit',
+          sourceType: 'PROPERTY_FIELD', sourceHash: 'credit', priority: 50, active: true,
+        }])
+        .mockResolvedValueOnce([]),
+    });
+
+    await expect(state.service.testQuestion(tenant, {
+      propertyId: 41,
+      audience: 'LEAD',
+      question: 'what will be minimum credeit score to get the property?',
+    })).resolves.toMatchObject({
+      decision: 'ANSWER',
+      answer: 'The minimum credit score is 720.',
+      confidence: 0.95,
+    });
+    expect(state.vectors.search).toHaveBeenCalledWith(
+      expect.objectContaining({ scope: 'TENANT', limit: 24 }),
+    );
+  });
+
+  it('logs test-chat retrieval evidence and the final policy decision', async () => {
+    const trace = jest.spyOn(Logger.prototype, 'log').mockImplementation();
+    const query = jest.fn(async (sql: string) => {
+      if (sql.includes('SELECT value FROM tenant_setting')) {
+        return { rows: [{ value: activeSettings }] };
+      }
+      if (sql.includes('FROM tenant_property')) {
+        return { rows: [{ id: 41, title: 'Lime Bay', status: 'published', payload: {} }] };
+      }
+      if (sql.includes('FROM tenant_chatbot_knowledge')) {
+        return { rows: [{
+          id: 'credit', propertyId: 41, scope: 'PROPERTY', audience: 'LEAD',
+          sourceType: 'PROPERTY_FIELD', title: 'Minimum credit score',
+          answer: 'Minimum credit score: 720', priority: 90, active: true,
+        }] };
+      }
+      return { rows: [] };
+    });
+    const state = serviceWith(query, {
+      search: jest.fn()
+        .mockResolvedValueOnce([{
+          pointId: 'credit', score: 0.9, scope: 'PROPERTY', tenantId: 42,
+          audience: 'LEAD', propertyId: 41, knowledgeId: 'credit',
+          sourceType: 'PROPERTY_FIELD', sourceHash: 'credit', priority: 90, active: true,
+        }])
+        .mockResolvedValueOnce([]),
+    });
+
+    await state.service.testQuestion(tenant, {
+      propertyId: 41,
+      audience: 'LEAD',
+      question: 'What is the minimum credit score?',
+    });
+
+    expect(trace).toHaveBeenCalledWith(
+      expect.stringContaining('"event":"chatbot.test.decision"'),
+    );
+    expect(trace).toHaveBeenCalledWith(
+      expect.stringContaining('"evidence"'),
+    );
+    trace.mockRestore();
+  });
+
+  it('reranks an exact one-word fact above a higher vector-score overview', async () => {
+    const query = jest.fn(async (sql: string) => {
+      if (sql.includes('SELECT value FROM tenant_setting')) {
+        return { rows: [{ value: activeSettings }] };
+      }
+      if (sql.includes('FROM tenant_property')) {
+        return { rows: [{ id: 41, title: 'Lime Bay', status: 'published', payload: {} }] };
+      }
+      if (sql.includes('FROM tenant_chatbot_knowledge')) {
+        return { rows: [
+          {
+            id: 'overview', propertyId: 41, scope: 'PROPERTY', audience: 'LEAD',
+            sourceType: 'PROPERTY_FIELD', title: 'Description',
+            answer: 'A spacious condo near shopping and restaurants.', priority: 80, active: true,
+          },
+          {
+            id: 'parking', propertyId: 41, scope: 'PROPERTY', audience: 'LEAD',
+            sourceType: 'PROPERTY_FIELD', title: 'Parking',
+            answer: 'Parking: 1 assigned spot and 1 guest parking spot.', priority: 70, active: true,
+          },
+        ] };
+      }
+      return { rows: [] };
+    });
+    const state = serviceWith(query, {
+      search: jest.fn()
+        .mockResolvedValueOnce([
+          {
+            pointId: 'overview', score: 0.72, scope: 'PROPERTY', tenantId: 42,
+            audience: 'LEAD', propertyId: 41, knowledgeId: 'overview',
+            sourceType: 'PROPERTY_FIELD', sourceHash: 'overview', priority: 80, active: true,
+          },
+          {
+            pointId: 'parking', score: 0.45, scope: 'PROPERTY', tenantId: 42,
+            audience: 'LEAD', propertyId: 41, knowledgeId: 'parking',
+            sourceType: 'PROPERTY_FIELD', sourceHash: 'parking', priority: 70, active: true,
+          },
+        ])
+        .mockResolvedValueOnce([]),
+    });
+
+    await expect(state.service.testQuestion(tenant, {
+      propertyId: 41,
+      audience: 'LEAD',
+      question: 'Parking?',
+    })).resolves.toMatchObject({
+      decision: 'ANSWER',
+      answer: 'Yes. This property includes 1 assigned parking spot and 1 guest parking spot.',
+      confidence: 0.95,
+    });
+  });
+
+  it.each([
+    {
+      question: 'is pet allwoed ?',
+      score: 0.32,
+      title: 'Pet policy',
+      answer: "No, pets aren't allowed at this property.",
+      storedAnswer: 'Pet policy: No.',
+    },
+    {
+      question: 'is there any parking spot ?',
+      score: 0.5,
+      title: 'Parking',
+      answer: 'Yes. This property includes 1 assigned parking spot and 1 guest parking spot.',
+      storedAnswer: 'Parking: 1 assigned spot and 1 guest parking spot.',
+    },
+    {
+      question: 'how mnay credit score need ?',
+      score: 0.38,
+      title: 'Minimum credit score',
+      answer: 'The minimum credit score is 720.',
+      storedAnswer: 'Minimum credit score: 720',
+    },
+  ])('answers short typo-heavy property question: $question', async ({
+    question: userQuestion,
+    score,
+    title,
+    answer,
+    storedAnswer,
+  }) => {
+    const query = jest.fn(async (sql: string) => {
+      if (sql.includes('SELECT value FROM tenant_setting')) {
+        return { rows: [{ value: activeSettings }] };
+      }
+      if (sql.includes('FROM tenant_property')) {
+        return { rows: [{ id: 41, title: 'Lime Bay', status: 'published', payload: {} }] };
+      }
+      if (sql.includes('FROM tenant_chatbot_knowledge')) {
+        return { rows: [{
+          id: 'fact', propertyId: 41, scope: 'PROPERTY', audience: 'LEAD',
+          sourceType: 'PROPERTY_FIELD', title, answer: storedAnswer ?? answer, priority: 85, active: true,
+        }] };
+      }
+      return { rows: [] };
+    });
+    const state = serviceWith(query, {
+      search: jest.fn()
+        .mockResolvedValueOnce([{
+          pointId: 'fact', score, scope: 'PROPERTY', tenantId: 42,
+          audience: 'LEAD', propertyId: 41, knowledgeId: 'fact',
+          sourceType: 'PROPERTY_FIELD', sourceHash: 'fact', priority: 85, active: true,
+        }])
+        .mockResolvedValueOnce([]),
+    });
+
+    await expect(state.service.testQuestion(tenant, {
+      propertyId: 41,
+      audience: 'LEAD',
+      question: userQuestion,
+    })).resolves.toMatchObject({
+      decision: 'ANSWER',
+      answer,
+      confidence: 0.95,
+    });
+  });
+
+  it('treats dog wording as pet-policy intent and answers naturally', async () => {
+    const query = jest.fn(async (sql: string) => {
+      if (sql.includes('SELECT value FROM tenant_setting')) return { rows: [{ value: activeSettings }] };
+      if (sql.includes('FROM tenant_property')) return { rows: [{ id: 41, title: 'Lime Bay', status: 'published', payload: {} }] };
+      if (sql.includes('FROM tenant_chatbot_knowledge')) return { rows: [{
+        id: 'pet', propertyId: 41, scope: 'PROPERTY', audience: 'LEAD',
+        sourceType: 'PROPERTY_FIELD', title: 'Lime Bay — Pet policy',
+        answer: 'Pet policy: No.', priority: 85, active: true,
+      }] };
+      return { rows: [] };
+    });
+    const state = serviceWith(query, {
+      search: jest.fn()
+        .mockResolvedValueOnce([{
+          pointId: 'pet', score: 0.31, scope: 'PROPERTY', tenantId: 42,
+          audience: 'LEAD', propertyId: 41, knowledgeId: 'pet',
+          sourceType: 'PROPERTY_FIELD', sourceHash: 'pet', priority: 85, active: true,
+        }])
+        .mockResolvedValueOnce([]),
+    });
+
+    await expect(state.service.testQuestion(tenant, {
+      propertyId: 41,
+      audience: 'LEAD',
+      question: 'is my dog allow in here?',
+    })).resolves.toMatchObject({
+      decision: 'ANSWER',
+      answer: "No, pets aren't allowed at this property.",
+      confidence: 0.95,
+    });
+  });
+
+  it('turns verified parking evidence into a human answer', async () => {
+    const query = jest.fn(async (sql: string) => {
+      if (sql.includes('SELECT value FROM tenant_setting')) return { rows: [{ value: activeSettings }] };
+      if (sql.includes('FROM tenant_property')) return { rows: [{ id: 41, title: 'Lime Bay', status: 'published', payload: {} }] };
+      if (sql.includes('FROM tenant_chatbot_knowledge')) return { rows: [{
+        id: 'parking', propertyId: 41, scope: 'PROPERTY', audience: 'LEAD',
+        sourceType: 'PROPERTY_FIELD', title: 'Lime Bay — Parking',
+        answer: 'Parking: paking spot 1 and 1 guest parking', priority: 85, active: true,
+      }] };
+      return { rows: [] };
+    });
+    const state = serviceWith(query, {
+      search: jest.fn()
+        .mockResolvedValueOnce([{
+          pointId: 'parking', score: 0.95, scope: 'PROPERTY', tenantId: 42,
+          audience: 'LEAD', propertyId: 41, knowledgeId: 'parking',
+          sourceType: 'PROPERTY_FIELD', sourceHash: 'parking', priority: 85, active: true,
+        }])
+        .mockResolvedValueOnce([]),
+    });
+
+    await expect(state.service.testQuestion(tenant, {
+      propertyId: 41,
+      audience: 'LEAD',
+      question: 'is there any parking spot?',
+    })).resolves.toMatchObject({
+      decision: 'ANSWER',
+      answer: 'Yes. This property includes 1 assigned parking spot and 1 guest parking spot.',
     });
   });
 
@@ -776,7 +1108,8 @@ describe('TenantChatbotService', () => {
       }),
     ]);
     expect(state.embeddings.embed).toHaveBeenCalledWith(
-      expect.stringContaining('Lockbox code: 8472'),
+      expect.stringContaining('8472'),
+      'document',
     );
   });
   it('reindexes property fields with tenant and audience metadata', async () => {
@@ -897,6 +1230,41 @@ describe('TenantChatbotService', () => {
 
     await expect(state.service.cleanupExpiredActivity(tenant)).resolves.toEqual({ messagesDeleted: 4, eventsDeleted: 3 });
     expect(query.mock.calls.map(([sql]) => sql).join('\n')).toContain("interval '7 days'");
+  });
+
+  it('treats landlord and HOA income facts as complementary and answers noisy income phrasing', async () => {
+    const rows = [
+      { id: 'income3x', propertyId: 41, scope: 'PROPERTY', audience: 'LEAD', sourceType: 'PROPERTY_FIELD', title: 'Income requirement', answer: 'Income requirement: Minimum 3x the rent', priority: 90, active: true },
+      { id: 'monthly', propertyId: 41, scope: 'PROPERTY', audience: 'LEAD', sourceType: 'PROPERTY_FIELD', title: 'Minimum monthly income', answer: 'Minimum monthly income: $4,650', priority: 90, active: true },
+      { id: 'hoa', propertyId: 41, scope: 'PROPERTY', audience: 'LEAD', sourceType: 'PROPERTY_FIELD', title: 'HOA income criteria', answer: 'HOA income criteria: $40,000 yearly', priority: 85, active: true },
+      { id: 'dti', propertyId: 41, scope: 'PROPERTY', audience: 'LEAD', sourceType: 'PROPERTY_FIELD', title: 'Debt to income ratio', answer: 'Debt to income ratio: must not exceed 40%', priority: 85, active: true },
+    ];
+    const query = jest.fn(async (sql: string) => {
+      if (sql.includes('SELECT value FROM tenant_setting')) return { rows: [{ value: activeSettings }] };
+      if (sql.includes('FROM tenant_property')) return { rows: [{ id: 41, title: 'Lime Bay', status: 'published', payload: {} }] };
+      if (sql.includes('FROM tenant_chatbot_knowledge')) return { rows };
+      return { rows: [] };
+    });
+    const matches = rows.map((row, index) => ({
+      pointId: row.id, score: 0.9 - index * 0.01, scope: 'PROPERTY', tenantId: 42,
+      audience: 'LEAD', propertyId: 41, knowledgeId: row.id, sourceType: 'PROPERTY_FIELD',
+      sourceHash: row.id, priority: row.priority, active: true,
+    }));
+    const state = serviceWith(query, {
+      search: jest.fn().mockResolvedValueOnce(matches).mockResolvedValueOnce([]),
+    });
+
+    const result = await state.service.testQuestion(tenant, {
+      propertyId: 41,
+      audience: 'LEAD',
+      question: 'what will be at last income for need for this propraty?',
+    });
+
+    expect(result.decision).toBe('ANSWER');
+    expect(result.reason).toBe('EVIDENCE_VERIFIED');
+    expect(result.answer).toContain('4,650');
+    expect(result.answer).toContain('40,000');
+    expect(result.answer).not.toContain('conflicting');
   });
 
 });

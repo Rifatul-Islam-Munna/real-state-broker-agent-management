@@ -5,6 +5,9 @@
 - `backend-nestjs/src/tenant-chatbot/tenant-chatbot.controller.ts` — tenant chatbot admin APIs.
 - `backend-nestjs/src/tenant-chatbot/tenant-chatbot-worker.service.ts` — inbound Email/SMS processing and Realtor verification.
 - `backend-nestjs/src/tenant-chatbot/qdrant-knowledge.service.ts` — Qdrant collection/search/upsert/health.
+- `backend-nestjs/src/tenant-chatbot/property-question-intent.ts` — canonical real-estate intent detection used for query augmentation and confidence reranking.
+- `backend-nestjs/src/tenant-chatbot/lime-bay-chatbot-corpus.ts` — 57-intent Lime Bay semantic regression corpus; 20 variants per intent.
+- `backend-nestjs/src/tenant-chatbot/tenant-chatbot.semantic-corpus.spec.ts` — 1,140-question chatbot semantic regression.
 - `backend-nestjs/src/tenant-database/tenant-database.migrations.ts` — tenant chatbot schema migrations.
 - `frontend/components/stitch/pages/test-chatbot/page.tsx` — tenant Test Chatbot UI.
 - `frontend/components/stitch/pages/chatbot-settings/page.tsx` — chatbot settings + knowledge UI.

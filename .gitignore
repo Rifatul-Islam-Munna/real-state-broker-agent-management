@@ -15,3 +15,6 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 .freebuff
+.graphify_python
+.graphify_detect.json
+graphify-out

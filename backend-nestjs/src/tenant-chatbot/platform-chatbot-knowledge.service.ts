@@ -138,6 +138,7 @@ export class PlatformChatbotKnowledgeService {
     await this.vectors.ensureCollection();
     const vector = await this.embeddings.embed(
       [item.title, ...(item.questionExamples ?? []), item.answer].join('\n'),
+      'document',
     );
     await this.vectors.upsert([{
       pointId: item.qdrantPointId,
@@ -150,6 +151,7 @@ export class PlatformChatbotKnowledgeService {
         sourceHash: item.sourceHash,
         priority: item.priority,
         active: item.active,
+        embeddingModelSignature: this.embeddings.modelSignature(),
       },
     }]);
     item.indexStatus = 'indexed';

@@ -59,8 +59,14 @@ export default async function PlatformChatbotKnowledgePage() {
             <textarea className="mt-2 min-h-32 w-full rounded-lg border border-slate-200 p-3" name="answer" required />
           </label>
           <label className="block text-sm font-medium text-slate-700">
-            Example questions
-            <textarea className="mt-2 min-h-24 w-full rounded-lg border border-slate-200 p-3" name="questionExamples" placeholder="One question per line" />
+            Main question
+            <input className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3" name="mainQuestion" required placeholder="Can I park my car?" />
+            <span className="mt-1 block text-xs font-normal text-slate-500">The clearest version of the question this answer should handle.</span>
+          </label>
+          <label className="block text-sm font-medium text-slate-700">
+            Similar ways people may ask
+            <textarea className="mt-2 min-h-28 w-full rounded-lg border border-slate-200 p-3" name="similarQuestions" placeholder={"Is parking included?\nWhere do I park?\nCan I park an SUV?\nDo I get guest parking?"} />
+            <span className="mt-1 block text-xs font-normal text-slate-500">One phrase per line. Add short wording, slang, typos, and natural variations.</span>
           </label>
           <label className="block text-sm font-medium text-slate-700">
             Priority
@@ -115,8 +121,11 @@ export default async function PlatformChatbotKnowledgePage() {
                   <label className="text-xs font-semibold text-slate-600">Verified answer
                     <textarea className="mt-1 min-h-28 w-full rounded-lg border border-slate-200 bg-white p-3" defaultValue={item.answer} name="answer" required />
                   </label>
-                  <label className="text-xs font-semibold text-slate-600">Example questions
-                    <textarea className="mt-1 min-h-20 w-full rounded-lg border border-slate-200 bg-white p-3" defaultValue={(item.questionExamples ?? []).join("\n")} name="questionExamples" />
+                  <label className="text-xs font-semibold text-slate-600">Main question
+                    <input className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-white px-3" defaultValue={item.questionExamples?.[0] ?? ""} name="mainQuestion" />
+                  </label>
+                  <label className="text-xs font-semibold text-slate-600">Similar ways people may ask
+                    <textarea className="mt-1 min-h-24 w-full rounded-lg border border-slate-200 bg-white p-3" defaultValue={(item.questionExamples ?? []).slice(1).join("\n")} name="similarQuestions" placeholder="One similar phrase per line" />
                   </label>
                   <button className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#4343d5] px-4 text-xs font-semibold text-white" type="submit"><BookOpenCheck className="size-3.5" /> Save and reindex</button>
                 </form>

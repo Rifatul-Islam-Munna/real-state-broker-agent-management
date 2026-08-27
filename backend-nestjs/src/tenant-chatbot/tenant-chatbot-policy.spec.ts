@@ -16,6 +16,7 @@ describe('tenant chatbot policy', () => {
       enabled: false,
       channels: { web: false, email: false, sms: false },
       minimumConfidence: 0.82,
+      showingRequestTemplateId: null,
     });
     expect(
       evaluateChatbotPolicy({
@@ -28,6 +29,21 @@ describe('tenant chatbot policy', () => {
       reason: 'BOT_DISABLED',
       terminal: false,
     });
+  });
+
+  it('normalizes a selected showing template and rejects invalid values', () => {
+    expect(
+      normalizeChatbotSettings({ showingRequestTemplateId: ' lead-showing ' })
+        .showingRequestTemplateId,
+    ).toBe('lead-showing');
+    expect(
+      normalizeChatbotSettings({ showingRequestTemplateId: '   ' })
+        .showingRequestTemplateId,
+    ).toBeNull();
+    expect(
+      normalizeChatbotSettings({ showingRequestTemplateId: 44 as never })
+        .showingRequestTemplateId,
+    ).toBeNull();
   });
 
   it('enforces the selected channel toggle', () => {

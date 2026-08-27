@@ -198,6 +198,8 @@ export function PropertyChatDialog({ open, onOpenChange, property }: PropertyCha
   const [chatDraft, setChatDraft] = useState("")
   const [chatTurns, setChatTurns] = useState<LiveChatTurn[]>([])
   const [chatTerminal, setChatTerminal] = useState(false)
+  const [showingEligible, setShowingEligible] = useState(false)
+  const [showingAt, setShowingAt] = useState("")
   const [chatError, setChatError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -217,6 +219,8 @@ export function PropertyChatDialog({ open, onOpenChange, property }: PropertyCha
     setChatDraft("")
     setChatTurns([])
     setChatTerminal(false)
+    setShowingEligible(false)
+    setShowingAt("")
     setChatError(null)
   }, [open])
 
@@ -375,7 +379,8 @@ export function PropertyChatDialog({ open, onOpenChange, property }: PropertyCha
           reason: result.reason,
         }])
       }
-      if (result.decision === "STOP" || result.decision === "CREATE_SHOWING_REQUEST") {
+      setShowingEligible(result.showingEligible === true)
+      if (result.terminal === true || result.decision === "CREATE_SHOWING_REQUEST") {
         setChatTerminal(true)
       }
     } catch (error) {
@@ -383,6 +388,40 @@ export function PropertyChatDialog({ open, onOpenChange, property }: PropertyCha
     }
   }
 
+  async function handleShowingSubmit() {
+    if (!showingEligible || !showingAt || !chatAccessToken || publicChatbot.isPending) return
+    const preferred = new Date(showingAt)
+    if (Number.isNaN(preferred.getTime())) {
+      setChatError("Choose a valid showing date and time.")
+      return
+    }
+    setChatError(null)
+    try {
+      const response = await publicChatbot.mutateAsync({
+        accessToken: chatAccessToken,
+        sessionId: chatSessionId,
+        idempotencyKey: crypto.randomUUID(),
+        body: "I confirm this showing request.",
+        showing: { confirmed: true, preferredAt: preferred.toISOString() },
+      })
+      if (response.error) throw response.error
+      const result = response.data
+      if (!result) throw new Error("The chatbot did not return a showing decision.")
+      if (result.answer?.trim()) {
+        setChatTurns((current) => [...current, {
+          id: `bot-${crypto.randomUUID()}`,
+          role: "bot",
+          body: result.answer.trim(),
+          decision: result.decision,
+          reason: result.reason,
+        }])
+      }
+      setShowingEligible(false)
+      setChatTerminal(result.terminal === true || result.decision === "CREATE_SHOWING_REQUEST")
+    } catch (error) {
+      setChatError(error instanceof Error ? error.message : "The showing request could not be submitted.")
+    }
+  }
   const answeredSteps = steps.slice(0, Math.min(currentStepIndex, steps.length))
 
   return (
@@ -543,6 +582,32 @@ export function PropertyChatDialog({ open, onOpenChange, property }: PropertyCha
                       <p className="rounded-2xl bg-white p-3 text-sm font-semibold text-slate-600">Automated chat has stopped for this conversation. The property team can continue with you directly.</p>
                     ) : (
                       <>
+                        {showingEligible ? (
+                          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                            <div className="flex items-start gap-2">
+                              <AppIcon className="mt-0.5 text-lg text-emerald-700" name="event_available" />
+                              <div>
+                                <p className="text-sm font-bold text-slate-900">You meet the basic property requirements.</p>
+                                <p className="mt-1 text-xs leading-5 text-slate-600">Choose a preferred date and time. A request is created only after you press Confirm Showing Request.</p>
+                              </div>
+                            </div>
+                            <Input
+                              className="mt-3 h-auto rounded-xl border-emerald-200 bg-white px-3 py-2"
+                              min={new Date().toISOString().slice(0, 16)}
+                              onChange={(event) => setShowingAt(event.target.value)}
+                              type="datetime-local"
+                              value={showingAt}
+                            />
+                            <button
+                              className="mt-3 w-full rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
+                              disabled={!showingAt || publicChatbot.isPending}
+                              onClick={() => void handleShowingSubmit()}
+                              type="button"
+                            >
+                              {publicChatbot.isPending ? "Submitting..." : "Confirm Showing Request"}
+                            </button>
+                          </div>
+                        ) : null}
                         <label className="text-xs font-bold uppercase tracking-[0.18em] text-primary" htmlFor={`property-chat-question-${property.id}`}>Ask a verified question</label>
                         <Textarea
                           id={`property-chat-question-${property.id}`}

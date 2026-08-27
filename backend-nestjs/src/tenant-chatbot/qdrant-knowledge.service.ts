@@ -14,6 +14,7 @@ export type QdrantKnowledgeMetadata = {
   sourceHash: string;
   priority: number;
   active: boolean;
+  embeddingModelSignature: string;
 };
 
 export type QdrantKnowledgePoint = {
@@ -34,6 +35,7 @@ export type QdrantSearchInput = {
   propertyId?: number | null;
   vector: number[];
   limit?: number;
+  modelSignature: string;
 };
 
 export type QdrantKnowledgeConfig = {
@@ -156,6 +158,7 @@ export class QdrantKnowledgeService implements OnApplicationBootstrap {
     const must: Array<Record<string, unknown>> = [
       { key: 'audience', match: { value: input.audience } },
       { key: 'active', match: { value: true } },
+      { key: 'embeddingModelSignature', match: { value: requiredSignature(input.modelSignature) } },
     ];
 
     if (input.scope === 'PLATFORM') {
@@ -265,6 +268,7 @@ export class QdrantKnowledgeService implements OnApplicationBootstrap {
       sourceHash: String(metadata.sourceHash).slice(0, 64),
       priority: clampInteger(metadata.priority, 50, 0, 100),
       active: metadata.active === true,
+      embeddingModelSignature: requiredSignature(metadata.embeddingModelSignature),
     };
   }
 
@@ -359,4 +363,10 @@ function clampInteger(
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return fallback;
   return Math.min(maximum, Math.max(minimum, Math.round(parsed)));
+}
+
+function requiredSignature(value: unknown) {
+  const signature = String(value ?? '').trim();
+  if (!signature) throw new Error('Embedding model signature is required.');
+  return signature.slice(0, 160);
 }

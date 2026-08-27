@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import {
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
@@ -9,6 +10,20 @@ import { SaasTenant } from '../saas-admin/entities/saas-tenant.entity';
 import { TenantDatabaseService } from '../tenant-database/tenant-database.service';
 import { MiniLmEmbeddingService } from './mini-lm-embedding.service';
 import { mapPropertyKnowledge } from './property-knowledge.mapper';
+import { composeVerifiedAnswer } from './verified-answer-composer';
+import { hasTopicEvidenceConflict, selectAnswerEvidence } from './evidence-selection';
+import {
+  parseChatbotRole,
+  parseQualificationReply,
+  parseShowingIntent,
+  qualificationResult,
+  readPropertyQualification,
+  type QualificationValues,
+} from './chatbot-conversation-intent';
+import {
+  augmentPropertyQuestion,
+  strongestSharedPropertyIntent,
+} from './property-question-intent';
 import {
   QdrantKnowledgeMatch,
   QdrantKnowledgeService,
@@ -54,6 +69,7 @@ export type TestChatbotQuestionInput = {
   audience: ChatbotAudience;
   question: string;
   channel?: ChatbotChannel;
+  allowSensitiveRealtorEvidence?: boolean;
 };
 
 export type HandleChatbotMessageInput = {
@@ -65,6 +81,13 @@ export type HandleChatbotMessageInput = {
   body: string;
   audience?: ChatbotAudience;
   leadCreditScore?: number | null;
+  realtorVerified?: boolean;
+  requireRoleConfirmation?: boolean;
+  workflowStateUpdate?: string;
+  audienceUpdate?: ChatbotAudience;
+  qualificationUpdates?: QualificationValues;
+  showingEligible?: boolean;
+  followUpPrompt?: string;
   showing?: { confirmed: boolean; preferredAt?: string | null };
 };
 
@@ -72,6 +95,9 @@ export type ChatbotLiveResponse = ChatbotTestResult & {
   conversationId: string | null;
   queued: boolean;
   outreachJobId?: number | null;
+  showingEligible?: boolean;
+  realtorVerified?: boolean;
+  terminal?: boolean;
 };
 
 export type PublicChatbotMessageInput = {
@@ -140,6 +166,8 @@ const KNOWLEDGE_RETURNING = [
 
 @Injectable()
 export class TenantChatbotService {
+  private readonly logger = new Logger(TenantChatbotService.name);
+
   constructor(
     private readonly databases: TenantDatabaseService,
     private readonly embeddings: MiniLmEmbeddingService,
@@ -282,6 +310,7 @@ export class TenantChatbotService {
           await this.vectors.ensureCollection();
           const vector = await this.embeddings.embed(
             [title, ...examples, answer].join('\n'),
+            'document',
           );
           await this.vectors.upsert([
             {
@@ -297,6 +326,7 @@ export class TenantChatbotService {
                 sourceHash: row.sourceHash ?? sourceHash,
                 priority: row.priority,
                 active: row.active,
+                embeddingModelSignature: this.embeddings.modelSignature(),
               },
             },
           ]);
@@ -450,6 +480,7 @@ export class TenantChatbotService {
             await this.vectors.ensureCollection();
             const vector = await this.embeddings.embed(
               [title, ...examples, answer].join('\n'),
+              'document',
             );
             await this.vectors.upsert([
               {
@@ -465,6 +496,7 @@ export class TenantChatbotService {
                   sourceHash,
                   priority,
                   active,
+                  embeddingModelSignature: this.embeddings.modelSignature(),
                 },
               },
             ]);
@@ -554,6 +586,7 @@ export class TenantChatbotService {
           const knowledgeId = String(inserted.rows[0]?.id);
           const vector = await this.embeddings.embed(
             `${chunk.title}\n${chunk.content}`,
+            'document',
           );
           await this.vectors.upsert([
             {
@@ -569,6 +602,7 @@ export class TenantChatbotService {
                 sourceHash: chunk.sourceHash,
                 priority: chunk.priority,
                 active: true,
+                embeddingModelSignature: this.embeddings.modelSignature(),
               },
             },
           ]);
@@ -637,6 +671,7 @@ export class TenantChatbotService {
             const knowledgeId = String(inserted.rows[0]?.id);
             const vector = await this.embeddings.embed(
               `${chunk.title}\n${chunk.content}`,
+              'document',
             );
             await this.vectors.upsert([
               {
@@ -652,6 +687,7 @@ export class TenantChatbotService {
                   sourceHash: chunk.sourceHash,
                   priority: chunk.priority,
                   active: true,
+                  embeddingModelSignature: this.embeddings.modelSignature(),
                 },
               },
             ]);
@@ -714,6 +750,14 @@ export class TenantChatbotService {
     const propertyId = positiveInteger(input.propertyId);
     const question = requiredText(input.question, 'question', 2_000);
     const audience = input.audience ? validAudience(input.audience) : 'LEAD';
+    this.logger.log(JSON.stringify({
+      event: 'chatbot.test.start',
+      tenantId: tenant.id,
+      propertyId,
+      audience,
+      channel,
+      question: question.slice(0, 300),
+    }));
     const qdrant = await this.vectors.healthCheck();
     if (!qdrant.connected) {
       throw new ServiceUnavailableException(
@@ -745,7 +789,7 @@ export class TenantChatbotService {
 
         let matches: QdrantKnowledgeMatch[];
         try {
-          const vector = await this.embeddings.embed(question);
+          const vector = await this.embeddings.embed(augmentPropertyQuestion(question), 'query');
           const [tenantMatches, platformMatches] = await Promise.all([
             this.vectors.search({
               scope: 'TENANT',
@@ -753,11 +797,14 @@ export class TenantChatbotService {
               audience,
               propertyId,
               vector,
+              modelSignature: this.embeddings.modelSignature(),
+              limit: propertyId ? 24 : 12,
             }),
             this.vectors.search({
               scope: 'PLATFORM',
               audience,
               vector,
+              modelSignature: this.embeddings.modelSignature(),
             }),
           ]);
           matches = [...tenantMatches, ...platformMatches]
@@ -768,33 +815,78 @@ export class TenantChatbotService {
                 match.propertyId === propertyId,
             )
             .sort((left, right) => right.score - left.score);
-        } catch {
+        } catch (error) {
+          this.logger.warn(JSON.stringify({
+            event: 'chatbot.test.search_failed',
+            tenantId: tenant.id,
+            propertyId,
+            error: errorMessage(error),
+          }));
           return stopped(settings, 'SYSTEM_UNAVAILABLE');
         }
 
-        const hydrated = await this.hydrateMatches(client, matches, audience);
-        const topScore = hydrated[0]?.match.score ?? null;
-        const conflict = hasEvidenceConflict(hydrated);
+        const hydratedMatches = await this.hydrateMatches(client, matches, audience);
+        const hydrated = hydratedMatches.filter(
+          ({ record }) =>
+            audience !== 'REALTOR' ||
+            input.allowSensitiveRealtorEvidence === true ||
+            !isSensitiveRealtorRecord(record),
+        );
+        const ranked = hydrated
+          .map((item) => ({ item, confidence: relevanceConfidence(question, item) }))
+          .sort(
+            (left, right) =>
+              right.confidence - left.confidence ||
+              right.item.match.score - left.item.match.score,
+          );
+        const rankedHydrated = ranked.map(({ item }) => item);
+        const answerEvidence = selectAnswerEvidence(question, rankedHydrated);
+        const topScore = answerEvidence[0]?.match.score ?? null;
+        const policyConfidence = answerEvidence[0]
+          ? relevanceConfidence(question, answerEvidence[0])
+          : null;
+        const conflict = hasTopicEvidenceConflict(question, answerEvidence);
         const decision = evaluateChatbotPolicy({
           settings,
           channel,
           conversationStatus: 'ACTIVE',
           propertyStatus,
           infrastructureReady: true,
-          hasEvidence: hydrated.length > 0,
+          hasEvidence: answerEvidence.length > 0,
           evidenceConflict: conflict,
-          confidence: topScore,
+          confidence: policyConfidence,
         });
+        this.logger.log(JSON.stringify({
+          event: 'chatbot.test.decision',
+          tenantId: tenant.id,
+          propertyId,
+          audience,
+          channel,
+          minimumConfidence: settings.minimumConfidence,
+          rawConfidence: topScore,
+          policyConfidence,
+          evidenceConflict: conflict,
+          decision: decision.action,
+          reason: decision.reason,
+          evidence: ranked.slice(0, 8).map(({ item: { match, record }, confidence }) => ({
+            knowledgeId: String(record.id),
+            title: record.title,
+            sourceType: record.sourceType,
+            rawScore: match.score,
+            policyScore: confidence,
+            priority: match.priority,
+          })),
+        }));
         if (decision.action !== 'ANSWER') {
-          return stopped(settings, decision.reason, topScore, hydrated);
+          return stopped(settings, decision.reason, topScore, rankedHydrated);
         }
 
         return {
-          answer: hydrated[0].record.answer,
+          answer: composeVerifiedAnswer(question, answerEvidence.map(({ record }) => ({ title: record.title, answer: record.answer }))) ?? humanizeVerifiedAnswer(answerEvidence[0].record),
           decision: 'ANSWER',
           reason: 'EVIDENCE_VERIFIED',
-          confidence: topScore,
-          evidence: evidenceFrom(hydrated),
+          confidence: policyConfidence,
+          evidence: evidenceFrom(answerEvidence),
         };
       },
     );
@@ -831,6 +923,8 @@ export class TenantChatbotService {
       idempotencyKey: input.idempotencyKey,
       body: input.body,
       showing: input.showing,
+      realtorVerified: false,
+      requireRoleConfirmation: true,
     });
   }
 
@@ -860,22 +954,44 @@ export class TenantChatbotService {
     if (baseDecision.action !== 'ALLOW_RETRIEVAL') {
       return liveStopped(settings, baseDecision.reason);
     }
-    const audience = input.audience ?? 'LEAD';
-    if (audience !== 'REALTOR' && isSensitiveRealtorQuestion(input.body)) {
+    const workflow = await this.prepareLiveWorkflow(tenant, input);
+    const liveInput = workflow.input;
+    if (workflow.result) {
+      return this.persistLiveResponse(tenant, liveInput, settings, workflow.result);
+    }
+    if (
+      isSensitiveRealtorQuestion(liveInput.body) &&
+      !(liveInput.audience === 'REALTOR' && liveInput.realtorVerified === true)
+    ) {
       return this.persistLiveResponse(
         tenant,
-        input,
+        liveInput,
         settings,
-        stopped(settings, 'REALTOR_VERIFICATION_REQUIRED'),
+        appendConversationalFollowUp(
+          stopped(settings, 'REALTOR_VERIFICATION_REQUIRED'),
+          liveInput.followUpPrompt,
+        ),
       );
     }
-    const result = await this.testQuestion(tenant, {
-      propertyId: input.propertyId,
-      audience,
-      question: input.body,
-      channel: input.channel,
-    });
-    return this.persistLiveResponse(tenant, input, settings, result);
+    const result = liveInput.showing?.confirmed
+      ? verifiedWorkflowResult(
+          'Showing confirmation received.',
+          'ANSWER',
+          'EVIDENCE_VERIFIED',
+        )
+      : await this.testQuestion(tenant, {
+          propertyId: liveInput.propertyId,
+          audience: liveInput.audience ?? 'LEAD',
+          question: liveInput.body,
+          channel: liveInput.channel,
+          allowSensitiveRealtorEvidence: liveInput.realtorVerified === true,
+        });
+    return this.persistLiveResponse(
+      tenant,
+      liveInput,
+      settings,
+      appendConversationalFollowUp(result, liveInput.followUpPrompt),
+    );
   }
 
   async listActivity(tenant: TenantReference) {
@@ -1203,6 +1319,395 @@ export class TenantChatbotService {
     );
   }
 
+  private async prepareLiveWorkflow(
+    tenant: TenantReference,
+    input: HandleChatbotMessageInput,
+  ): Promise<{ input: HandleChatbotMessageInput; result: ChatbotTestResult | null }> {
+    return this.databases.withTenantClient(
+      this.databaseName(tenant),
+      async (client) => {
+        const current = (
+          await client.query(
+            [
+              'SELECT audience, workflow_state AS "workflowState" FROM tenant_chatbot_conversation',
+              'WHERE session_id = $1 AND channel = $2 ORDER BY updated_at DESC LIMIT 1',
+            ].join(' '),
+            [input.sessionId, input.channel],
+          )
+        ).rows[0];
+        const lead = (
+          await client.query('SELECT id, payload FROM tenant_lead WHERE id = $1 LIMIT 1', [
+            input.leadId,
+          ])
+        ).rows[0];
+        const property = input.propertyId
+          ? (
+              await client.query(
+                'SELECT id, title, status, payload FROM tenant_property WHERE id = $1 LIMIT 1',
+                [input.propertyId],
+              )
+            ).rows[0]
+          : null;
+        const leadPayload = isRecordValue(lead?.payload) ? lead.payload : {};
+        const state = String(
+          current?.workflowState ??
+            (input.requireRoleConfirmation ? 'ASK_ROLE' : 'ANSWERING'),
+        );
+        let audience: ChatbotAudience =
+          current?.audience === 'REALTOR'
+            ? 'REALTOR'
+            : input.audience === 'REALTOR'
+              ? 'REALTOR'
+              : 'LEAD';
+        let realtorVerified = input.realtorVerified === true;
+        const wantsShowing = parseShowingIntent(input.body);
+
+        if (state === 'ASK_ROLE') {
+          const role = parseChatbotRole(input.body);
+          if (!role) {
+            if (wantsShowing) {
+              return {
+                input: {
+                  ...input,
+                  audience,
+                  realtorVerified: false,
+                  workflowStateUpdate: 'ASK_ROLE',
+                  showingEligible: false,
+                },
+                result: verifiedWorkflowResult(
+                  `Absolutely — I can help you request a showing. First, are you looking to rent the property yourself, or are you a Realtor?`,
+                  'ASK_ROLE',
+                  'ROLE_REQUIRED',
+                ),
+              };
+            }
+            return {
+              input: {
+                ...input,
+                audience,
+                realtorVerified: false,
+                workflowStateUpdate: 'ASK_ROLE',
+                followUpPrompt: roleFollowUpPrompt(),
+              },
+              result: null,
+            };
+          }
+          audience = role;
+          realtorVerified =
+            role === 'REALTOR' &&
+            (input.realtorVerified === true ||
+              (await this.isVerifiedRealtor(client, input.leadId)));
+          if (role === 'REALTOR') {
+            return {
+              input: {
+                ...input,
+                audience,
+                audienceUpdate: audience,
+                realtorVerified,
+                workflowStateUpdate: 'ANSWERING',
+              },
+              result: verifiedWorkflowResult(
+                realtorVerified
+                  ? 'Thanks. I found you in the verified Realtor directory. I can answer Realtor-only property questions, including verified access details.'
+                  : 'Thanks. I will use the Realtor information for this property. I can answer Realtor-only property context, but lockbox codes, entry instructions, owner contacts, internal remarks, commission details, and private showing instructions stay hidden until your Realtor contact is verified.',
+                'ANSWER',
+                'ROLE_CAPTURED',
+              ),
+            };
+          }
+          const values = qualificationValuesFromPayload(leadPayload);
+          if (!validStoredCredit(values.creditScore)) {
+            return {
+              input: {
+                ...input,
+                audience,
+                audienceUpdate: audience,
+                realtorVerified: false,
+                workflowStateUpdate: 'ASK_CREDIT',
+              },
+              result: creditPromptResult(),
+            };
+          }
+          if (!validStoredIncome(values.monthlyEarning)) {
+            return {
+              input: {
+                ...input,
+                audience,
+                audienceUpdate: audience,
+                realtorVerified: false,
+                workflowStateUpdate: 'ASK_INCOME',
+              },
+              result: incomePromptResult(),
+            };
+          }
+          return this.finishLeadQualification(client, {
+            ...input,
+            audience,
+            audienceUpdate: audience,
+            realtorVerified: false,
+          }, property, values);
+        }
+
+        if (audience === 'REALTOR') {
+          realtorVerified =
+            realtorVerified || (await this.isVerifiedRealtor(client, input.leadId));
+          return {
+            input: { ...input, audience, realtorVerified },
+            result: null,
+          };
+        }
+
+        const values = qualificationValuesFromPayload(leadPayload);
+        if (wantsShowing && state === 'QUALIFIED') {
+          return {
+            input: { ...input, audience, realtorVerified: false, showingEligible: true },
+            result: verifiedWorkflowResult(
+              `You're already qualified on the two basic checks. The showing form is ready below — choose a date and time, then confirm it.`,
+              'ANSWER',
+              'QUALIFIED',
+            ),
+          };
+        }
+        if (wantsShowing && state === 'ANSWERING') {
+          if (!validStoredCredit(values.creditScore)) {
+            return {
+              input: { ...input, audience, realtorVerified: false, workflowStateUpdate: 'ASK_CREDIT', showingEligible: false },
+              result: verifiedWorkflowResult(
+                `Absolutely — I can help with a showing. Before I unlock the form, what's your approximate credit score?`,
+                'ASK_CREDIT',
+                'CREDIT_REQUIRED',
+              ),
+            };
+          }
+          if (!validStoredIncome(values.monthlyEarning)) {
+            return {
+              input: { ...input, audience, realtorVerified: false, workflowStateUpdate: 'ASK_INCOME', showingEligible: false },
+              result: verifiedWorkflowResult(
+                `Thanks. One last basic check before I unlock the showing form: about how much is your monthly income before taxes?`,
+                'ASK_INCOME',
+                'INCOME_REQUIRED',
+              ),
+            };
+          }
+          return this.finishLeadQualification(client, { ...input, audience, realtorVerified: false }, property, values);
+        }
+        if (state === 'ASK_CREDIT') {
+          if (wantsShowing) {
+            return {
+              input: { ...input, audience, realtorVerified: false, workflowStateUpdate: 'ASK_CREDIT', showingEligible: false },
+              result: verifiedWorkflowResult(
+                `I can help with that. I just need your approximate credit score first so I can make sure this property is a fit before opening the showing form.`,
+                'ASK_CREDIT',
+                'CREDIT_REQUIRED',
+              ),
+            };
+          }
+          const parsed = parseQualificationReply(input.body, 'creditScore');
+          if (!validStoredCredit(parsed.creditScore)) {
+            return {
+              input: {
+                ...input,
+                audience,
+                realtorVerified: false,
+                workflowStateUpdate: 'ASK_CREDIT',
+                followUpPrompt: wantsShowing ? undefined : creditFollowUpPrompt(),
+              },
+              result: wantsShowing
+                ? verifiedWorkflowResult(
+                    "I can help with the showing. Before I unlock the form, what's your approximate credit score?",
+                    'ASK_CREDIT',
+                    'CREDIT_REQUIRED',
+                  )
+                : null,
+            };
+          }
+          values.creditScore = parsed.creditScore;
+          const qualificationUpdates = { creditScore: parsed.creditScore };
+          if (!validStoredIncome(values.monthlyEarning)) {
+            return {
+              input: {
+                ...input,
+                audience,
+                realtorVerified: false,
+                qualificationUpdates,
+                workflowStateUpdate: 'ASK_INCOME',
+              },
+              result: incomePromptResult(),
+            };
+          }
+          return this.finishLeadQualification(
+            client,
+            { ...input, audience, realtorVerified: false, qualificationUpdates },
+            property,
+            values,
+          );
+        }
+
+        if (state === 'ASK_INCOME') {
+          if (wantsShowing) {
+            return {
+              input: { ...input, audience, realtorVerified: false, workflowStateUpdate: 'ASK_INCOME', showingEligible: false },
+              result: verifiedWorkflowResult(
+                `Almost there — I still need your approximate monthly income before taxes. Once that basic check passes, I'll unlock the showing form.`,
+                'ASK_INCOME',
+                'INCOME_REQUIRED',
+              ),
+            };
+          }
+          const parsed = parseQualificationReply(input.body, 'monthlyEarning');
+          if (!validStoredIncome(parsed.monthlyEarning)) {
+            return {
+              input: {
+                ...input,
+                audience,
+                realtorVerified: false,
+                workflowStateUpdate: 'ASK_INCOME',
+                followUpPrompt: wantsShowing ? undefined : incomeFollowUpPrompt(),
+              },
+              result: wantsShowing
+                ? verifiedWorkflowResult(
+                    'I can help with the showing. One last check before I unlock the form: about how much is your monthly income before taxes?',
+                    'ASK_INCOME',
+                    'INCOME_REQUIRED',
+                  )
+                : null,
+            };
+          }
+          values.monthlyEarning = parsed.monthlyEarning;
+          return this.finishLeadQualification(
+            client,
+            {
+              ...input,
+              audience,
+              realtorVerified: false,
+              qualificationUpdates: { monthlyEarning: parsed.monthlyEarning },
+            },
+            property,
+            values,
+          );
+        }
+
+        return {
+          input: {
+            ...input,
+            audience,
+            realtorVerified: false,
+            showingEligible: state === 'QUALIFIED',
+          },
+          result: null,
+        };
+      },
+    );
+  }
+
+  private async finishLeadQualification(
+    client: { query: (sql: string, values?: unknown[]) => Promise<any> },
+    input: HandleChatbotMessageInput,
+    property: any,
+    values: QualificationValues,
+  ): Promise<{ input: HandleChatbotMessageInput; result: ChatbotTestResult }> {
+    const requirements = readPropertyQualification(
+      isRecordValue(property?.payload) ? property.payload : {},
+    );
+    const outcome = qualificationResult(values, requirements);
+    if (outcome.missing === 'creditScore') {
+      return {
+        input: { ...input, workflowStateUpdate: 'ASK_CREDIT', showingEligible: false },
+        result: creditPromptResult(),
+      };
+    }
+    if (outcome.missing === 'monthlyEarning') {
+      return {
+        input: { ...input, workflowStateUpdate: 'ASK_INCOME', showingEligible: false },
+        result: incomePromptResult(),
+      };
+    }
+    if (outcome.failed) {
+      const alternatives = await this.compatibleProperties(
+        client,
+        positiveInteger(property?.id),
+        values,
+      );
+      const isCredit = outcome.failed === 'creditScore';
+      const required = isCredit
+        ? requirements.minimumCreditScore
+        : requirements.minimumMonthlyIncome;
+      const label = isCredit ? 'credit score' : 'monthly income';
+      const suggestions = alternatives.length
+        ? ` Other available properties that match these two basic checks: ${alternatives.join('; ')}.`
+        : ' A team member can help you look for another available property.';
+      return {
+        input: {
+          ...input,
+          workflowStateUpdate: 'ANSWERING',
+          showingEligible: false,
+        },
+        result: verifiedWorkflowResult(
+          `Thanks. This property requires a minimum ${label} of ${formatQualificationNumber(required, isCredit)}. Based on the information you provided, this property may not be a match.${suggestions}`,
+          'ANSWER',
+          isCredit ? 'CREDIT_BELOW_MINIMUM' : 'INCOME_BELOW_MINIMUM',
+        ),
+      };
+    }
+    return {
+      input: {
+        ...input,
+        workflowStateUpdate: 'QUALIFIED',
+        showingEligible: true,
+      },
+      result: verifiedWorkflowResult(
+        "Thanks. Your credit score and monthly income meet this property's basic qualification requirements. You can keep asking questions or request a showing.",
+        'ANSWER',
+        'QUALIFIED',
+      ),
+    };
+  }
+
+  private async compatibleProperties(
+    client: { query: (sql: string, values?: unknown[]) => Promise<any> },
+    propertyId: number | null,
+    values: QualificationValues,
+  ) {
+    const rows = (
+      await client.query(
+        [
+          'SELECT id, title, status, payload FROM tenant_property',
+          "WHERE status = 'published' AND ($1::bigint IS NULL OR id <> $1)",
+          'ORDER BY updated_at DESC LIMIT 80',
+        ].join(' '),
+        [propertyId],
+      )
+    ).rows;
+    return rows
+      .filter((row: any) =>
+        qualificationResult(
+          values,
+          readPropertyQualification(isRecordValue(row.payload) ? row.payload : {}),
+        ).qualified,
+      )
+      .slice(0, 3)
+      .map((row: any) => alternativePropertyLabel(row));
+  }
+
+  private async isVerifiedRealtor(
+    client: { query: (sql: string, values?: unknown[]) => Promise<any> },
+    leadIdValue: number,
+  ) {
+    const verified = await client.query(
+      [
+        'SELECT 1 FROM tenant_lead lead',
+        "JOIN tenant_legacy_resource realtor ON realtor.resource = 'realtors'",
+        'WHERE lead.id = $1 AND (',
+        "(COALESCE(lead.email, '') <> '' AND LOWER(COALESCE(realtor.payload->>'email', '')) = LOWER(lead.email))",
+        "OR (regexp_replace(COALESCE(lead.phone, ''), '[^0-9]', '', 'g') <> ''",
+        "AND regexp_replace(COALESCE(realtor.payload->>'phone', ''), '[^0-9]', '', 'g') = regexp_replace(COALESCE(lead.phone, ''), '[^0-9]', '', 'g'))",
+        ') LIMIT 1',
+      ].join(' '),
+      [leadIdValue],
+    );
+    return verified.rows.length > 0;
+  }
+
   private async persistLiveResponse(
     tenant: TenantReference,
     input: HandleChatbotMessageInput,
@@ -1243,8 +1748,8 @@ export class TenantChatbotService {
           let conversation = (
             await client.query(
               [
-                'SELECT id::text AS id, status, stop_reason AS "stopReason",',
-                'turn_count AS "turnCount" FROM tenant_chatbot_conversation',
+                'SELECT id::text AS id, status, stop_reason AS "stopReason", audience,',
+                'workflow_state AS "workflowState", turn_count AS "turnCount" FROM tenant_chatbot_conversation',
                 'WHERE session_id = $1 AND channel = $2 ORDER BY updated_at DESC LIMIT 1',
               ].join(' '),
               [sessionId, input.channel],
@@ -1255,16 +1760,18 @@ export class TenantChatbotService {
               await client.query(
                 [
                   'INSERT INTO tenant_chatbot_conversation(',
-                  'lead_id, property_id, channel, audience, session_id)',
-                  'VALUES ($1, $2, $3, $4, $5)',
-                  'RETURNING id::text AS id, status, turn_count AS "turnCount"',
+                  'lead_id, property_id, channel, audience, session_id, workflow_state)',
+                  'VALUES ($1, $2, $3, $4, $5, $6)',
+                  'RETURNING id::text AS id, status, audience, workflow_state AS "workflowState", turn_count AS "turnCount"',
                 ].join(' '),
                 [
                   leadId,
                   propertyId,
                   input.channel,
-                  input.audience ?? 'LEAD',
+                  input.audienceUpdate ?? input.audience ?? 'LEAD',
                   sessionId,
+                  input.workflowStateUpdate ??
+                    (input.requireRoleConfirmation ? 'ASK_ROLE' : 'ANSWERING'),
                 ],
               )
             ).rows[0];
@@ -1285,7 +1792,78 @@ export class TenantChatbotService {
           );
           if (!incoming.rows.length) {
             await client.query('COMMIT');
-            return { ...result, conversationId, queued: false };
+            return {
+              ...result,
+              conversationId,
+              queued: false,
+              showingEligible: input.showingEligible === true,
+              realtorVerified: input.realtorVerified === true,
+              terminal: false,
+            };
+          }
+          if (input.audienceUpdate || input.workflowStateUpdate) {
+            const nextAudience =
+              input.audienceUpdate ?? input.audience ?? conversation.audience ?? 'LEAD';
+            const nextWorkflow =
+              input.workflowStateUpdate ?? conversation.workflowState ?? 'ANSWERING';
+            await client.query(
+              [
+                'UPDATE tenant_chatbot_conversation',
+                'SET audience = $2, workflow_state = $3, updated_at = now()',
+                'WHERE id = $1',
+              ].join(' '),
+              [conversationId, nextAudience, nextWorkflow],
+            );
+            conversation.audience = nextAudience;
+            conversation.workflowState = nextWorkflow;
+          }
+          if (validStoredCredit(input.qualificationUpdates?.creditScore)) {
+            await client.query(
+              [
+                'UPDATE tenant_lead SET payload = jsonb_set(',
+                "COALESCE(payload, '{}'::jsonb), '{creditScore}', to_jsonb($2::text), true),",
+                'updated_at = now() WHERE id = $1 RETURNING id',
+              ].join(' '),
+              [leadId, String(input.qualificationUpdates?.creditScore)],
+            );
+            lead.payload = {
+              ...(isRecordValue(lead.payload) ? lead.payload : {}),
+              creditScore: String(input.qualificationUpdates?.creditScore),
+            };
+          }
+          if (validStoredIncome(input.qualificationUpdates?.monthlyEarning)) {
+            await client.query(
+              [
+                'UPDATE tenant_lead SET payload = jsonb_set(',
+                "COALESCE(payload, '{}'::jsonb), '{monthlyEarning}', to_jsonb($2::text), true),",
+                'updated_at = now() WHERE id = $1 RETURNING id',
+              ].join(' '),
+              [leadId, String(input.qualificationUpdates?.monthlyEarning)],
+            );
+            lead.payload = {
+              ...(isRecordValue(lead.payload) ? lead.payload : {}),
+              monthlyEarning: String(input.qualificationUpdates?.monthlyEarning),
+            };
+          }
+          if (isWorkflowResultReason(result.reason)) {
+            const response = await this.persistRuleDecision(client, {
+              input,
+              settings,
+              result,
+              conversationId,
+              leadId,
+              lead,
+              property,
+              idempotencyKey,
+              terminal: false,
+            });
+            await client.query('COMMIT');
+            return {
+              ...response,
+              showingEligible: input.showingEligible === true,
+              realtorVerified: input.realtorVerified === true,
+              terminal: false,
+            };
           }
           const liveDecision = evaluateChatbotPolicy({
             settings,
@@ -1296,10 +1874,6 @@ export class TenantChatbotService {
             propertyStatus: propertyId
               ? (property?.status ?? 'unavailable')
               : null,
-            minimumCreditScore:
-              property?.payload?.minimumCreditScore ??
-              property?.payload?.minCreditScore,
-            leadCreditScore: input.leadCreditScore ?? lead.payload?.creditScore,
             turnCount: Number(conversation.turnCount ?? 0),
             infrastructureReady: true,
           });
@@ -1316,7 +1890,12 @@ export class TenantChatbotService {
               terminal: liveDecision.terminal,
             });
             await client.query('COMMIT');
-            return response;
+            return {
+              ...response,
+              showingEligible: input.showingEligible === true,
+              realtorVerified: input.realtorVerified === true,
+              terminal: liveDecision.terminal,
+            };
           }
           if (result.decision !== 'ANSWER') {
             const response = await this.persistRuleDecision(client, {
@@ -1330,11 +1909,75 @@ export class TenantChatbotService {
               idempotencyKey,
               terminal: isTerminalRuleReason(result.reason),
             });
+            const terminal = isTerminalRuleReason(result.reason);
             await client.query('COMMIT');
-            return response;
+            return {
+              ...response,
+              showingEligible: input.showingEligible === true,
+              realtorVerified: input.realtorVerified === true,
+              terminal,
+            };
           }
           const preferredAt = confirmedShowingAt(input.showing);
-          if (preferredAt && propertyId) {
+          const showingValues = qualificationValuesFromPayload(
+            isRecordValue(lead.payload) ? lead.payload : {},
+          );
+          const showingOutcome = qualificationResult(
+            showingValues,
+            readPropertyQualification(
+              isRecordValue(property?.payload) ? property.payload : {},
+            ),
+          );
+          const showingQualified =
+            input.audience === 'LEAD' &&
+            validStoredCredit(showingValues.creditScore) &&
+            validStoredIncome(showingValues.monthlyEarning) &&
+            showingOutcome.qualified;
+          if (preferredAt && !showingQualified) {
+            const block = !validStoredCredit(showingValues.creditScore)
+              ? creditPromptResult()
+              : !validStoredIncome(showingValues.monthlyEarning)
+                ? incomePromptResult()
+                : verifiedWorkflowResult(
+                    'This property does not pass the saved qualification checks, so I cannot submit a showing request for it. I can help with another available property.',
+                    'ANSWER',
+                    showingOutcome.failed === 'creditScore'
+                      ? 'CREDIT_BELOW_MINIMUM'
+                      : 'INCOME_BELOW_MINIMUM',
+                  );
+            const response = await this.persistRuleDecision(client, {
+              input,
+              settings,
+              result: block,
+              conversationId,
+              leadId,
+              lead,
+              property,
+              idempotencyKey,
+              terminal: false,
+            });
+            await client.query('COMMIT');
+            return {
+              ...response,
+              showingEligible: false,
+              realtorVerified: input.realtorVerified === true,
+              terminal: false,
+            };
+          }
+          if (
+            preferredAt &&
+            propertyId &&
+            property &&
+            hasShowingContact(lead)
+          ) {
+            const copy = await this.showingRequestCopy(
+              client,
+              tenant,
+              settings,
+              lead,
+              property,
+              preferredAt,
+            );
             const request = await client.query(
               [
                 'INSERT INTO tenant_showing_request(',
@@ -1348,8 +1991,8 @@ export class TenantChatbotService {
                 randomUUID(),
                 leadId,
                 propertyId,
-                `Showing request - ${property?.title ?? 'Property'}`,
-                'Confirmed through the tenant chatbot.',
+                copy.title,
+                copy.message,
                 lead.fullName,
                 lead.email ?? '',
                 lead.phone ?? '',
@@ -1385,6 +2028,9 @@ export class TenantChatbotService {
               evidence: [],
               conversationId,
               queued: false,
+              showingEligible: false,
+              realtorVerified: input.realtorVerified === true,
+              terminal: true,
             };
           }
           let outreachJobId: number | null = null;
@@ -1469,8 +2115,11 @@ export class TenantChatbotService {
           return {
             ...result,
             conversationId,
-            queued: input.channel === 'WEB' || Boolean(outreachJobId),
+            queued: input.channel === 'WEB' ? false : Boolean(outreachJobId),
             outreachJobId,
+            showingEligible: input.showingEligible === true,
+            realtorVerified: input.realtorVerified === true,
+            terminal: false,
           };
         } catch (error) {
           await client.query('ROLLBACK');
@@ -1478,6 +2127,63 @@ export class TenantChatbotService {
         }
       },
     );
+  }
+
+  private async showingRequestCopy(
+    client: { query: (sql: string, values?: unknown[]) => Promise<any> },
+    tenant: TenantReference,
+    settings: ChatbotSettings,
+    lead: any,
+    property: any,
+    preferredAt: Date,
+  ) {
+    const fallback = {
+      title: `Showing request - ${property.title ?? 'Property'}`,
+      message: 'Confirmed through the tenant chatbot.',
+    };
+    if (!settings.showingRequestTemplateId) return fallback;
+
+    const result = await client.query(
+      'SELECT value FROM tenant_setting WHERE key = $1 LIMIT 1',
+      ['agency_workspace_settings'],
+    );
+    const agency = (parseSettings(result.rows[0]?.value) ?? {}) as any;
+    const templates = Array.isArray(agency.communicationTemplates)
+      ? agency.communicationTemplates
+      : [];
+    const template = templates.find(
+      (item: any) =>
+        item &&
+        String(item.id ?? '') === settings.showingRequestTemplateId &&
+        item.audience === 'LeadShowing' &&
+        item.isActive !== false,
+    );
+    if (!template) return fallback;
+
+    const agencyName = cleanTemplateValue(
+      agency.profile?.agencyName ?? tenant.businessName,
+    );
+    const propertyAddress = cleanTemplateValue(
+      property.payload?.exactLocation ??
+        property.payload?.location ??
+        property.payload?.address ??
+        property.title,
+    );
+    const values: Record<string, string> = {
+      '{{client_name}}': cleanTemplateValue(
+        lead.fullName ?? lead.email ?? lead.phone,
+      ),
+      '{{property_address}}': propertyAddress,
+      '{{showing_time}}': preferredAt.toISOString(),
+      '{{agent_name}}': agencyName,
+      '{{agency_name}}': agencyName,
+    };
+    const title = renderShowingTemplate(template.subject, values);
+    const message = renderShowingTemplate(template.body, values);
+    return {
+      title: (title || fallback.title).slice(0, 240),
+      message: (message || fallback.message).slice(0, 4_000),
+    };
   }
 
   private async persistRuleDecision(
@@ -1675,14 +2381,10 @@ export class TenantChatbotService {
     metadata: Record<string, unknown>,
   ) {
     await client.query(
+      'INSERT INTO tenant_audit_log(action, actor_master_user_id, summary, metadata) VALUES ($1, $2, $3, $4::jsonb)',
       [
-        'INSERT INTO tenant_audit_log(',
-        'actor_master_user_id, action, resource_type, summary, metadata)',
-        "VALUES ($1, $2, 'chatbot', $3, $4::jsonb)",
-      ].join(' '),
-      [
-        positiveInteger(actorMasterUserId),
         action,
+        positiveInteger(actorMasterUserId),
         summary,
         JSON.stringify(metadata),
       ],
@@ -1725,6 +2427,102 @@ function positiveInteger(value: unknown): number | null {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
+function isRecordValue(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function qualificationValuesFromPayload(payload: Record<string, unknown>): QualificationValues {
+  return {
+    creditScore: numericValue(payload.creditScore),
+    monthlyEarning: numericValue(payload.monthlyEarning),
+  };
+}
+
+function numericValue(value: unknown) {
+  const parsed = Number(String(value ?? '').replace(/[$,\s]/g, ''));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function validStoredCredit(value: unknown) {
+  const score = Number(value);
+  return Number.isFinite(score) && score >= 300 && score <= 850;
+}
+
+function validStoredIncome(value: unknown) {
+  const amount = Number(value);
+  return Number.isFinite(amount) && amount > 0;
+}
+
+function verifiedWorkflowResult(
+  answer: string,
+  decision: ChatbotPolicyDecision['action'],
+  reason: ChatbotPolicyDecision['reason'],
+): ChatbotTestResult {
+  return { answer, decision, reason, confidence: null, evidence: [] };
+}
+
+function roleFollowUpPrompt() {
+  return 'Also, so I give you the right information going forward, are you looking to rent the property yourself, or are you a Realtor?';
+}
+
+function creditFollowUpPrompt() {
+  return "If you'd like, I can also check the two basic qualification requirements for you. What's your approximate credit score?";
+}
+
+function incomeFollowUpPrompt() {
+  return 'Thanks. And about how much is your monthly income before taxes? An estimate is fine.';
+}
+
+function appendConversationalFollowUp(
+  result: ChatbotTestResult,
+  followUp?: string,
+): ChatbotTestResult {
+  const prompt = String(followUp ?? '').trim();
+  if (!prompt) return result;
+  const answer = String(result.answer ?? '').trim();
+  return { ...result, answer: answer ? `${answer}\n\n${prompt}` : prompt };
+}
+
+function creditPromptResult() {
+  return verifiedWorkflowResult(
+    creditFollowUpPrompt(),
+    'ASK_CREDIT',
+    'CREDIT_REQUIRED',
+  );
+}
+
+function incomePromptResult() {
+  return verifiedWorkflowResult(
+    incomeFollowUpPrompt(),
+    'ASK_INCOME',
+    'INCOME_REQUIRED',
+  );
+}
+
+function isWorkflowResultReason(reason: ChatbotPolicyDecision['reason']) {
+  return [
+    'ROLE_REQUIRED', 'ROLE_CAPTURED', 'CREDIT_REQUIRED', 'INCOME_REQUIRED',
+    'CREDIT_BELOW_MINIMUM', 'INCOME_BELOW_MINIMUM', 'QUALIFIED',
+  ].includes(reason);
+}
+
+function alternativePropertyLabel(row: any) {
+  const payload = isRecordValue(row?.payload) ? row.payload : {};
+  const location = String(payload.exactLocation ?? payload.location ?? payload.address ?? '').trim();
+  const rent = String(payload.monthlyRent ?? payload.price ?? '').trim();
+  return [String(row?.title ?? 'Available property').trim(), location, rent]
+    .filter(Boolean)
+    .join(' — ');
+}
+
+function formatQualificationNumber(value: number | null, credit: boolean) {
+  if (!Number.isFinite(value)) {
+    return credit ? 'the published score' : 'the published income';
+  }
+  const rounded = Math.round(Number(value));
+  return credit ? String(rounded) : `$${rounded.toLocaleString('en-US')}/month`;
+}
+
 function clampInteger(
   value: unknown,
   fallback: number,
@@ -1753,8 +2551,13 @@ function stopped(
 
 function shouldSendRuleMessage(reason: ChatbotPolicyDecision['reason']) {
   return [
+    'ROLE_REQUIRED',
+    'ROLE_CAPTURED',
     'CREDIT_REQUIRED',
+    'INCOME_REQUIRED',
     'CREDIT_BELOW_MINIMUM',
+    'INCOME_BELOW_MINIMUM',
+    'QUALIFIED',
     'PROPERTY_UNAVAILABLE',
     'EVIDENCE_INSUFFICIENT',
     'EVIDENCE_CONFLICT',
@@ -1797,32 +2600,172 @@ function evidenceFrom(hydrated: HydratedMatch[]): ChatbotTestEvidence[] {
   }));
 }
 
-function hasEvidenceConflict(hydrated: HydratedMatch[]) {
-  if (hydrated.length < 2) return false;
-  const significant = hydrated.filter(
-    ({ match }) => match.score >= hydrated[0].match.score - 0.05,
+function relevanceConfidence(question: string, hydrated: HydratedMatch) {
+  const semantic = hydrated.match.score;
+  const sharedIntent = strongestSharedPropertyIntent(
+    question,
+    `${hydrated.record.title} ${hydrated.record.answer}`,
   );
-  const normalized = significant.map(({ record }) =>
-    record.answer
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, ' ')
-      .trim(),
+  if (sharedIntent && sharedIntent.weight >= 3) {
+    return Math.max(semantic, 0.95);
+  }
+  const queryTokens = meaningfulTokens(question);
+  if (queryTokens.length === 0) return semantic;
+  if (queryTokens.length === 1) {
+    const titleTokens = tokens(hydrated.record.title);
+    return titleTokens.some((titleToken) =>
+      fuzzyTokenMatch(queryTokens[0], titleToken),
+    )
+      ? Math.max(semantic, 0.95)
+      : semantic;
+  }
+  const evidenceTokens = tokens(
+    `${hydrated.record.title} ${hydrated.record.answer}`,
   );
-  return (
-    normalized.some((answer, index) =>
-      normalized.some(
-        (other, otherIndex) =>
-          index !== otherIndex &&
-          (answer.includes(`not ${other}`) || other.includes(`not ${answer}`)),
-      ),
-    ) ||
-    (normalized.some((answer) =>
-      /\b(no|not|never|prohibited|disallowed)\b/.test(answer),
-    ) &&
-      normalized.some((answer) =>
-        /\b(yes|allowed|available|included)\b/.test(answer),
-      ))
-  );
+  const matched = queryTokens.filter((queryToken) =>
+    evidenceTokens.some((evidenceToken) => fuzzyTokenMatch(queryToken, evidenceToken)),
+  ).length;
+  const coverage = matched / queryTokens.length;
+  if (coverage >= 0.75) return Math.max(semantic, 0.95);
+  if (coverage >= 0.6) return Math.max(semantic, 0.85);
+  return semantic;
+}
+
+const QUESTION_STOP_WORDS = new Set([
+  'a', 'about', 'allow', 'allowed', 'any', 'are', 'be', 'can', 'do', 'does',
+  'for', 'get', 'has', 'have', 'here', 'how', 'i', 'in', 'is', 'it', 'many', 'me', 'my',
+  'need', 'of', 'please', 'property', 'tell', 'the', 'there', 'this', 'to',
+  'what', 'when', 'where', 'who', 'why', 'will', 'would', 'your',
+]);
+
+function meaningfulTokens(value: string) {
+  return tokens(value).filter((token) => !isQuestionStopWord(token));
+}
+
+function isQuestionStopWord(token: string) {
+  if (QUESTION_STOP_WORDS.has(token)) return true;
+  return [...QUESTION_STOP_WORDS].some((word) => fuzzyTokenMatch(token, word));
+}
+
+function tokens(value: string) {
+  return (value.toLowerCase().match(/[a-z0-9]+/g) ?? []).map(canonicalToken);
+}
+
+function canonicalToken(value: string) {
+  let token = value;
+  if (token.length > 6 && token.endsWith('ing')) token = token.slice(0, -3);
+  if (token.length > 4 && token.endsWith('s')) token = token.slice(0, -1);
+  if (['dog', 'puppy', 'cat', 'kitten', 'animal'].includes(token)) return 'pet';
+  return token;
+}
+
+function fuzzyTokenMatch(left: string, right: string) {
+  if (left === right) return true;
+  if (left.length < 4 || right.length < 4) return false;
+  if (Math.abs(left.length - right.length) > 1) return false;
+  if (left.length === right.length) {
+    const mismatches: number[] = [];
+    for (let index = 0; index < left.length; index += 1) {
+      if (left[index] !== right[index]) mismatches.push(index);
+      if (mismatches.length > 2) return false;
+    }
+    if (mismatches.length <= 1) return true;
+    const [first, second] = mismatches;
+    return (
+      second === first + 1 &&
+      left[first] === right[second] &&
+      left[second] === right[first]
+    );
+  }
+  let leftIndex = 0;
+  let rightIndex = 0;
+  let edits = 0;
+  while (leftIndex < left.length && rightIndex < right.length) {
+    if (left[leftIndex] === right[rightIndex]) {
+      leftIndex += 1;
+      rightIndex += 1;
+      continue;
+    }
+    edits += 1;
+    if (edits > 1) return false;
+    if (left.length > right.length) leftIndex += 1;
+    else if (right.length > left.length) rightIndex += 1;
+    else {
+      leftIndex += 1;
+      rightIndex += 1;
+    }
+  }
+  return edits + Number(leftIndex < left.length || rightIndex < right.length) <= 1;
+}
+
+function humanizeVerifiedAnswer(record: KnowledgeRecord) {
+  const raw = String(record.answer ?? '').trim().replace(/\bpaking\b/gi, 'parking');
+  const colon = raw.indexOf(':');
+  if (colon <= 0) return sentence(raw);
+  const label = raw.slice(0, colon).trim().toLowerCase();
+  const value = raw.slice(colon + 1).trim();
+  const lowerValue = value.toLowerCase().replace(/[.!]+$/, '');
+
+  if (label === 'pet policy' && lowerValue === 'no') return "No, pets aren't allowed at this property.";
+  if (label === 'parking') {
+    if (
+      /spot\s*1\s+and\s+1\s+guest\s+parking/i.test(value) ||
+      /1\s+assigned\s+(?:parking\s+)?spot\s+and\s+1\s+guest\s+parking\s+spot/i.test(value)
+    ) {
+      return 'Yes. This property includes 1 assigned parking spot and 1 guest parking spot.';
+    }
+    return `Parking is available: ${sentence(value)}`;
+  }
+  if (label === 'guest parking') return `There is ${sentence(value).replace(/^There is\s+/i, '')}`;
+  if (label === 'monthly rent') return `The monthly rent is ${sentence(value)}`;
+  if (label === 'available from') return `The property is available from ${sentence(value)}`;
+  if (label === 'bedrooms') return `The property has ${value} bedrooms.`;
+  if (label === 'bathrooms') return `The property has ${value} bathrooms.`;
+  if (label === 'address') return `The property is located at ${sentence(value)}`;
+  if (label === 'community') return `The property is in the ${sentence(value)}`;
+  if (label === 'age requirement') return `This property is in a ${sentence(value)}`;
+  if (label === 'floor') return `The unit is on the ${sentence(value)}`;
+  if (label.startsWith('nearby ')) return `Nearby options include ${sentence(value)}`;
+  if (label === 'highway access') return `The property has ${sentence(value)}`;
+  if (label === 'nearby cities') return `Nearby cities include ${sentence(value)}`;
+  if (label === 'move-in costs') return `Move-in costs are ${sentence(value)}`;
+  if (label === 'first month' || label === 'last month') return `The ${label} is ${sentence(value.toLowerCase())}`;
+  if (label === 'security deposit') return `The security deposit is ${sentence(value)}`;
+  if (label === 'utilities') return sentence(value);
+  if (label === 'application instructions') return sentence(value.replace(/^apply online at\s+/i, 'You can apply online at '));
+  if (label === 'minimum credit score') return `The minimum credit score is ${sentence(value)}`;
+  if (label === 'income requirement') return `The income requirement is ${sentence(value)}`;
+  if (label === 'minimum monthly income') return `The minimum monthly income is ${sentence(value)}`;
+  if (label === 'applicant history') return `Applicants must have ${sentence(value.toLowerCase())}`;
+  if (label === 'co-signers') return /no co-signers/i.test(value) ? "No, co-signers aren't allowed." : sentence(value);
+  if (label === 'tenant insurance') return sentence(value);
+  if (label === 'insurance additional interest' || label === 'additional interest') return `Add ${value} as the additional interest on the insurance policy.`;
+  if (label === 'insurance mailing address') return `Use ${value} as the insurance mailing address.`;
+  if (label === 'application fee') return `The application fee is ${sentence(value)}`;
+  if (label === 'application turnaround') return `Application processing takes ${sentence(value)}`;
+  if (label === 'association') return lowerValue === 'yes' ? 'Yes, this property has an HOA/association.' : sentence(value);
+  if (label === 'debt to income ratio') return `The debt-to-income ratio ${sentence(value)}`;
+  if (label === 'hoa income criteria') return `The HOA income requirement is ${sentence(value)}`;
+  if (label === 'proof of income') return lowerValue === 'required' ? 'Yes, proof of income is required.' : sentence(value);
+  if (label === 'income documents') return `You will need ${sentence(value)}`;
+  if (label === 'hoa approval time') return `HOA approval takes ${sentence(value)}`;
+  if (label === 'hoa application fee') return `The HOA application fee is ${sentence(value)}`;
+  if (label === 'married hoa fee') return `For married applicants, the HOA application fee is ${sentence(value)}`;
+  if (label === 'marriage certificate') return `Married applicants need a marriage certificate; it is ${sentence(value)}`;
+  if (label === 'hoa payment method') return `The HOA application must be paid by ${sentence(value)}`;
+  if (label === 'hoa security deposit') return `The HOA security deposit is ${sentence(value)}`;
+  if (label === 'minimum lease duration') return `The minimum lease term is ${sentence(value)}`;
+  if (label === 'smoking') return /no smoking/i.test(value) ? "No, smoking isn't allowed inside the property." : sentence(value);
+  if (label === 'listing contact') return `You can contact the listing at ${sentence(value)}`;
+  if (label === 'application documentation') return sentence(value);
+  if (label === 'description detail') return sentence(value);
+  return `The ${label} is ${sentence(value)}`;
+}
+
+function sentence(value: string) {
+  const text = String(value ?? '').trim();
+  if (!text) return '';
+  return /[.!?]$/.test(text) ? text : `${text}.`;
 }
 
 function liveStopped(
@@ -1834,6 +2777,10 @@ function liveStopped(
     conversationId: null,
     queued: false,
   };
+}
+
+function isSensitiveRealtorRecord(record: KnowledgeRecord) {
+  return isSensitiveRealtorQuestion(`${record.title} ${record.answer}`);
 }
 
 function isSensitiveRealtorQuestion(value: unknown) {
@@ -1865,6 +2812,27 @@ function confirmedShowingAt(
     preferredAt.getTime() > Date.now()
     ? preferredAt
     : null;
+}
+
+function hasShowingContact(lead: any) {
+  return Boolean(
+    String(lead?.email ?? '').trim() || String(lead?.phone ?? '').trim(),
+  );
+}
+
+function cleanTemplateValue(value: unknown) {
+  return String(value ?? '').trim();
+}
+
+function renderShowingTemplate(
+  source: unknown,
+  values: Record<string, string>,
+) {
+  let result = cleanTemplateValue(source);
+  for (const [token, value] of Object.entries(values)) {
+    result = result.split(token).join(value);
+  }
+  return result;
 }
 
 function errorMessage(error: unknown) {

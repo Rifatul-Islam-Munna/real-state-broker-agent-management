@@ -49,6 +49,8 @@ describe('TenantChatbotWorkerService', () => {
       sessionId: 'email:7',
       idempotencyKey: 'inbound:501',
       body: 'Is parking included?',
+      realtorVerified: false,
+      requireRoleConfirmation: true,
     });
   });
   it('uses REALTOR audience only for a sender verified in the tenant realtor directory', async () => {
@@ -98,6 +100,8 @@ describe('TenantChatbotWorkerService', () => {
         audience: 'REALTOR',
         leadId: 12,
         propertyId: 44,
+        realtorVerified: true,
+        requireRoleConfirmation: true,
       }),
     );
   });
@@ -118,5 +122,32 @@ describe('TenantChatbotWorkerService', () => {
         delete process.env.TENANT_CHATBOT_WORKER_ENABLED;
       else process.env.TENANT_CHATBOT_WORKER_ENABLED = previous;
     }
+  });
+
+  it('cleans expired activity for every tenant during the scheduled pass', async () => {
+    const tenant = {
+      id: 42,
+      databaseName: 'tenant_42',
+      isActive: true,
+      isBlocked: false,
+    } as any;
+    const chatbot = {
+      cleanupExpiredActivity: jest
+        .fn()
+        .mockResolvedValue({ messagesDeleted: 2, eventsDeleted: 1 }),
+    };
+    const worker = new TenantChatbotWorkerService(
+      { find: jest.fn(async () => [tenant]) } as any,
+      {} as any,
+      chatbot as any,
+    );
+    jest.spyOn(worker, 'processTenant').mockResolvedValue({
+      processed: 0,
+      failed: 0,
+    });
+
+    await worker.processAllTenants();
+
+    expect(chatbot.cleanupExpiredActivity).toHaveBeenCalledWith(tenant);
   });
 });

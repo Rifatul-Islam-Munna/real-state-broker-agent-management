@@ -564,4 +564,12 @@ export const TENANT_DATABASE_MIGRATIONS: TenantDatabaseMigration[] = [
         ON tenant_chatbot_event(created_at)`,
     ],
   },
+  {
+    version: 14,
+    name: 'chatbot_conversation_workflow_state',
+    statements: [
+      `ALTER TABLE tenant_chatbot_conversation
+        ADD COLUMN IF NOT EXISTS workflow_state varchar(40) NOT NULL DEFAULT 'ANSWERING'`,
+    ],
+  },
 ];

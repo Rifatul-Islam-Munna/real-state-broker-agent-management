@@ -148,10 +148,23 @@ export function mapPropertyKnowledge(
     addChunk(chunks, propertyId, title, 'REALTOR', statusField, status);
   }
   for (const field of LEAD_FIELDS) {
-    const value = displayValue(payload[field.key]);
+    const value =
+      displayValue(payload[field.key]) ||
+      (field.key === 'minimumCreditScore'
+        ? minimumCreditScoreFromDescription(payload.description)
+        : '');
     if (!value) continue;
     addChunk(chunks, propertyId, title, 'LEAD', field, value);
     addChunk(chunks, propertyId, title, 'REALTOR', field, value);
+  }
+  for (const [index, detail] of descriptionDetails(payload.description).entries()) {
+    const field: FieldDefinition = {
+      key: `descriptionDetail:${index}`,
+      label: detail.label,
+      priority: 85,
+    };
+    addChunk(chunks, propertyId, title, 'LEAD', field, detail.value);
+    addChunk(chunks, propertyId, title, 'REALTOR', field, detail.value);
   }
   for (const field of REALTOR_FIELDS) {
     const value = displayValue(payload[field.key]);
@@ -159,6 +172,60 @@ export function mapPropertyKnowledge(
     addChunk(chunks, propertyId, title, 'REALTOR', field, value);
   }
   return chunks;
+}
+
+function descriptionDetails(value: unknown) {
+  const description = text(value);
+  if (!description) return [];
+  const lines = description
+    .split(/\r?\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .flatMap((line) => {
+      const colon = line.indexOf(':');
+      if (colon > 0 && colon <= 80) return [line];
+      return line
+        .split(/(?<=[.!?])\s+(?=[A-Z0-9])/)
+        .map((sentence) => sentence.trim())
+        .filter(Boolean);
+    });
+  const details: Array<{ label: string; value: string }> = [];
+  for (const line of lines) {
+    const colon = line.indexOf(':');
+    const rawLabel = colon > 0 && colon <= 80 ? line.slice(0, colon).trim() : '';
+    const rawValue = rawLabel ? line.slice(colon + 1).trim() : line;
+    if (!rawValue) continue;
+    details.push({
+      label: rawLabel
+        ? descriptionLabel(rawLabel)
+        : inferredDescriptionLabel(rawValue),
+      value: rawValue,
+    });
+  }
+  return details;
+}
+
+function descriptionLabel(value: string) {
+  const normalized = value.toLowerCase().replace(/^./, (letter) => letter.toUpperCase());
+  if (value.trim().toLowerCase() === 'pets') return 'Pet policy';
+  return normalized;
+}
+
+function inferredDescriptionLabel(value: string) {
+  const normalized = value.toLowerCase();
+  if (/\bpa(?:r)?king\b/.test(normalized)) return 'Parking';
+  if (/\bpets?\b/.test(normalized)) return 'Pet policy';
+  if (/\bsmok/.test(normalized)) return 'Smoking';
+  if (/\bcredit\b/.test(normalized)) return 'Credit requirement';
+  if (/\bincome\b/.test(normalized)) return 'Income requirement';
+  if (/\butilities?\b/.test(normalized)) return 'Utilities';
+  if (/\bdeposit\b/.test(normalized)) return 'Deposit';
+  if (/\bapplication\b/.test(normalized)) return 'Application';
+  if (/\blease\b/.test(normalized)) return 'Lease terms';
+  if (/\bhoa\b|\bassociation\b/.test(normalized)) return 'Association';
+  if (/\binsurance\b/.test(normalized)) return 'Tenant insurance';
+  if (/\bcontact\b|@|\bphone\b/.test(normalized)) return 'Listing contact';
+  return 'Description detail';
 }
 
 function addChunk(
@@ -180,10 +247,19 @@ function addChunk(
     sourceHash: createHash('sha256')
       .update(`${sourceKey}\n${content}`)
       .digest('hex'),
-    title: `${propertyTitle} Ã¢â‚¬â€ ${field.label}`,
+    title: `${propertyTitle} — ${field.label}`,
     content,
     priority: field.priority ?? 60,
   });
+}
+
+function minimumCreditScoreFromDescription(value: unknown) {
+  const description = text(value);
+  const match = description.match(/\bcredit\s*score\b[^\d]{0,12}(\d{3})\b/i);
+  const score = Number(match?.[1]);
+  return Number.isInteger(score) && score >= 300 && score <= 850
+    ? String(score)
+    : '';
 }
 
 function displayValue(value: unknown): string {

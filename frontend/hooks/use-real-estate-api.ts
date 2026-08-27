@@ -981,17 +981,26 @@ export function useCreateTenantPropertyInquiry() {
 
 export type PublicTenantChatbotResponse = {
   answer: string
-  decision: "ANSWER" | "STOP" | "ASK_CREDIT" | "CREATE_SHOWING_REQUEST"
+  decision: "ANSWER" | "STOP" | "ASK_ROLE" | "ASK_CREDIT" | "ASK_INCOME" | "CREATE_SHOWING_REQUEST"
   reason: string
   confidence: number | null
   conversationId: string | null
   queued: boolean
+  showingEligible?: boolean
+  realtorVerified?: boolean
+  terminal?: boolean
 }
 
 export function usePublicTenantChatbot() {
   return useCommonMutationApi<
     PublicTenantChatbotResponse,
-    { accessToken: string; sessionId: string; idempotencyKey: string; body: string }
+    {
+      accessToken: string
+      sessionId: string
+      idempotencyKey: string
+      body: string
+      showing?: { confirmed: boolean; preferredAt?: string | null }
+    }
   >({
     method: "POST",
     showSuccessToast: false,

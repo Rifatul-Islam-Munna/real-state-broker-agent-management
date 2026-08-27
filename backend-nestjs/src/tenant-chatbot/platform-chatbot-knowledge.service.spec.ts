@@ -24,6 +24,7 @@ describe('PlatformChatbotKnowledgeService', () => {
     };
     const embeddings = {
       embed: jest.fn(async () => Array(384).fill(0.01)),
+      modelSignature: jest.fn(() => 'snowflake/snowflake-arctic-embed-xs|q8|384|cls|arctic-query-v1'),
     };
     const vectors = {
       ensureCollection: jest.fn(async () => undefined),
@@ -59,7 +60,12 @@ describe('PlatformChatbotKnowledgeService', () => {
       }),
     ]);
     const metadata = vectors.upsert.mock.calls[0][0][0].metadata;
+    expect(embeddings.embed).toHaveBeenCalledWith(
+      expect.stringContaining(saved.title),
+      'document',
+    );
     expect(metadata.tenantId).toBeUndefined();
+    expect(metadata.embeddingModelSignature).toBe(embeddings.modelSignature());
     expect(auditRepository.save).toHaveBeenCalledWith(
       expect.objectContaining({
         action: 'chatbot.knowledge.create',
@@ -125,7 +131,10 @@ describe('PlatformChatbotKnowledgeService', () => {
       save: jest.fn(async (input) => input),
     };
     const auditRepository = { create: jest.fn((input) => input), save: jest.fn(async (input) => input) };
-    const embeddings = { embed: jest.fn(async () => Array(384).fill(0.01)) };
+    const embeddings = {
+      embed: jest.fn(async () => Array(384).fill(0.01)),
+      modelSignature: jest.fn(() => 'snowflake/snowflake-arctic-embed-xs|q8|384|cls|arctic-query-v1'),
+    };
     const vectors = {
       ensureCollection: jest.fn(async () => undefined),
       upsert: jest.fn(async () => undefined),

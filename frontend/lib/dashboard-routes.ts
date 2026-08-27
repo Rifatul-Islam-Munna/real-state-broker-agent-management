@@ -33,6 +33,7 @@ export const dashboardRoutes: readonly DashboardRoute[] = [
   { href: "/dashboard/contact-inbox", label: "Contact Us", icon: "contact_phone", permission: "lead" },
   { href: "/dashboard/property-chat-inbox", label: "Property Chat", icon: "textsms", permission: "lead" },
   { href: "/dashboard/test-chatbot", label: "Test Chatbot", icon: "science", permission: "lead" },
+  { href: "/dashboard/bot-activity", label: "Bot Activity", icon: "history", permission: "lead" },
   { href: "/dashboard/text-messages", label: "Text Messages", icon: "sms", permission: "lead" },
   { href: "/dashboard/mail", label: "Mail", icon: "mail", permission: "mail" },
   { href: "/dashboard/marketing", label: "Marketing", icon: "campaign", adminOnly: true },

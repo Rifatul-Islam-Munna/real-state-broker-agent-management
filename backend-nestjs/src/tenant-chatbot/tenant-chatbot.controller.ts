@@ -97,6 +97,11 @@ export class TenantChatbotController {
     return this.chatbot.testQuestion(request.tenant, body);
   }
 
+  @Get('activity')
+  botActivity(@Req() request: any) {
+    return this.chatbot.listActivity(request.tenant);
+  }
+
   @Get('leads/:leadId/activity')
   activity(@Req() request: any, @Param('leadId') leadId: string) {
     return this.chatbot.listLeadActivity(request.tenant, Number(leadId));
