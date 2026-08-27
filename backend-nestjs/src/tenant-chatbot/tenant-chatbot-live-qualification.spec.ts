@@ -160,15 +160,12 @@ describe('Tenant chatbot live qualification workflow', () => {
   it('routes a direct showing request through role and qualification instead of generic evidence fallback', async () => {
     const state = harness();
     await expect(state.send('I wanna rent this, can you give me the showing form?', 'show-1')).resolves.toMatchObject({
-      decision: 'ASK_ROLE', reason: 'ROLE_REQUIRED', showingEligible: false,
-    });
-    await expect(state.send('tenant', 'show-2')).resolves.toMatchObject({
       decision: 'ASK_CREDIT', reason: 'CREDIT_REQUIRED', showingEligible: false,
     });
-    await expect(state.send('800', 'show-3')).resolves.toMatchObject({
+    await expect(state.send('800', 'show-2')).resolves.toMatchObject({
       decision: 'ASK_INCOME', reason: 'INCOME_REQUIRED', showingEligible: false,
     });
-    const result = await state.send('6k', 'show-4');
+    const result = await state.send('6k', 'show-3');
     expect(result).toMatchObject({ decision: 'ANSWER', reason: 'QUALIFIED', showingEligible: true });
     expect(result.answer).toMatch(/showing|request/i);
   });
@@ -178,6 +175,19 @@ describe('Tenant chatbot live qualification workflow', () => {
     await state.send('can I schedule a tour?', 'tour-1');
     const result = await state.send('tenant', 'tour-2');
     expect(result).toMatchObject({ decision: 'ANSWER', reason: 'QUALIFIED', showingEligible: true });
+  });
+
+  it('understands a misspelled first-message showing request and asks the visitor role', async () => {
+    const state = harness();
+    const result = await state.send('can i have a shwoing tommorw?', 'typo-show-1');
+    expect(result).toMatchObject({ decision: 'ASK_ROLE', reason: 'ROLE_REQUIRED', showingEligible: false });
+  });
+
+  it('uses proactively supplied role, credit, and income in one message and unlocks showing immediately', async () => {
+    const state = harness();
+    const result = await state.send('I want to rent this place myself. My credit is 760 and I make $5,500 per month. Can I come see it tomorrow?', 'all-at-once-1');
+    expect(result).toMatchObject({ decision: 'ANSWER', reason: 'QUALIFIED', showingEligible: true });
+    expect(state.getLeadPayload()).toMatchObject({ creditScore: '760', monthlyEarning: '5500' });
   });
 });
 

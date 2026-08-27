@@ -15,6 +15,7 @@ import { hasTopicEvidenceConflict, selectAnswerEvidence } from './evidence-selec
 import {
   parseChatbotRole,
   parseQualificationReply,
+  parseQualificationValues,
   parseShowingIntent,
   qualificationResult,
   readPropertyQualification,
@@ -1361,6 +1362,19 @@ export class TenantChatbotService {
               : 'LEAD';
         let realtorVerified = input.realtorVerified === true;
         const wantsShowing = parseShowingIntent(input.body);
+        const suppliedQualification = parseQualificationValues(input.body);
+        if (
+          validStoredCredit(suppliedQualification.creditScore) ||
+          validStoredIncome(suppliedQualification.monthlyEarning)
+        ) {
+          input = {
+            ...input,
+            qualificationUpdates: {
+              ...(input.qualificationUpdates ?? {}),
+              ...suppliedQualification,
+            },
+          };
+        }
 
         if (state === 'ASK_ROLE') {
           const role = parseChatbotRole(input.body);
@@ -1415,7 +1429,10 @@ export class TenantChatbotService {
               ),
             };
           }
-          const values = qualificationValuesFromPayload(leadPayload);
+          const values = {
+            ...qualificationValuesFromPayload(leadPayload),
+            ...(input.qualificationUpdates ?? {}),
+          };
           if (!validStoredCredit(values.creditScore)) {
             return {
               input: {
@@ -1457,7 +1474,10 @@ export class TenantChatbotService {
           };
         }
 
-        const values = qualificationValuesFromPayload(leadPayload);
+        const values = {
+            ...qualificationValuesFromPayload(leadPayload),
+            ...(input.qualificationUpdates ?? {}),
+          };
         if (wantsShowing && state === 'QUALIFIED') {
           return {
             input: { ...input, audience, realtorVerified: false, showingEligible: true },
@@ -1522,7 +1542,10 @@ export class TenantChatbotService {
             };
           }
           values.creditScore = parsed.creditScore;
-          const qualificationUpdates = { creditScore: parsed.creditScore };
+          const qualificationUpdates = {
+            ...(input.qualificationUpdates ?? {}),
+            creditScore: parsed.creditScore,
+          };
           if (!validStoredIncome(values.monthlyEarning)) {
             return {
               input: {
@@ -1580,7 +1603,10 @@ export class TenantChatbotService {
               ...input,
               audience,
               realtorVerified: false,
-              qualificationUpdates: { monthlyEarning: parsed.monthlyEarning },
+              qualificationUpdates: {
+                ...(input.qualificationUpdates ?? {}),
+                monthlyEarning: parsed.monthlyEarning,
+              },
             },
             property,
             values,

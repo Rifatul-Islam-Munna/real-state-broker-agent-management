@@ -1,5 +1,5 @@
 import { Logger } from '@nestjs/common';
-import { LIME_BAY_INTENTS, variantsFor } from './lime-bay-chatbot-corpus';
+import { LIME_BAY_INTENTS, limeBayCorpusVariantCount, variantsFor } from './lime-bay-chatbot-corpus';
 import { normalizeChatbotSettings } from './tenant-chatbot-policy';
 import { TenantChatbotService } from './tenant-chatbot.service';
 
@@ -18,12 +18,13 @@ describe('Lime Bay chatbot semantic corpus', () => {
     jest.restoreAllMocks();
   });
 
-  it('contains at least 50 intents with exactly 20 unique variants each', () => {
+  it('contains at least 50 intents and more than 3,000 unique human wording variants', () => {
     expect(LIME_BAY_INTENTS.length).toBeGreaterThanOrEqual(50);
+    expect(limeBayCorpusVariantCount()).toBeGreaterThanOrEqual(3200);
     for (const intent of LIME_BAY_INTENTS) {
       const variants = variantsFor(intent);
-      expect(variants).toHaveLength(20);
-      expect(new Set(variants).size).toBe(20);
+      expect(variants).toHaveLength(64);
+      expect(new Set(variants).size).toBe(64);
     }
   });
   it('answers every Lime Bay wording variant from the verified fact', async () => {

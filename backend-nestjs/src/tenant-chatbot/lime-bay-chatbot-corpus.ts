@@ -3,23 +3,121 @@ export type LimeBayIntent = {
   subjects: string[]; expectIncludes: string[];
 };
 
-const PATTERNS = [
-  (s: string) => `${s}?`, (s: string) => `what about ${s}?`,
-  (s: string) => `can you tell me ${s}?`, (s: string) => `do you know ${s}?`,
-  (s: string) => `i need to know ${s}`, (s: string) => `please tell me ${s}`,
-  (s: string) => `what does it say about ${s}?`, (s: string) => `can i know ${s}?`,
-  (s: string) => `is there info on ${s}?`, (s: string) => `how about ${s}?`,
-  (s: string) => `quick question ${s}?`, (s: string) => `hey ${s}?`,
-  (s: string) => `pls ${s}?`, (s: string) => `whats ${s}?`,
-  (s: string) => `need info ${s}`, (s: string) => `could you explain ${s}?`,
-  (s: string) => `i am asking about ${s}`, (s: string) => `tell me about ${s}`,
-  (s: string) => `can you check ${s}?`, (s: string) => `do you have details on ${s}?`,
+const PREFIXES = [
+  '', 'hey, ', 'quick question, ', 'just wondering, ',
+  'for this property, ', 'before i apply, ', 'sorry typing fast, ', 'pls, ',
 ];
 
-export function variantsFor(intent: LimeBayIntent) {
-  return PATTERNS.map((pattern, index) => pattern(intent.subjects[index % intent.subjects.length]));
+const QUESTION_FORMS = [
+  (s: string) => `${s}?`,
+  (s: string) => `what about ${s}?`,
+  (s: string) => `can you tell me about ${s}?`,
+  (s: string) => `i need to know ${s}`,
+  (s: string) => `do you have info on ${s}?`,
+  (s: string) => `how does ${s} work?`,
+  (s: string) => `what should i know about ${s}?`,
+  (s: string) => `is there anything important about ${s}?`,
+];
+
+const EXTRA_SUBJECTS: Record<string, string[]> = {
+  rent: ['rent amount','asking rent','price per month','monthly housing cost','what is the rent','what do i pay every month'],
+  available: ['property availability','ready to move in date','occupancy date','when can i get keys','when can the lease start','vacant date'],
+  bedrooms: ['bedroom total','how many beds are there','bedroom count','number of sleeping rooms'],
+  bathrooms: ['bathroom total','how many baths are there','bathroom count','number of washrooms'],
+  address: ['location of the property','where is the apartment','where is this place','full property address','unit location'],
+  community: ['name of the community','which development is this in','senior community','neighborhood name'],
+  age: ['age requirement','age limit','55+ restriction','senior only rule','how old do i need to be'],
+  floor: ['what floor is the unit on','unit level','is this on the top floor','floor number'],
+  supermarket: ['nearest grocery store','food market nearby','where can i buy groceries','supermarket close to the property'],
+  dining: ['restaurants close to the property','food nearby','where can i eat nearby','nearby places to eat'],
+  shopping: ['shopping center nearby','malls close by','where can i shop nearby','nearest mall'],
+  highway: ['highway nearby','interstate access','how close is i-75','freeway connection'],
+  cities: ['towns nearby','areas close to tamarac','cities close to the property','what cities are around here'],
+  'movein-total': ['cash needed to move in','total upfront payment','move in money required','all move in charges','amount due before moving in'],
+  'first-month': ['first month due','pay first month upfront','first rent payment required','first month at move in'],
+  'last-month': ['last month due','pay last month upfront','last rent payment required','last month at move in'],
+  security: ['security deposit amount','rental security deposit','deposit required before move in','how much security deposit'],
+  cable: ['cable included in rent','cable utility bill','who pays for cable','is cable covered'],
+  gas: ['gas included in rent','gas utility bill','who pays for gas','is gas covered'],
+  trash: ['trash included in rent','garbage pickup bill','who pays garbage','waste service included'],
+  internet: ['internet included in rent','wifi bill','who pays internet','is wifi covered'],
+  water: ['water included in rent','water utility bill','who pays water','is water covered'],
+  electricity: ['electricity included in rent','power bill','who pays electricity','electric utility responsibility'],
+  'pest-control': ['pest control included','who pays exterminator','bug treatment responsibility','pest service bill'],
+  'apply-url': ['online application','how do i apply','where can i submit application','application website','rental application link'],
+  credit: ['fico requirement','minimum fico score','credit score needed','score required to qualify','what score do i need','credit cutoff'],
+  'income-multiple': ['income to rent ratio','3x rent rule','salary multiple requirement','three times rent requirement'],
+  'monthly-income': ['income per month needed','monthly salary requirement','how much must i make monthly','monthly earnings required','minimum pay per month'],
+  criminal: ['criminal background policy','criminal record requirement','background check criminal history','crime history rule'],
+  eviction: ['previous eviction policy','past eviction requirement','eviction record rule','can i have an eviction'],
+  cosigner: ['guarantor policy','can i use a cosigner','co signer allowed','can someone guarantee the lease'],
+  insurance: ['renters insurance requirement','tenant liability policy','do i need renters insurance','required insurance'],
+  'insurance-duration': ['how long renters insurance is needed','keep insurance for whole lease','insurance during entire tenancy','policy duration'],
+  'additional-interest': ['who goes as additional interest','insurance interested party','name to list on insurance','additional interest company'],
+  'insurance-address': ['address for insurance additional interest','where to send insurance notice','insurance mailing location','mailing address for truenest'],
+  'landlord-fee': ['application charge per adult','landlord application cost','fee to submit application','application price for each adult'],
+  turnaround: ['application processing time','how many days for landlord review','landlord approval wait','application decision time'],
+  hoa: ['homeowners association','is there an association','does this have an hoa','hoa requirement'],
+  dti: ['dti limit','debt ratio requirement','maximum debt to income','how much debt ratio is allowed'],
+  'hoa-income': ['association yearly income requirement','hoa salary minimum','annual earnings required by hoa','hoa income cutoff'],
+  'proof-income': ['income verification documents','do i need to prove income','proof of salary','income proof requirement'],
+  'tax-docs': ['tax return paperwork','w2 requirement','income tax documents','two years of tax returns'],
+  'hoa-time': ['association approval wait','hoa processing days','how long does hoa take','hoa review time'],
+  'hoa-fee': ['association application charge','hoa fee per applicant','hoa application cost','hoa fee for adult applicant'],
+  'married-fee': ['hoa cost for married couple','association fee for spouses','married applicant hoa charge','spouse application fee'],
+  'marriage-cert': ['proof of marriage required','marriage document','wedding certificate requirement','certificate for married applicants'],
+  card: ['hoa payment by credit card','association payment method','how do i pay hoa','hoa card payment requirement'],
+  'hoa-deposit': ['association refundable deposit','hoa security deposit amount','refundable 500 deposit','hoa deposit refund'],
+  pets: ['dog policy','cat policy','can pets live here','are animals allowed','can i bring a puppy','pet restrictions'],
+  parking: ['where can i leave my car','assigned car space','vehicle parking','suv parking space','how many parking spots','parking for my car'],
+  'guest-parking': ['visitor car space','parking for my guest','where visitors can park','guest vehicle parking'],
+  lease: ['lease term','shortest lease allowed','minimum rental period','how many months is the lease','lease duration'],
+  smoking: ['vaping policy','cigarette rule','can i smoke here','can i vape inside','smoke policy'],
+  phone: ['phone number for the listing','who do i call','agent contact number','listing telephone'],
+  email: ['email address for the listing','who do i email','agent contact email','listing mail address'],
+  'liability-name': ['insurance additional interest name','property manager insurance name','who should be named on policy'],
+  'application-docs': ['paperwork for application','documents every adult must submit','application document checklist','what papers are required'],
+};
+
+const TOPIC_TYPOS: Array<[RegExp, string]> = [
+  [/\bcredit\b/i,'creidt'], [/\bincome\b/i,'inocme'], [/\bparking\b/i,'parknig'], [/\bapplication\b/i,'applicaton'],
+  [/\binsurance\b/i,'insurence'], [/\bavailability\b/i,'availabilty'], [/\bavailable\b/i,'avaliable'], [/\bproperty\b/i,'proprty'],
+  [/\bbedrooms\b/i,'bedroms'], [/\bbathrooms\b/i,'bathroms'], [/\baddress\b/i,'adress'], [/\bcommunity\b/i,'comunity'],
+  [/\bsupermarket\b/i,'supermaket'], [/\brestaurants\b/i,'resturants'], [/\bshopping\b/i,'shoping'], [/\bhighway\b/i,'higway'],
+  [/\butilities\b/i,'utilites'], [/\binternet\b/i,'interent'], [/\belectricity\b/i,'electrcity'], [/\bdeposit\b/i,'deopsit'],
+  [/\bassociation\b/i,'assocation'], [/\bapproval\b/i,'aproval'], [/\bmarriage\b/i,'marrige'], [/\bdocuments\b/i,'documnts'],
+  [/\beviction\b/i,'evicton'], [/\bcosigner\b/i,'cosingner'], [/\blease\b/i,'leese'], [/\bsmoking\b/i,'smokng'],
+  [/\bphone\b/i,'phne'], [/\bemail\b/i,'emial'],
+];
+
+function subjectsFor(intent: LimeBayIntent) {
+  return [...new Set([...intent.subjects, ...(EXTRA_SUBJECTS[intent.id] ?? [])])];
 }
-const i = (id:string,title:string,storedAnswer:string,subjects:string[],expectIncludes:string[]): LimeBayIntent => ({ id,title,storedAnswer,subjects,expectIncludes });
+
+function typoSubject(subject: string) {
+  for (const [pattern, typo] of TOPIC_TYPOS) {
+    if (pattern.test(subject)) return subject.replace(pattern, typo);
+  }
+  return subject;
+}
+
+export function variantsFor(intent: LimeBayIntent) {
+  const subjects = subjectsFor(intent);
+  const variants: string[] = [];
+  for (let prefixIndex = 0; prefixIndex < PREFIXES.length; prefixIndex += 1) {
+    for (let formIndex = 0; formIndex < QUESTION_FORMS.length; formIndex += 1) {
+      const index = prefixIndex * QUESTION_FORMS.length + formIndex;
+      const baseSubject = subjects[index % subjects.length];
+      const subject = prefixIndex >= 6 ? typoSubject(baseSubject) : baseSubject;
+      variants.push(`${PREFIXES[prefixIndex]}${QUESTION_FORMS[formIndex](subject)}`);
+    }
+  }
+  return [...new Set(variants)];
+}
+
+export function limeBayCorpusVariantCount() {
+  return LIME_BAY_INTENTS.reduce((total, intent) => total + variantsFor(intent).length, 0);
+}const i = (id:string,title:string,storedAnswer:string,subjects:string[],expectIncludes:string[]): LimeBayIntent => ({ id,title,storedAnswer,subjects,expectIncludes });
 export const LIME_BAY_INTENTS: LimeBayIntent[] = [
   i('rent','Monthly rent','Monthly rent: $1,550.00 / month',['monthly rent','rent price','how much the place costs per month','monthly payment'],['1,550']),
   i('available','Available from','Available from: 8/18/2026',['availability date','when it is available','move in availability','available from date'],['8/18/2026']),
