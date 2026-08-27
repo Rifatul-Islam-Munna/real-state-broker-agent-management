@@ -17,6 +17,7 @@ import {
   parseQualificationReply,
   parseQualificationValues,
   parseShowingIntent,
+  qualificationClarificationPrompt,
   qualificationResult,
   readPropertyQualification,
   type QualificationValues,
@@ -1512,33 +1513,34 @@ export class TenantChatbotService {
           return this.finishLeadQualification(client, { ...input, audience, realtorVerified: false }, property, values);
         }
         if (state === 'ASK_CREDIT') {
-          if (wantsShowing) {
-            return {
-              input: { ...input, audience, realtorVerified: false, workflowStateUpdate: 'ASK_CREDIT', showingEligible: false },
-              result: verifiedWorkflowResult(
-                `I can help with that. I just need your approximate credit score first so I can make sure this property is a fit before opening the showing form.`,
-                'ASK_CREDIT',
-                'CREDIT_REQUIRED',
-              ),
-            };
-          }
           const parsed = parseQualificationReply(input.body, 'creditScore');
           if (!validStoredCredit(parsed.creditScore)) {
+            const clarification = qualificationClarificationPrompt(input.body, 'creditScore');
+            if (clarification) {
+              return {
+                input: { ...input, audience, realtorVerified: false, workflowStateUpdate: 'ASK_CREDIT', showingEligible: false },
+                result: verifiedWorkflowResult(clarification, 'ASK_CREDIT', 'CREDIT_REQUIRED'),
+              };
+            }
+            if (wantsShowing) {
+              return {
+                input: { ...input, audience, realtorVerified: false, workflowStateUpdate: 'ASK_CREDIT', showingEligible: false },
+                result: verifiedWorkflowResult(
+                  `I can help with that. I just need your approximate credit score first so I can make sure this property is a fit before opening the showing form.`,
+                  'ASK_CREDIT',
+                  'CREDIT_REQUIRED',
+                ),
+              };
+            }
             return {
               input: {
                 ...input,
                 audience,
                 realtorVerified: false,
                 workflowStateUpdate: 'ASK_CREDIT',
-                followUpPrompt: wantsShowing ? undefined : creditFollowUpPrompt(),
+                followUpPrompt: creditFollowUpPrompt(),
               },
-              result: wantsShowing
-                ? verifiedWorkflowResult(
-                    "I can help with the showing. Before I unlock the form, what's your approximate credit score?",
-                    'ASK_CREDIT',
-                    'CREDIT_REQUIRED',
-                  )
-                : null,
+              result: null,
             };
           }
           values.creditScore = parsed.creditScore;
@@ -1567,33 +1569,34 @@ export class TenantChatbotService {
         }
 
         if (state === 'ASK_INCOME') {
-          if (wantsShowing) {
-            return {
-              input: { ...input, audience, realtorVerified: false, workflowStateUpdate: 'ASK_INCOME', showingEligible: false },
-              result: verifiedWorkflowResult(
-                `Almost there — I still need your approximate monthly income before taxes. Once that basic check passes, I'll unlock the showing form.`,
-                'ASK_INCOME',
-                'INCOME_REQUIRED',
-              ),
-            };
-          }
           const parsed = parseQualificationReply(input.body, 'monthlyEarning');
           if (!validStoredIncome(parsed.monthlyEarning)) {
+            const clarification = qualificationClarificationPrompt(input.body, 'monthlyEarning');
+            if (clarification) {
+              return {
+                input: { ...input, audience, realtorVerified: false, workflowStateUpdate: 'ASK_INCOME', showingEligible: false },
+                result: verifiedWorkflowResult(clarification, 'ASK_INCOME', 'INCOME_REQUIRED'),
+              };
+            }
+            if (wantsShowing) {
+              return {
+                input: { ...input, audience, realtorVerified: false, workflowStateUpdate: 'ASK_INCOME', showingEligible: false },
+                result: verifiedWorkflowResult(
+                  `Almost there — I still need your approximate monthly income before taxes. Once that basic check passes, I'll unlock the showing form.`,
+                  'ASK_INCOME',
+                  'INCOME_REQUIRED',
+                ),
+              };
+            }
             return {
               input: {
                 ...input,
                 audience,
                 realtorVerified: false,
                 workflowStateUpdate: 'ASK_INCOME',
-                followUpPrompt: wantsShowing ? undefined : incomeFollowUpPrompt(),
+                followUpPrompt: incomeFollowUpPrompt(),
               },
-              result: wantsShowing
-                ? verifiedWorkflowResult(
-                    'I can help with the showing. One last check before I unlock the form: about how much is your monthly income before taxes?',
-                    'ASK_INCOME',
-                    'INCOME_REQUIRED',
-                  )
-                : null,
+              result: null,
             };
           }
           values.monthlyEarning = parsed.monthlyEarning;
@@ -2488,15 +2491,15 @@ function verifiedWorkflowResult(
 }
 
 function roleFollowUpPrompt() {
-  return 'Also, so I give you the right information going forward, are you looking to rent the property yourself, or are you a Realtor?';
+  return 'Quick question so I point you the right way: is this place for you, or are you a Realtor helping a client?';
 }
 
 function creditFollowUpPrompt() {
-  return "If you'd like, I can also check the two basic qualification requirements for you. What's your approximate credit score?";
+  return 'Got it. If you want, I can quickly check the two basic requirements. About where is your credit score?';
 }
 
 function incomeFollowUpPrompt() {
-  return 'Thanks. And about how much is your monthly income before taxes? An estimate is fine.';
+  return 'Thanks — and roughly what do you make per month before taxes? An estimate is totally fine.';
 }
 
 function appendConversationalFollowUp(

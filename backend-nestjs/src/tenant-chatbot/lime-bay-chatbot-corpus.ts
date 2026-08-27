@@ -6,6 +6,7 @@ export type LimeBayIntent = {
 const PREFIXES = [
   '', 'hey, ', 'quick question, ', 'just wondering, ',
   'for this property, ', 'before i apply, ', 'sorry typing fast, ', 'pls, ',
+  'yo, ', 'btw, ', 'hey quick one, ', 'sorry typo but ',
 ];
 
 const QUESTION_FORMS = [
@@ -17,11 +18,15 @@ const QUESTION_FORMS = [
   (s: string) => `how does ${s} work?`,
   (s: string) => `what should i know about ${s}?`,
   (s: string) => `is there anything important about ${s}?`,
+  (s: string) => `could you tell me ${s}?`,
+  (s: string) => `do u know ${s}?`,
+  (s: string) => `need info on ${s}`,
+  (s: string) => `any idea about ${s}?`,
 ];
 
 const EXTRA_SUBJECTS: Record<string, string[]> = {
-  rent: ['rent amount','asking rent','price per month','monthly housing cost','what is the rent','what do i pay every month'],
-  available: ['property availability','ready to move in date','occupancy date','when can i get keys','when can the lease start','vacant date'],
+  rent: ['rent amount','asking rent','price per month','monthly housing cost','what is the rent','what do i pay every month','what are they asking','what is it going for','how much is this place','price a month'],
+  available: ['property availability','ready to move in date','occupancy date','when can i get keys','when can the lease start','vacant date','still available','still up','still for rent','has it been taken'],
   bedrooms: ['bedroom total','how many beds are there','bedroom count','number of sleeping rooms'],
   bathrooms: ['bathroom total','how many baths are there','bathroom count','number of washrooms'],
   address: ['location of the property','where is the apartment','where is this place','full property address','unit location'],
@@ -44,10 +49,10 @@ const EXTRA_SUBJECTS: Record<string, string[]> = {
   water: ['water included in rent','water utility bill','who pays water','is water covered'],
   electricity: ['electricity included in rent','power bill','who pays electricity','electric utility responsibility'],
   'pest-control': ['pest control included','who pays exterminator','bug treatment responsibility','pest service bill'],
-  'apply-url': ['online application','how do i apply','where can i submit application','application website','rental application link'],
-  credit: ['fico requirement','minimum fico score','credit score needed','score required to qualify','what score do i need','credit cutoff'],
+  'apply-url': ['online application','how do i apply','where can i submit application','application website','rental application link','send me the application','where is the app','application form','start the application'],
+  credit: ['fico requirement','minimum fico score','credit score needed','score required to qualify','what score do i need','credit cutoff','what fico','score cutoff','credit to qualify'],
   'income-multiple': ['income to rent ratio','3x rent rule','salary multiple requirement','three times rent requirement'],
-  'monthly-income': ['income per month needed','monthly salary requirement','how much must i make monthly','monthly earnings required','minimum pay per month'],
+  'monthly-income': ['income per month needed','monthly salary requirement','how much must i make monthly','monthly earnings required','minimum pay per month','how much gotta make','how much do i need to make','do i make enough','salary needed'],
   criminal: ['criminal background policy','criminal record requirement','background check criminal history','crime history rule'],
   eviction: ['previous eviction policy','past eviction requirement','eviction record rule','can i have an eviction'],
   cosigner: ['guarantor policy','can i use a cosigner','co signer allowed','can someone guarantee the lease'],
@@ -68,13 +73,13 @@ const EXTRA_SUBJECTS: Record<string, string[]> = {
   'marriage-cert': ['proof of marriage required','marriage document','wedding certificate requirement','certificate for married applicants'],
   card: ['hoa payment by credit card','association payment method','how do i pay hoa','hoa card payment requirement'],
   'hoa-deposit': ['association refundable deposit','hoa security deposit amount','refundable 500 deposit','hoa deposit refund'],
-  pets: ['dog policy','cat policy','can pets live here','are animals allowed','can i bring a puppy','pet restrictions'],
-  parking: ['where can i leave my car','assigned car space','vehicle parking','suv parking space','how many parking spots','parking for my car'],
-  'guest-parking': ['visitor car space','parking for my guest','where visitors can park','guest vehicle parking'],
-  lease: ['lease term','shortest lease allowed','minimum rental period','how many months is the lease','lease duration'],
+  pets: ['dog policy','cat policy','can pets live here','are animals allowed','can i bring a puppy','pet restrictions','pet friendly','dogs ok','cats ok','can my dog stay'],
+  parking: ['where can i leave my car','assigned car space','vehicle parking','suv parking space','how many parking spots','parking for my car','where do i put my car','spot included','parking included'],
+  'guest-parking': ['visitor car space','parking for my guest','where visitors can park','guest vehicle parking','guest spot','visitor spot','where can my friend park'],
+  lease: ['lease term','shortest lease allowed','minimum rental period','how many months is the lease','lease duration','how long do i gotta stay','how long do i have to stay','one year lease'],
   smoking: ['vaping policy','cigarette rule','can i smoke here','can i vape inside','smoke policy'],
-  phone: ['phone number for the listing','who do i call','agent contact number','listing telephone'],
-  email: ['email address for the listing','who do i email','agent contact email','listing mail address'],
+  phone: ['phone number for the listing','who do i call','agent contact number','listing telephone','who do i talk to','who can i reach','contact person'],
+  email: ['email address for the listing','who do i email','agent contact email','listing mail address','who do i talk to','who can i reach','contact person'],
   'liability-name': ['insurance additional interest name','property manager insurance name','who should be named on policy'],
   'application-docs': ['paperwork for application','documents every adult must submit','application document checklist','what papers are required'],
 };

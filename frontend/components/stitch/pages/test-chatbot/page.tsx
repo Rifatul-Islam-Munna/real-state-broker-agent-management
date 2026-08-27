@@ -22,6 +22,7 @@ import {
   propertyQualification,
   qualificationMatchesProperty,
   shouldOfferPropertyIndex,
+  testQualificationClarification,
 } from "@/lib/chatbot-operations"
 import { formatKnowledgeProperty, type KnowledgePropertyLike } from "@/lib/chatbot-knowledge-targeting"
 import { reindexChatbotKnowledge, testChatbot, type ChatbotTestResult } from "@/lib/tenant-chatbot-actions"
@@ -46,9 +47,9 @@ const initialWorkflow: Workflow = {
   realtorVerified: false,
 }
 
-const ROLE_FOLLOW_UP = "Also, so I give you the right details, are you looking to rent this place yourself, or are you a Realtor?"
-const CREDIT_FOLLOW_UP = "If you want, I can quickly check whether this property looks like a fit. What's your approximate credit score?"
-const INCOME_FOLLOW_UP = "Got it. And roughly how much do you make per month before taxes? An estimate is fine."
+const ROLE_FOLLOW_UP = "Quick question so I point you the right way: is this place for you, or are you a Realtor helping a client?"
+const CREDIT_FOLLOW_UP = "Got it. If you want, I can quickly check the two basic requirements. About where is your credit score?"
+const INCOME_FOLLOW_UP = "Thanks — and roughly what do you make per month before taxes? An estimate is totally fine."
 
 function workflowResult(answer: string, decision: ChatbotTestResult["decision"], reason: string): ChatbotTestResult {
   return { answer, decision, reason, confidence: null, evidence: [] }
@@ -98,38 +99,49 @@ export function TestChatbotPage({ initialProperties }: Props) {
     if (!selectedProperty) {
       return workflowResult("Choose a property first so I can test qualification and showing behavior safely.", "STOP", "PROPERTY_REQUIRED")
     }
-    if (workflow.creditScore === null) {
-      const score = parseTestCredit(nextQuestion)
-      if (score === null) return null
-      setWorkflow((current) => ({ ...current, creditScore: score }))
-      return workflowResult(INCOME_FOLLOW_UP, "ASK_INCOME", "INCOME_REQUIRED")
+    const suppliedCredit = parseTestCredit(nextQuestion)
+    const suppliedIncome = parseTestMonthlyIncome(nextQuestion)
+    if (workflow.creditScore === null && suppliedCredit === null) {
+      const clarification = testQualificationClarification(nextQuestion, "creditScore")
+      if (clarification) return workflowResult(clarification, "ASK_CREDIT", "CREDIT_REQUIRED")
     }
-    if (workflow.monthlyIncome === null) {
-      const income = parseTestMonthlyIncome(nextQuestion)
-      if (income === null) return null
-      const qualified = qualificationMatchesProperty(workflow.creditScore, income, selectedProperty.payload)
-      setWorkflow((current) => ({ ...current, monthlyIncome: income, showingEligible: qualified }))
-      if (qualified) {
-        return workflowResult("That looks good on the two basic checks you shared. If you'd like to see the property, the showing form is ready below.", "ANSWER", "QUALIFIED")
-      }
-      const requirements = propertyQualification(selectedProperty.payload)
-      const alternatives = initialProperties
-        .filter((property) => property.id !== selectedProperty.id && property.status?.toLowerCase() === "published")
-        .filter((property) => qualificationMatchesProperty(workflow.creditScore!, income, property.payload))
-        .slice(0, 3)
-        .map((property) => formatKnowledgeProperty(property).title)
-      const failedCredit = Boolean(requirements.minimumCreditScore && workflow.creditScore < requirements.minimumCreditScore)
-      const reason = failedCredit ? "CREDIT_BELOW_MINIMUM" : "INCOME_BELOW_MINIMUM"
-      const requirementText = failedCredit
-        ? `minimum credit score of ${requirements.minimumCreditScore}`
-        : `minimum monthly income of $${requirements.minimumMonthlyIncome?.toLocaleString()}`
-      return workflowResult(
-        `This property requires a ${requirementText}. Based on the test values, it may not be a match.${alternatives.length ? ` Other published matches: ${alternatives.join(", ")}.` : " A team member can help find another property."}`,
-        "ANSWER",
-        reason
-      )
+    if (workflow.creditScore !== null && workflow.monthlyIncome === null && suppliedIncome === null) {
+      const clarification = testQualificationClarification(nextQuestion, "monthlyEarning")
+      if (clarification) return workflowResult(clarification, "ASK_INCOME", "INCOME_REQUIRED")
     }
-    return null
+    if (suppliedCredit === null && suppliedIncome === null) return null
+
+    const credit = workflow.creditScore ?? suppliedCredit
+    const income = workflow.monthlyIncome ?? suppliedIncome
+    setWorkflow((current) => ({
+      ...current,
+      creditScore: current.creditScore ?? suppliedCredit,
+      monthlyIncome: current.monthlyIncome ?? suppliedIncome,
+    }))
+    if (credit === null) return workflowResult(CREDIT_FOLLOW_UP, "ASK_CREDIT", "CREDIT_REQUIRED")
+    if (income === null) return workflowResult(INCOME_FOLLOW_UP, "ASK_INCOME", "INCOME_REQUIRED")
+
+    const qualified = qualificationMatchesProperty(credit, income, selectedProperty.payload)
+    setWorkflow((current) => ({ ...current, creditScore: credit, monthlyIncome: income, showingEligible: qualified }))
+    if (qualified) {
+      return workflowResult("That looks good on the two basic checks you shared. If you'd like to see the property, the showing form is ready below.", "ANSWER", "QUALIFIED")
+    }
+    const requirements = propertyQualification(selectedProperty.payload)
+    const alternatives = initialProperties
+      .filter((property) => property.id !== selectedProperty.id && property.status?.toLowerCase() === "published")
+      .filter((property) => qualificationMatchesProperty(credit, income, property.payload))
+      .slice(0, 3)
+      .map((property) => formatKnowledgeProperty(property).title)
+    const failedCredit = Boolean(requirements.minimumCreditScore && credit < requirements.minimumCreditScore)
+    const reason = failedCredit ? "CREDIT_BELOW_MINIMUM" : "INCOME_BELOW_MINIMUM"
+    const requirementText = failedCredit
+      ? `minimum credit score of ${requirements.minimumCreditScore}`
+      : `minimum monthly income of $${requirements.minimumMonthlyIncome?.toLocaleString()}`
+    return workflowResult(
+      `This property requires a ${requirementText}. Based on the test values, it may not be a match.${alternatives.length ? ` Other published matches: ${alternatives.join(", ")}.` : " A team member can help find another property."}`,
+      "ANSWER",
+      reason
+    )
   }, [initialProperties, selectedProperty, workflow.creditScore, workflow.monthlyIncome])
 
   const handleSubmit = useCallback((event: FormEvent<HTMLFormElement>) => {
@@ -150,6 +162,13 @@ export function TestChatbotPage({ initialProperties }: Props) {
     if (!workflow.role) {
       if (declaredRole) {
         setWorkflow((current) => ({ ...current, role: declaredRole }))
+        if (declaredRole === "LEAD") {
+          const qualification = qualificationReply(nextQuestion)
+          if (qualification) {
+            appendAssistant(nextQuestion, qualification, messageId)
+            return
+          }
+        }
         appendAssistant(
           nextQuestion,
           declaredRole === "REALTOR"

@@ -189,5 +189,45 @@ describe('Tenant chatbot live qualification workflow', () => {
     expect(result).toMatchObject({ decision: 'ANSWER', reason: 'QUALIFIED', showingEligible: true });
     expect(state.getLeadPayload()).toMatchObject({ creditScore: '760', monthlyEarning: '5500' });
   });
+
+  it('uses the same human slang and typo workflow for SMS conversations', async () => {
+    const state = harness();
+    const sms = { channel: 'SMS', sessionId: 'sms-human' };
+    await expect(state.send('yo cud i swing by tmr?', 'sms-1', sms)).resolves.toMatchObject({ decision: 'ASK_ROLE', reason: 'ROLE_REQUIRED' });
+    await expect(state.send('just me n my wife', 'sms-2', sms)).resolves.toMatchObject({ decision: 'ASK_CREDIT', reason: 'CREDIT_REQUIRED' });
+    await expect(state.send('seven forty', 'sms-3', sms)).resolves.toMatchObject({ decision: 'ASK_INCOME', reason: 'INCOME_REQUIRED' });
+    await expect(state.send('5k monthly', 'sms-4', sms)).resolves.toMatchObject({ decision: 'ANSWER', reason: 'QUALIFIED', showingEligible: true });
+    expect(state.getLeadPayload()).toMatchObject({ creditScore: '740', monthlyEarning: '5000' });
+  });
+
+  it('understands a natural all-at-once email qualification and showing request', async () => {
+    const state = harness();
+    const result = await state.send(
+      'Hi, this is for me. my score is seven forty and i make 5k monthly. wud love to take a look this wknd.',
+      'email-human-1',
+      { channel: 'EMAIL', sessionId: 'email-human' },
+    );
+    expect(result).toMatchObject({ decision: 'ANSWER', reason: 'QUALIFIED', showingEligible: true });
+    expect(state.getLeadPayload()).toMatchObject({ creditScore: '740', monthlyEarning: '5000' });
+  });
+
+  it('keeps invalid human credit self-reports in qualification instead of answering the property minimum', async () => {
+    const state = harness();
+    await expect(state.send('i wanna visit this propraty tommor is it possibale to do it can you give me details', 'human-visit-1')).resolves.toMatchObject({ decision: 'ASK_ROLE', reason: 'ROLE_REQUIRED' });
+    await expect(state.send('just me n my wife', 'human-visit-2')).resolves.toMatchObject({ decision: 'ASK_CREDIT', reason: 'CREDIT_REQUIRED' });
+    const invalid = await state.send('ahhh, my credit score is like 900', 'human-visit-3');
+    expect(invalid).toMatchObject({ decision: 'ASK_CREDIT', reason: 'CREDIT_REQUIRED', showingEligible: false });
+    expect(invalid.answer).toMatch(/300–850/);
+    await expect(state.send('not great maybe 790', 'human-visit-4')).resolves.toMatchObject({ decision: 'ASK_INCOME', reason: 'INCOME_REQUIRED' });
+    await expect(state.send('between 5 and 6k', 'human-visit-5')).resolves.toMatchObject({ decision: 'ANSWER', reason: 'QUALIFIED', showingEligible: true });
+    expect(state.getLeadPayload()).toMatchObject({ creditScore: '790', monthlyEarning: '5000' });
+  });
+
+  it('accepts a valid human credit reply even when the same message repeats the showing request', async () => {
+    const state = harness();
+    await state.send('can i visit tomorrow?', 'show-credit-1');
+    await state.send('this is for me', 'show-credit-2');
+    await expect(state.send('my score is around 740, can i still come see it tomorrow?', 'show-credit-3')).resolves.toMatchObject({ decision: 'ASK_INCOME', reason: 'INCOME_REQUIRED' });
+  });
 });
 

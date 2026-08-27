@@ -6,11 +6,12 @@ const WORD_ALIASES: Record<string, string> = {
   vewing: 'viewing', viewng: 'viewing', veiwng: 'viewing', veiw: 'view',
   appoinment: 'appointment', apointment: 'appointment', appoitment: 'appointment', appontment: 'appointment',
   scheduel: 'schedule', schdule: 'schedule', scedule: 'schedule', shedule: 'schedule', sheduele: 'schedule',
-  tommorow: 'tomorrow', tomorow: 'tomorrow', tommorrow: 'tomorrow', tmrw: 'tomorrow', whn: 'when', wen: 'when', nead: 'need', mnay: 'many',
-  proparty: 'property', proprty: 'property', propery: 'property', propety: 'property', proprety: 'property', porperty: 'property',
+  tommorow: 'tomorrow', tomorow: 'tomorrow', tommorrow: 'tomorrow', tommor: 'tomorrow', tmor: 'tomorrow', tmrw: 'tomorrow', whn: 'when', wen: 'when', nead: 'need', mnay: 'many',
+  possibale: 'possible', posible: 'possible', possble: 'possible', possibble: 'possible',
+  proparty: 'property', propraty: 'property', proprty: 'property', propery: 'property', propety: 'property', proprety: 'property', porperty: 'property',
   relator: 'realtor', realter: 'realtor', realator: 'realtor', realitor: 'realtor',
   tenent: 'tenant', tennant: 'tenant', tanant: 'tenant', renterz: 'renter',
-  credeit: 'credit', creidt: 'credit', crdit: 'credit', credt: 'credit', crdti: 'credit', crdt: 'credit',
+  credeit: 'credit', creidt: 'credit', crenti: 'credit', creti: 'credit', credti: 'credit', crdit: 'credit', credt: 'credit', crdti: 'credit', crdt: 'credit',
   scroe: 'score', scor: 'score', socre: 'score',
   inocme: 'income', incme: 'income', inome: 'income', incom: 'income', incomm: 'income',
   salry: 'salary', salery: 'salary', earnngs: 'earnings', earningz: 'earnings',
@@ -34,6 +35,23 @@ const WORD_ALIASES: Record<string, string> = {
   leese: 'lease', smokng: 'smoking', cigarete: 'cigarette', vapng: 'vaping',
   phne: 'phone', emial: 'email', contcat: 'contact',
   yr: 'year', yrs: 'years', wk: 'week', wks: 'weeks', mo: 'month', mos: 'months',
+  r: 'are', n: 'and', ya: 'you', yall: 'you all', thx: 'thanks', tnx: 'thanks', ty: 'thanks', np: 'no problem',
+  rn: 'right now', asap: 'as soon as possible', btw: 'by the way', fyi: 'for your information', idk: 'i do not know', abt: 'about', arnd: 'around',
+  lemme: 'let me', gimme: 'give me', tryna: 'trying to', imma: 'i am going to', finna: 'going to',
+  wud: 'would', cud: 'could', shud: 'should', thru: 'through', tho: 'though', prolly: 'probably', probly: 'probably',
+  bc: 'because', bcz: 'because', plss: 'please', plsss: 'please',
+  tmr: 'tomorrow', tonite: 'tonight', wknd: 'weekend',
+  mon: 'monday', tue: 'tuesday', tues: 'tuesday', wed: 'wednesday', thu: 'thursday', thur: 'thursday', thurs: 'thursday', fri: 'friday', sat: 'saturday', sun: 'sunday',
+  morn: 'morning', aft: 'afternoon', eve: 'evening',
+  apt: 'apartment', apts: 'apartments', br: 'bedroom', bdrm: 'bedroom', bdrms: 'bedrooms', bd: 'bedroom', ba: 'bathroom',
+  utils: 'utilities', util: 'utility', incl: 'included', inc: 'included', elec: 'electricity', wifi: 'internet',
+  req: 'requirement', reqs: 'requirements', reqd: 'required', min: 'minimum', avail: 'available',
+  app: 'application', appl: 'application', appy: 'apply', dep: 'deposit', secdep: 'security deposit',
+  sched: 'schedule', schedul: 'schedule', appt: 'appointment', appts: 'appointments',
+  shwng: 'showing', shwing: 'showing', vwing: 'viewing', tourng: 'touring',
+  prop: 'property', prpty: 'property', prprty: 'property', hous: 'house', condoo: 'condo',
+  cred: 'credit', crscore: 'credit score', ficoo: 'fico', incm: 'income', paystub: 'pay stub', paystubs: 'pay stubs',
+  petfriendly: 'pet friendly', doggo: 'dog', kitty: 'cat', gf: 'girlfriend', bf: 'boyfriend', hubby: 'husband',
 };
 
 const CANONICAL_WORDS = [
@@ -46,6 +64,9 @@ const CANONICAL_WORDS = [
   'association','approval','processing','marriage','certificate','documents','document','paperwork','criminal','eviction','cosigner',
   'guarantor','lease','smoking','cigarette','vaping','phone','email','contact','income','proof','payment','married','spouse','floor',
   'senior','age','price','rent','rental','cost','move','occupancy','ready','tomorrow','today','morning','afternoon','evening',
+  'tonight','weekend','weekday','monday','tuesday','wednesday','thursday','friday','saturday','sunday','possible','open','opening',
+  'slot','slots','inside','outside','walk','through','swing','drop','stop','check','look','available','interested','trying','person',
+  'included','requirements','thanks','please','right','now','soon','application','pay','stub','stubs','pet','friendly','dog','cat',
 ];
 const CANONICAL_SET = new Set(CANONICAL_WORDS);
 
@@ -69,6 +90,26 @@ const PHRASE_ALIASES: Array<[RegExp, string]> = [
   [/\bdocuments from adult occupants\b/g, 'application documents'], [/\bdocuments every adult must submit\b/g, 'application documents'],
   [/\ball adults documentation\b/g, 'application documentation'], [/\bpaperwork for application\b/g, 'application paperwork'],
   [/\bwhat papers are required\b/g, 'application paperwork'], [/\bapplication document checklist\b/g, 'application documents'],
+  [/\bstill up\b/g, 'still available'], [/\bstill open\b/g, 'still available'], [/\bstill on the market\b/g, 'still available'],
+  [/\bstill for rent\b/g, 'still available for rent'], [/\bhas it been taken\b/g, 'is it available'], [/\balready leased\b/g, 'availability'],
+  [/\bwhat is it going for\b/g, 'monthly rent'], [/\bwhat are they asking\b/g, 'monthly rent'], [/\bprice a month\b/g, 'rent per month'],
+  [/\bwhat comes with rent\b/g, 'utilities included in rent'], [/\bwhat comes w rent\b/g, 'utilities included in rent'],
+  [/\bwhat bills are on me\b/g, 'utilities tenant pays'], [/\bwhat do i cover\b/g, 'utilities tenant pays'], [/\bwhat is included\b/g, 'utilities included'],
+  [/\bhow much down to move in\b/g, 'move in cost'], [/\bwhat do i need upfront\b/g, 'move in cost'], [/\bmove in money\b/g, 'move in cost'],
+  [/\bwhere is the app\b/g, 'application link'], [/\bsend me the app\b/g, 'application link'], [/\bapp link\b/g, 'application link'],
+  [/\bscore cutoff\b/g, 'credit requirement'], [/\bfico minimum\b/g, 'minimum fico score'], [/\bwhat fico\b/g, 'credit score needed'],
+  [/\bhow much gotta make\b/g, 'income requirement'], [/\bhow much do i gotta make\b/g, 'income requirement'], [/\bincome requirement\b/g, 'income requirement'],
+  [/\bpet friendly\b/g, 'pets allowed'], [/\bdogs? ok\b/g, 'dogs allowed'], [/\bcats? ok\b/g, 'cats allowed'],
+  [/\bspot included\b/g, 'parking included'], [/\bwhere do i put my car\b/g, 'parking'], [/\bguest spot\b/g, 'guest parking'],
+  [/\bhow long do i gotta stay\b/g, 'lease length'], [/\bhow long do i have to stay\b/g, 'lease length'],
+  [/\bwho do i talk to\b/g, 'listing contact'], [/\bwho can i reach\b/g, 'listing contact'],
+  [/\bcan i swing by\b/g, 'can i visit'], [/\bcan i pull up\b/g, 'can i visit'], [/\bcan i stop in\b/g, 'can i visit'],
+  [/\bcan i go there\b/g, 'can i visit'], [/\bcan we go there\b/g, 'can we visit'], [/\bi wanna go there\b/g, 'i want to visit'],
+  [/\bcan i take a peek\b/g, 'can i see inside'], [/\bcan we take a peek\b/g, 'can we see inside'], [/\bgo check (?:it|the place|the property)\b/g, 'visit the property'],
+  [/\bwalk the unit\b/g, 'view the unit'], [/\bwalk through the unit\b/g, 'view the unit'], [/\bget inside\b/g, 'see inside'],
+  [/\bwhen can we take a look\b/g, 'when can we view the property'], [/\bgood time to come see\b/g, 'showing time'],
+  [/\bavailable slots?\b/g, 'showing slots'], [/\bany openings? for (?:a )?(showing|tour|viewing)\b/g, '$1 slots available'],
+  [/\b4 a (showing|tour|viewing)\b/g, 'for a $1'],
 ];
 
 export function normalizeChatbotHumanText(value: unknown) {
@@ -87,6 +128,14 @@ export function normalizeChatbotHumanText(value: unknown) {
     .replace(/\bwe'?re\b/g, 'we are')
     .replace(/\byou'?re\b/g, 'you are')
     .replace(/\bit'?s\b/g, 'it is')
+    .replace(/\bain'?t\b/g, 'is not')
+    .replace(/\bisn'?t\b/g, 'is not')
+    .replace(/\baren'?t\b/g, 'are not')
+    .replace(/\bwon'?t\b/g, 'will not')
+    .replace(/\bcan'?t\b/g, 'cannot')
+    .replace(/\b(?:w|with)\s*\/\s*o\b/g, 'without')
+    .replace(/\bw\s*\//g, 'with ')
+    .replace(/\b(?:uh+|umm+|hmm+)\b/g, ' ')
     .replace(/([a-z])\1{2,}/g, '$1$1');
 
   const tokens = text.match(/[a-z]+|(?:\$|usd)?\d+(?:[.,]\d+)?(?:k|grand|thousand)?|[/@.+-]+/g) ?? [];

@@ -9,6 +9,8 @@ import {
   parseTestChatbotRole,
   parseTestCredit,
   parseTestMonthlyIncome,
+  parseTestShowingIntent,
+  normalizeTestHumanText,
   propertyQualification,
   qualificationMatchesProperty,
   filterBotActivity,
@@ -17,6 +19,7 @@ import {
   propertyPickerLabel,
   shouldOfferPropertyIndex,
   splitIndexedKnowledge,
+  testQualificationClarification,
 } from "./chatbot-operations.ts"
 
 const activity = [
@@ -160,4 +163,49 @@ test("test conversation does not capture property numbers or requirements as qua
   assert.equal(parseTestMonthlyIncome("What is the $500 HOA deposit?"), null)
   assert.equal(parseTestCredit("What minimum credit score do I need, is it 720?"), null)
   assert.equal(parseTestMonthlyIncome("Is the minimum monthly income $4,650?"), null)
+})
+test("human normalization understands chat shorthand, typos and common rental slang", () => {
+  assert.match(normalizeTestHumanText("cud i sched a shwng tmr?"), /schedule a showing tomorrow/)
+  assert.match(normalizeTestHumanText("is the proprty still up?"), /property still available/)
+  assert.match(normalizeTestHumanText("what r the utilites incl?"), /utilities included/)
+})
+
+test("test chatbot role and showing helpers understand informal human messages", () => {
+  assert.equal(parseTestChatbotRole("just me n my wife, we wanna move in"), "LEAD")
+  assert.equal(parseTestChatbotRole("im their agent, showing it for my client"), "REALTOR")
+  assert.equal(parseTestChatbotRole("who is the listing agent?"), null)
+  assert.equal(parseTestShowingIntent("cud i swing by tmr?"), true)
+  assert.equal(parseTestShowingIntent("any openings 4 a tour sat?"), true)
+  assert.equal(parseTestShowingIntent("wud love to see it this wknd"), true)
+  assert.equal(parseTestShowingIntent("what is the rent?"), false)
+})
+test("test chatbot qualification helpers accept natural spoken and shorthand answers", () => {
+  assert.equal(parseTestCredit("seven forty"), 740)
+  assert.equal(parseTestCredit("my score is seven hundred forty"), 740)
+  assert.equal(parseTestMonthlyIncome("5k monthly"), 5000)
+  assert.equal(parseTestMonthlyIncome("five grand"), 5000)
+  assert.equal(parseTestMonthlyIncome("$75k/yr"), 6250)
+  assert.equal(parseTestMonthlyIncome("1200/wk"), 5200)
+  assert.equal(parseTestMonthlyIncome("my score is 750 n i make 5k monthly"), 5000)
+  assert.equal(parseTestCredit("what minimum score do i need, seven forty?"), null)
+  assert.equal(parseTestMonthlyIncome("is the rent 1550 monthly?"), null)
+})
+test("test chatbot understands emotional approximate and typo-heavy qualification replies", () => {
+  assert.equal(parseTestCredit("not great maybe 690"), 690)
+  assert.equal(parseTestCredit("my score is low 700s"), 710)
+  assert.equal(parseTestCredit("last i checked it was seven forty two"), 742)
+  assert.equal(parseTestCredit("seven oh five"), 705)
+  assert.equal(parseTestCredit("ahhh, my credit score is like 900"), null)
+  assert.match(testQualificationClarification("ahhh, my credit score is like 900", "creditScore") ?? "", /300–850/)
+  assert.match(testQualificationClarification("my crenti score is like 7090", "creditScore") ?? "", /Did you mean/)
+  assert.equal(parseTestMonthlyIncome("not much maybe 4500"), 4500)
+  assert.equal(parseTestMonthlyIncome("between 5 and 6k"), 5000)
+  assert.equal(parseTestMonthlyIncome("five and a half grand"), 5500)
+  assert.match(testQualificationClarification("i make like 50", "monthlyEarning") ?? "", /rough amount/i)
+})
+
+test("test chatbot catches indirect typo-heavy showing requests", () => {
+  assert.equal(parseTestShowingIntent("i wanna visit this propraty tommor is it possibale to do it can you give me details"), true)
+  assert.equal(parseTestShowingIntent("can i go there tomorrow and take a peek?"), true)
+  assert.equal(parseTestShowingIntent("can you send me more details and photos?"), false)
 })

@@ -4,6 +4,7 @@ import {
   parseQualificationReply,
   parseQualificationValues,
   parseShowingIntent,
+  qualificationClarificationPrompt,
   readPropertyQualification,
   qualificationResult,
 } from './chatbot-conversation-intent';
@@ -24,6 +25,14 @@ describe('chatbot conversation intent', () => {
     ['I represent my buyer', 'REALTOR'],
     ['I am acting for a client', 'REALTOR'],
     ['agent representing my tenant', 'REALTOR'],
+    ['just me and my wife, we wanna move in', 'LEAD'],
+    ['need a place for me n my gf', 'LEAD'],
+    ['trying to find an apt for myself', 'LEAD'],
+    ['not a realtor, this place is for me', 'LEAD'],
+    ['im their agent', 'REALTOR'],
+    ['showing this for my client', 'REALTOR'],
+    ['messaging on behalf of my buyer', 'REALTOR'],
+    ['i got a client interested in this unit', 'REALTOR'],
   ])('understands role wording %s', (message, expected) => {
     expect(parseChatbotRole(message)).toBe(expected);
   });
@@ -44,6 +53,12 @@ describe('chatbot conversation intent', () => {
     expect(parseQualificationReply('I make $5,200 per month', 'monthlyEarning')).toEqual({ monthlyEarning: 5200 });
     expect(parseQualificationReply('we make 9k combined', 'monthlyEarning')).toEqual({ monthlyEarning: 9000 });
     expect(parseQualificationReply('6 grand', 'monthlyEarning')).toEqual({ monthlyEarning: 6000 });
+    expect(parseQualificationReply('seven forty', 'creditScore')).toEqual({ creditScore: 740 });
+    expect(parseQualificationReply('seven hundred forty', 'creditScore')).toEqual({ creditScore: 740 });
+    expect(parseQualificationReply('5k monthly', 'monthlyEarning')).toEqual({ monthlyEarning: 5000 });
+    expect(parseQualificationReply('$75k/yr', 'monthlyEarning')).toEqual({ monthlyEarning: 6250 });
+    expect(parseQualificationReply('1200/wk', 'monthlyEarning')).toEqual({ monthlyEarning: 5200 });
+    expect(parseQualificationReply('five grand', 'monthlyEarning')).toEqual({ monthlyEarning: 5000 });
   });
 
   it('collects proactive values even when the bot did not ask first', () => {
@@ -52,6 +67,8 @@ describe('chatbot conversation intent', () => {
     expect(parseQualificationValues('my score is 780 and annual salary is 60k')).toEqual({ creditScore: 780, monthlyEarning: 5000 });
     expect(parseQualificationValues('I earn $1,200 weekly')).toEqual({ monthlyEarning: 5200 });
     expect(parseQualificationValues('we make 2400 biweekly')).toEqual({ monthlyEarning: 5200 });
+    expect(parseQualificationValues('my score is seven forty and my income is five grand monthly')).toEqual({ creditScore: 740, monthlyEarning: 5000 });
+    expect(parseQualificationValues('my fico is seven hundred forty and i bring in 6k a month')).toEqual({ creditScore: 740, monthlyEarning: 6000 });
   });
 
   it('does not mistake property numbers or requirement questions for qualification answers', () => {
@@ -62,6 +79,7 @@ describe('chatbot conversation intent', () => {
     expect(parseQualificationReply('how much creidt do i nead maybe 720?', 'creditScore')).toEqual({});
     expect(parseQualificationReply('Is the minimum monthly income $4,650?', 'monthlyEarning')).toEqual({});
     expect(parseQualificationValues('rent is $1550 monthly and minimum credit is 720')).toEqual({});
+    expect(parseQualificationValues('is the minimum score seven forty?')).toEqual({});
   });
 
   it('reads qualification requirements from structured fields or listing description', () => {
@@ -88,8 +106,23 @@ describe('chatbot conversation intent', () => {
     ['what utilites are included?', 'utilities'],
     ['where is the proprty adress?', 'address'],
     ['can i bring my puppy?', 'pets'],
+    ['still up?', 'available'],
+    ['what are they asking?', 'rent'],
+    ['what bills r on me?', 'utilities'],
+    ['is it pet friendly?', 'pets'],
+    ['where do i put my car?', 'parking'],
+    ['send me the app', 'apply-url'],
+    ['how long i gotta stay?', 'lease'],
+    ['guest spot?', 'guest-parking'],
+    ['what fico do i need?', 'credit'],
   ])('maps typo-heavy property wording %s to %s', (message, expectedIntent) => {
     expect(detectPropertyIntents(message).map((item) => item.id)).toContain(expectedIntent);
+  });
+
+  it('understands generic listing contact language without forcing phone or email wording', () => {
+    const intents = detectPropertyIntents('who do i talk to about this place?').map((item) => item.id);
+    expect(intents).toContain('phone');
+    expect(intents).toContain('email');
   });
 });
 
@@ -125,6 +158,15 @@ describe('showing conversation intent', () => {
     'i want to rent this condo',
     'ready to lease the place',
     'want to rent',
+    'when can we take a look?',
+    'cud i swing by tmr?',
+    'any openings 4 a tour sat?',
+    'wud love to see it this wknd',
+    'can i pull up tonite?',
+    'cn i sched a shwng fri?',
+    'would it be possible to see the unit this week?',
+    'what time could we come see it?',
+    'got any slots for a viewing tomorrow?',
   ])('recognizes showing/rental intent: %s', (message) => {
     expect(parseShowingIntent(message)).toBe(true);
   });
@@ -139,5 +181,34 @@ describe('showing conversation intent', () => {
     'who is the realtor?',
   ])('does not treat ordinary property questions as showing requests: %s', (message) => {
     expect(parseShowingIntent(message)).toBe(false);
+  });
+});
+describe('human qualification language expansion', () => {
+  it.each([
+    ['not great maybe 690', 'creditScore', { creditScore: 690 }],
+    ['my score is low 700s', 'creditScore', { creditScore: 710 }],
+    ['last i checked it was seven forty two', 'creditScore', { creditScore: 742 }],
+    ['seven oh five', 'creditScore', { creditScore: 705 }],
+    ['my score is just under 720', 'creditScore', { creditScore: 719 }],
+    ['not much maybe 4500', 'monthlyEarning', { monthlyEarning: 4500 }],
+    ['between 5 and 6k', 'monthlyEarning', { monthlyEarning: 5000 }],
+    ['five and a half grand', 'monthlyEarning', { monthlyEarning: 5500 }],
+  ])('understands human qualification reply %s', (message, field, expected) => {
+    expect(parseQualificationReply(message, field as 'creditScore' | 'monthlyEarning')).toEqual(expected);
+  });
+
+  it('recognizes invalid self reports as clarification instead of a property requirement question', () => {
+    expect(parseQualificationReply('ahhh, my credit score is like 900', 'creditScore')).toEqual({});
+    expect(qualificationClarificationPrompt('ahhh, my credit score is like 900', 'creditScore')).toMatch(/300–850/);
+    expect(qualificationClarificationPrompt('my crenti score is like 7090', 'creditScore')).toMatch(/Did you mean/);
+    expect(qualificationClarificationPrompt('i make like 50', 'monthlyEarning')).toMatch(/rough amount/i);
+  });
+});
+
+describe('indirect human showing wording', () => {
+  it('understands the typo-heavy visit wording from the test UI', () => {
+    expect(parseShowingIntent('i wanna visit this propraty tommor is it possibale to do it can you give me details')).toBe(true);
+    expect(parseShowingIntent('can i go there tomorrow and take a peek?')).toBe(true);
+    expect(parseShowingIntent('can you send me more details and photos?')).toBe(false);
   });
 });
