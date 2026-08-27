@@ -29,6 +29,7 @@ export type ChatbotDecisionReason =
   | 'SHOWING_REQUESTED'
   | 'SYSTEM_UNAVAILABLE'
   | 'REALTOR_VERIFICATION_REQUIRED'
+  | 'AI_GROUNDED_FALLBACK'
   | 'EVIDENCE_VERIFIED';
 
 export type ChatbotSettings = {

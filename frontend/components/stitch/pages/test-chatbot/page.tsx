@@ -1,10 +1,8 @@
 "use client"
 
-import { useCallback, useMemo, useState, useTransition, type FormEvent, type MouseEvent } from "react"
-import { BadgeCheckIcon, BotIcon, CalendarClockIcon, RotateCcwIcon, SendIcon, ShieldAlertIcon, SparklesIcon, UserRoundIcon } from "lucide-react"
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
+import { useCallback, useMemo, useState, useTransition, type FormEvent } from "react"
+import { BadgeCheckIcon, BotIcon, CalendarClockIcon, ChevronDownIcon, RotateCcwIcon, SendIcon, ShieldAlertIcon, SparklesIcon, UserRoundIcon } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { ChatbotPropertyPicker } from "@/components/chatbot-property-picker"
@@ -14,18 +12,16 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Spinner } from "@/components/ui/spinner"
 import { Switch } from "@/components/ui/switch"
 import {
-  appendConversationalPrompt,
   parseTestChatbotRole,
   parseTestCredit,
   parseTestMonthlyIncome,
   parseTestShowingIntent,
   propertyQualification,
   qualificationMatchesProperty,
-  shouldOfferPropertyIndex,
   testQualificationClarification,
 } from "@/lib/chatbot-operations"
 import { formatKnowledgeProperty, type KnowledgePropertyLike } from "@/lib/chatbot-knowledge-targeting"
-import { reindexChatbotKnowledge, testChatbot, type ChatbotTestResult } from "@/lib/tenant-chatbot-actions"
+import { interpretTestChatbotReply, testChatbot, type ChatbotTestResult } from "@/lib/tenant-chatbot-actions"
 
 type Props = { initialProperties: KnowledgePropertyLike[] }
 type Workflow = {
@@ -47,12 +43,25 @@ const initialWorkflow: Workflow = {
   realtorVerified: false,
 }
 
-const ROLE_FOLLOW_UP = "Quick question so I point you the right way: is this place for you, or are you a Realtor helping a client?"
-const CREDIT_FOLLOW_UP = "Got it. If you want, I can quickly check the two basic requirements. About where is your credit score?"
-const INCOME_FOLLOW_UP = "Thanks — and roughly what do you make per month before taxes? An estimate is totally fine."
+const CREDIT_FOLLOW_UP = "If you want, I can quickly check the two basic requirements. Could you share your approximate credit score? A rough number is completely fine."
+const INCOME_FOLLOW_UP = "Thanks. The second basic check is income. If you don't mind, about how much do you make per month before taxes? A rough estimate is completely fine."
 
 function workflowResult(answer: string, decision: ChatbotTestResult["decision"], reason: string): ChatbotTestResult {
   return { answer, decision, reason, confidence: null, evidence: [] }
+}
+
+function looksLikePropertyInquiry(value: string) {
+  const text = value.toLowerCase()
+  return /[?]/.test(value) || /\b(what|when|where|which|how|does|do|is|are|can|could|would|will|fit|enough|space|room|bed|bath|rent|parking|pet|utility|family|household|occupancy)\b/.test(text)
+}
+
+function looksLikeQualificationReply(value: string, expected: "creditScore" | "monthlyEarning") {
+  if (expected === "creditScore") {
+    if (parseTestCredit(value) !== null) return true
+    return /\b(credit|fico|credit score|my score|score is|score was|credit karma|experian|equifax|transunion)\b/i.test(value)
+  }
+  if (parseTestMonthlyIncome(value) !== null) return true
+  return /\b(income|salary|earnings|paycheck|i make|we make|i earn|we earn|bring in|bring home|per month|monthly|per year|yearly|annual)\b/i.test(value)
 }
 
 export function TestChatbotPage({ initialProperties }: Props) {
@@ -153,8 +162,7 @@ export function TestChatbotPage({ initialProperties }: Props) {
     setMessages((current) => [...current, { id: `user-${messageId}`, role: "user", body: nextQuestion }])
     setQuestion("")
 
-    let followUp = ""
-    let audience: "LEAD" | "REALTOR" = workflow.role ?? "LEAD"
+    const audience: "LEAD" | "REALTOR" = workflow.role ?? "LEAD"
 
     const showingIntent = parseTestShowingIntent(nextQuestion)
     const declaredRole = parseTestChatbotRole(nextQuestion)
@@ -163,6 +171,19 @@ export function TestChatbotPage({ initialProperties }: Props) {
       if (declaredRole) {
         setWorkflow((current) => ({ ...current, role: declaredRole }))
         if (declaredRole === "LEAD") {
+          const isCreditReply = looksLikeQualificationReply(nextQuestion, "creditScore")
+          const isIncomeReply = looksLikeQualificationReply(nextQuestion, "monthlyEarning")
+          if (looksLikePropertyInquiry(nextQuestion) && !isCreditReply && !isIncomeReply) {
+            startTransition(async () => {
+              try {
+                const result = await testChatbot({ propertyId, audience: "LEAD", channel: "WEB", question: nextQuestion })
+                appendAssistant(nextQuestion, { ...result, answer: `${result.answer}\n\n${CREDIT_FOLLOW_UP}` }, messageId)
+              } catch (cause) {
+                setError(cause instanceof Error ? cause.message : "The test chat could not answer.")
+              }
+            })
+            return
+          }
           const qualification = qualificationReply(nextQuestion)
           if (qualification) {
             appendAssistant(nextQuestion, qualification, messageId)
@@ -186,25 +207,113 @@ export function TestChatbotPage({ initialProperties }: Props) {
         )
         return
       }
-      followUp = ROLE_FOLLOW_UP
+      startTransition(async () => {
+        try {
+          const interpreted = await interpretTestChatbotReply({
+            propertyId,
+            audience: "LEAD",
+            channel: "WEB",
+            expected: "role",
+            message: nextQuestion,
+          })
+          if (interpreted.recognized && interpreted.role) {
+            setWorkflow((current) => ({ ...current, role: interpreted.role }))
+            if (interpreted.role === "LEAD") {
+              const isCreditReply = looksLikeQualificationReply(nextQuestion, "creditScore")
+              const isIncomeReply = looksLikeQualificationReply(nextQuestion, "monthlyEarning")
+              if (looksLikePropertyInquiry(nextQuestion) && !isCreditReply && !isIncomeReply) {
+                const result = await testChatbot({ propertyId, audience: "LEAD", channel: "WEB", question: nextQuestion })
+                appendAssistant(nextQuestion, { ...result, answer: `${result.answer}\n\n${CREDIT_FOLLOW_UP}` }, messageId)
+                return
+              }
+              const qualification = qualificationReply(nextQuestion)
+              if (qualification) {
+                appendAssistant(nextQuestion, qualification, messageId)
+                return
+              }
+              appendAssistant(
+                nextQuestion,
+                workflowResult(`Got it — you're interested in this property. ${CREDIT_FOLLOW_UP}`, "ASK_CREDIT", "CREDIT_REQUIRED"),
+                messageId
+              )
+              return
+            }
+            appendAssistant(
+              nextQuestion,
+              workflowResult("Got it — you're a Realtor. I can use the Realtor-facing property details, but private access information stays hidden until the Realtor is verified.", "ANSWER", "ROLE_CAPTURED"),
+              messageId
+            )
+            return
+          }
+          const result = await testChatbot({ propertyId, audience: "LEAD", channel: "WEB", question: nextQuestion })
+          appendAssistant(nextQuestion, result, messageId)
+        } catch (cause) {
+          setError(cause instanceof Error ? cause.message : "The test chat could not answer.")
+        }
+      })
+      return
     } else if (workflow.role === "LEAD" && (!workflow.showingEligible || workflow.monthlyIncome === null)) {
+      const expected = workflow.creditScore === null ? "creditScore" as const : "monthlyEarning" as const
+      const isQualificationReply = looksLikeQualificationReply(nextQuestion, expected)
+      if (looksLikePropertyInquiry(nextQuestion) && !showingIntent && !isQualificationReply) {
+        startTransition(async () => {
+          try {
+            const result = await testChatbot({ propertyId, audience: "LEAD", channel: "WEB", question: nextQuestion })
+            const followUp = expected === "creditScore" ? CREDIT_FOLLOW_UP : INCOME_FOLLOW_UP
+            appendAssistant(nextQuestion, { ...result, answer: `${result.answer}\n\n${followUp}` }, messageId)
+          } catch (cause) {
+            setError(cause instanceof Error ? cause.message : "The test chat could not answer.")
+          }
+        })
+        return
+      }
       const qualification = qualificationReply(nextQuestion)
       if (qualification) {
         appendAssistant(nextQuestion, qualification, messageId)
         return
       }
-      if (showingIntent || declaredRole === "LEAD") {
-        appendAssistant(
-          nextQuestion,
-          workflow.creditScore === null
-            ? workflowResult("Absolutely — I can help with that. Before I unlock the showing form, what's your approximate credit score?", "ASK_CREDIT", "CREDIT_REQUIRED")
-            : workflowResult("Thanks. One last basic check before I unlock the showing form: about how much is your monthly income before taxes?", "ASK_INCOME", "INCOME_REQUIRED"),
-          messageId
-        )
-        return
-      }
-      followUp = workflow.creditScore === null ? CREDIT_FOLLOW_UP : INCOME_FOLLOW_UP
-      audience = "LEAD"
+      startTransition(async () => {
+        try {
+          const interpreted = await interpretTestChatbotReply({
+            propertyId,
+            audience: "LEAD",
+            channel: "WEB",
+            expected,
+            message: nextQuestion,
+          })
+          if (interpreted.clarification) {
+            appendAssistant(nextQuestion, workflowResult(
+              interpreted.clarification,
+              expected === "creditScore" ? "ASK_CREDIT" : "ASK_INCOME",
+              expected === "creditScore" ? "CREDIT_REQUIRED" : "INCOME_REQUIRED"
+            ), messageId)
+            return
+          }
+          const interpretedValue = expected === "creditScore" ? interpreted.creditScore : interpreted.monthlyEarning
+          if (interpreted.recognized && interpretedValue !== null) {
+            const resolved = qualificationReply(String(interpretedValue))
+            if (resolved) {
+              appendAssistant(nextQuestion, resolved, messageId)
+              return
+            }
+          }
+          if (showingIntent || declaredRole === "LEAD") {
+            appendAssistant(
+              nextQuestion,
+              expected === "creditScore"
+                ? workflowResult("Absolutely — I can help with that. Before I unlock the showing form, what's your approximate credit score?", "ASK_CREDIT", "CREDIT_REQUIRED")
+                : workflowResult("Thanks. One last basic check before I unlock the showing form: about how much is your monthly income before taxes?", "ASK_INCOME", "INCOME_REQUIRED"),
+              messageId
+            )
+            return
+          }
+          const result = await testChatbot({ propertyId, audience: "LEAD", channel: "WEB", question: nextQuestion })
+          appendAssistant(nextQuestion, result, messageId)
+        } catch (cause) {
+          setError(cause instanceof Error ? cause.message : "The test chat could not answer.")
+        }
+      })
+      return
     }
 
     startTransition(async () => {
@@ -216,37 +325,12 @@ export function TestChatbotPage({ initialProperties }: Props) {
           question: nextQuestion,
           allowSensitiveRealtorEvidence: audience === "REALTOR" && workflow.realtorVerified,
         })
-        const conversationalResult = followUp
-          ? { ...result, answer: appendConversationalPrompt(result.answer, followUp) }
-          : result
-        appendAssistant(nextQuestion, conversationalResult, messageId)
+        appendAssistant(nextQuestion, result, messageId)
       } catch (cause) {
         setError(cause instanceof Error ? cause.message : "The test chat could not answer.")
       }
     })
   }, [appendAssistant, propertyId, qualificationReply, question, workflow])
-
-  const handlePrepareKnowledge = useCallback((event: MouseEvent<HTMLButtonElement>) => {
-    const messageId = event.currentTarget.dataset.messageId
-    const message = messages.find((item) => item.id === messageId)
-    if (!message || message.role !== "assistant" || !message.propertyId) return
-    setError("")
-    startTransition(async () => {
-      try {
-        await reindexChatbotKnowledge()
-        const result = await testChatbot({
-          propertyId: message.propertyId,
-          audience: workflow.role ?? "LEAD",
-          channel: "WEB",
-          question: message.question,
-          allowSensitiveRealtorEvidence: workflow.role === "REALTOR" && workflow.realtorVerified,
-        })
-        setMessages((current) => current.map((item) => item.id === message.id && item.role === "assistant" ? { ...item, body: result.answer, result } : item))
-      } catch (cause) {
-        setError(cause instanceof Error ? cause.message : "Property knowledge could not be prepared.")
-      }
-    })
-  }, [messages, workflow])
 
   const handleShowingPreview = useCallback(() => {
     if (!showingAt || !workflow.showingEligible || !selectedProperty) return
@@ -309,12 +393,35 @@ export function TestChatbotPage({ initialProperties }: Props) {
                   <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground"><BotIcon /></span>
                   <div className="min-w-0 flex-1 rounded-2xl rounded-tl-md border bg-card px-4 py-3 shadow-xs">
                     <p className="whitespace-pre-wrap text-sm leading-6">{message.body}</p>
-                    <div className="mt-3 flex flex-wrap gap-2"><Badge variant={message.result.decision === "STOP" ? "destructive" : "secondary"}>{message.result.decision}</Badge><Badge variant="outline">{message.result.reason}</Badge>{message.result.confidence != null ? <Badge variant="outline">{Math.round(message.result.confidence * 100)}%</Badge> : null}</div>
-                    {shouldOfferPropertyIndex(message.result, message.propertyId) ? (
-                      <Button className="mt-3" data-message-id={message.id} disabled={isPending} onClick={handlePrepareKnowledge} size="sm" type="button" variant="outline">{isPending ? <Spinner data-icon="inline-start" /> : <SparklesIcon data-icon="inline-start" />}Index property knowledge and retry</Button>
-                    ) : null}
-                    {message.result.evidence.length ? (
-                      <Accordion className="mt-2"><AccordionItem value={`details-${message.id}`} className="border-0"><AccordionTrigger className="py-2 text-xs text-muted-foreground hover:no-underline">Evidence and decision details</AccordionTrigger><AccordionContent><div className="flex flex-col gap-2 rounded-lg bg-muted/50 p-3">{message.result.evidence.map((source) => <div key={source.knowledgeId} className="flex items-center justify-between gap-3 rounded-md border bg-background p-2"><div className="min-w-0"><p className="truncate text-xs font-medium">{source.title}</p><p className="text-xs text-muted-foreground">{source.scope} · {source.sourceType}</p></div><Badge variant="outline">{Math.round(source.score * 100)}%</Badge></div>)}</div></AccordionContent></AccordionItem></Accordion>
+                    {(message.result.confidence !== null || message.result.evidence.length > 0 || message.result.ai) ? (
+                      <details className="mt-3 border-t pt-3 text-xs text-muted-foreground">
+                        <summary className="flex cursor-pointer list-none items-center gap-2 font-medium text-foreground/80">
+                          <ChevronDownIcon className="size-3.5" />
+                          Test details
+                          {message.result.confidence !== null ? <span>· {Math.round(message.result.confidence * 100)}% confidence</span> : null}
+                          {message.result.ai?.provider ? <span>· {message.result.ai.status === "ANSWERED" ? "AI answered" : "AI attempted"} · {message.result.ai.provider}</span> : null}
+                        </summary>
+                        <div className="mt-2 space-y-2">
+                          <p><span className="font-medium text-foreground/70">Decision:</span> {message.result.decision} · {message.result.reason}</p>
+                          {message.result.ai?.model ? <p><span className="font-medium text-foreground/70">Model:</span> {message.result.ai.model}</p> : null}
+                          {message.result.evidence.length ? (
+                            <div>
+                              <p className="mb-1 font-medium text-foreground/70">Retrieved chunks</p>
+                              <div className="space-y-1.5">
+                                {message.result.evidence.map((item) => (
+                                  <div key={`${message.id}-${item.knowledgeId}`} className="rounded-md border bg-muted/30 px-2.5 py-2">
+                                    <div className="flex items-center justify-between gap-3">
+                                      <span className="truncate font-medium text-foreground/80">{item.title}</span>
+                                      <span>{Math.round(item.score * 100)}%</span>
+                                    </div>
+                                    <p className="mt-0.5">{item.sourceType} · {item.scope}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ) : null}
+                        </div>
+                      </details>
                     ) : null}
                   </div>
                 </article>

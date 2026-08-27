@@ -196,6 +196,8 @@ export function parseTestChatbotRole(value: string) {
 
   if (/^(?:yes |yeah |yep )?(?:(?:i am|we are) )?(?:a |an )?(tenant|renter|applicant|prospective tenant|prospective renter)$/.test(text)) return "LEAD" as const
   if (/\b(for myself|for ourselves|for me|for us|just me|my family|our family|my partner|my spouse|my husband|my wife|my girlfriend|my boyfriend|personal use)\b/.test(text)) return "LEAD" as const
+  if (/\b(i|we|my|our).{0,18}\b(family|household|wife|husband|spouse|partner|kids?|children).{0,28}\b(fit|stay|live|move|enough|space|room)\b/.test(text)) return "LEAD" as const
+  if (/\b(family|household)\s+(?:of\s+)?\d{1,2}.{0,24}\b(fit|stay|live|move|enough|space|room)\b/.test(text)) return "LEAD" as const
   if (/\b(i|we).{0,8}\b(want|would like|plan|hope|need|looking|interested|trying).{0,35}\b(rent|lease|move|live|buy|purchase)\b/.test(text)) return "LEAD" as const
   if (/\b(i|we).{0,8}\b(need|want|looking for|trying to find).{0,24}\b(place|home|house|apartment|unit|condo)\b/.test(text)) return "LEAD" as const
   if (/\b(rent|lease|move into|live in|buy|purchase).{0,30}\b(myself|ourselves|me|us|my family|my partner|my spouse|this property|this place|this home|this house|this apartment|this unit|this condo)\b/.test(text)) return "LEAD" as const

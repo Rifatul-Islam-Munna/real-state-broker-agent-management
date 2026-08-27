@@ -6,7 +6,12 @@ import { AuthenticatedTenantGuard } from '../tenant-dashboard/authenticated-tena
 import { TenantPlanPermissionGuard } from '../tenant-dashboard/tenant-plan-permission.guard';
 import { TenantStaffPermissionGuard } from '../tenant-dashboard/tenant-staff-permission.guard';
 import { MiniLmEmbeddingService } from './mini-lm-embedding.service';
+import { PlatformChatbotAiController } from './platform-chatbot-ai.controller';
+import { PlatformChatbotAiService } from './platform-chatbot-ai.service';
 import { PlatformChatbotKnowledge } from './platform-chatbot-knowledge.entity';
+import { PlatformChatbotLearningController } from './platform-chatbot-learning.controller';
+import { PlatformChatbotLearningCandidate } from './platform-chatbot-learning.entity';
+import { PlatformChatbotLearningService } from './platform-chatbot-learning.service';
 import { PlatformChatbotKnowledgeController } from './platform-chatbot-knowledge.controller';
 import { PlatformChatbotKnowledgeService } from './platform-chatbot-knowledge.service';
 import { QdrantKnowledgeService } from './qdrant-knowledge.service';
@@ -19,11 +24,20 @@ import {
 } from './tenant-chatbot.service';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([SaasTenant, SaasAdminAuditLog, PlatformChatbotKnowledge])],
+  imports: [
+    TypeOrmModule.forFeature([
+      SaasTenant,
+      SaasAdminAuditLog,
+      PlatformChatbotKnowledge,
+      PlatformChatbotLearningCandidate,
+    ]),
+  ],
   controllers: [
     TenantChatbotController,
     TenantChatbotPublicController,
     PlatformChatbotKnowledgeController,
+    PlatformChatbotAiController,
+    PlatformChatbotLearningController,
   ],
   providers: [
     TenantChatbotService,
@@ -31,6 +45,8 @@ import {
     MiniLmEmbeddingService,
     QdrantKnowledgeService,
     PlatformChatbotKnowledgeService,
+    PlatformChatbotAiService,
+    PlatformChatbotLearningService,
     AuthenticatedTenantGuard,
     TenantStaffPermissionGuard,
     TenantPlanPermissionGuard,

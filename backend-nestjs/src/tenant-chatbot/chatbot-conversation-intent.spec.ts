@@ -3,6 +3,7 @@ import {
   parseChatbotRole,
   parseQualificationReply,
   parseQualificationValues,
+  parseQualificationWithApprovedHint,
   parseShowingIntent,
   qualificationClarificationPrompt,
   readPropertyQualification,
@@ -17,6 +18,8 @@ describe('chatbot conversation intent', () => {
     ['I wanna rent this place for myself', 'LEAD'],
     ['rent this condo myself', 'LEAD'],
     ['my family and i want to move in', 'LEAD'],
+    ['we had 4 member of family will it fit?', 'LEAD'],
+    ['family of 4 will fit here?', 'LEAD'],
     ['we are prospective renters', 'LEAD'],
     ["I'm the Realtor for my client", 'REALTOR'],
     ['realtor', 'REALTOR'],
@@ -202,6 +205,13 @@ describe('human qualification language expansion', () => {
     expect(qualificationClarificationPrompt('ahhh, my credit score is like 900', 'creditScore')).toMatch(/300–850/);
     expect(qualificationClarificationPrompt('my crenti score is like 7090', 'creditScore')).toMatch(/Did you mean/);
     expect(qualificationClarificationPrompt('i make like 50', 'monthlyEarning')).toMatch(/rough amount/i);
+  });
+
+  it('uses an approved semantic hint only to parse the current visitor value', () => {
+    expect(parseQualificationWithApprovedHint('score hovering around 712', 'creditScore')).toEqual({ creditScore: 712 });
+    expect(parseQualificationWithApprovedHint('roughly 5.5k every month', 'monthlyEarning')).toEqual({ monthlyEarning: 5500 });
+    expect(parseQualificationWithApprovedHint('is the minimum score 720?', 'creditScore')).toEqual({});
+    expect(parseQualificationWithApprovedHint('is rent 1550 monthly?', 'monthlyEarning')).toEqual({});
   });
 });
 

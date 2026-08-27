@@ -10,6 +10,7 @@ import type {
   ChatbotSettingsPatch,
   CreateTenantKnowledgeInput,
   TestChatbotQuestionInput,
+  TestChatbotReplyInterpretInput,
   UpdateTenantKnowledgeInput,
 } from './tenant-chatbot.service';
 
@@ -95,6 +96,14 @@ export class TenantChatbotController {
   @Post('test')
   test(@Req() request: any, @Body() body: TestChatbotQuestionInput) {
     return this.chatbot.testQuestion(request.tenant, body);
+  }
+
+  @Post('test/interpret-reply')
+  interpretTestReply(
+    @Req() request: any,
+    @Body() body: TestChatbotReplyInterpretInput,
+  ) {
+    return this.chatbot.interpretTestReply(request.tenant, body);
   }
 
   @Get('activity')

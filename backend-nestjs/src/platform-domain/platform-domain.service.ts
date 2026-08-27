@@ -18,6 +18,25 @@ export type StripeRuntimeSettings = {
   currency: string;
 };
 
+export type PlatformChatbotAiProvider = 'OpenRouter' | 'OpenAI' | 'Gemini' | 'Claude' | 'Ollama' | 'Custom';
+export type PlatformChatbotAiConfig = {
+  enabled: boolean;
+  providerName: PlatformChatbotAiProvider;
+  baseUrl: string;
+  models: string[];
+  temperature: number;
+  maxOutputTokens: number;
+  timeoutMs: number;
+  maxConcurrency: number;
+  answerFallbackEnabled: boolean;
+  qualificationFallbackEnabled: boolean;
+  reviewLearningEnabled: boolean;
+  denyDataCollection: boolean;
+};
+export type PlatformChatbotAiRuntimeSettings = PlatformChatbotAiConfig & {
+  apiKey: string;
+};
+
 @Injectable()
 export class PlatformDomainService implements OnModuleInit {
   private primaryDomain: string;
@@ -166,6 +185,91 @@ export class PlatformDomainService implements OnModuleInit {
     return { secretKey, webhookSecret, publishableKey, currency };
   }
 
+  async getChatbotAiSettings() {
+    const row = await this.settings.findOne({ where: { id: 1 } });
+    const config = this.normalizeChatbotAiConfig(row?.chatbotAiConfig);
+    return {
+      ...config,
+      apiKeyConfigured: Boolean(row?.chatbotAiApiKeyEncrypted),
+      updatedAt: row?.updatedAt ?? null,
+    };
+  }
+
+  async updateChatbotAiSettings(dto: any, actorUserId: number) {
+    const row = await this.getOrCreateRow();
+    const current = this.normalizeChatbotAiConfig(row.chatbotAiConfig);
+    const config = this.normalizeChatbotAiConfig({ ...current, ...(dto ?? {}) });
+    const apiKey = this.clean(dto?.apiKey);
+    if (dto?.clearApiKey === true) row.chatbotAiApiKeyEncrypted = null;
+    else if (apiKey) row.chatbotAiApiKeyEncrypted = this.encrypt(apiKey);
+    row.chatbotAiConfig = config as unknown as Record<string, unknown>;
+    row.updatedByUserId = actorUserId;
+    await this.settings.save(row);
+    await this.audit(
+      'platform.chatbot_ai.update',
+      actorUserId,
+      'Updated platform chatbot AI settings',
+      {
+        enabled: config.enabled,
+        providerName: config.providerName,
+        modelCount: config.models.length,
+        answerFallbackEnabled: config.answerFallbackEnabled,
+        qualificationFallbackEnabled: config.qualificationFallbackEnabled,
+      },
+    );
+    return this.getChatbotAiSettings();
+  }
+
+  async getChatbotAiRuntimeSettings(): Promise<PlatformChatbotAiRuntimeSettings> {
+    const row = await this.settings.findOne({ where: { id: 1 } });
+    const config = this.normalizeChatbotAiConfig(row?.chatbotAiConfig);
+    const apiKey = row?.chatbotAiApiKeyEncrypted ? this.decrypt(row.chatbotAiApiKeyEncrypted) : '';
+    return { ...config, apiKey };
+  }
+
+  private normalizeChatbotAiConfig(value: unknown): PlatformChatbotAiConfig {
+    const source = value && typeof value === 'object' && !Array.isArray(value)
+      ? value as Record<string, unknown>
+      : {};
+    const providerName = this.chatbotAiProvider(source.providerName);
+    const models = Array.isArray(source.models)
+      ? [...new Set(source.models.map((item) => this.cleanChatbotModelId(item)).filter(Boolean))].slice(0, 20)
+      : [];
+    return {
+      enabled: source.enabled === true,
+      providerName,
+      baseUrl: this.clean(source.baseUrl),
+      models,
+      temperature: this.clampNumber(source.temperature, 0.84, 0.8, 0.88),
+      maxOutputTokens: this.clampInteger(source.maxOutputTokens, 180, 64, 500),
+      timeoutMs: this.clampInteger(source.timeoutMs, 20_000, 2_000, 30_000),
+      maxConcurrency: this.clampInteger(source.maxConcurrency, 32, 1, 100),
+      answerFallbackEnabled: source.answerFallbackEnabled !== false,
+      qualificationFallbackEnabled: source.qualificationFallbackEnabled !== false,
+      reviewLearningEnabled: source.reviewLearningEnabled !== false,
+      denyDataCollection: source.denyDataCollection === true,
+    };
+  }
+
+  private chatbotAiProvider(value: unknown): PlatformChatbotAiProvider {
+    const normalized = this.clean(value).toLowerCase();
+    if (normalized === 'openai') return 'OpenAI';
+    if (normalized === 'gemini' || normalized === 'google') return 'Gemini';
+    if (normalized === 'claude' || normalized === 'anthropic') return 'Claude';
+    if (normalized === 'ollama') return 'Ollama';
+    if (normalized === 'custom') return 'Custom';
+    return 'OpenRouter';
+  }
+
+  private clampInteger(value: unknown, fallback: number, minimum: number, maximum: number) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? Math.min(maximum, Math.max(minimum, Math.round(parsed))) : fallback;
+  }
+
+  private clampNumber(value: unknown, fallback: number, minimum: number, maximum: number) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? Math.min(maximum, Math.max(minimum, parsed)) : fallback;
+  }
   private async getOrCreateRow() {
     let row = await this.settings.findOne({ where: { id: 1 } });
     if (!row) {
@@ -214,6 +318,13 @@ export class PlatformDomainService implements OnModuleInit {
   private clean(value: unknown) {
     return `${value ?? ''}`.trim();
   }
+
+  private cleanChatbotModelId(value: unknown) {
+    return this.clean(value)
+      .replace(/^[\s,;.'"`]+/, '')
+      .replace(/[\s,;.'"`]+$/, '');
+  }
+
   private normalizeSubdomain(value: string) {
     const subdomain = this.clean(value).toLowerCase();
     if (!/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(subdomain)) {

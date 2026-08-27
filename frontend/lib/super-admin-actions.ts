@@ -230,3 +230,143 @@ export async function deletePlatformChatbotKnowledgeAction(formData: FormData) {
   })
   revalidatePath("/super-admin/chatbot-knowledge")
 }
+
+export type PlatformChatbotAiSettings = {
+  enabled: boolean
+  providerName: "OpenRouter" | "OpenAI" | "Gemini" | "Claude" | "Ollama" | "Custom"
+  baseUrl: string
+  models: string[]
+  temperature: number
+  maxOutputTokens: number
+  timeoutMs: number
+  maxConcurrency: number
+  answerFallbackEnabled: boolean
+  qualificationFallbackEnabled: boolean
+  reviewLearningEnabled: boolean
+  denyDataCollection: boolean
+  apiKeyConfigured: boolean
+  updatedAt?: string | null
+}
+
+export async function getPlatformChatbotAiSettings() {
+  return request("/super-admin-management/chatbot-ai") as Promise<PlatformChatbotAiSettings>
+}
+
+export async function updatePlatformChatbotAiAction(formData: FormData) {
+  const models = String(formData.get("models") ?? "")
+    .split(/[\n,;]+/)
+    .map((item) => item.trim().replace(/^[\s,;.'"`]+|[\s,;.'"`]+$/g, ""))
+    .filter(Boolean)
+  const result = await request("/super-admin-management/chatbot-ai", {
+    method: "PATCH",
+    body: JSON.stringify({
+      enabled: formData.get("enabled") === "on",
+      providerName: formData.get("providerName"),
+      baseUrl: formData.get("baseUrl"),
+      models,
+      apiKey: formData.get("apiKey"),
+      clearApiKey: formData.get("clearApiKey") === "on",
+      temperature: Number(formData.get("temperature") ?? 0.84),
+      maxOutputTokens: Number(formData.get("maxOutputTokens") ?? 180),
+      timeoutMs: Number(formData.get("timeoutMs") ?? 20000),
+      maxConcurrency: Number(formData.get("maxConcurrency") ?? 32),
+      answerFallbackEnabled: formData.get("answerFallbackEnabled") === "on",
+      qualificationFallbackEnabled: formData.get("qualificationFallbackEnabled") === "on",
+      reviewLearningEnabled: formData.get("reviewLearningEnabled") === "on",
+      denyDataCollection: formData.get("denyDataCollection") === "on",
+    }),
+  }) as PlatformChatbotAiSettings
+  revalidatePath("/super-admin/chatbot-learning")
+  return result
+}
+
+export async function testPlatformChatbotAiAction() {
+  return request("/super-admin-management/chatbot-ai/test", { method: "POST" }) as Promise<{
+    ok: boolean
+    provider: string
+    model: string
+    message: string
+  }>
+}
+
+export type PlatformChatbotLearningCandidate = {
+  id: string
+  tenantId: number
+  tenantName: string
+  propertyId: number | null
+  propertyTitle: string
+  audience: "LEAD" | "REALTOR"
+  channel: "WEB" | "EMAIL" | "SMS"
+  kind: "ANSWER" | "QUALIFICATION"
+  status: "PENDING" | "APPROVED" | "REJECTED"
+  question: string
+  answer: string
+  structuredPayload?: Record<string, unknown> | null
+  evidenceKnowledgeIds?: string[]
+  provider: string
+  model: string
+  confidence: number | null
+  occurrences: number
+  firstSeenAt: string
+  lastSeenAt: string
+  reviewedAt?: string | null
+}
+
+export type PlatformChatbotLearningPage = {
+  items: PlatformChatbotLearningCandidate[]
+  total: number
+  page: number
+  pageSize: number
+  counts: { pending: number; approved: number; rejected: number }
+}
+
+export async function getPlatformChatbotLearning(filters: {
+  status?: string
+  kind?: string
+  tenantId?: string | number
+  page?: string | number
+} = {}) {
+  const params = new URLSearchParams()
+  if (filters.status) params.set("status", String(filters.status))
+  if (filters.kind) params.set("kind", String(filters.kind))
+  if (filters.tenantId) params.set("tenantId", String(filters.tenantId))
+  if (filters.page) params.set("page", String(filters.page))
+  params.set("pageSize", "100")
+  return request(`/super-admin-management/chatbot-learning?${params.toString()}`) as Promise<PlatformChatbotLearningPage>
+}
+
+async function reviewPlatformChatbotLearning(formData: FormData, status: "APPROVED" | "REJECTED") {
+  const ids = formData.getAll("ids").map(String).filter(Boolean)
+  await request("/super-admin-management/chatbot-learning/review", {
+    method: "PATCH",
+    body: JSON.stringify({ ids, status }),
+  })
+  revalidatePath("/super-admin/chatbot-learning")
+  revalidatePath("/super-admin/chatbot-knowledge")
+}
+
+export async function approvePlatformChatbotLearningAction(formData: FormData) {
+  return reviewPlatformChatbotLearning(formData, "APPROVED")
+}
+
+export async function rejectPlatformChatbotLearningAction(formData: FormData) {
+  return reviewPlatformChatbotLearning(formData, "REJECTED")
+}
+
+export async function importPlatformChatbotLearningAction(formData: FormData) {
+  const file = formData.get("backup")
+  if (!(file instanceof File) || file.size === 0) {
+    throw new Error("Choose a chatbot learned-pack JSON file.")
+  }
+  if (file.size > 10 * 1024 * 1024) {
+    throw new Error("Learning pack must be 10 MB or smaller.")
+  }
+  const payload = JSON.parse(await file.text())
+  const result = await request("/super-admin-management/chatbot-learning/import", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  })
+  revalidatePath("/super-admin/chatbot-learning")
+  revalidatePath("/super-admin/chatbot-knowledge")
+  return result
+}

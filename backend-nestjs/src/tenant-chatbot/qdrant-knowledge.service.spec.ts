@@ -201,6 +201,32 @@ describe('QdrantKnowledgeService', () => {
     });
   });
 
+  it('keeps approved qualification learning in a tenant-isolated LEARNING scope', async () => {
+    const client = { query: jest.fn().mockResolvedValue({ points: [] }) };
+    const service = new QdrantKnowledgeService(config, client as any);
+
+    await service.searchLearning({
+      tenantId: 42,
+      audience: 'LEAD',
+      propertyId: 41,
+      vector,
+      modelSignature,
+      sourceType: 'AI_QUALIFICATION_CREDIT',
+    });
+
+    const request = client.query.mock.calls[0][1];
+    expect(request.filter.must).toEqual(expect.arrayContaining([
+      { key: 'scope', match: { value: 'LEARNING' } },
+      { key: 'tenantId', match: { value: 42 } },
+      { key: 'audience', match: { value: 'LEAD' } },
+      { key: 'sourceType', match: { value: 'AI_QUALIFICATION_CREDIT' } },
+    ]));
+    expect(request.filter.should).toEqual([
+      { key: 'propertyId', match: { value: 41 } },
+      { is_empty: { key: 'propertyId' } },
+    ]);
+  });
+
   it('can be instantiated by Nest without requiring a config injection token', async () => {
     const moduleRef = await Test.createTestingModule({
       providers: [QdrantKnowledgeService],

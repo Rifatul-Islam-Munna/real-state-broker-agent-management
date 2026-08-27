@@ -30,6 +30,8 @@ export function parseChatbotRole(value: unknown): ChatbotAudience | null {
   const leadSelfContext = [
     /\b(i am|we are)\s+(?:a|an|the)?\s*(tenant|renter|applicant|prospective tenant|prospective renter|future tenant|future renter)\b/i,
     /\b(for myself|for ourselves|for me|for us|just me|me only|my family|our family|my partner|our partner|my spouse|my husband|my wife|my girlfriend|my boyfriend|our home|personal use)\b/i,
+    /\b(i|we|my|our).{0,18}\b(family|household|wife|husband|spouse|partner|kids?|children).{0,28}\b(fit|stay|live|move|enough|space|room)\b/i,
+    /\b(family|household)\s+(?:of\s+)?\d{1,2}.{0,24}\b(fit|stay|live|move|enough|space|room)\b/i,
     /\b(i|we)\s+(?:want|want to|would like|plan|hope|need|looking|are looking|interested|are interested|trying to).{0,40}\b(rent|lease|move|live|buy|purchase)\b/i,
     /\b(i|we)\s+(?:need|want|looking for|trying to find).{0,30}\b(place|home|house|apartment|unit|condo)\b/i,
     /\b(i|we)\s+(?:would|will|plan to|want to).{0,20}\b(live|stay|move).{0,20}\b(here|there|in it|into it)\b/i,
@@ -93,6 +95,34 @@ export function parseQualificationValues(value: unknown): QualificationValues {
   if (credit !== null) result.creditScore = credit;
   if (income !== null) result.monthlyEarning = income;
   return result;
+}
+
+export function parseQualificationWithApprovedHint(
+  value: unknown,
+  expected: QualificationField,
+): QualificationValues {
+  const text = normalizeChatbotHumanText(value).replace(/,/g, '');
+  if (!text || isRequirementQuestion(text, expected)) return {};
+  if (expected === 'creditScore') {
+    if (hasPropertyNumberContext(text) && !hasCreditSelfContext(text)) return {};
+    const band = parseCreditBand(text);
+    if (band !== null) return { creditScore: band };
+    const spoken = parseSpokenCredit(text);
+    if (spoken !== null) return { creditScore: spoken };
+    const candidates = [...text.matchAll(/\b(\d{3})\b/g)]
+      .map((match) => validCredit(match[1]))
+      .filter((score): score is number => score !== null);
+    if (candidates.length !== 1) return {};
+    let score = candidates[0];
+    if (/\b(just|slightly|little|bit)\s+under\b.{0,12}\b\d{3}\b/i.test(text)) score -= 1;
+    if (/\b(just|slightly|little|bit)\s+over\b.{0,12}\b\d{3}\b/i.test(text)) score += 1;
+    return validCredit(score) === null ? {} : { creditScore: score };
+  }
+  const selfIncome = /\b(my|our)\s+(income|salary|earnings|pay|gross|net|take home)|\b(i|we)\s+(make|earn|get|receive|bring in|bring home|pull in|take home|gross|net|clear)\b/i.test(text);
+  if (/\b(rent|deposit|fee|hoa|association|price|cost|application|security deposit)\b/i.test(text) && !selfIncome) return {};
+  const amount = parseHumanAmount(text);
+  if (amount === null) return {};
+  return { monthlyEarning: monthlyEquivalent(amount, text) };
 }
 
 export function qualificationClarificationPrompt(value: unknown, expected: QualificationField) {

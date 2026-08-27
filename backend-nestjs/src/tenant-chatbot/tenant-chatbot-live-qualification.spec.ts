@@ -9,7 +9,13 @@ describe('Tenant chatbot live qualification workflow', () => {
     responseDelaySeconds: 0,
   });
 
-  function harness(options?: { verifiedRealtor?: boolean; credit?: string; income?: string }) {
+  function harness(options?: {
+    verifiedRealtor?: boolean;
+    credit?: string;
+    income?: string;
+    ai?: { interpretReply?: jest.Mock; answerFromEvidence?: jest.Mock };
+    learning?: { approvedQualificationHint?: jest.Mock; recordQualification?: jest.Mock; recordAnswer?: jest.Mock };
+  }) {
     let conversation: any = null;
     let leadPayload: Record<string, unknown> = {
       ...(options?.credit ? { creditScore: options.credit } : {}),
@@ -88,6 +94,8 @@ describe('Tenant chatbot live qualification workflow', () => {
       embeddings as any,
       vectors as any,
       { findActiveByIds: jest.fn(async () => []) } as any,
+      options?.ai as any,
+      options?.learning as any,
     );
     const send = (body: string, id: string, extra: Record<string, unknown> = {}) => service.handleMessage(tenant, {
       channel: 'WEB', leadId: 7, propertyId: 9, sessionId: 'web-role',
@@ -228,6 +236,101 @@ describe('Tenant chatbot live qualification workflow', () => {
     await state.send('can i visit tomorrow?', 'show-credit-1');
     await state.send('this is for me', 'show-credit-2');
     await expect(state.send('my score is around 740, can i still come see it tomorrow?', 'show-credit-3')).resolves.toMatchObject({ decision: 'ASK_INCOME', reason: 'INCOME_REQUIRED' });
+  });
+
+  it('uses AI only when a human qualification reply is genuinely hard to parse', async () => {
+    const ai = {
+      interpretReply: jest.fn().mockResolvedValue({
+        recognized: true,
+        role: null,
+        creditScore: null,
+        monthlyEarning: 5417,
+        period: 'BIWEEKLY',
+        confidence: 0.93,
+        provider: 'OpenRouter',
+        model: 'free/model-a',
+      }),
+    };
+    const learning = {
+      approvedQualificationHint: jest.fn().mockResolvedValue(null),
+      recordQualification: jest.fn().mockResolvedValue({ id: 'learn-1' }),
+    };
+    const state = harness({ ai, learning });
+    await state.send('can i visit tomorrow?', 'ai-human-1');
+    await state.send('this one is for me', 'ai-human-2');
+    await state.send('760', 'ai-human-3');
+    const result = await state.send(
+      'i receive a couple and a half thousand every two weeks before tax',
+      'ai-human-4',
+      { channel: 'EMAIL', sessionId: 'email-ai-human' },
+    );
+    expect(result).toMatchObject({ decision: 'ANSWER', reason: 'QUALIFIED', showingEligible: true });
+    expect(state.getLeadPayload()).toMatchObject({ creditScore: '760', monthlyEarning: '5417' });
+    expect(ai.interpretReply).toHaveBeenCalledWith(expect.objectContaining({
+      expected: 'monthlyEarning',
+      channel: 'EMAIL',
+    }));
+    expect(learning.recordQualification).toHaveBeenCalledWith(expect.objectContaining({
+      question: 'i receive a couple and a half thousand every two weeks before tax',
+      structuredPayload: expect.objectContaining({ expected: 'monthlyEarning', monthlyEarning: 5417 }),
+    }));
+  });
+
+  it('uses AI for an unusual role reply and records the interpretation for review', async () => {
+    const ai = {
+      interpretReply: jest.fn().mockResolvedValue({
+        recognized: true,
+        role: 'REALTOR',
+        creditScore: null,
+        monthlyEarning: null,
+        period: null,
+        confidence: 0.96,
+        provider: 'OpenRouter',
+        model: 'free/model-b',
+      }),
+    };
+    const learning = {
+      approvedQualificationHint: jest.fn().mockResolvedValue(null),
+      recordQualification: jest.fn().mockResolvedValue({ id: 'role-review' }),
+    };
+    const state = harness({ ai, learning });
+    await state.send('can i arrange a viewing?', 'ai-role-1');
+    const result = await state.send('im handling this for a purchaser as their representative', 'ai-role-2');
+    expect(result).toMatchObject({ decision: 'ANSWER', reason: 'ROLE_CAPTURED' });
+    expect(state.getConversation()?.audience).toBe('REALTOR');
+    expect(ai.interpretReply).toHaveBeenCalledWith(expect.objectContaining({ expected: 'role' }));
+    expect(learning.recordQualification).toHaveBeenCalledWith(expect.objectContaining({
+      structuredPayload: { expected: 'role', role: 'REALTOR' },
+    }));
+  });
+
+  it('reuses an approved exact hard reply locally without calling AI again', async () => {
+    const ai = { interpretReply: jest.fn().mockResolvedValue(null) };
+    const learning = {
+      approvedQualificationHint: jest.fn(async (input: any) => input.expected === 'monthlyEarning'
+        ? { exact: true, score: 1, candidateId: 'approved-income', role: null, creditScore: null, monthlyEarning: 5417 }
+        : null),
+    };
+    const state = harness({ ai, learning });
+    await state.send('can i visit tomorrow?', 'learned-1');
+    await state.send('this is for me', 'learned-2');
+    await state.send('760', 'learned-3');
+    const result = await state.send('i receive a couple and a half thousand every two weeks before tax', 'learned-4');
+    expect(result).toMatchObject({ decision: 'ANSWER', reason: 'QUALIFIED', showingEligible: true });
+    expect(state.getLeadPayload()).toMatchObject({ creditScore: '760', monthlyEarning: '5417' });
+    expect(ai.interpretReply).not.toHaveBeenCalled();
+  });
+
+  it('does not spend an AI call on an ordinary property question while qualification is pending', async () => {
+    const ai = { interpretReply: jest.fn().mockResolvedValue(null) };
+    const learning = { approvedQualificationHint: jest.fn().mockResolvedValue(null) };
+    const state = harness({ ai, learning });
+    await state.send('hello', 'gate-1');
+    await state.send('tenant', 'gate-2');
+    const result = await state.send('Can I park my car?', 'gate-3');
+    expect(result).toMatchObject({ decision: 'ANSWER', reason: 'EVIDENCE_VERIFIED' });
+    expect(ai.interpretReply).not.toHaveBeenCalled();
+    expect(learning.approvedQualificationHint).not.toHaveBeenCalled();
   });
 });
 

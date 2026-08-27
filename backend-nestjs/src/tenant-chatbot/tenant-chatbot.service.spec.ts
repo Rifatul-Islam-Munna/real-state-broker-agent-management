@@ -18,6 +18,8 @@ describe('TenantChatbotService', () => {
     query: jest.Mock,
     vectorOverrides: Record<string, unknown> = {},
     platformRows: any[] = [],
+    ai?: any,
+    learning?: any,
   ) {
     const databases = {
       withTenantClient: jest.fn(async (_name: string, callback: any) =>
@@ -46,6 +48,8 @@ describe('TenantChatbotService', () => {
         embeddings as any,
         vectors as any,
         platform as any,
+        ai,
+        learning,
       ),
       databases,
       embeddings,
@@ -53,6 +57,35 @@ describe('TenantChatbotService', () => {
       platform,
     };
   }
+
+  it('lets AI interpret a hard role reply even when local heuristics do not recognize it', async () => {
+    const query = jest.fn(async () => ({ rows: [] }));
+    const ai = {
+      interpretReply: jest.fn(async () => ({
+        recognized: true,
+        role: 'LEAD',
+        creditScore: null,
+        monthlyEarning: null,
+        period: null,
+        confidence: 0.93,
+        provider: 'OpenRouter',
+        model: 'test-model',
+      })),
+    };
+    const state = serviceWith(query, {}, [], ai);
+
+    await expect(state.service.interpretTestReply(tenant, {
+      propertyId: 41,
+      audience: 'LEAD',
+      channel: 'WEB',
+      expected: 'role',
+      message: 'im looking for get this property',
+    })).resolves.toMatchObject({ recognized: true, source: 'AI', role: 'LEAD' });
+    expect(ai.interpretReply).toHaveBeenCalledWith(expect.objectContaining({
+      expected: 'role',
+      message: 'im looking for get this property',
+    }));
+  });
 
   it('returns fail-closed defaults and persists normalized settings', async () => {
     const query = jest.fn(async (sql: string) => {
@@ -421,6 +454,132 @@ describe('TenantChatbotService', () => {
     });
   });
 
+  it('uses grounded AI only for low-confidence retrieved evidence and queues the answer for review', async () => {
+    const query = jest.fn(async (sql: string) => {
+      if (sql.includes('SELECT value FROM tenant_setting')) return { rows: [{ value: activeSettings }] };
+      if (sql.includes('FROM tenant_property')) return { rows: [{ id: 41, title: 'Lime Bay', status: 'published', payload: {} }] };
+      if (sql.includes('FROM tenant_chatbot_knowledge')) return { rows: [{
+        id: 'pet', propertyId: 41, scope: 'PROPERTY', audience: 'LEAD',
+        sourceType: 'MANUAL', title: 'Animal policy',
+        answer: 'One cat is allowed with written approval.', priority: 80, active: true,
+      }] };
+      return { rows: [] };
+    });
+    const ai = {
+      answerFromEvidence: jest.fn().mockResolvedValue({
+        answer: 'Yes, one cat is allowed if you have written approval.',
+        provider: 'OpenRouter',
+        model: 'free/model',
+        confidence: 0.94,
+      }),
+    };
+    const learning = { recordAnswer: jest.fn().mockResolvedValue({ id: 'candidate-1' }) };
+    const state = serviceWith(query, {
+      search: jest.fn()
+        .mockResolvedValueOnce([{
+          pointId: 'pet', score: 0.7, scope: 'PROPERTY', tenantId: 42,
+          audience: 'LEAD', propertyId: 41, knowledgeId: 'pet',
+          sourceType: 'MANUAL', sourceHash: 'pet', priority: 80, active: true,
+        }])
+        .mockResolvedValueOnce([]),
+    }, [], ai, learning);
+
+    await expect(state.service.testQuestion(tenant, {
+      propertyId: 41,
+      audience: 'LEAD',
+      question: 'Could my little furball stay with me?',
+    })).resolves.toMatchObject({
+      decision: 'ANSWER',
+      reason: 'AI_GROUNDED_FALLBACK',
+      answer: 'Yes, one cat is allowed if you have written approval.',
+      confidence: 0.94,
+    });
+    expect(ai.answerFromEvidence).toHaveBeenCalledWith(expect.objectContaining({
+      tenantId: 42,
+      propertyId: 41,
+      question: 'Could my little furball stay with me?',
+      evidence: [expect.objectContaining({ answer: 'One cat is allowed with written approval.' })],
+    }));
+    expect(learning.recordAnswer).toHaveBeenCalledWith(expect.objectContaining({
+      tenantId: 42,
+      propertyTitle: 'Lime Bay',
+      answer: 'Yes, one cat is allowed if you have written approval.',
+      provider: 'OpenRouter',
+    }));
+  });
+
+  it.each(['WEB', 'SMS', 'EMAIL'] as const)('uses grounded AI fallback below the tenant threshold on %s', async (channel) => {
+    const tenantSettings = normalizeChatbotSettings({
+      enabled: true,
+      channels: { web: true, email: true, sms: true },
+      minimumConfidence: 0.8,
+    });
+    const query = jest.fn(async (sql: string) => {
+      if (sql.includes('SELECT value FROM tenant_setting')) return { rows: [{ value: tenantSettings }] };
+      if (sql.includes('FROM tenant_property')) return { rows: [{ id: 41, title: 'Lime Bay', status: 'published', payload: {} }] };
+      if (sql.includes('FROM tenant_chatbot_knowledge')) return { rows: [{
+        id: 'water', propertyId: 41, scope: 'PROPERTY', audience: 'LEAD',
+        sourceType: 'MANUAL', title: 'Utilities', answer: 'Water is included in rent.', priority: 80, active: true,
+      }] };
+      return { rows: [] };
+    });
+    const ai = { answerFromEvidence: jest.fn().mockResolvedValue({
+      answer: 'Water is included in rent.', provider: 'OpenRouter', model: 'free/model', confidence: 0.91,
+    }) };
+    const state = serviceWith(query, {
+      search: jest.fn()
+        .mockResolvedValueOnce([{ pointId: 'water', score: 0.54, scope: 'PROPERTY', tenantId: 42, audience: 'LEAD', propertyId: 41, knowledgeId: 'water', sourceType: 'MANUAL', sourceHash: 'water', priority: 80, active: true }])
+        .mockResolvedValueOnce([]),
+    }, [], ai);
+
+    await expect(state.service.testQuestion(tenant, {
+      propertyId: 41,
+      audience: 'LEAD',
+      channel,
+      question: 'what about that wet utility thing?',
+    })).resolves.toMatchObject({
+      decision: 'ANSWER',
+      reason: 'AI_GROUNDED_FALLBACK',
+      ai: { provider: 'OpenRouter', model: 'free/model' },
+    });
+    expect(ai.answerFromEvidence).toHaveBeenCalledWith(expect.objectContaining({ channel }));
+  });
+
+  it('uses each tenant minimum confidence before deciding whether AI fallback is needed', async () => {
+    const tenantSettings = normalizeChatbotSettings({
+      enabled: true,
+      channels: { web: true, email: true, sms: true },
+      minimumConfidence: 0.65,
+    });
+    const query = jest.fn(async (sql: string) => {
+      if (sql.includes('SELECT value FROM tenant_setting')) return { rows: [{ value: tenantSettings }] };
+      if (sql.includes('FROM tenant_property')) return { rows: [{ id: 41, title: 'Lime Bay', status: 'published', payload: {} }] };
+      if (sql.includes('FROM tenant_chatbot_knowledge')) return { rows: [{
+        id: 'pet', propertyId: 41, scope: 'PROPERTY', audience: 'LEAD',
+        sourceType: 'MANUAL', title: 'Animal policy',
+        answer: 'One cat is allowed with written approval.', priority: 80, active: true,
+      }] };
+      return { rows: [] };
+    });
+    const ai = { answerFromEvidence: jest.fn() };
+    const state = serviceWith(query, {
+      search: jest.fn()
+        .mockResolvedValueOnce([{
+          pointId: 'pet', score: 0.7, scope: 'PROPERTY', tenantId: 42,
+          audience: 'LEAD', propertyId: 41, knowledgeId: 'pet',
+          sourceType: 'MANUAL', sourceHash: 'pet', priority: 80, active: true,
+        }])
+        .mockResolvedValueOnce([]),
+    }, [], ai);
+
+    const result = await state.service.testQuestion(tenant, {
+      propertyId: 41,
+      audience: 'LEAD',
+      question: 'Could my little furball stay with me?',
+    });
+    expect(result).toMatchObject({ decision: 'ANSWER', reason: 'EVIDENCE_VERIFIED', confidence: 0.7 });
+    expect(ai.answerFromEvidence).not.toHaveBeenCalled();
+  });
   it('does not call unrelated words inside listing text conflicting evidence', async () => {
     const query = jest.fn(async (sql: string) => {
       if (sql.includes('SELECT value FROM tenant_setting')) {
@@ -521,7 +680,7 @@ describe('TenantChatbotService', () => {
     );
   });
 
-  it('logs test-chat retrieval evidence and the final policy decision', async () => {
+  it('does not emit retrieval or decision thinking logs for test-chat', async () => {
     const trace = jest.spyOn(Logger.prototype, 'log').mockImplementation();
     const query = jest.fn(async (sql: string) => {
       if (sql.includes('SELECT value FROM tenant_setting')) {
@@ -555,12 +714,10 @@ describe('TenantChatbotService', () => {
       question: 'What is the minimum credit score?',
     });
 
-    expect(trace).toHaveBeenCalledWith(
-      expect.stringContaining('"event":"chatbot.test.decision"'),
-    );
-    expect(trace).toHaveBeenCalledWith(
-      expect.stringContaining('"evidence"'),
-    );
+    const output = trace.mock.calls.flat().join('\\n');
+    expect(output).not.toContain('chatbot.test.start');
+    expect(output).not.toContain('chatbot.test.decision');
+    expect(output).not.toContain('knowledgeId');
     trace.mockRestore();
   });
 
@@ -687,7 +844,7 @@ describe('TenantChatbotService', () => {
       if (sql.includes('FROM tenant_property')) return { rows: [{ id: 41, title: 'Lime Bay', status: 'published', payload: {} }] };
       if (sql.includes('FROM tenant_chatbot_knowledge')) return { rows: [{
         id: 'pet', propertyId: 41, scope: 'PROPERTY', audience: 'LEAD',
-        sourceType: 'PROPERTY_FIELD', title: 'Lime Bay — Pet policy',
+        sourceType: 'PROPERTY_FIELD', title: 'Lime Bay Ã¢â‚¬â€ Pet policy',
         answer: 'Pet policy: No.', priority: 85, active: true,
       }] };
       return { rows: [] };
@@ -719,7 +876,7 @@ describe('TenantChatbotService', () => {
       if (sql.includes('FROM tenant_property')) return { rows: [{ id: 41, title: 'Lime Bay', status: 'published', payload: {} }] };
       if (sql.includes('FROM tenant_chatbot_knowledge')) return { rows: [{
         id: 'parking', propertyId: 41, scope: 'PROPERTY', audience: 'LEAD',
-        sourceType: 'PROPERTY_FIELD', title: 'Lime Bay — Parking',
+        sourceType: 'PROPERTY_FIELD', title: 'Lime Bay Ã¢â‚¬â€ Parking',
         answer: 'Parking: paking spot 1 and 1 guest parking', priority: 85, active: true,
       }] };
       return { rows: [] };

@@ -2,8 +2,8 @@ import { createHash, randomUUID } from 'node:crypto';
 import {
   Inject,
   Injectable,
-  Logger,
   NotFoundException,
+  Optional,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { SaasTenant } from '../saas-admin/entities/saas-tenant.entity';
@@ -12,10 +12,12 @@ import { MiniLmEmbeddingService } from './mini-lm-embedding.service';
 import { mapPropertyKnowledge } from './property-knowledge.mapper';
 import { composeVerifiedAnswer } from './verified-answer-composer';
 import { hasTopicEvidenceConflict, selectAnswerEvidence } from './evidence-selection';
+import { normalizeChatbotHumanText } from './chatbot-human-language';
 import {
   parseChatbotRole,
   parseQualificationReply,
   parseQualificationValues,
+  parseQualificationWithApprovedHint,
   parseShowingIntent,
   qualificationClarificationPrompt,
   qualificationResult,
@@ -24,8 +26,11 @@ import {
 } from './chatbot-conversation-intent';
 import {
   augmentPropertyQuestion,
+  detectPropertyIntents,
   strongestSharedPropertyIntent,
 } from './property-question-intent';
+import { PlatformChatbotAiService } from './platform-chatbot-ai.service';
+import { PlatformChatbotLearningService } from './platform-chatbot-learning.service';
 import {
   QdrantKnowledgeMatch,
   QdrantKnowledgeService,
@@ -72,6 +77,14 @@ export type TestChatbotQuestionInput = {
   question: string;
   channel?: ChatbotChannel;
   allowSensitiveRealtorEvidence?: boolean;
+};
+
+export type TestChatbotReplyInterpretInput = {
+  propertyId?: number | null;
+  audience?: ChatbotAudience;
+  channel?: ChatbotChannel;
+  expected: 'role' | 'creditScore' | 'monthlyEarning';
+  message: string;
 };
 
 export type HandleChatbotMessageInput = {
@@ -156,6 +169,7 @@ export type ChatbotTestResult = {
   reason: ChatbotPolicyDecision['reason'];
   confidence: number | null;
   evidence: ChatbotTestEvidence[];
+  ai?: { provider: string; model: string | null; status?: 'ANSWERED' | 'UNSUPPORTED' | 'INVALID_OUTPUT' | 'FAILED' | 'DISABLED' } | null;
 };
 
 const KNOWLEDGE_RETURNING = [
@@ -168,18 +182,80 @@ const KNOWLEDGE_RETURNING = [
 
 @Injectable()
 export class TenantChatbotService {
-  private readonly logger = new Logger(TenantChatbotService.name);
-
   constructor(
     private readonly databases: TenantDatabaseService,
     private readonly embeddings: MiniLmEmbeddingService,
     private readonly vectors: QdrantKnowledgeService,
     @Inject(PLATFORM_KNOWLEDGE_READER)
     private readonly platform: PlatformKnowledgeReader,
+    @Optional() private readonly ai?: PlatformChatbotAiService,
+    @Optional() private readonly learning?: PlatformChatbotLearningService,
   ) {}
 
   async getInfrastructureStatus() {
     return { qdrant: await this.vectors.healthCheck() };
+  }
+
+  async interpretTestReply(
+    tenant: TenantReference,
+    input: TestChatbotReplyInterpretInput,
+  ) {
+    const expected = input.expected;
+    const audience = input.audience === 'REALTOR' ? 'REALTOR' : 'LEAD';
+    const channel = input.channel === 'EMAIL' || input.channel === 'SMS' ? input.channel : 'WEB';
+    const propertyId = positiveInteger(input.propertyId);
+    const message = requiredText(input.message, 'message', 2_000);
+    if (expected === 'role') {
+      const localRole = parseChatbotRole(message);
+      if (localRole) return { recognized: true, source: 'LOCAL', role: localRole, creditScore: null, monthlyEarning: null };
+      if (!looksLikeRoleReplyCandidate(message)) return { recognized: false, source: 'NONE', role: null, creditScore: null, monthlyEarning: null };
+      const learned = await this.learning?.approvedQualificationHint({ tenantId: tenant.id, propertyId, audience, expected, message });
+      if (learned?.role) return { recognized: true, source: 'LEARNED', role: learned.role, creditScore: null, monthlyEarning: null };
+      const ai = await this.ai?.interpretReply({ tenantId: tenant.id, propertyId, audience, channel, expected, message });
+      return ai?.role
+        ? { recognized: true, source: 'AI', role: ai.role, creditScore: null, monthlyEarning: null, provider: ai.provider, model: ai.model, confidence: ai.confidence }
+        : { recognized: false, source: 'NONE', role: null, creditScore: null, monthlyEarning: null };
+    }
+    const local = parseQualificationReply(message, expected);
+    if (
+      (expected === 'creditScore' && validStoredCredit(local.creditScore)) ||
+      (expected === 'monthlyEarning' && validStoredIncome(local.monthlyEarning))
+    ) {
+      return { recognized: true, source: 'LOCAL', role: null, creditScore: local.creditScore ?? null, monthlyEarning: local.monthlyEarning ?? null };
+    }
+    const clarification = qualificationClarificationPrompt(message, expected);
+    if (!looksLikeQualificationReplyCandidate(message, expected)) {
+      return clarification
+        ? { recognized: false, source: 'LOCAL', role: null, creditScore: null, monthlyEarning: null, clarification }
+        : { recognized: false, source: 'NONE', role: null, creditScore: null, monthlyEarning: null };
+    }
+    const learned = await this.learning?.approvedQualificationHint({ tenantId: tenant.id, propertyId, audience, expected, message });
+    if (learned) {
+      if (learned.exact && expected === 'creditScore' && validStoredCredit(learned.creditScore)) {
+        return { recognized: true, source: 'LEARNED', role: null, creditScore: Math.round(Number(learned.creditScore)), monthlyEarning: null };
+      }
+      if (learned.exact && expected === 'monthlyEarning' && validStoredIncome(learned.monthlyEarning)) {
+        return { recognized: true, source: 'LEARNED', role: null, creditScore: null, monthlyEarning: Math.round(Number(learned.monthlyEarning)) };
+      }
+      const parsed = parseQualificationWithApprovedHint(message, expected);
+      if (
+        (expected === 'creditScore' && validStoredCredit(parsed.creditScore)) ||
+        (expected === 'monthlyEarning' && validStoredIncome(parsed.monthlyEarning))
+      ) {
+        return { recognized: true, source: 'LEARNED', role: null, creditScore: parsed.creditScore ?? null, monthlyEarning: parsed.monthlyEarning ?? null };
+      }
+    }
+    const ai = await this.ai?.interpretReply({ tenantId: tenant.id, propertyId, audience, channel, expected, message });
+    if (ai) {
+      const validCredit = expected === 'creditScore' && validStoredCredit(ai.creditScore) ? Math.round(Number(ai.creditScore)) : null;
+      const validIncome = expected === 'monthlyEarning' && validStoredIncome(ai.monthlyEarning) ? Math.round(Number(ai.monthlyEarning)) : null;
+      if (validCredit !== null || validIncome !== null) {
+        return { recognized: true, source: 'AI', role: null, creditScore: validCredit, monthlyEarning: validIncome, provider: ai.provider, model: ai.model, confidence: ai.confidence };
+      }
+    }
+    return clarification
+      ? { recognized: false, source: 'LOCAL', role: null, creditScore: null, monthlyEarning: null, clarification }
+      : { recognized: false, source: ai ? 'AI' : 'NONE', role: null, creditScore: null, monthlyEarning: null };
   }
 
   async getSettings(tenant: TenantReference): Promise<ChatbotSettings> {
@@ -531,6 +607,7 @@ export class TenantChatbotService {
       throw new Error('Qdrant is not configured.');
     const propertyId = positiveInteger(propertyIdValue);
     if (!propertyId) throw new Error('A valid property is required.');
+    await this.learning?.invalidateApprovedAnswersForProperty(tenant.id, propertyId).catch(() => undefined);
     return this.databases.withTenantClient(
       this.databaseName(tenant),
       async (client) => {
@@ -621,6 +698,7 @@ export class TenantChatbotService {
   async reindexKnowledge(tenant: TenantReference) {
     if (!this.vectors.isConfigured())
       throw new Error('Qdrant is not configured.');
+    await this.learning?.invalidateApprovedAnswersForProperty(tenant.id).catch(() => undefined);
     return this.databases.withTenantClient(
       this.databaseName(tenant),
       async (client) => {
@@ -752,14 +830,6 @@ export class TenantChatbotService {
     const propertyId = positiveInteger(input.propertyId);
     const question = requiredText(input.question, 'question', 2_000);
     const audience = input.audience ? validAudience(input.audience) : 'LEAD';
-    this.logger.log(JSON.stringify({
-      event: 'chatbot.test.start',
-      tenantId: tenant.id,
-      propertyId,
-      audience,
-      channel,
-      question: question.slice(0, 300),
-    }));
     const qdrant = await this.vectors.healthCheck();
     if (!qdrant.connected) {
       throw new ServiceUnavailableException(
@@ -771,12 +841,14 @@ export class TenantChatbotService {
       this.databaseName(tenant),
       async (client) => {
         let propertyStatus: string | null = null;
+        let propertyTitle = '';
         if (propertyId) {
           const property = await client.query(
             'SELECT id, title, status, payload FROM tenant_property WHERE id = $1 LIMIT 1',
             [propertyId],
           );
           propertyStatus = property.rows[0]?.status ?? 'unavailable';
+          propertyTitle = String(property.rows[0]?.title ?? '');
         }
         const initial = evaluateChatbotPolicy({
           settings,
@@ -817,13 +889,7 @@ export class TenantChatbotService {
                 match.propertyId === propertyId,
             )
             .sort((left, right) => right.score - left.score);
-        } catch (error) {
-          this.logger.warn(JSON.stringify({
-            event: 'chatbot.test.search_failed',
-            tenantId: tenant.id,
-            propertyId,
-            error: errorMessage(error),
-          }));
+        } catch {
           return stopped(settings, 'SYSTEM_UNAVAILABLE');
         }
 
@@ -858,28 +924,74 @@ export class TenantChatbotService {
           evidenceConflict: conflict,
           confidence: policyConfidence,
         });
-        this.logger.log(JSON.stringify({
-          event: 'chatbot.test.decision',
-          tenantId: tenant.id,
-          propertyId,
-          audience,
-          channel,
-          minimumConfidence: settings.minimumConfidence,
-          rawConfidence: topScore,
-          policyConfidence,
-          evidenceConflict: conflict,
-          decision: decision.action,
-          reason: decision.reason,
-          evidence: ranked.slice(0, 8).map(({ item: { match, record }, confidence }) => ({
-            knowledgeId: String(record.id),
-            title: record.title,
-            sourceType: record.sourceType,
-            rawScore: match.score,
-            policyScore: confidence,
-            priority: match.priority,
-          })),
-        }));
         if (decision.action !== 'ANSWER') {
+          const aiEvidence = uniqueHydratedMatches([...answerEvidence, ...rankedHydrated]).slice(0, 6);
+          if (
+            decision.reason === 'EVIDENCE_INSUFFICIENT' &&
+            !conflict &&
+            aiEvidence.length > 0 &&
+            (policyConfidence === null || policyConfidence < settings.minimumConfidence) &&
+            this.ai
+          ) {
+            const aiInput = {
+              tenantId: tenant.id,
+              propertyId,
+              audience,
+              channel,
+              question,
+              evidence: aiEvidence.map(({ record }) => ({
+                knowledgeId: String(record.id),
+                title: record.title,
+                answer: record.answer,
+                sourceType: record.sourceType,
+              })),
+            };
+            const detailed = (this.ai as any).answerFromEvidenceDetailed;
+            const attempt = typeof detailed === 'function'
+              ? await detailed.call(this.ai, aiInput)
+              : (() => undefined)();
+            const resolvedAttempt = attempt ?? await this.ai.answerFromEvidence(aiInput).then((answer) => ({
+              answer,
+              attempted: true,
+              provider: answer?.provider ?? null,
+              model: answer?.model ?? null,
+              status: answer ? 'ANSWERED' as const : 'FAILED' as const,
+            }));
+            const aiAnswer = resolvedAttempt.answer;
+            if (aiAnswer) {
+              if (this.learning) {
+                await this.learning.recordAnswer({
+                  tenantId: tenant.id,
+                  tenantName: tenant.businessName,
+                  propertyId,
+                  propertyTitle,
+                  audience,
+                  channel,
+                  question,
+                  answer: aiAnswer.answer,
+                  evidenceKnowledgeIds: aiEvidence.map(({ record }) => String(record.id)),
+                  provider: aiAnswer.provider,
+                  model: aiAnswer.model,
+                  confidence: aiAnswer.confidence,
+                }).catch(() => undefined);
+              }
+              return {
+                answer: aiAnswer.answer,
+                decision: 'ANSWER',
+                reason: 'AI_GROUNDED_FALLBACK',
+                confidence: aiAnswer.confidence ?? policyConfidence,
+                evidence: evidenceFrom(aiEvidence),
+                ai: { provider: aiAnswer.provider, model: aiAnswer.model, status: 'ANSWERED' },
+              };
+            }
+            const fallback = stopped(settings, decision.reason, topScore, rankedHydrated);
+            return {
+              ...fallback,
+              ai: resolvedAttempt.attempted
+                ? { provider: resolvedAttempt.provider ?? 'Unknown', model: resolvedAttempt.model, status: resolvedAttempt.status }
+                : null,
+            };
+          }
           return stopped(settings, decision.reason, topScore, rankedHydrated);
         }
 
@@ -1378,7 +1490,7 @@ export class TenantChatbotService {
         }
 
         if (state === 'ASK_ROLE') {
-          const role = parseChatbotRole(input.body);
+          const role = await this.resolveRoleReply(tenant, input, property, audience);
           if (!role) {
             if (wantsShowing) {
               return {
@@ -1434,6 +1546,7 @@ export class TenantChatbotService {
             ...qualificationValuesFromPayload(leadPayload),
             ...(input.qualificationUpdates ?? {}),
           };
+          const propertyQuestion = detectPropertyIntents(input.body).length > 0;
           if (!validStoredCredit(values.creditScore)) {
             return {
               input: {
@@ -1442,8 +1555,9 @@ export class TenantChatbotService {
                 audienceUpdate: audience,
                 realtorVerified: false,
                 workflowStateUpdate: 'ASK_CREDIT',
+                ...(propertyQuestion ? { followUpPrompt: creditFollowUpPrompt() } : {}),
               },
-              result: creditPromptResult(),
+              result: propertyQuestion ? null : creditPromptResult(),
             };
           }
           if (!validStoredIncome(values.monthlyEarning)) {
@@ -1454,8 +1568,9 @@ export class TenantChatbotService {
                 audienceUpdate: audience,
                 realtorVerified: false,
                 workflowStateUpdate: 'ASK_INCOME',
+                ...(propertyQuestion ? { followUpPrompt: incomeFollowUpPrompt() } : {}),
               },
-              result: incomePromptResult(),
+              result: propertyQuestion ? null : incomePromptResult(),
             };
           }
           return this.finishLeadQualification(client, {
@@ -1513,7 +1628,31 @@ export class TenantChatbotService {
           return this.finishLeadQualification(client, { ...input, audience, realtorVerified: false }, property, values);
         }
         if (state === 'ASK_CREDIT') {
-          const parsed = parseQualificationReply(input.body, 'creditScore');
+          let parsed = parseQualificationReply(input.body, 'creditScore');
+          const creditClarification = qualificationClarificationPrompt(input.body, 'creditScore');
+          const propertyQuestionWhileWaitingForCredit =
+            !validStoredCredit(parsed.creditScore) && !creditClarification && detectPropertyIntents(input.body).length > 0;
+          if (propertyQuestionWhileWaitingForCredit) {
+            return {
+              input: {
+                ...input,
+                audience,
+                realtorVerified: false,
+                workflowStateUpdate: 'ASK_CREDIT',
+                followUpPrompt: creditFollowUpPrompt(),
+              },
+              result: null,
+            };
+          }
+          if (!validStoredCredit(parsed.creditScore)) {
+            parsed = await this.resolveQualificationReply(
+              tenant,
+              input,
+              property,
+              audience,
+              'creditScore',
+            );
+          }
           if (!validStoredCredit(parsed.creditScore)) {
             const clarification = qualificationClarificationPrompt(input.body, 'creditScore');
             if (clarification) {
@@ -1569,7 +1708,31 @@ export class TenantChatbotService {
         }
 
         if (state === 'ASK_INCOME') {
-          const parsed = parseQualificationReply(input.body, 'monthlyEarning');
+          let parsed = parseQualificationReply(input.body, 'monthlyEarning');
+          const incomeClarification = qualificationClarificationPrompt(input.body, 'monthlyEarning');
+          const propertyQuestionWhileWaitingForIncome =
+            !validStoredIncome(parsed.monthlyEarning) && !incomeClarification && detectPropertyIntents(input.body).length > 0;
+          if (propertyQuestionWhileWaitingForIncome) {
+            return {
+              input: {
+                ...input,
+                audience,
+                realtorVerified: false,
+                workflowStateUpdate: 'ASK_INCOME',
+                followUpPrompt: incomeFollowUpPrompt(),
+              },
+              result: null,
+            };
+          }
+          if (!validStoredIncome(parsed.monthlyEarning)) {
+            parsed = await this.resolveQualificationReply(
+              tenant,
+              input,
+              property,
+              audience,
+              'monthlyEarning',
+            );
+          }
           if (!validStoredIncome(parsed.monthlyEarning)) {
             const clarification = qualificationClarificationPrompt(input.body, 'monthlyEarning');
             if (clarification) {
@@ -1627,6 +1790,129 @@ export class TenantChatbotService {
         };
       },
     );
+  }
+
+  private async resolveRoleReply(
+    tenant: TenantReference,
+    input: HandleChatbotMessageInput,
+    property: any,
+    audience: ChatbotAudience,
+  ): Promise<ChatbotAudience | null> {
+    const local = parseChatbotRole(input.body);
+    if (local) return local;
+    if (!looksLikeRoleReplyCandidate(input.body)) return null;
+    const learned = await this.learning?.approvedQualificationHint({
+      tenantId: tenant.id,
+      propertyId: positiveInteger(property?.id),
+      audience,
+      expected: 'role',
+      message: input.body,
+    });
+    if (learned?.role) return learned.role;
+    if (!this.ai) return null;
+    const interpreted = await this.ai.interpretReply({
+      tenantId: tenant.id,
+      propertyId: positiveInteger(property?.id),
+      audience,
+      channel: input.channel,
+      expected: 'role',
+      message: input.body,
+    });
+    if (!interpreted?.role) return null;
+    await this.learning?.recordQualification({
+      tenantId: tenant.id,
+      tenantName: tenant.businessName,
+      propertyId: positiveInteger(property?.id),
+      propertyTitle: String(property?.title ?? ''),
+      audience,
+      channel: input.channel,
+      question: input.body,
+      answer: `Detected role: ${interpreted.role}`,
+      structuredPayload: { expected: 'role', role: interpreted.role },
+      evidenceKnowledgeIds: [],
+      provider: interpreted.provider,
+      model: interpreted.model,
+      confidence: interpreted.confidence,
+    }).catch(() => undefined);
+    return interpreted.role;
+  }
+
+  private async resolveQualificationReply(
+    tenant: TenantReference,
+    input: HandleChatbotMessageInput,
+    property: any,
+    audience: ChatbotAudience,
+    expected: 'creditScore' | 'monthlyEarning',
+  ): Promise<QualificationValues> {
+    if (!looksLikeQualificationReplyCandidate(input.body, expected)) return {};
+    const learned = await this.learning?.approvedQualificationHint({
+      tenantId: tenant.id,
+      propertyId: positiveInteger(property?.id),
+      audience,
+      expected,
+      message: input.body,
+    });
+    if (learned) {
+      if (learned.exact && expected === 'creditScore' && validStoredCredit(learned.creditScore)) {
+        return { creditScore: Math.round(Number(learned.creditScore)) };
+      }
+      if (learned.exact && expected === 'monthlyEarning' && validStoredIncome(learned.monthlyEarning)) {
+        return { monthlyEarning: Math.round(Number(learned.monthlyEarning)) };
+      }
+      const hinted = parseQualificationWithApprovedHint(input.body, expected);
+      if (
+        (expected === 'creditScore' && validStoredCredit(hinted.creditScore)) ||
+        (expected === 'monthlyEarning' && validStoredIncome(hinted.monthlyEarning))
+      ) {
+        return hinted;
+      }
+    }
+    if (!this.ai) return {};
+    const interpreted = await this.ai.interpretReply({
+      tenantId: tenant.id,
+      propertyId: positiveInteger(property?.id),
+      audience,
+      channel: input.channel,
+      expected,
+      message: input.body,
+    });
+    if (!interpreted) return {};
+    const parsed: QualificationValues = {};
+    if (expected === 'creditScore' && validStoredCredit(interpreted.creditScore)) {
+      parsed.creditScore = Math.round(Number(interpreted.creditScore));
+    }
+    if (expected === 'monthlyEarning' && validStoredIncome(interpreted.monthlyEarning)) {
+      parsed.monthlyEarning = Math.round(Number(interpreted.monthlyEarning));
+    }
+    if (
+      !validStoredCredit(parsed.creditScore) &&
+      !validStoredIncome(parsed.monthlyEarning)
+    ) {
+      return {};
+    }
+    await this.learning?.recordQualification({
+      tenantId: tenant.id,
+      tenantName: tenant.businessName,
+      propertyId: positiveInteger(property?.id),
+      propertyTitle: String(property?.title ?? ''),
+      audience,
+      channel: input.channel,
+      question: input.body,
+      answer: expected === 'creditScore'
+        ? `Credit score: ${parsed.creditScore}`
+        : `Monthly income: ${parsed.monthlyEarning}`,
+      structuredPayload: {
+        expected,
+        creditScore: parsed.creditScore ?? null,
+        monthlyEarning: parsed.monthlyEarning ?? null,
+        period: interpreted.period,
+      },
+      evidenceKnowledgeIds: [],
+      provider: interpreted.provider,
+      model: interpreted.model,
+      confidence: interpreted.confidence,
+    }).catch(() => undefined);
+    return parsed;
   }
 
   private async finishLeadQualification(
@@ -2137,7 +2423,11 @@ export class TenantChatbotService {
               conversationId,
               leadId,
               result.reason,
-              JSON.stringify({ outreachJobId, channel: input.channel }),
+              JSON.stringify({
+                outreachJobId,
+                channel: input.channel,
+                ...(result.ai ? { ai: result.ai } : {}),
+              }),
             ],
           );
           await client.query('COMMIT');
@@ -2495,11 +2785,11 @@ function roleFollowUpPrompt() {
 }
 
 function creditFollowUpPrompt() {
-  return 'Got it. If you want, I can quickly check the two basic requirements. About where is your credit score?';
+  return "If you want, I can quickly check the two basic requirements. Could you share your approximate credit score? A rough number is completely fine.";
 }
 
 function incomeFollowUpPrompt() {
-  return 'Thanks — and roughly what do you make per month before taxes? An estimate is totally fine.';
+  return "Thanks. The second basic check is income. If you don't mind, about how much do you make per month before taxes? A rough estimate is completely fine.";
 }
 
 function appendConversationalFollowUp(
@@ -2627,6 +2917,16 @@ function evidenceFrom(hydrated: HydratedMatch[]): ChatbotTestEvidence[] {
     sourceType: record.sourceType,
     score: match.score,
   }));
+}
+
+function uniqueHydratedMatches(items: HydratedMatch[]) {
+  const seen = new Set<string>();
+  return items.filter(({ record }) => {
+    const key = `${record.scope}:${record.id}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function relevanceConfidence(question: string, hydrated: HydratedMatch) {
@@ -2862,6 +3162,37 @@ function renderShowingTemplate(
     result = result.split(token).join(value);
   }
   return result;
+}
+
+function looksLikeRoleReplyCandidate(value: unknown) {
+  const text = normalizeChatbotHumanText(value);
+  if (!text || text.length > 320) return false;
+  if (/^(?:what|when|where|how|why|is|are|does|do|can|could)\b/i.test(text) && !/\b(i am|we are|for me|for us|myself|ourselves|my client|our client|my buyer|our buyer)\b/i.test(text)) return false;
+  const directRoleLanguage = /\b(i|we|me|my|mine|us|our|ours|myself|ourselves|client|customer|buyer|purchaser|tenant|renter|realtor|broker|agent|representative)\b/i.test(text) &&
+    /\b(rent|lease|move|live|buy|purchase|represent|representative|client|customer|buyer|purchaser|tenant|renter|realtor|broker|agent|myself|ourselves|family|household|spouse|wife|husband|partner|own)\b/i.test(text);
+  const naturalInterestReply = /\b(i|we|me|us)\b.{0,45}\b(look(?:ing)?|interested|want|wanna|trying|try|need|hope|plan|planning)\b.{0,55}\b(get|rent|lease|buy|move|live|take|have|property|place|home|house|apartment|apt|unit|this|it)\b/i.test(text);
+  const possessionReply = /\b(i|we)\b.{0,35}\b(want|wanna|need|trying|looking)\b.{0,35}\b(this|it|the property|the place|the home|the unit)\b/i.test(text);
+  return directRoleLanguage || naturalInterestReply || possessionReply;
+}
+
+function looksLikeQualificationReplyCandidate(
+  value: unknown,
+  expected: 'creditScore' | 'monthlyEarning',
+) {
+  const text = normalizeChatbotHumanText(value).replace(/,/g, '');
+  if (!text || text.length > 320) return false;
+  if (expected === 'creditScore') {
+    const selfCredit = /\b(my|our|mine|ours|i|we)\b.{0,24}\b(credit|fico|score|rating)\b|\b(credit|fico|score|rating)\b.{0,24}\b(is|was|around|about|at|sitting|roughly|mine|ours)\b/i.test(text);
+    const humanNumber = /\b\d{3,5}\b|\b(?:six|seven|eight)\s+(?:hundred|oh|zero|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)\b/i.test(text);
+    const requirementQuestion = /\b(minimum|required|requirement|need|needed|must have|what score|how much credit|qualify)\b/i.test(text) && !selfCredit;
+    if (requirementQuestion) return false;
+    return selfCredit || (humanNumber && /\b(about|around|roughly|maybe|probably|like|ish|think|guess|low|mid|middle|high|checked|score|fico|credit|not great|not good|decent)\b/i.test(text));
+  }
+  const selfIncome = /\b(my|our|mine|ours|i|we)\b.{0,30}\b(income|salary|pay|earn|earnings|make|get|receive|bring|gross|net|clear|take home)\b|\b(income|salary|earnings|pay)\b.{0,24}\b(is|was|around|about|at|roughly|mine|ours)\b/i.test(text);
+  const humanAmount = /(?:\$\s*)?\d+(?:\.\d+)?\s*(?:k|grand|thousand)?\b|\b(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)(?:\s+and\s+a\s+half)?\s+(?:grand|thousand)\b/i.test(text);
+  const requirementQuestion = /\b(minimum|required|requirement|need to make|must make|what income|how much income|qualify)\b/i.test(text) && !selfIncome;
+  if (requirementQuestion) return false;
+  return selfIncome || (humanAmount && /\b(about|around|roughly|maybe|probably|like|ish|month|monthly|week|weekly|year|annual|grand|thousand|not much|not a lot|somewhere)\b/i.test(text));
 }
 
 function errorMessage(error: unknown) {

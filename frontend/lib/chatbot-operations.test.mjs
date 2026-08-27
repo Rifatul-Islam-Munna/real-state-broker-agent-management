@@ -172,6 +172,8 @@ test("human normalization understands chat shorthand, typos and common rental sl
 
 test("test chatbot role and showing helpers understand informal human messages", () => {
   assert.equal(parseTestChatbotRole("just me n my wife, we wanna move in"), "LEAD")
+  assert.equal(parseTestChatbotRole("we had 4 member of family will it fit?"), "LEAD")
+  assert.equal(parseTestChatbotRole("family of 4 will fit here?"), "LEAD")
   assert.equal(parseTestChatbotRole("im their agent, showing it for my client"), "REALTOR")
   assert.equal(parseTestChatbotRole("who is the listing agent?"), null)
   assert.equal(parseTestShowingIntent("cud i swing by tmr?"), true)

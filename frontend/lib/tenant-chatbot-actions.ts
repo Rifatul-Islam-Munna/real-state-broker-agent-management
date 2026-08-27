@@ -88,6 +88,7 @@ export type ChatbotTestResult = {
   decision: "ANSWER" | "STOP" | "ASK_ROLE" | "ASK_CREDIT" | "ASK_INCOME" | "CREATE_SHOWING_REQUEST"
   reason: string
   confidence: number | null
+  ai?: { provider: string; model: string | null; status?: "ANSWERED" | "UNSUPPORTED" | "INVALID_OUTPUT" | "FAILED" | "DISABLED" } | null
   evidence: Array<{
     knowledgeId: string
     title: string
@@ -201,4 +202,29 @@ export async function reindexChatbotKnowledge() {
   )
   revalidatePath("/dashboard/chatbot-settings")
   return result
+}
+
+export type ChatbotTestReplyInterpretation = {
+  recognized: boolean
+  source: "LOCAL" | "LEARNED" | "AI" | "NONE"
+  role: "LEAD" | "REALTOR" | null
+  creditScore: number | null
+  monthlyEarning: number | null
+  clarification?: string
+  provider?: string
+  model?: string
+  confidence?: number | null
+}
+
+export async function interpretTestChatbotReply(input: {
+  propertyId?: number | null
+  audience?: "LEAD" | "REALTOR"
+  channel?: "WEB" | "EMAIL" | "SMS"
+  expected: "role" | "creditScore" | "monthlyEarning"
+  message: string
+}) {
+  return request<ChatbotTestReplyInterpretation>("/tenant-chatbot/test/interpret-reply", {
+    method: "POST",
+    body: JSON.stringify(input),
+  })
 }

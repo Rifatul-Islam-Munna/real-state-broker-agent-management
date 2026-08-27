@@ -2,7 +2,7 @@ import { Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { QdrantClient } from '@qdrant/js-client-rest';
 import { ChatbotAudience } from './tenant-chatbot.types';
 
-export type KnowledgeScope = 'PLATFORM' | 'TENANT' | 'PROPERTY';
+export type KnowledgeScope = 'PLATFORM' | 'TENANT' | 'PROPERTY' | 'LEARNING';
 
 export type QdrantKnowledgeMetadata = {
   scope: KnowledgeScope;
@@ -36,6 +36,16 @@ export type QdrantSearchInput = {
   vector: number[];
   limit?: number;
   modelSignature: string;
+};
+
+export type QdrantLearningSearchInput = {
+  tenantId: number;
+  audience: ChatbotAudience;
+  propertyId?: number | null;
+  vector: number[];
+  limit?: number;
+  modelSignature: string;
+  sourceType?: string;
 };
 
 export type QdrantKnowledgeConfig = {
@@ -205,6 +215,53 @@ export class QdrantKnowledgeService implements OnApplicationBootstrap {
       );
   }
 
+  async searchLearning(input: QdrantLearningSearchInput): Promise<QdrantKnowledgeMatch[]> {
+    this.assertConfigured();
+    const tenantId = positiveInteger(input.tenantId);
+    if (!tenantId) throw new Error('A valid tenantId is required for learning search.');
+    const must: Array<Record<string, unknown>> = [
+      { key: 'scope', match: { value: 'LEARNING' } },
+      { key: 'tenantId', match: { value: tenantId } },
+      { key: 'audience', match: { value: input.audience } },
+      { key: 'active', match: { value: true } },
+      { key: 'embeddingModelSignature', match: { value: requiredSignature(input.modelSignature) } },
+    ];
+    if (input.sourceType) {
+      must.push({
+        key: 'sourceType',
+        match: { value: String(input.sourceType).slice(0, 80) },
+      });
+    }
+    const filter: Record<string, unknown> = { must };
+    const propertyId = positiveInteger(input.propertyId);
+    if (propertyId) {
+      filter.should = [
+        { key: 'propertyId', match: { value: propertyId } },
+        { is_empty: { key: 'propertyId' } },
+      ];
+    }
+    try {
+      const result = await this.sdk().query(this.config.collection, {
+        query: this.vector(input.vector),
+        filter,
+        limit: clampInteger(input.limit, 4, 1, 12),
+        with_payload: true,
+        with_vector: false,
+      });
+      const points = Array.isArray(result?.points) ? result.points : [];
+      return points
+        .map((point: any) => this.match(point))
+        .filter(
+          (match: QdrantKnowledgeMatch | null): match is QdrantKnowledgeMatch =>
+            Boolean(match),
+        );
+    } catch (error) {
+      throw new Error(
+        `Qdrant failed to search learned replies: ${errorMessage(error)}`,
+      );
+    }
+  }
+
   async deleteBySource(
     scope: KnowledgeScope,
     sourceHash: string,
@@ -343,7 +400,12 @@ function errorMessage(error: unknown) {
 }
 
 function validScope(value: unknown): KnowledgeScope {
-  if (value === 'PLATFORM' || value === 'TENANT' || value === 'PROPERTY') {
+  if (
+    value === 'PLATFORM' ||
+    value === 'TENANT' ||
+    value === 'PROPERTY' ||
+    value === 'LEARNING'
+  ) {
     return value;
   }
   throw new Error('Qdrant metadata scope is invalid.');
