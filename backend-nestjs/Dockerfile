@@ -1,17 +1,17 @@
-FROM node:lts-alpine AS deps
+FROM node:lts-bookworm-slim AS deps
 WORKDIR /app
 
 COPY package*.json ./
 RUN npm ci
 
-FROM node:lts-alpine AS build
+FROM node:lts-bookworm-slim AS build
 WORKDIR /app
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN npm run build
 
-FROM node:lts-alpine AS runner
+FROM node:lts-bookworm-slim AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
