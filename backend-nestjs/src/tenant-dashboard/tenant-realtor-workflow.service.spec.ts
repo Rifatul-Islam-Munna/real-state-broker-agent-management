@@ -307,6 +307,62 @@ describe('TenantRealtorWorkflowService showing confirmations', () => {
     expect(realtorEmail.body).toContain('Buyer One');
   });
 
+  it('schedules all six realtor follow-up templates in order', async () => {
+    const { service, enqueueWithClient } = build();
+    const settings = (service as any).settings;
+    settings.getAgencySettings.mockResolvedValue({
+      profile: { agencyName: 'Blue Realty' },
+      leadAutomation: {
+        enabled: true,
+        channels: ['Email'],
+        followUpEnabled: true,
+        leadShowingTemplateId: 'showing-confirm',
+        realtorShowingTemplateId: 'realtor-showing',
+      },
+      communicationTemplates: [
+        {
+          id: 'showing-confirm', name: 'Showing Confirmation', subject: 'Lead', body: 'Lead',
+          channels: ['Email'], sequenceType: 'Direct', audience: 'LeadShowing', isActive: true,
+        },
+        {
+          id: 'realtor-showing', name: 'Realtor Showing', subject: 'Showing', body: 'Showing',
+          channels: ['Email'], sequenceType: 'Direct', audience: 'Realtor', isActive: true,
+        },
+        ...Array.from({ length: 6 }, (_, index) => ({
+          id: `realtor-follow-up-${index + 1}`,
+          name: `Realtor Follow-up ${index + 1}`,
+          subject: `Step ${index + 1}`,
+          body: `Follow-up ${index + 1}`,
+          channels: ['Email'],
+          sequenceType: `FollowUp${index + 1}`,
+          audience: 'Realtor',
+          gapDays: 1,
+          isActive: true,
+        })),
+      ],
+    });
+
+    await (service as any).autoSendShowingConfirmations(tenant(), {
+      showingId: 88,
+      propertyId: 12,
+      propertyTitle: 'Live Home',
+      leadId: 9,
+      leadName: 'Buyer One',
+      recipientEmail: 'buyer@example.com',
+      realtorName: 'Rita Realtor',
+      realtorEmail: 'rita@example.com',
+      showingAt: new Date('2026-08-20T15:00:00Z'),
+    });
+
+    const realtorFollowUps = enqueueWithClient.mock.calls
+      .map((call: any[]) => call[1])
+      .filter((item: any) => item.sourceType === 'showing-followup');
+    expect(realtorFollowUps).toHaveLength(6);
+    expect(realtorFollowUps.map((item: any) => item.payload.sequenceType)).toEqual([
+      'FollowUp1', 'FollowUp2', 'FollowUp3', 'FollowUp4', 'FollowUp5', 'FollowUp6',
+    ]);
+  });
+
   it('sends nothing when automation is disabled', async () => {
     const { service, enqueueWithClient } = build();
     service;
@@ -329,5 +385,49 @@ describe('TenantRealtorWorkflowService showing confirmations', () => {
     expect(result.lead).toBe(0);
     expect(result.realtor).toBe(0);
     expect(enqueueWithClient).not.toHaveBeenCalled();
+  });
+});
+
+
+describe('TenantRealtorWorkflowService showing request defaults', () => {
+  it('allows approval without a realtor name', async () => {
+    let approved = false;
+    const query = jest.fn(async (sql: string) => {
+      if (sql.includes('FROM tenant_showing_request r') && sql.includes('WHERE r.id = $1')) {
+        return { rowCount: 1, rows: [{
+          id: 88, accessToken: 'secure-token', leadId: 9, leadName: 'Buyer One',
+          recipientEmail: 'buyer@example.com', recipientPhone: '', propertyId: 12,
+          requestedPropertyId: 12, requestedPropertyTitle: 'Live Home', propertyMode: 'fixed',
+          status: approved ? 'approved' : 'submitted',
+          preferredShowingAt: new Date(Date.now() + 3_600_000).toISOString(),
+          assignedRealtorName: '', approvedShowingId: approved ? 99 : null,
+        }] };
+      }
+      if (sql.includes('SELECT id, title, status, payload FROM tenant_property')) {
+        return { rowCount: 1, rows: [{ id: 12, title: 'Live Home', status: 'published', payload: {} }] };
+      }
+      if (sql.includes('SELECT id FROM tenant_showing WHERE showing_request_id')) return { rowCount: 0, rows: [] };
+      if (sql.includes('INSERT INTO tenant_showing(')) return { rowCount: 1, rows: [{ id: 99 }] };
+      if (sql.includes("SET status = 'approved'")) approved = true;
+      return { rowCount: 1, rows: [] };
+    });    const state = setup(query);
+    await expect(state.service.approveShowingRequest(
+      tenant(),
+      88,
+      {
+        propertyId: 12,
+        showingAt: new Date(Date.now() + 7_200_000).toISOString(),
+        realtorName: '',
+        realtorEmail: '',
+        realtorPhone: '',
+        notes: '',
+      },
+      { id: 5, fullName: 'Tenant Owner' },
+    )).resolves.toMatchObject({ id: 88, status: 'approved', assignedRealtorName: '' });
+
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('INSERT INTO tenant_showing('),
+      expect.arrayContaining([88, 9, 12, 'Buyer One', '', '', '']),
+    );
   });
 });

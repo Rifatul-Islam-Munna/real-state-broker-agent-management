@@ -265,13 +265,7 @@ export function cloneAgencySettings(
     existingShowingConfirmation.sequenceType = "Direct"
     existingShowingConfirmation.gapDays = 0
   }
-  const addDefaultTemplate = (templateId: string) => {
-    if (communicationTemplates.some((item) => item.id === templateId)) return
-    const template = defaultAgencySettings.communicationTemplates.find((item) => item.id === templateId)
-    if (template) communicationTemplates.push({ ...template, variableTokens: [...(template.variableTokens ?? [])] })
-  }
-  addDefaultTemplate("lead-showing-confirmation")
-  addDefaultTemplate("showing-confirmation")
+
   return {
     communicationTemplates,
     profile: {

@@ -36,7 +36,9 @@ export type LeadFormErrors = Partial<Record<keyof LeadFormValues | "form", strin
 export type OutreachType = "email" | "message"
 export type LeadListFilter = LeadStage | "all" | "not-listed"
 
-export const boardLeadStages = leadStageOrder.filter((stage) => stage !== "Canceled")
+export const boardLeadStages = leadStageOrder.filter(
+  (stage) => stage !== "Canceled" && stage !== "NotResponded"
+)
 export { leadStageOrder }
 
 export const leadButtonClass =

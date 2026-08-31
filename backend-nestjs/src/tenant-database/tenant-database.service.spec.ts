@@ -1,3 +1,4 @@
+import { TENANT_DATABASE_MIGRATIONS } from './tenant-database.migrations';
 import { TenantDatabaseService } from './tenant-database.service';
 
 describe('TenantDatabaseService', () => {
@@ -46,6 +47,9 @@ describe('TenantDatabaseService', () => {
         call.sql.includes('CREATE TABLE IF NOT EXISTS tenant_property'),
       ),
     ).toBe(true);
+    expect(calls.some((call) =>
+      call.sql.includes('CREATE TABLE IF NOT EXISTS tenant_chatbot_web_session'),
+    )).toBe(true);
     expect(
       calls.some((call) =>
         call.sql.startsWith('INSERT INTO tenant_schema_migration'),
@@ -60,14 +64,9 @@ describe('TenantDatabaseService', () => {
       query: jest.fn(async (sql: string) => {
         if (sql.startsWith('SELECT version')) {
           return {
-            rows: [
-              { version: 1 },
-              { version: 2 },
-              { version: 3 },
-              { version: 4 },
-              { version: 5 },
-              { version: 6 },
-            ],
+            rows: TENANT_DATABASE_MIGRATIONS.map(({ version }) => ({
+              version,
+            })),
           };
         }
         return { rows: [] };
@@ -133,14 +132,10 @@ describe('TenantDatabaseService', () => {
       { id: 2, databaseName: 'tenant_2_beta', databaseStatus: 'ready' },
     ]);
     jest.spyOn(service, 'ensureTenantDatabaseRole').mockResolvedValue();
-    jest
-      .spyOn(service, 'getPool')
-      .mockImplementation((name: string) => ({ databaseName: name }) as any);
-    jest
-      .spyOn(service, 'runMigrations')
-      .mockImplementation(async (pool: any) => {
-        if (pool.databaseName === 'tenant_2_beta')
-          throw new Error('beta failed');
+    const migrate = jest
+      .spyOn(service, 'runMigrationsForDatabase')
+      .mockImplementation(async (databaseName: string) => {
+        if (databaseName === 'tenant_2_beta') throw new Error('beta failed');
       });
 
     const result = await service.migrateAllTenantDatabases();
@@ -153,15 +148,16 @@ describe('TenantDatabaseService', () => {
         error: 'beta failed',
       },
     ]);
+    expect(migrate).toHaveBeenCalledWith('tenant_1_alpha');
+    expect(migrate).toHaveBeenCalledWith('tenant_2_beta');
   });
 
   it('drops a newly created database when migration or seeding fails', async () => {
     const service = createService();
     jest.spyOn(service, 'createDatabase').mockResolvedValue(undefined);
     jest.spyOn(service, 'ensureTenantDatabaseRole').mockResolvedValue();
-    jest.spyOn(service, 'getPool').mockReturnValue({ query: jest.fn() } as any);
     jest
-      .spyOn(service, 'runMigrations')
+      .spyOn(service, 'runMigrationsForDatabase')
       .mockRejectedValue(new Error('schema failed'));
     const drop = jest
       .spyOn(service, 'dropDatabase')

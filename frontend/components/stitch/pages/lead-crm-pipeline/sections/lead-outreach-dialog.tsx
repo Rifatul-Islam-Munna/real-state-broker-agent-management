@@ -20,7 +20,7 @@ import { usePdfTemplates } from "@/hooks/use-pdfs-api"
 import type { LeadOutreachComposerValues, LeadOutreachMode } from "./lead-outreach-types"
 
 const emptyTemplateValue = "__none__"
-const sequenceRank: Record<string, number> = { Direct: 0, FollowUp1: 1, FollowUp2: 2, FollowUp3: 3 }
+const sequenceRank: Record<string, number> = { Direct: 0, FollowUp1: 1, FollowUp2: 2, FollowUp3: 3, FollowUp4: 4, FollowUp5: 5, FollowUp6: 6 }
 
 function resolveTemplateTokens(templateText: string, lead: LeadItem, agentName?: string | null, agencyName?: string | null) {
   const replacements: Record<string, string> = {

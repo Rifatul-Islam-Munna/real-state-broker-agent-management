@@ -34,6 +34,7 @@ import { TenantDatabaseModule } from './tenant-database/tenant-database.module';
 import { SecurityModule } from './security/security.module';
 import { TenantDashboardModule } from './tenant-dashboard/tenant-dashboard.module';
 import { PlatformDomainModule } from './platform-domain/platform-domain.module';
+import { TenantChatbotModule } from './tenant-chatbot/tenant-chatbot.module';
 
 @Module({
   imports: [
@@ -70,6 +71,7 @@ import { PlatformDomainModule } from './platform-domain/platform-domain.module';
     SecurityModule,
     TenantDashboardModule,
     PlatformDomainModule,
+    TenantChatbotModule,
   ],
   controllers: [],
   providers: [AppService, DevSeedService],

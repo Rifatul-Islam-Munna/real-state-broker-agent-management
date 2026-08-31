@@ -4,7 +4,13 @@ import Link from "next/link"
 import { useState } from "react"
 
 import { AppIcon } from "@/components/ui/app-icon"
-import { type LeadItem, useLeadHistory } from "@/hooks/use-real-estate-api"
+import {
+  type LeadItem,
+  useLeadChatbotActivity,
+  useLeadHistory,
+  useResumeLeadChatbot,
+  useStopLeadChatbot,
+} from "@/hooks/use-real-estate-api"
 import { useSchedulingSettings } from "@/hooks/use-scheduling-settings"
 import { formatDateTimeInZone } from "@/lib/time-zone"
 import { formatDateTimeLabel, formatLeadPriority, formatRelativeTimeLabel } from "@/lib/admin-portal"
@@ -15,6 +21,22 @@ import { leadButtonClass, leadStageMeta } from "./lead-shared"
 function displayText(value?: string | null, fallback = "Not set") {
   const text = value?.trim() ?? ""
   return text.length > 0 ? text : fallback
+}
+
+const followUpCardTone: Record<number, { card: string; badge: string }> = {
+  1: { card: "border border-sky-200 bg-sky-50/80 dark:border-sky-800/70 dark:bg-sky-950/35", badge: "bg-sky-100 text-sky-800 dark:bg-sky-900/70 dark:text-sky-200" },
+  2: { card: "border border-cyan-200 bg-cyan-50/80 dark:border-cyan-800/70 dark:bg-cyan-950/35", badge: "bg-cyan-100 text-cyan-800 dark:bg-cyan-900/70 dark:text-cyan-200" },
+  3: { card: "border border-amber-200 bg-amber-50/80 dark:border-amber-800/70 dark:bg-amber-950/35", badge: "bg-amber-100 text-amber-800 dark:bg-amber-900/70 dark:text-amber-200" },
+  4: { card: "border border-orange-200 bg-orange-50/80 dark:border-orange-800/70 dark:bg-orange-950/35", badge: "bg-orange-100 text-orange-800 dark:bg-orange-900/70 dark:text-orange-200" },
+  5: { card: "border border-violet-200 bg-violet-50/80 dark:border-violet-800/70 dark:bg-violet-950/35", badge: "bg-violet-100 text-violet-800 dark:bg-violet-900/70 dark:text-violet-200" },
+  6: { card: "border border-rose-200 bg-rose-50/80 dark:border-rose-800/70 dark:bg-rose-950/35", badge: "bg-rose-100 text-rose-800 dark:bg-rose-900/70 dark:text-rose-200" },
+}
+
+function followUpStep(lead: LeadItem) {
+  const step = Number(lead.followUpSequence)
+  return lead.stage === "FollowUp" && Number.isInteger(step) && step >= 1 && step <= 6
+    ? step
+    : null
 }
 
 function getLeadNotes(notes?: string[] | null) {
@@ -135,11 +157,16 @@ export function LeadKanbanCard({
   const lastActivityLabel = formatRelativeTimeLabel(
     lead.lastActivityAt ?? lead.updatedAt ?? lead.createdAt ?? new Date().toISOString(),
   )
+  const currentFollowUpStep = followUpStep(lead)
+  const currentFollowUpTone = currentFollowUpStep
+    ? followUpCardTone[currentFollowUpStep]
+    : null
 
   return (
     <article
       className={cn(
         "group overflow-hidden rounded-xl bg-white shadow-[var(--shadow-surface-1)] transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-surface-2)]",
+        currentFollowUpTone?.card,
         lead.isFollowUpOverdue && "border-l-4 border-l-[var(--ether-error)]",
         isActive && "ring-2 ring-[var(--ether-primary)]/25",
       )}
@@ -151,6 +178,14 @@ export function LeadKanbanCard({
           onClick={() => setIsExpanded((expanded) => !expanded)}
           type="button"
         >
+          {currentFollowUpStep && currentFollowUpTone ? (
+            <span className={cn(
+              "mb-2 inline-flex rounded-full px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.08em]",
+              currentFollowUpTone.badge,
+            )}>
+              {`Follow-up ${currentFollowUpStep}`}
+            </span>
+          ) : null}
           <h4 className="truncate text-lg font-bold text-[var(--ether-on-surface)]">{lead.name}</h4>
           <p className="mt-1 flex items-center gap-1 text-xs text-[var(--ether-on-surface-variant)]">
             <AppIcon className="text-sm" name="location_on" />
@@ -260,6 +295,15 @@ export function LeadDetailsPanel({
   const schedulingQuery = useSchedulingSettings()
   const workspaceTimeZone = schedulingQuery.data?.timeZone || "UTC"
   const historyQuery = useLeadHistory(lead.id, 50)
+  const chatbotQuery = useLeadChatbotActivity(lead.id)
+  const stopChatbot = useStopLeadChatbot(lead.id)
+  const resumeChatbot = useResumeLeadChatbot(lead.id)
+  const chatbotEntries = Array.isArray(chatbotQuery.data) ? chatbotQuery.data : []
+  const latestChatbotControl = chatbotEntries.find(
+    (entry) => entry.kind === "event" && (entry.type === "STOPPED" || entry.type === "RESUMED"),
+  )
+  const manuallyStopped = latestChatbotControl?.type === "STOPPED" && latestChatbotControl.reason === "MANUAL_STOP"
+  const terminalStop = latestChatbotControl?.type === "STOPPED" && latestChatbotControl.reason !== "MANUAL_STOP"
   const historyEntries = Array.isArray(historyQuery.data) ? historyQuery.data : []
   const happenedEntries = (() => {
     const nonScheduled = historyEntries
@@ -410,6 +454,41 @@ export function LeadDetailsPanel({
               </div>
             </section>
           ) : null}
+
+          <section className="rounded-xl border border-[var(--ether-outline-variant)] bg-[var(--ether-surface-container-low)]/50 p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h3 className="ether-label-caps flex items-center gap-2 text-[10px] text-[var(--ether-outline)]"><AppIcon name="smart_toy" /> Chatbot Activity</h3>
+                <p className="mt-2 text-xs leading-5 text-[var(--ether-on-surface-variant)]">Bot messages, policy stops, and handoff events for this lead.</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {manuallyStopped ? (
+                  <button className="rounded-lg border border-[var(--ether-primary)] px-3 py-2 text-xs font-bold text-[var(--ether-primary)] disabled:opacity-50" disabled={resumeChatbot.isPending} onClick={() => resumeChatbot.mutate({})} type="button">Resume Chatbot</button>
+                ) : terminalStop ? null : (
+                  <button className="rounded-lg border border-[var(--ether-error)]/30 px-3 py-2 text-xs font-bold text-[var(--ether-error)] disabled:opacity-50" disabled={stopChatbot.isPending} onClick={() => stopChatbot.mutate({})} type="button">Stop Chatbot</button>
+                )}
+              </div>
+            </div>
+            {terminalStop ? <p className="mt-3 rounded-lg bg-[var(--ether-error-container)] p-3 text-xs font-semibold text-[var(--ether-error)]">Automation stopped by policy: {latestChatbotControl?.reason}. Start a new conversation after the underlying issue is resolved.</p> : null}
+            {chatbotQuery.isLoading ? <p className="mt-4 text-xs text-[var(--ether-outline)]">Loading chatbot activity...</p> : null}
+            {chatbotQuery.error ? <p className="mt-4 text-xs font-semibold text-[var(--ether-error)]">{chatbotQuery.error.message}</p> : null}
+            {!chatbotQuery.isLoading && chatbotEntries.length === 0 ? <p className="mt-4 text-xs text-[var(--ether-outline)]">No chatbot activity has been recorded for this lead.</p> : null}
+            {chatbotEntries.length > 0 ? (
+              <div className="mt-4 space-y-3">
+                {chatbotEntries.slice(0, 12).map((entry) => (
+                  <div className="rounded-lg border border-[var(--ether-outline-variant)] bg-white p-3" key={`chatbot-${entry.kind}-${entry.id}`}>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-xs font-bold text-[var(--ether-on-surface)]">{entry.kind === "message" ? `${entry.type} message` : entry.type}</p>
+                      <span className="text-[9px] font-bold uppercase text-[var(--ether-outline)]">{formatDateTimeInZone(entry.createdAt, workspaceTimeZone)}</span>
+                    </div>
+                    {entry.body ? <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-[var(--ether-on-surface-variant)]">{entry.body}</p> : null}
+                    {entry.reason ? <p className="mt-2 text-[10px] font-semibold text-[var(--ether-primary)]">Decision: {entry.reason}</p> : null}
+                    {typeof entry.confidence === "number" ? <p className="mt-1 text-[10px] text-[var(--ether-outline)]">Confidence: {Math.round(entry.confidence * 100)}%</p> : null}
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </section>
 
           <section>
             <h3 className="ether-label-caps flex items-center gap-2 text-[10px] text-[var(--ether-outline)]"><AppIcon name="analytics" /> Notes & Activity Feed</h3>

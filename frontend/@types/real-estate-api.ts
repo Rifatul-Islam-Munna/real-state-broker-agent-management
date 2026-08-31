@@ -423,7 +423,7 @@ export type AgencyCommunicationTemplateItem = {
   body: string
   channels: AgencyCommunicationChannel[]
   variableTokens: string[]
-  sequenceType?: "Direct" | "FollowUp1" | "FollowUp2" | "FollowUp3"
+  sequenceType?: "Direct" | "FollowUp1" | "FollowUp2" | "FollowUp3" | "FollowUp4" | "FollowUp5" | "FollowUp6"
   gapDays?: number
   isActive?: boolean
   attachPropertyDocuments?: boolean
@@ -728,7 +728,12 @@ export type PropertyItem = {
   availableFrom?: string | null
   minimumLeaseMonths?: number | null
   applicationInstructions?: string
+  realtorDescription?: string
   realtorShowingInstructions?: string
+  entryInstructions?: string
+  lockboxCode?: string
+  commissionInfo?: string
+  internalRemarks?: string
   ownerName?: string
   ownerEmail?: string
   ownerPhone?: string
@@ -783,7 +788,12 @@ export type PropertySaveInput = {
   availableFrom?: string | null
   minimumLeaseMonths?: number | null
   applicationInstructions?: string
+  realtorDescription?: string
   realtorShowingInstructions?: string
+  entryInstructions?: string
+  lockboxCode?: string
+  commissionInfo?: string
+  internalRemarks?: string
   ownerName: string
   ownerEmail: string
   ownerPhone: string
@@ -804,6 +814,7 @@ export type LeadStage =
   | "New"
   | "Contacted"
   | "FollowUp"
+  | "NotResponded"
   | "Replied"
   | "Pending"
   | "Qualified"
@@ -847,6 +858,9 @@ export type LeadItem = {
   nextActionDate?: string | null
   nextActionType: string
   followUpStatus: LeadFollowUpStatus
+  followUpSequence?: number | null
+  finalFollowUpSentAt?: string | null
+  notRespondedAt?: string | null
   isFollowUpOverdue: boolean
   notes: string[]
   createdAt: string
@@ -856,8 +870,22 @@ export type LeadItem = {
   leadLifecycleId?: string | null
   leadLifecyclePropertyId?: number | null
   leadLifecycleStartedAt?: string | null
-  reEngagement?: { isReEngagement: boolean; previousPropertyId?: number | null; previousPropertyName?: string | null; currentPropertyId?: number | null; currentPropertyName?: string | null; restartedAt?: string | null; reason?: string | null } | null
-  propertyInterestHistory?: Array<{ previousPropertyId?: number | null; previousPropertyName?: string | null; currentPropertyId?: number | null; currentPropertyName?: string | null; changedAt?: string | null }>
+  reEngagement?: {
+    isReEngagement: boolean
+    previousPropertyId?: number | null
+    previousPropertyName?: string | null
+    currentPropertyId?: number | null
+    currentPropertyName?: string | null
+    restartedAt?: string | null
+    reason?: string | null
+  } | null
+  propertyInterestHistory?: Array<{
+    previousPropertyId?: number | null
+    previousPropertyName?: string | null
+    currentPropertyId?: number | null
+    currentPropertyName?: string | null
+    changedAt?: string | null
+  }>
   linkedDealId?: number | null
   linkedDealTitle?: string | null
 }
@@ -998,7 +1026,6 @@ export type LeadOutreachDispatchInput = {
   createdBy?: string | null
   scheduledAt?: string | null
 }
-
 
 export type LeadOutreachAudienceType = "LeadStage" | "DealStage"
 
@@ -1167,6 +1194,7 @@ export type ContactRequestItem = {
   agentName?: string | null
   status: ContactRequestStatus
   leadId?: number | null
+  chatSessionToken?: string | null
   createdAt: string
   updatedAt: string
 }

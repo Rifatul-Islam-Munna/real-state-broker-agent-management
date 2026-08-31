@@ -376,7 +376,7 @@ export class TenantRealtorWorkflowService {
     );
     const expiryHours = Math.min(
       24 * 30,
-      Math.max(1, Number(dto.expiryHours) || 72),
+      Math.max(1, Number(dto.expiryHours) || 168),
     );
 
     const context = await this.databases.withTenantClient(
@@ -586,7 +586,7 @@ export class TenantRealtorWorkflowService {
       if (['submitted', 'approved', 'rejected'].includes(request.rows[0].status)) {
         throw new BadRequestException('Completed showing request cannot create another share link');
       }
-      const expiryHours = Math.min(24 * 30, Math.max(1, Number(dto?.expiryHours) || Number(request.rows[0].expiryHours) || 72));
+      const expiryHours = Math.min(24 * 30, Math.max(1, Number(dto?.expiryHours) || Number(request.rows[0].expiryHours) || 168));
       const token = randomBytes(36).toString('base64url');
       const expiresAt = new Date(Date.now() + expiryHours * 3_600_000);
       await client.query(
@@ -613,11 +613,6 @@ export class TenantRealtorWorkflowService {
     const realtorEmail = this.clean(dto.realtorEmail, 240).toLowerCase();
     const realtorPhone = this.clean(dto.realtorPhone, 80);
     const notes = this.clean(dto.notes, 4000);
-    if (!realtorName) {
-      throw new BadRequestException(
-        'Assign the showing realtor before approval',
-      );
-    }
     const actorUserId = Number(user?.id ?? user?.sub ?? 0) || null;
     let confirmationContext: any = null;
 
@@ -909,11 +904,11 @@ export class TenantRealtorWorkflowService {
             .filter((item: any) =>
               item?.isActive !== false &&
               item?.audience === 'Realtor' &&
-              ['FollowUp1', 'FollowUp2', 'FollowUp3'].includes(item?.sequenceType),
+              ['FollowUp1', 'FollowUp2', 'FollowUp3', 'FollowUp4', 'FollowUp5', 'FollowUp6'].includes(item?.sequenceType),
             )
             .sort((left: any, right: any) =>
-              ['FollowUp1', 'FollowUp2', 'FollowUp3'].indexOf(left.sequenceType) -
-              ['FollowUp1', 'FollowUp2', 'FollowUp3'].indexOf(right.sequenceType),
+              ['FollowUp1', 'FollowUp2', 'FollowUp3', 'FollowUp4', 'FollowUp5', 'FollowUp6'].indexOf(left.sequenceType) -
+              ['FollowUp1', 'FollowUp2', 'FollowUp3', 'FollowUp4', 'FollowUp5', 'FollowUp6'].indexOf(right.sequenceType),
             );
           let cumulativeDays = 0;
           for (const template of followUps) {
@@ -1069,6 +1064,12 @@ export class TenantRealtorWorkflowService {
         const request = await this.requestByToken(client, token);
         if (!request) throw new NotFoundException('Showing request not found');
         if (new Date(request.expiresAt).getTime() <= Date.now()) {
+          await client.query(
+            `UPDATE tenant_showing_request
+             SET status = 'expired', updated_at = now()
+             WHERE id = $1`,
+            [request.id],
+          );
           throw new GoneException('This showing request has expired');
         }
         if (request.status === 'rejected') {

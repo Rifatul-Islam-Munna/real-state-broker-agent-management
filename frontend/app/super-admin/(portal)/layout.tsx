@@ -1,16 +1,8 @@
 import type { ReactNode } from "react"
-import Link from "next/link"
-import { Activity, Building2, CreditCard, LayoutDashboard, LogOut, Settings, ShieldCheck, Users } from "lucide-react"
+import { Building2, LogOut, ShieldCheck } from "lucide-react"
 
 import { requireSuperAdminSession, superAdminLogoutAction } from "@/lib/auth-actions"
-
-const navigation = [
-  { href: "/super-admin", label: "Overview", icon: LayoutDashboard },
-  { href: "/super-admin/plans", label: "Plans", icon: CreditCard },
-  { href: "/super-admin/tenants", label: "Tenants", icon: Users },
-  { href: "/super-admin/activity", label: "Activity log", icon: Activity },
-  { href: "/super-admin/settings", label: "Platform settings", icon: Settings },
-]
+import { SuperAdminNavigation } from "./super-admin-navigation"
 
 export default async function SuperAdminPortalLayout({ children }: { children: ReactNode }) {
   const user = await requireSuperAdminSession()
@@ -29,18 +21,7 @@ export default async function SuperAdminPortalLayout({ children }: { children: R
             </div>
           </div>
 
-          <nav className="mt-10 space-y-2" aria-label="Super Admin navigation">
-            {navigation.map(({ href, label, icon: Icon }) => (
-              <Link
-                className="flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium text-white/70 transition hover:bg-white/10 hover:text-white"
-                href={href}
-                key={href}
-              >
-                <Icon className="size-[18px]" />
-                {label}
-              </Link>
-            ))}
-          </nav>
+          <SuperAdminNavigation />
 
           <div className="mt-10 rounded-xl border border-white/10 bg-white/5 p-4">
             <div className="flex items-center gap-2 text-sm font-semibold">

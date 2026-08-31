@@ -68,7 +68,7 @@ export function TenantShowingRequestsWorkspace({ leads, properties, templates, r
   const [queueSearch, setQueueSearch] = useState("")
   const [copiedLinkId, setCopiedLinkId] = useState<number | null>(null)
   const [copyError, setCopyError] = useState("")
-  const [expiryHours, setExpiryHours] = useState("72")
+  const [expiryHours, setExpiryHours] = useState("168")
   const [requestState, requestAction, requestPending] = useActionState(createTenantShowingRequestAction, initialState)
   const [templateState, templateAction, templatePending] = useActionState(createTenantShowingTemplateAction, initialState)
   const [selectedLeadId, setSelectedLeadId] = useState("")
@@ -206,7 +206,7 @@ export function TenantShowingRequestsWorkspace({ leads, properties, templates, r
           <div className="max-w-3xl">
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#f2c050]">Appointment intake</p>
             <h1 className="mt-3 text-3xl font-bold tracking-[-0.045em] sm:text-4xl">Showing request studio</h1>
-            <p className="mt-3 max-w-2xl text-sm leading-7 text-white/70 sm:text-base">Build reusable forms, send expiring links to leads, review their property and time choices, then approve with a manually assigned realtor.</p>
+            <p className="mt-3 max-w-2xl text-sm leading-7 text-white/70 sm:text-base">Build reusable forms, send secure 7-day links to leads, review their property and time choices, then approve immediately. Realtor assignment can be added now or later.</p>
           </div>
           <div className="grid grid-cols-3 gap-3 text-center">
             <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3"><p className="text-2xl font-bold">{requests.length}</p><p className="text-[11px] uppercase tracking-wide text-white/55">Requests</p></div>

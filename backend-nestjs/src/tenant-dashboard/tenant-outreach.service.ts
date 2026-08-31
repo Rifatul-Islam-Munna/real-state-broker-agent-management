@@ -15,6 +15,7 @@ import {
   TenantOutreachDeliveryService,
 } from './tenant-outreach-delivery.service';
 import { TenantWorkspaceSettingsService } from './tenant-workspace-settings.service';
+import { TenantChatbotService } from '../tenant-chatbot/tenant-chatbot.service';
 
 export type TenantOutreachStatus =
   | 'scheduled'
@@ -90,29 +91,38 @@ export class TenantOutreachService {
 
   constructor(
     private readonly databases: TenantDatabaseService,
-    @Optional() private readonly workspaceSettings?: TenantWorkspaceSettingsService,
-    @Optional() private readonly deliveryService?: TenantOutreachDeliveryService,
+    @Optional()
+    private readonly workspaceSettings?: TenantWorkspaceSettingsService,
+    @Optional()
+    private readonly deliveryService?: TenantOutreachDeliveryService,
+    @Optional() private readonly chatbot?: TenantChatbotService,
   ) {}
 
   async getAgencySettings(tenant: SaasTenant) {
-    return this.databases.withTenantClient(this.databaseName(tenant), (client) =>
-      this.agencySettings(client),
+    return this.databases.withTenantClient(
+      this.databaseName(tenant),
+      (client) => this.agencySettings(client),
     );
   }
 
   async updateAgencySettings(tenant: SaasTenant, input: any) {
-    return this.databases.withTenantClient(this.databaseName(tenant), async (client) => {
-      const current = await this.agencySettings(client);
-      const value = {
-        ...current,
-        ...(this.object(input) ?? {}),
-        communicationTemplates: Array.isArray(input?.communicationTemplates)
-          ? input.communicationTemplates.map((item: any) => this.normalizeTemplate(item))
-          : current.communicationTemplates,
-      };
-      await this.writeSetting(client, SETTINGS.agency, value);
-      return { ...value, updatedAt: new Date().toISOString() };
-    });
+    return this.databases.withTenantClient(
+      this.databaseName(tenant),
+      async (client) => {
+        const current = await this.agencySettings(client);
+        const value = {
+          ...current,
+          ...(this.object(input) ?? {}),
+          communicationTemplates: Array.isArray(input?.communicationTemplates)
+            ? input.communicationTemplates.map((item: any) =>
+                this.normalizeTemplate(item),
+              )
+            : current.communicationTemplates,
+        };
+        await this.writeSetting(client, SETTINGS.agency, value);
+        return { ...value, updatedAt: new Date().toISOString() };
+      },
+    );
   }
 
   async getTemplates(tenant: SaasTenant) {
@@ -121,127 +131,142 @@ export class TenantOutreachService {
   }
 
   async getIntegrationWorkspace(tenant: SaasTenant) {
-    return this.databases.withTenantClient(this.databaseName(tenant), async (client) => {
-      const [email, sms] = await Promise.all([
-        this.readSetting(client, SETTINGS.email, null),
-        this.readSetting(client, SETTINGS.sms, null),
-      ]);
-      return {
-        hasCommunicationConfig: Boolean(sms),
-        communicationUpdatedAt: sms?.updatedAt ?? null,
-        communicationProviderName: sms?.providerName ?? null,
-        communicationSmsSyncEnabled: sms?.enableSmsSync === true,
-        communicationSmsSyncIntervalMinutes: sms?.enableSmsSync
-          ? Number(sms.syncIntervalMinutes ?? 5)
-          : null,
-        hasAiProviderConfig: false,
-        aiProviderUpdatedAt: null,
-        aiProviderName: null,
-        hasSmtpConfig: Boolean(email),
-        smtpUpdatedAt: email?.updatedAt ?? null,
-        smtpProviderName: email?.providerName ?? null,
-        mailboxSyncEnabled: email?.enableInboxSync === true,
-        mailboxSyncIntervalMinutes: email?.enableInboxSync
-          ? Number(email.syncIntervalMinutes ?? 5)
-          : null,
-        updatedAt: email?.updatedAt ?? sms?.updatedAt ?? null,
-        smtp: email ? this.redactSecrets(email) : null,
-        communication: sms ? this.redactSecrets(sms) : null,
-      };
-    });
+    return this.databases.withTenantClient(
+      this.databaseName(tenant),
+      async (client) => {
+        const [email, sms] = await Promise.all([
+          this.readSetting(client, SETTINGS.email, null),
+          this.readSetting(client, SETTINGS.sms, null),
+        ]);
+        return {
+          hasCommunicationConfig: Boolean(sms),
+          communicationUpdatedAt: sms?.updatedAt ?? null,
+          communicationProviderName: sms?.providerName ?? null,
+          communicationSmsSyncEnabled: sms?.enableSmsSync === true,
+          communicationSmsSyncIntervalMinutes: sms?.enableSmsSync
+            ? Number(sms.syncIntervalMinutes ?? 5)
+            : null,
+          hasAiProviderConfig: false,
+          aiProviderUpdatedAt: null,
+          aiProviderName: null,
+          hasSmtpConfig: Boolean(email),
+          smtpUpdatedAt: email?.updatedAt ?? null,
+          smtpProviderName: email?.providerName ?? null,
+          mailboxSyncEnabled: email?.enableInboxSync === true,
+          mailboxSyncIntervalMinutes: email?.enableInboxSync
+            ? Number(email.syncIntervalMinutes ?? 5)
+            : null,
+          updatedAt: email?.updatedAt ?? sms?.updatedAt ?? null,
+          smtp: email ? this.redactSecrets(email) : null,
+          communication: sms ? this.redactSecrets(sms) : null,
+        };
+      },
+    );
   }
 
   async updateIntegrationWorkspace(tenant: SaasTenant, input: any) {
-    return this.databases.withTenantClient(this.databaseName(tenant), async (client) => {
-      if (input?.clearSmtp === true) {
-        await this.deleteSetting(client, SETTINGS.email);
-      } else if (input?.smtp) {
-        const previous = await this.readSetting(client, SETTINGS.email, {});
-        await this.writeSetting(client, SETTINGS.email, {
-          ...previous,
-          ...this.object(input.smtp),
-          password: this.keepSecret(input.smtp.password, previous.password),
-          gmailRefreshToken: this.keepSecret(
-            input.smtp.gmailRefreshToken,
-            previous.gmailRefreshToken,
-          ),
-          gmailAccessToken: this.keepSecret(
-            input.smtp.gmailAccessToken,
-            previous.gmailAccessToken,
-          ),
-          updatedAt: new Date().toISOString(),
-        });
-      }
+    return this.databases.withTenantClient(
+      this.databaseName(tenant),
+      async (client) => {
+        if (input?.clearSmtp === true) {
+          await this.deleteSetting(client, SETTINGS.email);
+        } else if (input?.smtp) {
+          const previous = await this.readSetting(client, SETTINGS.email, {});
+          await this.writeSetting(client, SETTINGS.email, {
+            ...previous,
+            ...this.object(input.smtp),
+            password: this.keepSecret(input.smtp.password, previous.password),
+            gmailRefreshToken: this.keepSecret(
+              input.smtp.gmailRefreshToken,
+              previous.gmailRefreshToken,
+            ),
+            gmailAccessToken: this.keepSecret(
+              input.smtp.gmailAccessToken,
+              previous.gmailAccessToken,
+            ),
+            updatedAt: new Date().toISOString(),
+          });
+        }
 
-      if (input?.clearCommunication === true || input?.clearTwilio === true) {
-        await this.deleteSetting(client, SETTINGS.sms);
-      } else if (input?.communication || input?.twilio) {
-        const source = input.communication ?? input.twilio;
-        const previous = await this.readSetting(client, SETTINGS.sms, {});
-        await this.writeSetting(client, SETTINGS.sms, {
-          ...previous,
-          ...this.object(source),
-          authToken: this.keepSecret(source.authToken, previous.authToken),
-          updatedAt: new Date().toISOString(),
-        });
-      }
+        if (input?.clearCommunication === true || input?.clearTwilio === true) {
+          await this.deleteSetting(client, SETTINGS.sms);
+        } else if (input?.communication || input?.twilio) {
+          const source = input.communication ?? input.twilio;
+          const previous = await this.readSetting(client, SETTINGS.sms, {});
+          await this.writeSetting(client, SETTINGS.sms, {
+            ...previous,
+            ...this.object(source),
+            authToken: this.keepSecret(source.authToken, previous.authToken),
+            updatedAt: new Date().toISOString(),
+          });
+        }
 
-      const [email, sms] = await Promise.all([
-        this.readSetting(client, SETTINGS.email, null),
-        this.readSetting(client, SETTINGS.sms, null),
-      ]);
-      return {
-        hasCommunicationConfig: Boolean(sms),
-        communicationUpdatedAt: sms?.updatedAt ?? null,
-        communicationProviderName: sms?.providerName ?? null,
-        communicationSmsSyncEnabled: sms?.enableSmsSync === true,
-        communicationSmsSyncIntervalMinutes: sms?.enableSmsSync
-          ? Number(sms.syncIntervalMinutes ?? 5)
-          : null,
-        hasAiProviderConfig: false,
-        aiProviderUpdatedAt: null,
-        aiProviderName: null,
-        hasSmtpConfig: Boolean(email),
-        smtpUpdatedAt: email?.updatedAt ?? null,
-        smtpProviderName: email?.providerName ?? null,
-        mailboxSyncEnabled: email?.enableInboxSync === true,
-        mailboxSyncIntervalMinutes: email?.enableInboxSync
-          ? Number(email.syncIntervalMinutes ?? 5)
-          : null,
-        updatedAt: new Date().toISOString(),
-      };
-    });
+        const [email, sms] = await Promise.all([
+          this.readSetting(client, SETTINGS.email, null),
+          this.readSetting(client, SETTINGS.sms, null),
+        ]);
+        return {
+          hasCommunicationConfig: Boolean(sms),
+          communicationUpdatedAt: sms?.updatedAt ?? null,
+          communicationProviderName: sms?.providerName ?? null,
+          communicationSmsSyncEnabled: sms?.enableSmsSync === true,
+          communicationSmsSyncIntervalMinutes: sms?.enableSmsSync
+            ? Number(sms.syncIntervalMinutes ?? 5)
+            : null,
+          hasAiProviderConfig: false,
+          aiProviderUpdatedAt: null,
+          aiProviderName: null,
+          hasSmtpConfig: Boolean(email),
+          smtpUpdatedAt: email?.updatedAt ?? null,
+          smtpProviderName: email?.providerName ?? null,
+          mailboxSyncEnabled: email?.enableInboxSync === true,
+          mailboxSyncIntervalMinutes: email?.enableInboxSync
+            ? Number(email.syncIntervalMinutes ?? 5)
+            : null,
+          updatedAt: new Date().toISOString(),
+        };
+      },
+    );
   }
 
   async getSchedulingSettings(tenant: SaasTenant) {
-    return this.databases.withTenantClient(this.databaseName(tenant), (client) =>
-      this.schedulingSettings(client),
+    return this.databases.withTenantClient(
+      this.databaseName(tenant),
+      (client) => this.schedulingSettings(client),
     );
   }
 
   async updateSchedulingSettings(tenant: SaasTenant, input: any) {
-    return this.databases.withTenantClient(this.databaseName(tenant), async (client) => {
-      const current = await this.schedulingSettings(client);
-      const value = {
-        timeZone: this.text(input?.timeZone, current.timeZone),
-        morningOutreachHour: this.clampInt(
-          input?.morningOutreachHour,
-          current.morningOutreachHour,
-          0,
-          23,
-        ),
-        maxAttempts: this.clampInt(input?.maxAttempts, current.maxAttempts, 1, 20),
-        retryBaseSeconds: this.clampInt(
-          input?.retryBaseSeconds,
-          current.retryBaseSeconds,
-          15,
-          86_400,
-        ),
-        updatedAt: new Date().toISOString(),
-      };
-      await this.writeSetting(client, SETTINGS.scheduling, value);
-      return value;
-    });
+    return this.databases.withTenantClient(
+      this.databaseName(tenant),
+      async (client) => {
+        const current = await this.schedulingSettings(client);
+        const value = {
+          timeZone: this.text(input?.timeZone, current.timeZone),
+          morningOutreachHour: this.clampInt(
+            input?.morningOutreachHour,
+            current.morningOutreachHour,
+            0,
+            23,
+          ),
+          maxAttempts: this.clampInt(
+            input?.maxAttempts,
+            current.maxAttempts,
+            1,
+            20,
+          ),
+          retryBaseSeconds: this.clampInt(
+            input?.retryBaseSeconds,
+            current.retryBaseSeconds,
+            15,
+            86_400,
+          ),
+          updatedAt: new Date().toISOString(),
+        };
+        await this.writeSetting(client, SETTINGS.scheduling, value);
+        return value;
+      },
+    );
   }
 
   getHomepageSettings(tenant: SaasTenant) {
@@ -268,24 +293,35 @@ export class TenantOutreachService {
   }
 
   async enqueueWithClient(client: PoolClient, input: TenantEnqueueInput) {
-    const channels = [...new Set(input.channels.map((item) => this.channel(item)))];
-    if (!channels.length) throw new BadRequestException('At least one delivery channel is required.');
+    const channels = [
+      ...new Set(input.channels.map((item) => this.channel(item))),
+    ];
+    if (!channels.length)
+      throw new BadRequestException(
+        'At least one delivery channel is required.',
+      );
     const scheduling = await this.schedulingSettings(client);
     const scheduledAt = this.dateOrNow(input.scheduledAt);
-    const baseKey = this.text(input.idempotencyKey, this.hash(JSON.stringify({
-      leadId: input.leadId ?? null,
-      sourceType: input.sourceType ?? 'lead-outreach',
-      sourceId: input.sourceId ?? '',
-      scheduledAt: scheduledAt.toISOString(),
-      title: input.title,
-      body: input.body,
-      createdBy: input.createdBy ?? 'Tenant workspace',
-    })));
+    const baseKey = this.text(
+      input.idempotencyKey,
+      this.hash(
+        JSON.stringify({
+          leadId: input.leadId ?? null,
+          sourceType: input.sourceType ?? 'lead-outreach',
+          sourceId: input.sourceId ?? '',
+          scheduledAt: scheduledAt.toISOString(),
+          title: input.title,
+          body: input.body,
+          createdBy: input.createdBy ?? 'Tenant workspace',
+        }),
+      ),
+    );
     const rows: TenantOutreachJob[] = [];
     for (const channel of channels) {
-      const recipientMissing = channel === 'Email'
-        ? !this.text(input.recipientEmail)
-        : !this.text(input.recipientPhone);
+      const recipientMissing =
+        channel === 'Email'
+          ? !this.text(input.recipientEmail)
+          : !this.text(input.recipientPhone);
       const providerSetting = await this.readSetting(
         client,
         channel === 'Email' ? SETTINGS.email : SETTINGS.sms,
@@ -295,8 +331,11 @@ export class TenantOutreachService {
         providerSetting?.providerName,
         channel === 'Email' ? 'SMTP' : 'Twilio',
       );
-      const key = channels.length === 1 ? baseKey : `${baseKey}:${channel.toLowerCase()}`;
-      const status: TenantOutreachStatus = recipientMissing ? 'failed' : 'scheduled';
+      const key =
+        channels.length === 1 ? baseKey : `${baseKey}:${channel.toLowerCase()}`;
+      const status: TenantOutreachStatus = recipientMissing
+        ? 'failed'
+        : 'scheduled';
       const lastError = recipientMissing
         ? channel === 'Email'
           ? 'Recipient email is missing.'
@@ -354,56 +393,66 @@ export class TenantOutreachService {
   }
 
   async queueOutreach(tenant: SaasTenant, input: any) {
-    const queued = await this.databases.withTenantClient(this.databaseName(tenant), async (client) => {
-      const leadId = this.positiveId(input?.leadId, 'Lead id');
-      const lead = await this.leadSnapshot(client, leadId);
-      const channel = this.channel(input?.kind);
-      const agency = await this.agencySettings(client);
-      const template = input?.templateId
-        ? agency.communicationTemplates.find(
-            (item: any) => `${item.id}` === `${input.templateId}`,
-          )
-        : null;
-      const title = this.resolveTemplateTokens(
-        this.text(input?.title, template?.subject ?? ''),
-        lead,
-        agency,
-      );
-      const body = this.resolveTemplateTokens(
-        this.text(input?.message ?? input?.body, template?.body ?? ''),
-        lead,
-        agency,
-      );
-      if (!body) throw new BadRequestException('A message is required.');
-      if (channel === 'Email' && !title) {
-        throw new BadRequestException('An email subject is required.');
-      }
-      const scheduling = await this.schedulingSettings(client);
-      const scheduledAt = this.scheduleDate(input?.scheduledAt, scheduling.timeZone);
-      const jobs = await this.enqueueWithClient(client, {
-        leadId,
-        sourceType: 'lead-outreach',
-        sourceId: input?.templateId ?? '',
-        channels: [channel],
-        recipientName: this.text(lead.name ?? lead.fullName),
-        recipientEmail: this.text(lead.email),
-        recipientPhone: this.text(lead.phone),
-        title: title || `${channel} outreach`,
-        body,
-        mediaUrls: this.stringList(input?.mediaUrls),
-        createdBy: this.text(input?.createdBy, 'Tenant workspace'),
-        scheduledAt,
-        idempotencyKey: this.text(input?.idempotencyKey) || undefined,
-        payload: {
-          templateId: input?.templateId ?? null,
-          sequenceType: template?.sequenceType ?? 'Direct',
+    const queued = await this.databases.withTenantClient(
+      this.databaseName(tenant),
+      async (client) => {
+        const leadId = this.positiveId(input?.leadId, 'Lead id');
+        const lead = await this.leadSnapshot(client, leadId);
+        const channel = this.channel(input?.kind);
+        const agency = await this.agencySettings(client);
+        const template = input?.templateId
+          ? agency.communicationTemplates.find(
+              (item: any) => `${item.id}` === `${input.templateId}`,
+            )
+          : null;
+        const title = this.resolveTemplateTokens(
+          this.text(input?.title, template?.subject ?? ''),
           lead,
-        },
-      });
-      return this.mapJob(jobs[0]);
-    });
+          agency,
+        );
+        const body = this.resolveTemplateTokens(
+          this.text(input?.message ?? input?.body, template?.body ?? ''),
+          lead,
+          agency,
+        );
+        if (!body) throw new BadRequestException('A message is required.');
+        if (channel === 'Email' && !title) {
+          throw new BadRequestException('An email subject is required.');
+        }
+        const scheduling = await this.schedulingSettings(client);
+        const scheduledAt = this.scheduleDate(
+          input?.scheduledAt,
+          scheduling.timeZone,
+        );
+        const jobs = await this.enqueueWithClient(client, {
+          leadId,
+          sourceType: 'lead-outreach',
+          sourceId: input?.templateId ?? '',
+          channels: [channel],
+          recipientName: this.text(lead.name ?? lead.fullName),
+          recipientEmail: this.text(lead.email),
+          recipientPhone: this.text(lead.phone),
+          title: title || `${channel} outreach`,
+          body,
+          mediaUrls: this.stringList(input?.mediaUrls),
+          createdBy: this.text(input?.createdBy, 'Tenant workspace'),
+          scheduledAt,
+          idempotencyKey: this.text(input?.idempotencyKey) || undefined,
+          payload: {
+            templateId: input?.templateId ?? null,
+            sequenceType: template?.sequenceType ?? 'Direct',
+            lead,
+          },
+        });
+        return this.mapJob(jobs[0]);
+      },
+    );
 
-    if (input?.sendNow === true && !input?.scheduledAt && queued?.rawStatus === 'scheduled') {
+    if (
+      input?.sendNow === true &&
+      !input?.scheduledAt &&
+      queued?.rawStatus === 'scheduled'
+    ) {
       const claimed = await this.claimManualJob(tenant, Number(queued.id));
       if (claimed) {
         await this.processClaimedJob(tenant, claimed);
@@ -416,28 +465,37 @@ export class TenantOutreachService {
 
   private async claimManualJob(tenant: SaasTenant, jobId: number) {
     const workerId = `manual-${process.pid}-${Date.now()}`;
-    return this.databases.withTenantClient(this.databaseName(tenant), async (client) => {
-      const result = await client.query<TenantOutreachJob>(
-        `UPDATE tenant_outreach_job
+    return this.databases.withTenantClient(
+      this.databaseName(tenant),
+      async (client) => {
+        const result = await client.query<TenantOutreachJob>(
+          `UPDATE tenant_outreach_job
          SET status = 'processing', attempt_count = attempt_count + 1,
              locked_at = now(), locked_by = $2::text, updated_at = now()
          WHERE id = $1 AND status = 'scheduled'
          RETURNING *`,
-        [jobId, workerId],
-      );
-      return result.rows[0] ? this.normalizeClaimedJob(result.rows[0]) : null;
-    });
+          [jobId, workerId],
+        );
+        return result.rows[0] ? this.normalizeClaimedJob(result.rows[0]) : null;
+      },
+    );
   }
 
   private async getMappedJob(tenant: SaasTenant, jobId: number) {
-    return this.databases.withTenantClient(this.databaseName(tenant), async (client) => {
-      const result = await client.query<TenantOutreachJob>(
-        'SELECT * FROM tenant_outreach_job WHERE id = $1',
-        [jobId],
-      );
-      if (!result.rows[0]) throw new NotFoundException('Outreach job was not found after sending.');
-      return this.mapJob(result.rows[0]);
-    });
+    return this.databases.withTenantClient(
+      this.databaseName(tenant),
+      async (client) => {
+        const result = await client.query<TenantOutreachJob>(
+          'SELECT * FROM tenant_outreach_job WHERE id = $1',
+          [jobId],
+        );
+        if (!result.rows[0])
+          throw new NotFoundException(
+            'Outreach job was not found after sending.',
+          );
+        return this.mapJob(result.rows[0]);
+      },
+    );
   }
 
   async queueBulkOutreach(tenant: SaasTenant, input: any) {
@@ -458,7 +516,8 @@ export class TenantOutreachService {
           failures.push(`Lead #${leadId}: Outreach job was not created.`);
           continue;
         }
-        if (item.status === 'Failed') failures.push(`${item.leadName}: ${item.summary}`);
+        if (item.status === 'Failed')
+          failures.push(`${item.leadName}: ${item.summary}`);
         else savedCount += 1;
       } catch (error) {
         failures.push(
@@ -482,9 +541,11 @@ export class TenantOutreachService {
     tenant: SaasTenant,
     filters: { leadId?: number; kind?: string; status?: string },
   ) {
-    return this.databases.withTenantClient(this.databaseName(tenant), async (client) => {
-      const result = await client.query<TenantOutreachJob>(
-        `SELECT j.*,
+    return this.databases.withTenantClient(
+      this.databaseName(tenant),
+      async (client) => {
+        const result = await client.query<TenantOutreachJob>(
+          `SELECT j.*,
                 CASE
                   WHEN (j.direction = 'Incoming' OR j.status = 'received')
                        AND j.lead_id IS NOT NULL
@@ -510,14 +571,17 @@ export class TenantOutreachService {
          FROM tenant_outreach_job j
          ORDER BY j.created_at DESC
          LIMIT 2000`,
-      );
-      const leadId = Number(filters.leadId);
-      return result.rows
-        .map((row) => this.mapJob(row))
-        .filter((item) => !Number.isInteger(leadId) || item.leadId === leadId)
-        .filter((item) => !filters.kind || item.kind === filters.kind)
-        .filter((item) => this.matchesPublicStatus(item.status, filters.status));
-    });
+        );
+        const leadId = Number(filters.leadId);
+        return result.rows
+          .map((row) => this.mapJob(row))
+          .filter((item) => !Number.isInteger(leadId) || item.leadId === leadId)
+          .filter((item) => !filters.kind || item.kind === filters.kind)
+          .filter((item) =>
+            this.matchesPublicStatus(item.status, filters.status),
+          );
+      },
+    );
   }
 
   async updateScheduleStatus(
@@ -526,24 +590,27 @@ export class TenantOutreachService {
     status: 'active' | 'paused' | 'cancelled',
   ) {
     const jobId = this.positiveId(id, 'Schedule item id');
-    return this.databases.withTenantClient(this.databaseName(tenant), async (client) => {
-      const current = await client.query<TenantOutreachJob>(
-        'SELECT * FROM tenant_outreach_job WHERE id = $1',
-        [jobId],
-      );
-      const job = current.rows[0];
-      if (!job) throw new NotFoundException('Tenant schedule item was not found.');
+    return this.databases.withTenantClient(
+      this.databaseName(tenant),
+      async (client) => {
+        const current = await client.query<TenantOutreachJob>(
+          'SELECT * FROM tenant_outreach_job WHERE id = $1',
+          [jobId],
+        );
+        const job = current.rows[0];
+        if (!job)
+          throw new NotFoundException('Tenant schedule item was not found.');
 
-      const nextStatus: TenantOutreachJob['status'] =
-        status === 'active' ? 'scheduled' : status;
-      const reason =
-        status === 'active'
-          ? 'Schedule resumed.'
-          : status === 'paused'
-            ? 'Schedule paused by a tenant user.'
-            : 'Schedule cancelled by a tenant user.';
-      const updated = await client.query<TenantOutreachJob>(
-        `UPDATE tenant_outreach_job
+        const nextStatus: TenantOutreachJob['status'] =
+          status === 'active' ? 'scheduled' : status;
+        const reason =
+          status === 'active'
+            ? 'Schedule resumed.'
+            : status === 'paused'
+              ? 'Schedule paused by a tenant user.'
+              : 'Schedule cancelled by a tenant user.';
+        const updated = await client.query<TenantOutreachJob>(
+          `UPDATE tenant_outreach_job
          SET status = $2::text,
              next_attempt_at = CASE WHEN $2::text = 'scheduled' THEN now() ELSE next_attempt_at END,
              locked_at = NULL,
@@ -553,90 +620,103 @@ export class TenantOutreachService {
              updated_at = now()
          WHERE id = $1
          RETURNING *`,
-        [jobId, nextStatus, reason],
-      );
-      return this.mapJob(updated.rows[0]);
-    });
+          [jobId, nextStatus, reason],
+        );
+        return this.mapJob(updated.rows[0]);
+      },
+    );
   }
 
   async retryJob(tenant: SaasTenant, id: number) {
     const jobId = this.positiveId(id, 'Job id');
-    return this.databases.withTenantClient(this.databaseName(tenant), async (client) => {
-      const updated = await client.query<TenantOutreachJob>(
-        `UPDATE tenant_outreach_job
+    return this.databases.withTenantClient(
+      this.databaseName(tenant),
+      async (client) => {
+        const updated = await client.query<TenantOutreachJob>(
+          `UPDATE tenant_outreach_job
          SET status = 'retrying', next_attempt_at = now(), locked_at = NULL,
              locked_by = NULL, last_error = '', completed_at = NULL, updated_at = now()
          WHERE id = $1 AND status IN ('failed', 'dead_letter')
          RETURNING *`,
-        [jobId],
-      );
-      if (!updated.rows[0]) {
-        throw new BadRequestException('Only failed or dead-letter jobs can be retried.');
-      }
-      return this.mapJob(updated.rows[0]);
-    });
+          [jobId],
+        );
+        if (!updated.rows[0]) {
+          throw new BadRequestException(
+            'Only failed or dead-letter jobs can be retried.',
+          );
+        }
+        return this.mapJob(updated.rows[0]);
+      },
+    );
   }
 
   async markRepliesRead(tenant: SaasTenant, ids: number[], isRead = true) {
-    const cleanIds = [...new Set((Array.isArray(ids) ? ids : []).map(Number))].filter(
-      (id) => Number.isInteger(id) && id > 0,
-    );
+    const cleanIds = [
+      ...new Set((Array.isArray(ids) ? ids : []).map(Number)),
+    ].filter((id) => Number.isInteger(id) && id > 0);
     if (cleanIds.length === 0) {
       throw new BadRequestException('Choose at least one tenant reply.');
     }
-    return this.databases.withTenantClient(this.databaseName(tenant), async (client) => {
-      await client.query(
-        `UPDATE tenant_outreach_job
+    return this.databases.withTenantClient(
+      this.databaseName(tenant),
+      async (client) => {
+        await client.query(
+          `UPDATE tenant_outreach_job
          SET is_read = $2, updated_at = now()
          WHERE id = ANY($1::bigint[])
            AND (direction = 'Incoming' OR status = 'received')`,
-        [cleanIds, isRead],
-      );
-      return { ids: cleanIds, isRead };
-    });
+          [cleanIds, isRead],
+        );
+        return { ids: cleanIds, isRead };
+      },
+    );
   }
 
   async monitoring(tenant: SaasTenant) {
-    return this.databases.withTenantClient(this.databaseName(tenant), async (client) => {
-      const [counts, oldest, recentFailures] = await Promise.all([
-        client.query<{ status: TenantOutreachStatus; count: number }>(
-          `SELECT status, COUNT(*)::int AS count
+    return this.databases.withTenantClient(
+      this.databaseName(tenant),
+      async (client) => {
+        const [counts, oldest, recentFailures] = await Promise.all([
+          client.query<{ status: TenantOutreachStatus; count: number }>(
+            `SELECT status, COUNT(*)::int AS count
            FROM tenant_outreach_job
            GROUP BY status`,
-        ),
-        client.query(
-          `SELECT id, scheduled_at, next_attempt_at
+          ),
+          client.query(
+            `SELECT id, scheduled_at, next_attempt_at
            FROM tenant_outreach_job
            WHERE status IN ('scheduled', 'retrying')
            ORDER BY next_attempt_at ASC
            LIMIT 1`,
-        ),
-        client.query(
-          `SELECT id, lead_id, channel, status, attempt_count, max_attempts,
+          ),
+          client.query(
+            `SELECT id, lead_id, channel, status, attempt_count, max_attempts,
                   last_error, updated_at
            FROM tenant_outreach_job
            WHERE status IN ('failed', 'dead_letter')
            ORDER BY updated_at DESC
            LIMIT 20`,
-        ),
-      ]);
-      const byStatus: Record<TenantOutreachStatus, number> = {
-        scheduled: 0,
-        processing: 0,
-        sent: 0,
-        retrying: 0,
-        failed: 0,
-        dead_letter: 0,
-      };
-      for (const row of counts.rows) byStatus[row.status] = Number(row.count) || 0;
-      return {
-        databaseName: this.databaseName(tenant),
-        statuses: byStatus,
-        oldestDue: oldest.rows[0] ?? null,
-        recentFailures: recentFailures.rows,
-        checkedAt: new Date().toISOString(),
-      };
-    });
+          ),
+        ]);
+        const byStatus: Record<TenantOutreachStatus, number> = {
+          scheduled: 0,
+          processing: 0,
+          sent: 0,
+          retrying: 0,
+          failed: 0,
+          dead_letter: 0,
+        };
+        for (const row of counts.rows)
+          byStatus[row.status] = Number(row.count) || 0;
+        return {
+          databaseName: this.databaseName(tenant),
+          statuses: byStatus,
+          oldestDue: oldest.rows[0] ?? null,
+          recentFailures: recentFailures.rows,
+          checkedAt: new Date().toISOString(),
+        };
+      },
+    );
   }
 
   async recordInboundEmail(
@@ -775,7 +855,10 @@ export class TenantOutreachService {
                 idempotencyKey,
                 Number(lead?.id) > 0 ? Number(lead.id) : null,
                 providerMessageId.slice(0, 120),
-                this.text(lead?.full_name ?? lead?.fullName ?? recipient).slice(0, 200),
+                this.text(lead?.full_name ?? lead?.fullName ?? recipient).slice(
+                  0,
+                  200,
+                ),
                 recipient.slice(0, 80),
                 this.text(input.body),
                 JSON.stringify(this.stringList(input.mediaUrls).slice(0, 10)),
@@ -812,9 +895,11 @@ export class TenantOutreachService {
       2,
       120,
     );
-    return this.databases.withTenantClient(this.databaseName(tenant), async (client) => {
-      const result = await client.query(
-        `UPDATE tenant_outreach_job
+    return this.databases.withTenantClient(
+      this.databaseName(tenant),
+      async (client) => {
+        const result = await client.query(
+          `UPDATE tenant_outreach_job
          SET status = CASE
                WHEN attempt_count >= max_attempts THEN 'dead_letter'
                ELSE 'retrying'
@@ -830,10 +915,11 @@ export class TenantOutreachService {
          WHERE status = 'processing'
            AND locked_at IS NOT NULL
            AND locked_at < now() - ($1 * interval '1 minute')`,
-        [staleMinutes],
-      );
-      return result.rowCount ?? 0;
-    });
+          [staleMinutes],
+        );
+        return result.rowCount ?? 0;
+      },
+    );
   }
 
   async claimDueJobs(
@@ -847,11 +933,13 @@ export class TenantOutreachService {
       1,
       100,
     );
-    return this.databases.withTenantClient(this.databaseName(tenant), async (client) => {
-      await client.query('BEGIN');
-      try {
-        await client.query(
-          `UPDATE tenant_outreach_job j
+    return this.databases.withTenantClient(
+      this.databaseName(tenant),
+      async (client) => {
+        await client.query('BEGIN');
+        try {
+          await client.query(
+            `UPDATE tenant_outreach_job j
            SET status = 'cancelled',
                last_error = 'Cancelled because linked property is not currently published.',
                completed_at = now(),
@@ -867,9 +955,9 @@ export class TenantOutreachService {
                WHERE lp.lead_id = j.lead_id
                  AND p.status = 'published'
              )`,
-        );
-        const result = await client.query<TenantOutreachJob>(
-          `WITH due AS (
+          );
+          const result = await client.query<TenantOutreachJob>(
+            `WITH due AS (
              SELECT j.id
              FROM tenant_outreach_job j
              WHERE j.status IN ('scheduled', 'retrying')
@@ -901,33 +989,49 @@ export class TenantOutreachService {
            FROM due
            WHERE j.id = due.id
            RETURNING j.*`,
-          [limit, workerId],
-        );
-        await client.query('COMMIT');
-        return result.rows.map((row) => ({
-          ...row,
-          leadId: row.lead_id,
-          sourceType: row.source_type,
-          sourceId: row.source_id,
-          recipientName: row.recipient_name,
-          recipientEmail: row.recipient_email,
-          recipientPhone: row.recipient_phone,
-          mediaUrls: row.media_urls,
-          createdBy: row.created_by,
-          scheduledAt: row.scheduled_at,
-          attemptCount: row.attempt_count,
-          maxAttempts: row.max_attempts,
-          providerMessageId: row.provider_message_id,
-        })) as TenantOutreachJob[];
-      } catch (error) {
-        await client.query('ROLLBACK');
-        throw error;
-      }
-    });
+            [limit, workerId],
+          );
+          await client.query('COMMIT');
+          return result.rows.map((row) => ({
+            ...row,
+            leadId: row.lead_id,
+            sourceType: row.source_type,
+            sourceId: row.source_id,
+            recipientName: row.recipient_name,
+            recipientEmail: row.recipient_email,
+            recipientPhone: row.recipient_phone,
+            mediaUrls: row.media_urls,
+            createdBy: row.created_by,
+            scheduledAt: row.scheduled_at,
+            attemptCount: row.attempt_count,
+            maxAttempts: row.max_attempts,
+            providerMessageId: row.provider_message_id,
+          })) as TenantOutreachJob[];
+        } catch (error) {
+          await client.query('ROLLBACK');
+          throw error;
+        }
+      },
+    );
   }
 
   async processClaimedJob(tenant: SaasTenant, job: TenantOutreachJob) {
     const normalized = this.normalizeClaimedJob(job as any);
+    if (
+      normalized.source_type === 'tenant-chatbot' ||
+      normalized.source_type === 'tenant-chatbot-rule'
+    ) {
+      const authorization = this.chatbot
+        ? await this.chatbot.authorizeOutboundJob(tenant, normalized)
+        : { allowed: false, reason: 'SYSTEM_UNAVAILABLE' as const };
+      if (!authorization.allowed) {
+        return {
+          id: normalized.id,
+          status: 'cancelled' as const,
+          reason: authorization.reason,
+        };
+      }
+    }
     const databaseName = this.databaseName(tenant);
     const attemptId = await this.beginAttempt(databaseName, normalized);
     try {
@@ -940,7 +1044,10 @@ export class TenantOutreachService {
       );
       return { id: normalized.id, status: 'sent' as const };
     } catch (error) {
-      const message = error instanceof Error ? error.message : `${error ?? 'Delivery failed'}`;
+      const message =
+        error instanceof Error
+          ? error.message
+          : `${error ?? 'Delivery failed'}`;
       this.logger?.error?.(
         `[outreach] delivery failed tenant=${tenant.id} database=${databaseName} job=${normalized.id} lead=${normalized.lead_id ?? 'none'} channel=${normalized.channel} provider=${normalized.provider || 'unknown'}: ${message}`,
         error instanceof Error ? error.stack : undefined,
@@ -990,17 +1097,21 @@ export class TenantOutreachService {
   }
 
   private async getJsonSetting(tenant: SaasTenant, key: string, fallback: any) {
-    return this.databases.withTenantClient(this.databaseName(tenant), (client) =>
-      this.readSetting(client, key, fallback),
+    return this.databases.withTenantClient(
+      this.databaseName(tenant),
+      (client) => this.readSetting(client, key, fallback),
     );
   }
 
   private async updateJsonSetting(tenant: SaasTenant, key: string, input: any) {
-    return this.databases.withTenantClient(this.databaseName(tenant), async (client) => {
-      const value = this.object(input) ?? {};
-      await this.writeSetting(client, key, value);
-      return value;
-    });
+    return this.databases.withTenantClient(
+      this.databaseName(tenant),
+      async (client) => {
+        const value = this.object(input) ?? {};
+        await this.writeSetting(client, key, value);
+        return value;
+      },
+    );
   }
 
   private async agencySettings(client: PoolClient) {
@@ -1011,9 +1122,14 @@ export class TenantOutreachService {
     return {
       ...defaults,
       ...(this.object(current) ?? {}),
-      profile: { ...defaults.profile, ...(this.object(current?.profile) ?? {}) },
+      profile: {
+        ...defaults.profile,
+        ...(this.object(current?.profile) ?? {}),
+      },
       communicationTemplates: Array.isArray(current?.communicationTemplates)
-        ? current.communicationTemplates.map((item: any) => this.normalizeTemplate(item))
+        ? current.communicationTemplates.map((item: any) =>
+            this.normalizeTemplate(item),
+          )
         : defaults.communicationTemplates,
     };
   }
@@ -1022,9 +1138,19 @@ export class TenantOutreachService {
     const current = await this.readSetting(client, SETTINGS.scheduling, {});
     return {
       timeZone: this.text(current?.timeZone, 'UTC'),
-      morningOutreachHour: this.clampInt(current?.morningOutreachHour, 9, 0, 23),
+      morningOutreachHour: this.clampInt(
+        current?.morningOutreachHour,
+        9,
+        0,
+        23,
+      ),
       maxAttempts: this.clampInt(current?.maxAttempts, 5, 1, 20),
-      retryBaseSeconds: this.clampInt(current?.retryBaseSeconds, 60, 15, 86_400),
+      retryBaseSeconds: this.clampInt(
+        current?.retryBaseSeconds,
+        60,
+        15,
+        86_400,
+      ),
       updatedAt: current?.updatedAt ?? null,
     };
   }
@@ -1065,24 +1191,31 @@ export class TenantOutreachService {
       'SELECT to_jsonb(lead) AS value FROM tenant_lead lead WHERE id = $1',
       [leadId],
     );
-    if (!result.rows[0]?.value) throw new NotFoundException('Tenant lead was not found.');
+    if (!result.rows[0]?.value)
+      throw new NotFoundException('Tenant lead was not found.');
     return this.camelize(result.rows[0].value);
   }
 
   private async resolveAudience(client: PoolClient, input: any) {
-    const leads = await client.query('SELECT to_jsonb(lead) AS value FROM tenant_lead lead');
+    const leads = await client.query(
+      'SELECT to_jsonb(lead) AS value FROM tenant_lead lead',
+    );
     const normalized = leads.rows.map((row) => this.camelize(row.value));
     if ((input?.audienceType ?? 'LeadStage') !== 'DealStage') {
-      if (!input?.leadStage) throw new BadRequestException('Choose a tenant lead stage.');
+      if (!input?.leadStage)
+        throw new BadRequestException('Choose a tenant lead stage.');
       return normalized
         .filter((lead) => `${lead.stage ?? ''}` === `${input.leadStage}`)
         .map((lead) => Number(lead.id))
         .filter((id) => Number.isInteger(id) && id > 0);
     }
 
-    if (!input?.dealStage) throw new BadRequestException('Choose a tenant deal stage.');
+    if (!input?.dealStage)
+      throw new BadRequestException('Choose a tenant deal stage.');
     const table = await this.resolveEntityTable(client, 'deal');
-    const deals = await client.query(`SELECT to_jsonb(item) AS value FROM ${table} item`);
+    const deals = await client.query(
+      `SELECT to_jsonb(item) AS value FROM ${table} item`,
+    );
     const leadIds = deals.rows
       .map((row) => this.camelize(row.value))
       .filter((deal) => `${deal.stage ?? ''}` === `${input.dealStage}`)
@@ -1107,19 +1240,28 @@ export class TenantOutreachService {
       payload: Record<string, unknown>;
     },
   ) {
-    if (!input.sender) throw new BadRequestException('Inbound sender is required.');
+    if (!input.sender)
+      throw new BadRequestException('Inbound sender is required.');
     const databaseName = this.databaseName(tenant);
     return this.databases.withTenantClient(databaseName, async (client) => {
       await client.query('BEGIN');
       try {
-        const lead = await this.findLeadForInbound(client, input.channel, input.sender);
-        const providerMessageId = input.messageId || this.hash([
-          input.provider,
+        const lead = await this.findLeadForInbound(
+          client,
           input.channel,
           input.sender,
-          input.receivedAt.toISOString(),
-          input.body,
-        ].join('|'));
+        );
+        const providerMessageId =
+          input.messageId ||
+          this.hash(
+            [
+              input.provider,
+              input.channel,
+              input.sender,
+              input.receivedAt.toISOString(),
+              input.body,
+            ].join('|'),
+          );
         const idempotencyKey = this.hash(
           `inbound|${input.channel}|${input.provider}|${providerMessageId}`,
         );
@@ -1151,8 +1293,15 @@ export class TenantOutreachService {
             input.channel === 'Email' ? 'mail-inbox' : 'sms-inbox',
             providerMessageId.slice(0, 120),
             input.channel,
-            this.text(lead?.full_name ?? lead?.fullName ?? input.senderName ?? input.sender).slice(0, 200),
-            input.channel === 'Email' ? input.sender.toLowerCase().slice(0, 240) : '',
+            this.text(
+              lead?.full_name ??
+                lead?.fullName ??
+                input.senderName ??
+                input.sender,
+            ).slice(0, 200),
+            input.channel === 'Email'
+              ? input.sender.toLowerCase().slice(0, 240)
+              : '',
             input.channel === 'SMS' ? input.sender.slice(0, 80) : '',
             input.title.slice(0, 500),
             input.body,
@@ -1179,15 +1328,16 @@ export class TenantOutreachService {
           );
           row = complete.rows[0] ?? row;
         }
-        const isReply = row && Number(lead?.id) > 0
-          ? await this.hasPriorSentOutreach(
-              client,
-              Number(lead.id),
-              input.channel,
-              input.receivedAt,
-              input.sender,
-            )
-          : false;
+        const isReply =
+          row && Number(lead?.id) > 0
+            ? await this.hasPriorSentOutreach(
+                client,
+                Number(lead.id),
+                input.channel,
+                input.receivedAt,
+                input.sender,
+              )
+            : false;
         if (row && isReply) {
           const showingMessage = await client.query(
             `SELECT payload, recipient_name, recipient_email, recipient_phone
@@ -1203,9 +1353,15 @@ export class TenantOutreachService {
              LIMIT 1`,
             [Number(lead.id), input.channel, input.receivedAt],
           );
-          const showingPayload = this.object(showingMessage.rows[0]?.payload) ?? {};
+          const showingPayload =
+            this.object(showingMessage.rows[0]?.payload) ?? {};
           const leadPayload = this.object(lead.payload) ?? {};
-          const propertyId = Number(showingPayload.propertyId ?? leadPayload.primaryPropertyId ?? leadPayload.propertyId) || 0;
+          const propertyId =
+            Number(
+              showingPayload.propertyId ??
+                leadPayload.primaryPropertyId ??
+                leadPayload.propertyId,
+            ) || 0;
           if (propertyId > 0) {
             const existingFeedback = await client.query(
               `SELECT 1 FROM tenant_legacy_resource
@@ -1218,17 +1374,19 @@ export class TenantOutreachService {
               await client.query(
                 `INSERT INTO tenant_legacy_resource(resource, payload)
                  VALUES ('showing-feedback', $1::jsonb)`,
-                [JSON.stringify({
-                  propertyId,
-                  leadId: Number(lead.id),
-                  realtorName: showingMessage.rows[0]?.recipient_name ?? '',
-                  realtorContact: input.sender,
-                  feedbackText: input.body,
-                  receivedAt: input.receivedAt.toISOString(),
-                  sourceMessageId: providerMessageId,
-                  sentiment: '',
-                  source: 'realtor-reply',
-                })],
+                [
+                  JSON.stringify({
+                    propertyId,
+                    leadId: Number(lead.id),
+                    realtorName: showingMessage.rows[0]?.recipient_name ?? '',
+                    realtorContact: input.sender,
+                    feedbackText: input.body,
+                    receivedAt: input.receivedAt.toISOString(),
+                    sourceMessageId: providerMessageId,
+                    sentiment: '',
+                    source: 'realtor-reply',
+                  }),
+                ],
               );
             }
           }
@@ -1285,21 +1443,22 @@ export class TenantOutreachService {
     channel: 'Email' | 'SMS',
     sender: string,
   ) {
-    const result = channel === 'Email'
-      ? await client.query(
-          `SELECT id, full_name AS "fullName", email, phone, status, payload
+    const result =
+      channel === 'Email'
+        ? await client.query(
+            `SELECT id, full_name AS "fullName", email, phone, status, payload
            FROM tenant_lead WHERE LOWER(email) = LOWER($1)
            ORDER BY id DESC LIMIT 1`,
-          [sender],
-        )
-      : await client.query(
-          `SELECT id, full_name, email, phone, status, payload
+            [sender],
+          )
+        : await client.query(
+            `SELECT id, full_name, email, phone, status, payload
            FROM tenant_lead
            WHERE regexp_replace(COALESCE(phone, ''), '[^0-9]', '', 'g') =
                  regexp_replace($1, '[^0-9]', '', 'g')
            ORDER BY id DESC LIMIT 1`,
-          [sender],
-        );
+            [sender],
+          );
     return result.rows[0] ?? null;
   }
 
@@ -1349,10 +1508,12 @@ export class TenantOutreachService {
       next_attempt_at: job.next_attempt_at ?? job.nextAttemptAt ?? new Date(),
       attempt_count: Number(job.attempt_count ?? job.attemptCount) || 0,
       max_attempts: Number(job.max_attempts ?? job.maxAttempts) || 5,
-      provider_message_id: job.provider_message_id ?? job.providerMessageId ?? '',
+      provider_message_id:
+        job.provider_message_id ?? job.providerMessageId ?? '',
       direction: job.direction ?? 'Scheduled',
       status: job.status ?? 'processing',
-      idempotency_key: job.idempotency_key ?? job.idempotencyKey ?? `job-${job.id}`,
+      idempotency_key:
+        job.idempotency_key ?? job.idempotencyKey ?? `job-${job.id}`,
       title: job.title ?? job.subject ?? '',
       body: job.body ?? '',
       provider: job.provider ?? '',
@@ -1432,12 +1593,20 @@ export class TenantOutreachService {
         );
         if (Number(job.lead_id) > 0) {
           const payload = this.object(job.payload) ?? {};
-          const isFollowUp = job.source_type === 'lead-followup' ||
-            this.text(payload.sequenceType).startsWith('FollowUp');
+          const sequenceType = this.text(payload.sequenceType);
+          const sequenceMatch = /^FollowUp([1-6])$/.exec(sequenceType);
+          const sequenceNumber = sequenceMatch ? Number(sequenceMatch[1]) : 0;
+          const leadFollowUpSequence = job.source_type === 'lead-followup' ? sequenceNumber : 0;
+          const isFinalLeadFollowUp =
+            job.source_type === 'lead-followup' &&
+            (payload.isFinalFollowUp === true || leadFollowUpSequence === 6);
+          const isFollowUp = job.source_type === 'lead-followup' || sequenceNumber > 0;
           const leadSnapshot = this.object(payload.lead) ?? {};
           const leadSnapshotPayload = this.object(leadSnapshot.payload) ?? {};
-          const isPostVisitFollowUp = isFollowUp &&
-            this.text(leadSnapshotPayload.stage ?? leadSnapshot.stage) === 'Visit';
+          const isPostVisitFollowUp =
+            isFollowUp &&
+            this.text(leadSnapshotPayload.stage ?? leadSnapshot.stage) ===
+              'Visit';
           await client.query(
             `UPDATE tenant_lead
              SET payload = COALESCE(payload, '{}'::jsonb) ||
@@ -1456,10 +1625,19 @@ export class TenantOutreachService {
                  ) || CASE
                    WHEN $3::boolean THEN jsonb_build_object('postVisitFollowUpSentAt', now()::text)
                    ELSE '{}'::jsonb
+                 END || CASE
+                   WHEN $4::int > 0 THEN jsonb_build_object(
+                     'followUpSequence', GREATEST(CASE WHEN COALESCE(payload->>'followUpSequence', '') ~ '^[0-9]+$' THEN (payload->>'followUpSequence')::int ELSE 0 END, $4::int),
+                     'followUpSequenceType', CASE WHEN $4::int >= CASE WHEN COALESCE(payload->>'followUpSequence', '') ~ '^[0-9]+$' THEN (payload->>'followUpSequence')::int ELSE 0 END THEN $5::text ELSE COALESCE(payload->>'followUpSequenceType', $5::text) END
+                   )
+                   ELSE '{}'::jsonb
+                 END || CASE
+                   WHEN $6::boolean THEN jsonb_build_object('finalFollowUpSentAt', now()::text)
+                   ELSE '{}'::jsonb
                  END,
                  updated_at = now()
              WHERE id = $1`,
-            [Number(job.lead_id), isFollowUp, isPostVisitFollowUp],
+            [Number(job.lead_id), isFollowUp, isPostVisitFollowUp, leadFollowUpSequence, sequenceType, isFinalLeadFollowUp],
           );
         }
         await client.query('COMMIT');
@@ -1477,9 +1655,11 @@ export class TenantOutreachService {
     status: TenantOutreachStatus,
     error: unknown,
   ) {
-    const message = error instanceof Error ? error.message : `${error ?? 'Delivery failed'}`;
-    const scheduling = await this.databases.withTenantClient(databaseName, (client) =>
-      this.schedulingSettings(client),
+    const message =
+      error instanceof Error ? error.message : `${error ?? 'Delivery failed'}`;
+    const scheduling = await this.databases.withTenantClient(
+      databaseName,
+      (client) => this.schedulingSettings(client),
     );
     const retrySeconds = this.retryDelaySeconds(
       scheduling.retryBaseSeconds,
@@ -1559,14 +1739,18 @@ export class TenantOutreachService {
       attemptCount: Number(row.attempt_count) || 0,
       maxAttempts: Number(row.max_attempts) || 0,
       lastError: row.last_error,
-      leadName: this.text(lead.full_name ?? lead.fullName ?? lead.name, row.recipient_name),
+      leadName: this.text(
+        lead.full_name ?? lead.fullName ?? lead.name,
+        row.recipient_name,
+      ),
       leadEmail: this.text(lead.email, row.recipient_email),
       leadPhone: this.text(lead.phone, row.recipient_phone),
       leadProperty: this.text(lead.property ?? lead.propertyTitle),
       leadPropertyId: lead.propertyId ?? null,
       leadStage: this.text(lead.stage ?? lead.status),
       leadPriority: this.text(lead.priority),
-      isReply: payload.isReply === true || (row as any).inferred_is_reply === true,
+      isReply:
+        payload.isReply === true || (row as any).inferred_is_reply === true,
     };
   }
 
@@ -1574,7 +1758,12 @@ export class TenantOutreachService {
     if (status === 'received') return 'Received';
     if (status === 'sent') return 'Sent';
     if (status === 'paused') return 'Paused';
-    if (status === 'failed' || status === 'dead_letter' || status === 'cancelled') return 'Failed';
+    if (
+      status === 'failed' ||
+      status === 'dead_letter' ||
+      status === 'cancelled'
+    )
+      return 'Failed';
     return 'Scheduled';
   }
 
@@ -1588,85 +1777,130 @@ export class TenantOutreachService {
     return normalizedActual === normalizedRequested;
   }
 
-  private async listEntity(tenant: SaasTenant, entity: 'lead' | 'deal', query: any) {
-    return this.databases.withTenantClient(this.databaseName(tenant), async (client) => {
-      const table = await this.resolveEntityTable(client, entity);
-      const result = await client.query(
-        `SELECT to_jsonb(item) AS value FROM ${table} item ORDER BY item.id DESC LIMIT 5000`,
-      );
-      const search = this.text(query?.search ?? query?.q).toLowerCase();
-      const stage = this.text(query?.stage);
-      let items = result.rows.map((row) => this.camelize(row.value));
-      if (stage) items = items.filter((item) => `${item.stage ?? ''}` === stage);
-      if (search) {
-        items = items.filter((item) => JSON.stringify(item).toLowerCase().includes(search));
-      }
-      const page = this.clampInt(query?.page, 1, 1, 100_000);
-      const pageSize = this.clampInt(query?.pageSize, 20, 1, 500);
-      const totalCount = items.length;
-      return {
-        items: items.slice((page - 1) * pageSize, page * pageSize),
-        page,
-        pageSize,
-        totalCount,
-      };
-    });
+  private async listEntity(
+    tenant: SaasTenant,
+    entity: 'lead' | 'deal',
+    query: any,
+  ) {
+    return this.databases.withTenantClient(
+      this.databaseName(tenant),
+      async (client) => {
+        const table = await this.resolveEntityTable(client, entity);
+        const result = await client.query(
+          `SELECT to_jsonb(item) AS value FROM ${table} item ORDER BY item.id DESC LIMIT 5000`,
+        );
+        const search = this.text(query?.search ?? query?.q).toLowerCase();
+        const stage = this.text(query?.stage);
+        let items = result.rows.map((row) => this.camelize(row.value));
+        if (stage)
+          items = items.filter((item) => `${item.stage ?? ''}` === stage);
+        if (search) {
+          items = items.filter((item) =>
+            JSON.stringify(item).toLowerCase().includes(search),
+          );
+        }
+        const page = this.clampInt(query?.page, 1, 1, 100_000);
+        const pageSize = this.clampInt(query?.pageSize, 20, 1, 500);
+        const totalCount = items.length;
+        return {
+          items: items.slice((page - 1) * pageSize, page * pageSize),
+          page,
+          pageSize,
+          totalCount,
+        };
+      },
+    );
   }
 
-  private async createEntity(tenant: SaasTenant, entity: 'lead' | 'deal', input: any) {
-    return this.databases.withTenantClient(this.databaseName(tenant), async (client) => {
-      const table = await this.resolveEntityTable(client, entity);
-      const columns = await this.tableColumns(client, table);
-      const values = this.entityValues(input, columns, false);
-      if (values.columns.length === 0) throw new BadRequestException('No supported fields were provided.');
-      const params = values.columns.map((_, index) => `$${index + 1}`);
-      const result = await client.query(
-        `INSERT INTO ${table}(${values.columns.join(', ')})
+  private async createEntity(
+    tenant: SaasTenant,
+    entity: 'lead' | 'deal',
+    input: any,
+  ) {
+    return this.databases.withTenantClient(
+      this.databaseName(tenant),
+      async (client) => {
+        const table = await this.resolveEntityTable(client, entity);
+        const columns = await this.tableColumns(client, table);
+        const values = this.entityValues(input, columns, false);
+        if (values.columns.length === 0)
+          throw new BadRequestException('No supported fields were provided.');
+        const params = values.columns.map((_, index) => `$${index + 1}`);
+        const result = await client.query(
+          `INSERT INTO ${table}(${values.columns.join(', ')})
          VALUES (${params.join(', ')})
          RETURNING to_jsonb(${table}) AS value`,
-        values.values,
-      );
-      return this.camelize(result.rows[0].value);
-    });
+          values.values,
+        );
+        return this.camelize(result.rows[0].value);
+      },
+    );
   }
 
-  private async updateEntity(tenant: SaasTenant, entity: 'lead' | 'deal', input: any) {
+  private async updateEntity(
+    tenant: SaasTenant,
+    entity: 'lead' | 'deal',
+    input: any,
+  ) {
     const id = this.positiveId(input?.id, `${entity} id`);
-    return this.databases.withTenantClient(this.databaseName(tenant), async (client) => {
-      const table = await this.resolveEntityTable(client, entity);
-      const columns = await this.tableColumns(client, table);
-      const values = this.entityValues(input, columns, true);
-      if (values.columns.length === 0) throw new BadRequestException('No supported fields were provided.');
-      const sets = values.columns.map((column, index) => `${column} = $${index + 1}`);
-      if (columns.has('updated_at')) sets.push('updated_at = now()');
-      const result = await client.query(
-        `UPDATE ${table} SET ${sets.join(', ')}
+    return this.databases.withTenantClient(
+      this.databaseName(tenant),
+      async (client) => {
+        const table = await this.resolveEntityTable(client, entity);
+        const columns = await this.tableColumns(client, table);
+        const values = this.entityValues(input, columns, true);
+        if (values.columns.length === 0)
+          throw new BadRequestException('No supported fields were provided.');
+        const sets = values.columns.map(
+          (column, index) => `${column} = $${index + 1}`,
+        );
+        if (columns.has('updated_at')) sets.push('updated_at = now()');
+        const result = await client.query(
+          `UPDATE ${table} SET ${sets.join(', ')}
          WHERE id = $${values.values.length + 1}
          RETURNING to_jsonb(${table}) AS value`,
-        [...values.values, id],
-      );
-      if (!result.rows[0]) throw new NotFoundException(`Tenant ${entity} was not found.`);
-      return this.camelize(result.rows[0].value);
-    });
+          [...values.values, id],
+        );
+        if (!result.rows[0])
+          throw new NotFoundException(`Tenant ${entity} was not found.`);
+        return this.camelize(result.rows[0].value);
+      },
+    );
   }
 
-  private async deleteEntity(tenant: SaasTenant, entity: 'lead' | 'deal', idValue: number) {
+  private async deleteEntity(
+    tenant: SaasTenant,
+    entity: 'lead' | 'deal',
+    idValue: number,
+  ) {
     const id = this.positiveId(idValue, `${entity} id`);
-    return this.databases.withTenantClient(this.databaseName(tenant), async (client) => {
-      const table = await this.resolveEntityTable(client, entity);
-      const result = await client.query(`DELETE FROM ${table} WHERE id = $1 RETURNING id`, [id]);
-      if (!result.rows[0]) throw new NotFoundException(`Tenant ${entity} was not found.`);
-      return { id };
-    });
+    return this.databases.withTenantClient(
+      this.databaseName(tenant),
+      async (client) => {
+        const table = await this.resolveEntityTable(client, entity);
+        const result = await client.query(
+          `DELETE FROM ${table} WHERE id = $1 RETURNING id`,
+          [id],
+        );
+        if (!result.rows[0])
+          throw new NotFoundException(`Tenant ${entity} was not found.`);
+        return { id };
+      },
+    );
   }
 
-  private async resolveEntityTable(client: PoolClient, entity: 'lead' | 'deal') {
+  private async resolveEntityTable(
+    client: PoolClient,
+    entity: 'lead' | 'deal',
+  ) {
     const candidates =
       entity === 'lead'
         ? ['tenant_lead']
         : ['tenant_deal', 'tenant_deal_pipeline', 'tenant_pipeline_deal'];
     for (const table of candidates) {
-      const result = await client.query('SELECT to_regclass($1) AS name', [table]);
+      const result = await client.query('SELECT to_regclass($1) AS name', [
+        table,
+      ]);
       if (result.rows[0]?.name) return table;
     }
     throw new NotFoundException(`The tenant ${entity} table is not available.`);
@@ -1704,7 +1938,10 @@ export class TenantOutreachService {
 
   private normalizeTemplate(input: any) {
     return {
-      id: this.text(input?.id, this.hash(JSON.stringify(input ?? {})).slice(0, 12)),
+      id: this.text(
+        input?.id,
+        this.hash(JSON.stringify(input ?? {})).slice(0, 12),
+      ),
       name: this.text(input?.name, 'Tenant template'),
       subject: this.text(input?.subject),
       body: this.text(input?.body),
@@ -1712,7 +1949,7 @@ export class TenantOutreachService {
         ['Email', 'SMS'].includes(item),
       ),
       variableTokens: this.stringList(input?.variableTokens),
-      sequenceType: ['Direct', 'FollowUp1', 'FollowUp2', 'FollowUp3'].includes(
+      sequenceType: ['Direct', 'FollowUp1', 'FollowUp2', 'FollowUp3', 'FollowUp4', 'FollowUp5', 'FollowUp6'].includes(
         input?.sequenceType,
       )
         ? input.sequenceType
@@ -1771,7 +2008,10 @@ export class TenantOutreachService {
         lead?.property ?? lead?.propertyTitle,
         'the property',
       ),
-      '{{agent_name}}': this.text(lead?.agent ?? lead?.assignedAgentName, 'your agent'),
+      '{{agent_name}}': this.text(
+        lead?.agent ?? lead?.assignedAgentName,
+        'your agent',
+      ),
       '{{agency_name}}': this.text(agency?.profile?.agencyName, 'our agency'),
       '{{showing_time}}': this.text(lead?.timeline, 'the requested time'),
       '{{closing_date}}': this.text(lead?.timeline, 'the scheduled date'),
@@ -1789,7 +2029,8 @@ export class TenantOutreachService {
       ? new Date(raw)
       : parseDateTimeInZone(raw, timeZone);
     const date = zoned instanceof Date ? zoned : new Date(raw);
-    if (!Number.isFinite(date.getTime())) throw new BadRequestException('Scheduled time is invalid.');
+    if (!Number.isFinite(date.getTime()))
+      throw new BadRequestException('Scheduled time is invalid.');
     return date;
   }
 
@@ -1805,18 +2046,27 @@ export class TenantOutreachService {
     const explicit = this.text(provided);
     if (explicit) return explicit.slice(0, 160);
     return this.hash(
-      [leadId, channel, scheduledAt.toISOString(), subject, body, createdBy].join('|'),
+      [
+        leadId,
+        channel,
+        scheduledAt.toISOString(),
+        subject,
+        body,
+        createdBy,
+      ].join('|'),
     );
   }
 
   private databaseName(tenant: SaasTenant) {
-    if (!tenant.databaseName) throw new BadRequestException('Tenant database is not ready.');
+    if (!tenant.databaseName)
+      throw new BadRequestException('Tenant database is not ready.');
     return tenant.databaseName;
   }
 
   private positiveId(value: any, label: string) {
     const id = Number(value);
-    if (!Number.isInteger(id) || id <= 0) throw new BadRequestException(`${label} is required.`);
+    if (!Number.isInteger(id) || id <= 0)
+      throw new BadRequestException(`${label} is required.`);
     return id;
   }
 
@@ -1839,7 +2089,8 @@ export class TenantOutreachService {
 
   private keepSecret(value: any, previous: any) {
     const normalized = this.text(value);
-    if (!normalized || normalized === '********' || normalized === '••••••••') return previous ?? '';
+    if (!normalized || normalized === '********' || normalized === '••••••••')
+      return previous ?? '';
     return normalized;
   }
 
@@ -1859,7 +2110,8 @@ export class TenantOutreachService {
 
   private camelize(value: any): any {
     if (Array.isArray(value)) return value.map((item) => this.camelize(item));
-    if (!value || typeof value !== 'object' || value instanceof Date) return value;
+    if (!value || typeof value !== 'object' || value instanceof Date)
+      return value;
     return Object.fromEntries(
       Object.entries(value).map(([key, item]) => [
         key.replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase()),
@@ -1877,7 +2129,9 @@ export class TenantOutreachService {
   }
 
   private object(value: any): Record<string, any> | null {
-    return value && typeof value === 'object' && !Array.isArray(value) ? value : null;
+    return value && typeof value === 'object' && !Array.isArray(value)
+      ? value
+      : null;
   }
 
   private stringList(value: any) {
@@ -1887,7 +2141,9 @@ export class TenantOutreachService {
 
   private clampInt(value: any, fallback: number, min: number, max: number) {
     const parsed = Number.parseInt(`${value ?? ''}`, 10);
-    return Number.isFinite(parsed) ? Math.min(max, Math.max(min, parsed)) : fallback;
+    return Number.isFinite(parsed)
+      ? Math.min(max, Math.max(min, parsed))
+      : fallback;
   }
 
   private text(value: any, fallback = '') {

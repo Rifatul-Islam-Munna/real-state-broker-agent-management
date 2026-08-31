@@ -12,6 +12,10 @@ import { MailboxLeadIntelligenceService } from '../leads/mailbox-lead-intelligen
 import { Property } from '../properties/entities/property.entity';
 import { MailInboxItem, MailInboxKind, MailInboxStatus } from './entities/mail.entity';
 import { SettingsService } from '../settings/settings.service';
+import {
+  isGmailReconnectRequired,
+  refreshGmailAccessToken,
+} from '../common/gmail-oauth';
 import { normalizePhoneNumber } from '../common/phone-normalizer';
 import { ShowingFeedbackService } from '../showing-feedback/showing-feedback.service';
 import { LeadCollectionTemplateService } from './lead-collection-template.service';
@@ -39,6 +43,11 @@ interface MailProviderConfig {
   gmailAccessToken: string;
   gmailRefreshToken: string;
   gmailTokenExpiresAt: string | null;
+  gmailRefreshTokenExpiresAt?: string | null;
+  gmailLastTokenRefreshAt?: string | null;
+  gmailReconnectRequired?: boolean;
+  gmailLastAuthError?: string;
+  gmailAuthFailedAt?: string | null;
   gmailLabelIds: string[];
 }
 
@@ -164,8 +173,9 @@ export class MailInboxSyncBackgroundService {
   async getSyncStatus() {
     const settings = await this.integrationRepo.findOne({ where: { id: 1 } });
     const config = this.readMailConfig(settings?.smtpPayload);
-    const isConfigured = config !== null;
-    const syncEnabled = config?.enableInboxSync === true;
+    const reconnectRequired = config?.gmailReconnectRequired === true;
+    const isConfigured = config !== null && !reconnectRequired;
+    const syncEnabled = config?.enableInboxSync === true && !reconnectRequired;
     const syncIntervalMinutes = syncEnabled ? config.syncIntervalMinutes : null;
 
     return {
@@ -185,8 +195,12 @@ export class MailInboxSyncBackgroundService {
       lastMatchedLeadCount: this.lastMatchedLeadCount,
       lastCreatedLeadCount: this.lastCreatedLeadCount,
       lastSkippedCount: this.lastSkippedCount,
-      lastError: this.lastError,
-      statusMessage: !isConfigured
+      lastError: this.lastError ?? config?.gmailLastAuthError ?? null,
+      gmailReconnectRequired: reconnectRequired,
+      gmailAuthFailedAt: config?.gmailAuthFailedAt ?? null,
+      statusMessage: reconnectRequired
+        ? 'Gmail authorization needs to be renewed. Reconnect Gmail to resume automatic inbox sync.'
+        : !isConfigured
         ? 'Mail is not configured yet.'
         : !syncEnabled
           ? 'Inbox sync is turned off.'
@@ -199,7 +213,10 @@ export class MailInboxSyncBackgroundService {
   private async runSync(trigger: string, forceRun: boolean) {
     const settings = await this.integrationRepo.findOne({ where: { id: 1 } });
     const config = this.readMailConfig(settings?.smtpPayload);
-    if (!config?.enableInboxSync || this.isRunning) return;
+    const gmailDisconnected =
+      config?.authType === 'gmail-oauth' &&
+      (!config.gmailRefreshToken || !config.gmailEmail);
+    if (!config?.enableInboxSync || gmailDisconnected || this.isRunning) return;
 
     if (!forceRun && this.lastStartedAt) {
       const nextRunAt = this.lastStartedAt.getTime() + config.syncIntervalMinutes * 60_000;
@@ -225,6 +242,22 @@ export class MailInboxSyncBackgroundService {
     } catch (error) {
       this.lastCompletedAt = new Date();
       this.lastError = this.errorMessage(error);
+      if (
+        settings &&
+        config.authType === 'gmail-oauth' &&
+        isGmailReconnectRequired(error)
+      ) {
+        settings.smtpPayload = JSON.stringify({
+          ...config,
+          enableInboxSync: false,
+          gmailAccessToken: '',
+          gmailTokenExpiresAt: null,
+          gmailReconnectRequired: true,
+          gmailLastAuthError: this.lastError.slice(0, 500),
+          gmailAuthFailedAt: new Date().toISOString(),
+        });
+        await this.integrationRepo.save(settings);
+      }
       throw error;
     } finally {
       this.isRunning = false;
@@ -623,6 +656,11 @@ export class MailInboxSyncBackgroundService {
       gmailAccessToken: `${raw.gmailAccessToken ?? ''}`.trim(),
       gmailRefreshToken: `${raw.gmailRefreshToken ?? ''}`.trim(),
       gmailTokenExpiresAt: raw.gmailTokenExpiresAt ? `${raw.gmailTokenExpiresAt}` : null,
+      gmailRefreshTokenExpiresAt: raw.gmailRefreshTokenExpiresAt ? `${raw.gmailRefreshTokenExpiresAt}` : null,
+      gmailLastTokenRefreshAt: raw.gmailLastTokenRefreshAt ? `${raw.gmailLastTokenRefreshAt}` : null,
+      gmailReconnectRequired: raw.gmailReconnectRequired === true,
+      gmailLastAuthError: `${raw.gmailLastAuthError ?? ''}`.trim(),
+      gmailAuthFailedAt: raw.gmailAuthFailedAt ? `${raw.gmailAuthFailedAt}` : null,
       gmailLabelIds: this.stringList(raw.gmailLabelIds).length ? this.stringList(raw.gmailLabelIds) : ['INBOX'],
     };
   }
@@ -693,24 +731,29 @@ export class MailInboxSyncBackgroundService {
     if (!clientId || !clientSecret || !config.gmailRefreshToken) {
       throw new Error('Google OAuth credentials are required for Gmail sync.');
     }
-    const response = await fetch('https://oauth2.googleapis.com/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        client_id: clientId,
-        client_secret: clientSecret,
-        refresh_token: config.gmailRefreshToken,
-        grant_type: 'refresh_token',
-      }),
+    const refreshed = await refreshGmailAccessToken({
+      clientId,
+      clientSecret,
+      refreshToken: config.gmailRefreshToken,
     });
-    if (!response.ok) throw new Error(`Gmail token refresh failed: ${response.status}`);
-    const token: any = await response.json();
-    config.gmailAccessToken = `${token.access_token ?? ''}`.trim();
-    config.gmailTokenExpiresAt = new Date(Date.now() + (Number(token.expires_in) || 3600) * 1000).toISOString();
+    config.gmailAccessToken = refreshed.accessToken;
+    config.gmailTokenExpiresAt = refreshed.accessTokenExpiresAt;
+    config.gmailLastTokenRefreshAt = new Date().toISOString();
+    config.gmailReconnectRequired = false;
+    config.gmailLastAuthError = '';
+    config.gmailAuthFailedAt = null;
+    if (refreshed.refreshTokenExpiresAt) {
+      config.gmailRefreshTokenExpiresAt = refreshed.refreshTokenExpiresAt;
+    }
     await this.settingsService.saveSmtpConfig({
       ...await this.settingsService.getSmtpConfig(),
       gmailAccessToken: config.gmailAccessToken,
       gmailTokenExpiresAt: config.gmailTokenExpiresAt,
+      gmailRefreshTokenExpiresAt: config.gmailRefreshTokenExpiresAt,
+      gmailLastTokenRefreshAt: config.gmailLastTokenRefreshAt,
+      gmailReconnectRequired: false,
+      gmailLastAuthError: '',
+      gmailAuthFailedAt: null,
     });
     return config.gmailAccessToken;
   }

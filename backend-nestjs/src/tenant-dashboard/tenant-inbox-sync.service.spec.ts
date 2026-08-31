@@ -344,6 +344,66 @@ describe('TenantInboxSyncService follow-up scheduling', () => {
     );
   });
 
+  test('schedules all six configured lead follow-ups in order', async () => {
+    const sixStepAgency = {
+      ...followUpAgency,
+      communicationTemplates: Array.from({ length: 6 }, (_, index) => ({
+        id: `follow-up-${index + 1}`,
+        name: `Follow-up ${index + 1}`,
+        subject: `Step ${index + 1}`,
+        body: `Follow-up ${index + 1} for {{client_name}}`,
+        channels: ['Email'],
+        sequenceType: `FollowUp${index + 1}`,
+        audience: 'Lead',
+        gapDays: 1,
+        isActive: true,
+      })),
+    };
+    const { service, enqueueWithClient } = buildFollowUpService(
+      [followUpLead],
+      sixStepAgency,
+      [{ status: 'scheduled' }],
+    );
+
+    await (service as any).scheduleTenantFollowUps({ databaseName: 'tenant_1_demo' } as any);
+
+    expect(enqueueWithClient).toHaveBeenCalledTimes(6);
+    const jobs = enqueueWithClient.mock.calls.map((call: any[]) => call[1]);
+    expect(jobs.map((item: any) => item.payload.sequenceType)).toEqual([
+      'FollowUp1', 'FollowUp2', 'FollowUp3', 'FollowUp4', 'FollowUp5', 'FollowUp6',
+    ]);
+    expect(jobs.map((item: any) => item.payload.isFinalFollowUp)).toEqual([
+      false, false, false, false, false, true,
+    ]);
+  });
+
+  test('sends only enabled follow-ups and treats the last enabled step as final', async () => {
+    const twoStepAgency = {
+      ...followUpAgency,
+      communicationTemplates: Array.from({ length: 6 }, (_, index) => ({
+        id: `follow-up-${index + 1}`,
+        name: `Follow-up ${index + 1}`,
+        subject: `Step ${index + 1}`,
+        body: `Body ${index + 1}`,
+        channels: ['Email'],
+        sequenceType: `FollowUp${index + 1}`,
+        audience: 'Lead',
+        gapDays: 1,
+        isActive: index < 2,
+      })),
+    };
+    const { service, enqueueWithClient } = buildFollowUpService(
+      [followUpLead], twoStepAgency, [{ status: 'scheduled' }],
+    );
+
+    await (service as any).scheduleTenantFollowUps({ databaseName: 'tenant_1_demo' } as any);
+
+    const jobs = enqueueWithClient.mock.calls.map((call: any[]) => call[1]);
+    expect(jobs).toHaveLength(2);
+    expect(jobs.map((item: any) => item.payload.sequenceType)).toEqual(['FollowUp1', 'FollowUp2']);
+    expect(jobs.map((item: any) => item.payload.isFinalFollowUp)).toEqual([false, true]);
+  });
+
   test('does not schedule follow-ups when follow-ups are disabled', async () => {
     const { service, enqueueWithClient } = buildFollowUpService(
       [followUpLead],
@@ -518,6 +578,33 @@ describe('TenantInboxSyncService post-visit board cleanup', () => {
       expect.stringContaining("'inBoard', false"),
       [2],
     );
+    expect(query.mock.calls[0][0]).toContain("source_type = 'lead-followup'");
+    expect(query.mock.calls[0][0]).toContain("status IN ('scheduled', 'retrying', 'processing')");
+  });
+});
+
+describe('TenantInboxSyncService final follow-up cleanup', () => {
+  test('marks a lead NotResponded and removes it two days after the configured final follow-up with no reply', async () => {
+    const query = jest.fn().mockResolvedValue({ rowCount: 1, rows: [{ id: 9 }] });
+    const databases = {
+      withTenantClient: jest.fn((_database: string, callback: any) => callback({ query })),
+    };
+    const service = new TenantInboxSyncService(
+      {} as any,
+      databases as any,
+      {} as any,
+    );
+
+    await expect(
+      (service as any).removeUnansweredFinalFollowUps({ databaseName: 'tenant_1_demo' }),
+    ).resolves.toEqual({ removed: 1 });
+    const sql = query.mock.calls[0][0];
+    expect(sql).toContain("'stage', 'NotResponded'");
+    expect(sql).toContain("payload->>'finalFollowUpSentAt'");
+    expect(sql).toContain("direction = 'Incoming'");
+    expect(sql).toContain("source_type = 'lead-followup'");
+    expect(sql).toContain("status IN ('scheduled', 'retrying', 'processing')");
+    expect(query).toHaveBeenCalledWith(expect.any(String), [2]);
   });
 });
 
@@ -1579,6 +1666,58 @@ describe('TenantInboxSyncService active parser processing', () => {
     expect(query).toHaveBeenCalledWith(
       expect.stringContaining("$1 = '' AND $2 = '' AND $3 <> ''"),
       ['person@example.com', '', 'shared-provider@example.net'],
+    );
+  });
+});
+
+describe('TenantInboxSyncService Gmail OAuth durability', () => {
+  const originalClientId = process.env.GOOGLE_CLIENT_ID;
+  const originalClientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  const originalFetch = global.fetch;
+
+  afterEach(() => {
+    process.env.GOOGLE_CLIENT_ID = originalClientId;
+    process.env.GOOGLE_CLIENT_SECRET = originalClientSecret;
+    global.fetch = originalFetch;
+    jest.restoreAllMocks();
+  });
+
+  test('preserves the refresh token and marks reconnect required when Google revokes authorization', async () => {
+    process.env.GOOGLE_CLIENT_ID = 'client-id';
+    process.env.GOOGLE_CLIENT_SECRET = 'client-secret';
+    global.fetch = jest.fn().mockResolvedValue(new Response(JSON.stringify({
+      error: 'invalid_grant',
+      error_description: 'Token has been expired or revoked.',
+    }), { status: 400 })) as any;
+    const settings = { saveRawSmtp: jest.fn().mockResolvedValue(undefined) };
+    const service = new TenantInboxSyncService(
+      {} as any,
+      {} as any,
+      settings as any,
+    );
+    const config = {
+      authType: 'gmail-oauth',
+      enableInboxSync: true,
+      gmailEmail: 'agent@example.com',
+      gmailAccessToken: 'expired-access',
+      gmailRefreshToken: 'refresh-token-to-preserve',
+      gmailTokenExpiresAt: '2020-01-01T00:00:00.000Z',
+    };
+
+    await expect((service as any).gmailAccessToken(
+      'tenant_1_demo',
+      config,
+      { databaseName: 'tenant_1_demo' } as any,
+    )).rejects.toMatchObject({ code: 'invalid_grant', reconnectRequired: true });
+    expect(settings.saveRawSmtp).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        enableInboxSync: false,
+        gmailEmail: 'agent@example.com',
+        gmailRefreshToken: 'refresh-token-to-preserve',
+        gmailReconnectRequired: true,
+        gmailAccessToken: '',
+      }),
     );
   });
 });

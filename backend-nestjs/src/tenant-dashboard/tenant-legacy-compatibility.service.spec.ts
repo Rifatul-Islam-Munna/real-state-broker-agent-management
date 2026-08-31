@@ -20,11 +20,13 @@ describe('TenantLegacyCompatibilityService response defaults', () => {
       {} as any,
     );
 
-    await expect((service as any).linkMatchingUnlistedLeads(
-      { query },
-      9,
-      '9230 Lagoon Pl Unit #411',
-    )).resolves.toBe(1);
+    await expect(
+      (service as any).linkMatchingUnlistedLeads(
+        { query },
+        9,
+        '9230 Lagoon Pl Unit #411',
+      ),
+    ).resolves.toBe(1);
     expect(query).toHaveBeenCalledWith(
       expect.stringContaining('INSERT INTO tenant_lead_property'),
       [21, 9],
@@ -35,6 +37,65 @@ describe('TenantLegacyCompatibilityService response defaults', () => {
     );
   });
 
+  test('automatically reindexes only the property that was edited', async () => {
+    const query = jest.fn(async (sql: string) => {
+      if (sql.includes('SELECT payload FROM tenant_property')) {
+        return {
+          rowCount: 1,
+          rows: [{ payload: { title: 'Oak Home', lockboxCode: '1111' } }],
+        };
+      }
+      if (sql.includes('UPDATE tenant_property SET title')) {
+        return {
+          rowCount: 1,
+          rows: [
+            {
+              id: 9,
+              title: 'Oak Home',
+              status: 'published',
+              payload: {
+                title: 'Oak Home',
+                lockboxCode: '8472',
+                propertyDocuments: [],
+              },
+            },
+          ],
+        };
+      }
+      if (sql.includes('FROM tenant_lead lead'))
+        return { rowCount: 0, rows: [] };
+      return { rowCount: 1, rows: [] };
+    });
+    const databases = {
+      withTenantClient: jest.fn(async (_database: string, callback: any) =>
+        callback({ query }),
+      ),
+    };
+    const dashboard = {
+      reindexPropertyKnowledge: jest.fn(async () => ({
+        propertyId: 9,
+        indexed: 1,
+      })),
+    };
+    const service = new TenantLegacyCompatibilityService(
+      databases as any,
+      dashboard as any,
+      {} as any,
+      {} as any,
+    );
+    jest.spyOn(service as any, 'syncPropertyDocuments').mockResolvedValue([]);
+    const tenant = { id: 42, databaseName: 'tenant_42' } as any;
+
+    await service.updateProperty(tenant, {
+      id: 9,
+      title: 'Oak Home',
+      status: 'Open',
+      lockboxCode: '8472',
+      propertyDocuments: [],
+    });
+
+    expect(dashboard.reindexPropertyKnowledge).toHaveBeenCalledWith(tenant, 9);
+  });
   test('permanently deletes lead and all connected tenant records in one transaction', async () => {
     const statements: string[] = [];
     const query = jest.fn(async (sql: string) => {
@@ -45,7 +106,9 @@ describe('TenantLegacyCompatibilityService response defaults', () => {
       return { rowCount: 0, rows: [] };
     });
     const databases = {
-      withTenantClient: jest.fn((_database: string, callback: any) => callback({ query })),
+      withTenantClient: jest.fn((_database: string, callback: any) =>
+        callback({ query }),
+      ),
     };
     const service = new TenantLegacyCompatibilityService(
       databases as any,
@@ -53,19 +116,20 @@ describe('TenantLegacyCompatibilityService response defaults', () => {
       {} as any,
     );
 
-    await expect(service.deleteLead(
-      { databaseName: 'tenant_1_demo' } as any,
-      { id: 9 },
-    )).resolves.toEqual({ deleted: [9] });
-    expect(statements).toEqual(expect.arrayContaining([
-      'BEGIN',
-      expect.stringContaining('tenant_mail_deletion_tombstone'),
-      expect.stringContaining('DELETE FROM tenant_outreach_job'),
-      expect.stringContaining('DELETE FROM tenant_legacy_resource'),
-      expect.stringContaining('DELETE FROM tenant_audit_log'),
-      expect.stringContaining('DELETE FROM tenant_lead WHERE'),
-      'COMMIT',
-    ]));
+    await expect(
+      service.deleteLead({ databaseName: 'tenant_1_demo' } as any, { id: 9 }),
+    ).resolves.toEqual({ deleted: [9] });
+    expect(statements).toEqual(
+      expect.arrayContaining([
+        'BEGIN',
+        expect.stringContaining('tenant_mail_deletion_tombstone'),
+        expect.stringContaining('DELETE FROM tenant_outreach_job'),
+        expect.stringContaining('DELETE FROM tenant_legacy_resource'),
+        expect.stringContaining('DELETE FROM tenant_audit_log'),
+        expect.stringContaining('DELETE FROM tenant_lead WHERE'),
+        'COMMIT',
+      ]),
+    );
   });
 
   test('normalizes incomplete deal records before UI rendering', () => {
@@ -74,12 +138,14 @@ describe('TenantLegacyCompatibilityService response defaults', () => {
       {} as any,
       {} as any,
     );
-    expect((service as any).dealItem({
-      id: 7,
-      payload: {},
-      created_at: new Date('2026-08-18T00:00:00Z'),
-      updated_at: new Date('2026-08-18T00:00:00Z'),
-    })).toMatchObject({
+    expect(
+      (service as any).dealItem({
+        id: 7,
+        payload: {},
+        created_at: new Date('2026-08-18T00:00:00Z'),
+        updated_at: new Date('2026-08-18T00:00:00Z'),
+      }),
+    ).toMatchObject({
       id: 7,
       title: '',
       client: '',
@@ -98,10 +164,22 @@ describe('TenantLegacyCompatibilityService response defaults', () => {
       {} as any,
     );
     const items = [
-      { id: 1, name: 'Today mail', createdAt: new Date('2026-08-17T10:00:00Z'), lastActivityAt: new Date('2026-08-18T10:00:00Z') },
-      { id: 2, name: 'Older mail', createdAt: new Date('2026-08-18T10:00:00Z'), lastActivityAt: new Date('2026-08-17T10:00:00Z') },
+      {
+        id: 1,
+        name: 'Today mail',
+        createdAt: new Date('2026-08-17T10:00:00Z'),
+        lastActivityAt: new Date('2026-08-18T10:00:00Z'),
+      },
+      {
+        id: 2,
+        name: 'Older mail',
+        createdAt: new Date('2026-08-18T10:00:00Z'),
+        lastActivityAt: new Date('2026-08-17T10:00:00Z'),
+      },
     ];
-    expect((service as any).filter(items, { date: '2026-08-18' })).toEqual([items[0]]);
+    expect((service as any).filter(items, { date: '2026-08-18' })).toEqual([
+      items[0],
+    ]);
   });
 
   test('filters leads by lifecycle stage and property listing status', () => {
@@ -120,10 +198,9 @@ describe('TenantLegacyCompatibilityService response defaults', () => {
       items[0],
       items[1],
     ]);
-    expect((service as any).filter(items, { propertyListingStatus: 'NotListed' })).toEqual([
-      items[1],
-      items[2],
-    ]);
+    expect(
+      (service as any).filter(items, { propertyListingStatus: 'NotListed' }),
+    ).toEqual([items[1], items[2]]);
   });
 
   test('puts contacted leads on board and removes terminal leads', () => {
@@ -133,25 +210,38 @@ describe('TenantLegacyCompatibilityService response defaults', () => {
       {} as any,
     );
 
-    expect((service as any).normalizeLeadPayload({ stage: 'Contacted', inBoard: false }))
-      .toMatchObject({ stage: 'Contacted', inBoard: true });
-    expect((service as any).normalizeLeadPayload({ stage: 'Deal', inBoard: true }))
-      .toMatchObject({ stage: 'Deal', inBoard: false });
-    expect((service as any).normalizeLeadPayload({ stage: 'Canceled', inBoard: true }))
-      .toMatchObject({ stage: 'Canceled', inBoard: false });
+    expect(
+      (service as any).normalizeLeadPayload({
+        stage: 'Contacted',
+        inBoard: false,
+      }),
+    ).toMatchObject({ stage: 'Contacted', inBoard: true });
+    expect(
+      (service as any).normalizeLeadPayload({ stage: 'Deal', inBoard: true }),
+    ).toMatchObject({ stage: 'Deal', inBoard: false });
+    expect(
+      (service as any).normalizeLeadPayload({
+        stage: 'Canceled',
+        inBoard: true,
+      }),
+    ).toMatchObject({ stage: 'Canceled', inBoard: false });
   });
 
   test('returns lead history as an array for the lead detail UI', async () => {
     const query = jest.fn().mockResolvedValue({
-      rows: [{
-        id: 12,
-        payload: { leadId: 7, action: 'Created' },
-        created_at: new Date('2026-08-18T00:00:00Z'),
-        updated_at: new Date('2026-08-18T00:00:00Z'),
-      }],
+      rows: [
+        {
+          id: 12,
+          payload: { leadId: 7, action: 'Created' },
+          created_at: new Date('2026-08-18T00:00:00Z'),
+          updated_at: new Date('2026-08-18T00:00:00Z'),
+        },
+      ],
     });
     const databases = {
-      withTenantClient: jest.fn((_database: string, callback: any) => callback({ query })),
+      withTenantClient: jest.fn((_database: string, callback: any) =>
+        callback({ query }),
+      ),
     };
     const service = new TenantLegacyCompatibilityService(
       databases as any,
@@ -159,10 +249,12 @@ describe('TenantLegacyCompatibilityService response defaults', () => {
       {} as any,
     );
 
-    await expect(service.genericList(
-      { databaseName: 'tenant_1_demo' } as any,
-      'lead-history',
-      { leadId: 7 },
-    )).resolves.toEqual([expect.objectContaining({ id: 12, leadId: 7 })]);
+    await expect(
+      service.genericList(
+        { databaseName: 'tenant_1_demo' } as any,
+        'lead-history',
+        { leadId: 7 },
+      ),
+    ).resolves.toEqual([expect.objectContaining({ id: 12, leadId: 7 })]);
   });
 });

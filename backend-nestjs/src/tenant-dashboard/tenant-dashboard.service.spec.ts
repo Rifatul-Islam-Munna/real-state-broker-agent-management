@@ -30,18 +30,24 @@ function setup(databaseName = 'tenant_7_blue') {
     }),
   };
   const databases: any = {
-    withTenantClient: jest.fn(async (name: string, callback: any) => callback(client)),
+    withTenantClient: jest.fn(async (name: string, callback: any) =>
+      callback(client),
+    ),
   };
   const tenants: any = {
     findOne: jest.fn(async () => null),
     save: jest.fn(async (value: any) => value),
   };
+  const chatbot: any = {
+    reindexProperty: jest.fn(async () => ({ propertyId: 1, indexed: 1 })),
+  };
   return {
-    service: new TenantDashboardService(databases, tenants),
+    service: new (TenantDashboardService as any)(databases, tenants, chatbot),
     tenant,
     client,
     databases,
     tenants,
+    chatbot,
   };
 }
 
@@ -68,11 +74,45 @@ describe('TenantDashboardService', () => {
     );
   });
 
+  it('automatically reindexes a newly saved property for chatbot knowledge', async () => {
+    const state = setup();
+    state.client.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('INSERT INTO tenant_property')) {
+        return {
+          rows: [
+            {
+              id: 9,
+              title: 'Oak Home',
+              status: 'published',
+              payload: { lockboxCode: '8472' },
+            },
+          ],
+          rowCount: 1,
+        };
+      }
+      return { rows: [], rowCount: 1 };
+    });
+
+    await state.service.createProperty(
+      state.tenant,
+      {
+        title: 'Oak Home',
+        status: 'published',
+        payload: { lockboxCode: '8472' },
+      },
+      10,
+    );
+
+    expect(state.chatbot.reindexProperty).toHaveBeenCalledWith(state.tenant, 9);
+  });
   it('rejects new lead links to inactive properties and rolls back', async () => {
     const state = setup();
     state.client.query.mockImplementation(async (sql: string) => {
       if (sql.includes('SELECT id, title, status FROM tenant_property')) {
-        return { rows: [{ id: 1, title: 'Inactive Home', status: 'draft' }], rowCount: 1 };
+        return {
+          rows: [{ id: 1, title: 'Inactive Home', status: 'draft' }],
+          rowCount: 1,
+        };
       }
       return { rows: [], rowCount: 0 };
     });
@@ -96,7 +136,10 @@ describe('TenantDashboardService', () => {
     const state = setup();
     state.client.query.mockImplementation(async (sql: string) => {
       if (sql.includes('SELECT id, title, status FROM tenant_property')) {
-        return { rows: [{ id: 2, title: 'Second Home', status: 'published' }], rowCount: 1 };
+        return {
+          rows: [{ id: 2, title: 'Second Home', status: 'published' }],
+          rowCount: 1,
+        };
       }
       if (sql.includes('FROM tenant_lead') && sql.includes('regexp_replace')) {
         return { rows: [{ id: 5 }], rowCount: 1 };
@@ -110,7 +153,9 @@ describe('TenantDashboardService', () => {
               email: 'buyer@example.com',
               phone: '01700000000',
               status: 'new',
-              properties: [{ id: 2, title: 'Second Home', status: 'published' }],
+              properties: [
+                { id: 2, title: 'Second Home', status: 'published' },
+              ],
             },
           ],
           rowCount: 1,

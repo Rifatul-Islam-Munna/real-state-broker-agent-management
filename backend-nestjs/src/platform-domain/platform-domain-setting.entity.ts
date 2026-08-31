@@ -26,6 +26,12 @@ export class PlatformDomainSetting {
   @Column({ type: 'varchar', length: 3, default: 'usd' })
   stripeCurrency: string;
 
+  @Column({ type: 'jsonb', nullable: true })
+  chatbotAiConfig: Record<string, unknown> | null;
+
+  @Column({ type: 'text', nullable: true })
+  chatbotAiApiKeyEncrypted: string | null;
+
   @Column({ type: 'int', nullable: true })
   updatedByUserId: number | null;
 

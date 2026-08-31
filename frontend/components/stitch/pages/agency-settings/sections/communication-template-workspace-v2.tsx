@@ -50,7 +50,7 @@ type EditorState =
   | { mode: "edit"; id: string }
   | null
 
-const sequenceOptions = ["Direct", "FollowUp1", "FollowUp2", "FollowUp3"] as const
+const sequenceOptions = ["Direct", "FollowUp1", "FollowUp2", "FollowUp3", "FollowUp4", "FollowUp5", "FollowUp6"] as const
 const leadTokens = [
   "{{client_name}}",
   "{{property_address}}",
@@ -105,16 +105,27 @@ function audienceLabel(value?: TemplateAudience) {
 
 function TemplateCard({
   onEdit,
+  onSelectedChange,
+  selected,
   template,
 }: {
   onEdit: () => void
+  onSelectedChange: (checked: boolean) => void
+  selected: boolean
   template: AgencyCommunicationTemplateItem
 }) {
   return (
     <Card className="shadow-none">
       <CardHeader className="space-y-3">
         <div className="flex items-center justify-between gap-2">
-          <Badge variant="outline">{audienceLabel(template.audience)}</Badge>
+          <div className="flex items-center gap-2">
+            <Checkbox
+              aria-label={`Select ${template.name}`}
+              checked={selected}
+              onCheckedChange={(checked) => onSelectedChange(checked === true)}
+            />
+            <Badge variant="outline">{audienceLabel(template.audience)}</Badge>
+          </div>
           <Badge variant={template.isActive === false ? "outline" : "secondary"}>
             {template.isActive === false ? "Paused" : "Active"}
           </Badge>
@@ -156,12 +167,40 @@ export function CommunicationTemplateWorkspaceV2({
   templates: AgencyCommunicationTemplateItem[]
 }) {
   const [editor, setEditor] = useState<EditorState>(null)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
   const activeTemplate = useMemo(() => {
     if (!editor) return null
     return editor.mode === "create"
       ? newTemplate(editor.audience)
       : templates.find((item) => item.id === editor.id) ?? null
   }, [editor, templates])
+  const allSelected = templates.length > 0 && templates.every((item) => selectedIds.has(item.id))
+
+  useEffect(() => {
+    const availableIds = new Set(templates.map((item) => item.id))
+    setSelectedIds((current) => {
+      const next = new Set([...current].filter((id) => availableIds.has(id)))
+      if (next.size === current.size && [...next].every((id) => current.has(id))) return current
+      return next
+    })
+  }, [templates])
+
+  const toggleSelected = (id: string, checked: boolean) => {
+    setSelectedIds((current) => {
+      const next = new Set(current)
+      if (checked) next.add(id)
+      else next.delete(id)
+      return next
+    })
+  }
+
+  const deleteSelected = async () => {
+    if (selectedIds.size === 0 || isSaving) return
+    const count = selectedIds.size
+    if (!window.confirm(`Delete ${count} selected template${count === 1 ? "" : "s"}?`)) return
+    const saved = await onChange(templates.filter((item) => !selectedIds.has(item.id)))
+    if (saved) setSelectedIds(new Set())
+  }
 
   return (
     <section className="space-y-4 scroll-mt-24" id="communication-templates">
@@ -171,10 +210,31 @@ export function CommunicationTemplateWorkspaceV2({
             {"Communication templates"}
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            {"Cards show status and delivery channels. Full editing opens in a side sheet."}
+            {"Follow-ups support steps 1-6. Only active templates send; the last active lead follow-up starts the 2-day no-reply window."}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button
+            disabled={templates.length === 0 || isSaving}
+            onClick={() =>
+              setSelectedIds(allSelected ? new Set() : new Set(templates.map((item) => item.id)))
+            }
+            size="sm"
+            type="button"
+            variant="outline"
+          >
+            {allSelected ? "Clear selection" : "Select all"}
+          </Button>
+          <Button
+            disabled={selectedIds.size === 0 || isSaving}
+            onClick={deleteSelected}
+            size="sm"
+            type="button"
+            variant="destructive"
+          >
+            <AppIcon name="delete" />
+            {`Delete selected${selectedIds.size ? ` (${selectedIds.size})` : ""}`}
+          </Button>
           <Button
             onClick={() => setEditor({ mode: "create", audience: "Lead" })}
             size="sm"
@@ -222,6 +282,8 @@ export function CommunicationTemplateWorkspaceV2({
             <TemplateCard
               key={template.id}
               onEdit={() => setEditor({ mode: "edit", id: template.id })}
+              onSelectedChange={(checked) => toggleSelected(template.id, checked)}
+              selected={selectedIds.has(template.id)}
               template={template}
             />
           ))}

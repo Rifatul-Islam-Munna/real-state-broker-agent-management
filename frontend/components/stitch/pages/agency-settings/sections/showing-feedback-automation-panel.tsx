@@ -38,7 +38,7 @@ const weekDays = [
 ]
 
 function isFollowUpSequence(value?: string) {
-  return value === "FollowUp1" || value === "FollowUp2" || value === "FollowUp3"
+  return /^FollowUp[1-6]$/.test(value ?? "")
 }
 
 function SurfaceCard({
