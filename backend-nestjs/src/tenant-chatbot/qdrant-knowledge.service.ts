@@ -344,6 +344,9 @@ export class QdrantKnowledgeService implements OnApplicationBootstrap {
     this.assertConfigured();
     this.client ??= new QdrantClient({
       url: this.config.url,
+      // SDK otherwise appends its default :6333 even when an HTTPS URL has
+      // no explicit port. Let the URL protocol select 443 (or 80 for HTTP).
+      port: null,
       apiKey: this.config.apiKey,
     }) as QdrantSdkClient;
     return this.client;
