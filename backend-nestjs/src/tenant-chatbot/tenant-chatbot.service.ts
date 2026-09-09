@@ -11,9 +11,13 @@ import { TenantDatabaseService } from '../tenant-database/tenant-database.servic
 import { MiniLmEmbeddingService } from './mini-lm-embedding.service';
 import { mapPropertyKnowledge } from './property-knowledge.mapper';
 import { composeVerifiedAnswer } from './verified-answer-composer';
-import { hasTopicEvidenceConflict, selectAnswerEvidence } from './evidence-selection';
+import {
+  hasTopicEvidenceConflict,
+  selectAnswerEvidence,
+} from './evidence-selection';
 import { normalizeChatbotHumanText } from './chatbot-human-language';
 import {
+  chatbotConversationReply,
   parseChatbotRole,
   parseQualificationReply,
   parseQualificationValues,
@@ -169,7 +173,16 @@ export type ChatbotTestResult = {
   reason: ChatbotPolicyDecision['reason'];
   confidence: number | null;
   evidence: ChatbotTestEvidence[];
-  ai?: { provider: string; model: string | null; status?: 'ANSWERED' | 'UNSUPPORTED' | 'INVALID_OUTPUT' | 'FAILED' | 'DISABLED' } | null;
+  ai?: {
+    provider: string;
+    model: string | null;
+    status?:
+      | 'ANSWERED'
+      | 'UNSUPPORTED'
+      | 'INVALID_OUTPUT'
+      | 'FAILED'
+      | 'DISABLED';
+  } | null;
 };
 
 const KNOWLEDGE_RETURNING = [
@@ -202,60 +215,199 @@ export class TenantChatbotService {
   ) {
     const expected = input.expected;
     const audience = input.audience === 'REALTOR' ? 'REALTOR' : 'LEAD';
-    const channel = input.channel === 'EMAIL' || input.channel === 'SMS' ? input.channel : 'WEB';
+    const channel =
+      input.channel === 'EMAIL' || input.channel === 'SMS'
+        ? input.channel
+        : 'WEB';
     const propertyId = positiveInteger(input.propertyId);
     const message = requiredText(input.message, 'message', 2_000);
     if (expected === 'role') {
       const localRole = parseChatbotRole(message);
-      if (localRole) return { recognized: true, source: 'LOCAL', role: localRole, creditScore: null, monthlyEarning: null };
-      if (!looksLikeRoleReplyCandidate(message)) return { recognized: false, source: 'NONE', role: null, creditScore: null, monthlyEarning: null };
-      const learned = await this.learning?.approvedQualificationHint({ tenantId: tenant.id, propertyId, audience, expected, message });
-      if (learned?.role) return { recognized: true, source: 'LEARNED', role: learned.role, creditScore: null, monthlyEarning: null };
-      const ai = await this.ai?.interpretReply({ tenantId: tenant.id, propertyId, audience, channel, expected, message });
+      if (localRole)
+        return {
+          recognized: true,
+          source: 'LOCAL',
+          role: localRole,
+          creditScore: null,
+          monthlyEarning: null,
+        };
+      if (!looksLikeRoleReplyCandidate(message))
+        return {
+          recognized: false,
+          source: 'NONE',
+          role: null,
+          creditScore: null,
+          monthlyEarning: null,
+        };
+      const learned = await this.learning?.approvedQualificationHint({
+        tenantId: tenant.id,
+        propertyId,
+        audience,
+        expected,
+        message,
+      });
+      if (learned?.role)
+        return {
+          recognized: true,
+          source: 'LEARNED',
+          role: learned.role,
+          creditScore: null,
+          monthlyEarning: null,
+        };
+      const ai = await this.ai?.interpretReply({
+        tenantId: tenant.id,
+        propertyId,
+        audience,
+        channel,
+        expected,
+        message,
+      });
       return ai?.role
-        ? { recognized: true, source: 'AI', role: ai.role, creditScore: null, monthlyEarning: null, provider: ai.provider, model: ai.model, confidence: ai.confidence }
-        : { recognized: false, source: 'NONE', role: null, creditScore: null, monthlyEarning: null };
+        ? {
+            recognized: true,
+            source: 'AI',
+            role: ai.role,
+            creditScore: null,
+            monthlyEarning: null,
+            provider: ai.provider,
+            model: ai.model,
+            confidence: ai.confidence,
+          }
+        : {
+            recognized: false,
+            source: 'NONE',
+            role: null,
+            creditScore: null,
+            monthlyEarning: null,
+          };
     }
     const local = parseQualificationReply(message, expected);
     if (
       (expected === 'creditScore' && validStoredCredit(local.creditScore)) ||
       (expected === 'monthlyEarning' && validStoredIncome(local.monthlyEarning))
     ) {
-      return { recognized: true, source: 'LOCAL', role: null, creditScore: local.creditScore ?? null, monthlyEarning: local.monthlyEarning ?? null };
+      return {
+        recognized: true,
+        source: 'LOCAL',
+        role: null,
+        creditScore: local.creditScore ?? null,
+        monthlyEarning: local.monthlyEarning ?? null,
+      };
     }
     const clarification = qualificationClarificationPrompt(message, expected);
     if (!looksLikeQualificationReplyCandidate(message, expected)) {
       return clarification
-        ? { recognized: false, source: 'LOCAL', role: null, creditScore: null, monthlyEarning: null, clarification }
-        : { recognized: false, source: 'NONE', role: null, creditScore: null, monthlyEarning: null };
+        ? {
+            recognized: false,
+            source: 'LOCAL',
+            role: null,
+            creditScore: null,
+            monthlyEarning: null,
+            clarification,
+          }
+        : {
+            recognized: false,
+            source: 'NONE',
+            role: null,
+            creditScore: null,
+            monthlyEarning: null,
+          };
     }
-    const learned = await this.learning?.approvedQualificationHint({ tenantId: tenant.id, propertyId, audience, expected, message });
+    const learned = await this.learning?.approvedQualificationHint({
+      tenantId: tenant.id,
+      propertyId,
+      audience,
+      expected,
+      message,
+    });
     if (learned) {
-      if (learned.exact && expected === 'creditScore' && validStoredCredit(learned.creditScore)) {
-        return { recognized: true, source: 'LEARNED', role: null, creditScore: Math.round(Number(learned.creditScore)), monthlyEarning: null };
+      if (
+        learned.exact &&
+        expected === 'creditScore' &&
+        validStoredCredit(learned.creditScore)
+      ) {
+        return {
+          recognized: true,
+          source: 'LEARNED',
+          role: null,
+          creditScore: Math.round(Number(learned.creditScore)),
+          monthlyEarning: null,
+        };
       }
-      if (learned.exact && expected === 'monthlyEarning' && validStoredIncome(learned.monthlyEarning)) {
-        return { recognized: true, source: 'LEARNED', role: null, creditScore: null, monthlyEarning: Math.round(Number(learned.monthlyEarning)) };
+      if (
+        learned.exact &&
+        expected === 'monthlyEarning' &&
+        validStoredIncome(learned.monthlyEarning)
+      ) {
+        return {
+          recognized: true,
+          source: 'LEARNED',
+          role: null,
+          creditScore: null,
+          monthlyEarning: Math.round(Number(learned.monthlyEarning)),
+        };
       }
       const parsed = parseQualificationWithApprovedHint(message, expected);
       if (
         (expected === 'creditScore' && validStoredCredit(parsed.creditScore)) ||
-        (expected === 'monthlyEarning' && validStoredIncome(parsed.monthlyEarning))
+        (expected === 'monthlyEarning' &&
+          validStoredIncome(parsed.monthlyEarning))
       ) {
-        return { recognized: true, source: 'LEARNED', role: null, creditScore: parsed.creditScore ?? null, monthlyEarning: parsed.monthlyEarning ?? null };
+        return {
+          recognized: true,
+          source: 'LEARNED',
+          role: null,
+          creditScore: parsed.creditScore ?? null,
+          monthlyEarning: parsed.monthlyEarning ?? null,
+        };
       }
     }
-    const ai = await this.ai?.interpretReply({ tenantId: tenant.id, propertyId, audience, channel, expected, message });
+    const ai = await this.ai?.interpretReply({
+      tenantId: tenant.id,
+      propertyId,
+      audience,
+      channel,
+      expected,
+      message,
+    });
     if (ai) {
-      const validCredit = expected === 'creditScore' && validStoredCredit(ai.creditScore) ? Math.round(Number(ai.creditScore)) : null;
-      const validIncome = expected === 'monthlyEarning' && validStoredIncome(ai.monthlyEarning) ? Math.round(Number(ai.monthlyEarning)) : null;
+      const validCredit =
+        expected === 'creditScore' && validStoredCredit(ai.creditScore)
+          ? Math.round(Number(ai.creditScore))
+          : null;
+      const validIncome =
+        expected === 'monthlyEarning' && validStoredIncome(ai.monthlyEarning)
+          ? Math.round(Number(ai.monthlyEarning))
+          : null;
       if (validCredit !== null || validIncome !== null) {
-        return { recognized: true, source: 'AI', role: null, creditScore: validCredit, monthlyEarning: validIncome, provider: ai.provider, model: ai.model, confidence: ai.confidence };
+        return {
+          recognized: true,
+          source: 'AI',
+          role: null,
+          creditScore: validCredit,
+          monthlyEarning: validIncome,
+          provider: ai.provider,
+          model: ai.model,
+          confidence: ai.confidence,
+        };
       }
     }
     return clarification
-      ? { recognized: false, source: 'LOCAL', role: null, creditScore: null, monthlyEarning: null, clarification }
-      : { recognized: false, source: ai ? 'AI' : 'NONE', role: null, creditScore: null, monthlyEarning: null };
+      ? {
+          recognized: false,
+          source: 'LOCAL',
+          role: null,
+          creditScore: null,
+          monthlyEarning: null,
+          clarification,
+        }
+      : {
+          recognized: false,
+          source: ai ? 'AI' : 'NONE',
+          role: null,
+          creditScore: null,
+          monthlyEarning: null,
+        };
   }
 
   async getSettings(tenant: TenantReference): Promise<ChatbotSettings> {
@@ -607,7 +759,9 @@ export class TenantChatbotService {
       throw new Error('Qdrant is not configured.');
     const propertyId = positiveInteger(propertyIdValue);
     if (!propertyId) throw new Error('A valid property is required.');
-    await this.learning?.invalidateApprovedAnswersForProperty(tenant.id, propertyId).catch(() => undefined);
+    await this.learning
+      ?.invalidateApprovedAnswersForProperty(tenant.id, propertyId)
+      .catch(() => undefined);
     return this.databases.withTenantClient(
       this.databaseName(tenant),
       async (client) => {
@@ -698,7 +852,9 @@ export class TenantChatbotService {
   async reindexKnowledge(tenant: TenantReference) {
     if (!this.vectors.isConfigured())
       throw new Error('Qdrant is not configured.');
-    await this.learning?.invalidateApprovedAnswersForProperty(tenant.id).catch(() => undefined);
+    await this.learning
+      ?.invalidateApprovedAnswersForProperty(tenant.id)
+      .catch(() => undefined);
     return this.databases.withTenantClient(
       this.databaseName(tenant),
       async (client) => {
@@ -863,7 +1019,10 @@ export class TenantChatbotService {
 
         let matches: QdrantKnowledgeMatch[];
         try {
-          const vector = await this.embeddings.embed(augmentPropertyQuestion(question), 'query');
+          const vector = await this.embeddings.embed(
+            augmentPropertyQuestion(question),
+            'query',
+          );
           const [tenantMatches, platformMatches] = await Promise.all([
             this.vectors.search({
               scope: 'TENANT',
@@ -893,7 +1052,11 @@ export class TenantChatbotService {
           return stopped(settings, 'SYSTEM_UNAVAILABLE');
         }
 
-        const hydratedMatches = await this.hydrateMatches(client, matches, audience);
+        const hydratedMatches = await this.hydrateMatches(
+          client,
+          matches,
+          audience,
+        );
         const hydrated = hydratedMatches.filter(
           ({ record }) =>
             audience !== 'REALTOR' ||
@@ -901,7 +1064,10 @@ export class TenantChatbotService {
             !isSensitiveRealtorRecord(record),
         );
         const ranked = hydrated
-          .map((item) => ({ item, confidence: relevanceConfidence(question, item) }))
+          .map((item) => ({
+            item,
+            confidence: relevanceConfidence(question, item),
+          }))
           .sort(
             (left, right) =>
               right.confidence - left.confidence ||
@@ -925,12 +1091,16 @@ export class TenantChatbotService {
           confidence: policyConfidence,
         });
         if (decision.action !== 'ANSWER') {
-          const aiEvidence = uniqueHydratedMatches([...answerEvidence, ...rankedHydrated]).slice(0, 6);
+          const aiEvidence = uniqueHydratedMatches([
+            ...answerEvidence,
+            ...rankedHydrated,
+          ]).slice(0, 6);
           if (
             decision.reason === 'EVIDENCE_INSUFFICIENT' &&
             !conflict &&
             aiEvidence.length > 0 &&
-            (policyConfidence === null || policyConfidence < settings.minimumConfidence) &&
+            (policyConfidence === null ||
+              policyConfidence < settings.minimumConfidence) &&
             this.ai
           ) {
             const aiInput = {
@@ -947,33 +1117,40 @@ export class TenantChatbotService {
               })),
             };
             const detailed = (this.ai as any).answerFromEvidenceDetailed;
-            const attempt = typeof detailed === 'function'
-              ? await detailed.call(this.ai, aiInput)
-              : (() => undefined)();
-            const resolvedAttempt = attempt ?? await this.ai.answerFromEvidence(aiInput).then((answer) => ({
-              answer,
-              attempted: true,
-              provider: answer?.provider ?? null,
-              model: answer?.model ?? null,
-              status: answer ? 'ANSWERED' as const : 'FAILED' as const,
-            }));
+            const attempt =
+              typeof detailed === 'function'
+                ? await detailed.call(this.ai, aiInput)
+                : (() => undefined)();
+            const resolvedAttempt =
+              attempt ??
+              (await this.ai.answerFromEvidence(aiInput).then((answer) => ({
+                answer,
+                attempted: true,
+                provider: answer?.provider ?? null,
+                model: answer?.model ?? null,
+                status: answer ? ('ANSWERED' as const) : ('FAILED' as const),
+              })));
             const aiAnswer = resolvedAttempt.answer;
             if (aiAnswer) {
               if (this.learning) {
-                await this.learning.recordAnswer({
-                  tenantId: tenant.id,
-                  tenantName: tenant.businessName,
-                  propertyId,
-                  propertyTitle,
-                  audience,
-                  channel,
-                  question,
-                  answer: aiAnswer.answer,
-                  evidenceKnowledgeIds: aiEvidence.map(({ record }) => String(record.id)),
-                  provider: aiAnswer.provider,
-                  model: aiAnswer.model,
-                  confidence: aiAnswer.confidence,
-                }).catch(() => undefined);
+                await this.learning
+                  .recordAnswer({
+                    tenantId: tenant.id,
+                    tenantName: tenant.businessName,
+                    propertyId,
+                    propertyTitle,
+                    audience,
+                    channel,
+                    question,
+                    answer: aiAnswer.answer,
+                    evidenceKnowledgeIds: aiEvidence.map(({ record }) =>
+                      String(record.id),
+                    ),
+                    provider: aiAnswer.provider,
+                    model: aiAnswer.model,
+                    confidence: aiAnswer.confidence,
+                  })
+                  .catch(() => undefined);
               }
               return {
                 answer: aiAnswer.answer,
@@ -981,14 +1158,27 @@ export class TenantChatbotService {
                 reason: 'AI_GROUNDED_FALLBACK',
                 confidence: aiAnswer.confidence ?? policyConfidence,
                 evidence: evidenceFrom(aiEvidence),
-                ai: { provider: aiAnswer.provider, model: aiAnswer.model, status: 'ANSWERED' },
+                ai: {
+                  provider: aiAnswer.provider,
+                  model: aiAnswer.model,
+                  status: 'ANSWERED',
+                },
               };
             }
-            const fallback = stopped(settings, decision.reason, topScore, rankedHydrated);
+            const fallback = stopped(
+              settings,
+              decision.reason,
+              topScore,
+              rankedHydrated,
+            );
             return {
               ...fallback,
               ai: resolvedAttempt.attempted
-                ? { provider: resolvedAttempt.provider ?? 'Unknown', model: resolvedAttempt.model, status: resolvedAttempt.status }
+                ? {
+                    provider: resolvedAttempt.provider ?? 'Unknown',
+                    model: resolvedAttempt.model,
+                    status: resolvedAttempt.status,
+                  }
                 : null,
             };
           }
@@ -996,7 +1186,14 @@ export class TenantChatbotService {
         }
 
         return {
-          answer: composeVerifiedAnswer(question, answerEvidence.map(({ record }) => ({ title: record.title, answer: record.answer }))) ?? humanizeVerifiedAnswer(answerEvidence[0].record),
+          answer:
+            composeVerifiedAnswer(
+              question,
+              answerEvidence.map(({ record }) => ({
+                title: record.title,
+                answer: record.answer,
+              })),
+            ) ?? humanizeVerifiedAnswer(answerEvidence[0].record),
           decision: 'ANSWER',
           reason: 'EVIDENCE_VERIFIED',
           confidence: policyConfidence,
@@ -1050,10 +1247,11 @@ export class TenantChatbotService {
     if (input.leadId) {
       const control = await this.databases.withTenantClient(
         this.databaseName(tenant),
-        async (client) => client.query(
-          'SELECT chatbot_manually_stopped AS "chatbotManuallyStopped" FROM tenant_lead WHERE id = $1 LIMIT 1',
-          [input.leadId],
-        ),
+        async (client) =>
+          client.query(
+            'SELECT chatbot_manually_stopped AS "chatbotManuallyStopped" FROM tenant_lead WHERE id = $1 LIMIT 1',
+            [input.leadId],
+          ),
       );
       if (control.rows[0]?.chatbotManuallyStopped === true) {
         return liveStopped(settings, 'MANUAL_STOP');
@@ -1071,7 +1269,12 @@ export class TenantChatbotService {
     const workflow = await this.prepareLiveWorkflow(tenant, input);
     const liveInput = workflow.input;
     if (workflow.result) {
-      return this.persistLiveResponse(tenant, liveInput, settings, workflow.result);
+      return this.persistLiveResponse(
+        tenant,
+        liveInput,
+        settings,
+        workflow.result,
+      );
     }
     if (
       isSensitiveRealtorQuestion(liveInput.body) &&
@@ -1109,33 +1312,48 @@ export class TenantChatbotService {
   }
 
   async listActivity(tenant: TenantReference) {
-    return this.databases.withTenantClient(this.databaseName(tenant), async (client) => {
-      const result = await client.query([
-        "SELECT 'message' AS kind, m.id::text AS id, m.role AS type, m.decision AS reason,",
-        'm.body, m.direction, m.confidence, m.created_at AS "createdAt", c.id::text AS "conversationId",',
-        'c.lead_id AS "leadId", c.property_id AS "propertyId", c.channel, c.audience, c.status AS "conversationStatus",',
-        "COALESCE(l.full_name, l.email, l.phone, 'Unknown lead') AS \"leadName\", p.title AS \"propertyTitle\"",
-        'FROM tenant_chatbot_message m JOIN tenant_chatbot_conversation c ON c.id = m.conversation_id',
-        'LEFT JOIN tenant_lead l ON l.id = c.lead_id LEFT JOIN tenant_property p ON p.id = c.property_id',
-        "WHERE m.created_at >= now() - interval '7 days' UNION ALL",
-        "SELECT 'event' AS kind, e.id::text AS id, e.event_type AS type, e.reason, NULL::text AS body,",
-        'NULL::varchar AS direction, NULL::numeric AS confidence, e.created_at AS "createdAt", c.id::text AS "conversationId",',
-        'c.lead_id AS "leadId", c.property_id AS "propertyId", c.channel, c.audience, c.status AS "conversationStatus",',
-        "COALESCE(l.full_name, l.email, l.phone, 'Unknown lead') AS \"leadName\", p.title AS \"propertyTitle\"",
-        'FROM tenant_chatbot_event e JOIN tenant_chatbot_conversation c ON c.id = e.conversation_id',
-        'LEFT JOIN tenant_lead l ON l.id = c.lead_id LEFT JOIN tenant_property p ON p.id = c.property_id',
-        'WHERE e.created_at >= now() - interval \'7 days\' ORDER BY "createdAt" DESC LIMIT 500',
-      ].join(' '));
-      return result.rows;
-    });
+    return this.databases.withTenantClient(
+      this.databaseName(tenant),
+      async (client) => {
+        const result = await client.query(
+          [
+            "SELECT 'message' AS kind, m.id::text AS id, m.role AS type, m.decision AS reason,",
+            'm.body, m.direction, m.confidence, m.created_at AS "createdAt", c.id::text AS "conversationId",',
+            'c.lead_id AS "leadId", c.property_id AS "propertyId", c.channel, c.audience, c.status AS "conversationStatus",',
+            'COALESCE(l.full_name, l.email, l.phone, \'Unknown lead\') AS "leadName", p.title AS "propertyTitle"',
+            'FROM tenant_chatbot_message m JOIN tenant_chatbot_conversation c ON c.id = m.conversation_id',
+            'LEFT JOIN tenant_lead l ON l.id = c.lead_id LEFT JOIN tenant_property p ON p.id = c.property_id',
+            "WHERE m.created_at >= now() - interval '7 days' UNION ALL",
+            "SELECT 'event' AS kind, e.id::text AS id, e.event_type AS type, e.reason, NULL::text AS body,",
+            'NULL::varchar AS direction, NULL::numeric AS confidence, e.created_at AS "createdAt", c.id::text AS "conversationId",',
+            'c.lead_id AS "leadId", c.property_id AS "propertyId", c.channel, c.audience, c.status AS "conversationStatus",',
+            'COALESCE(l.full_name, l.email, l.phone, \'Unknown lead\') AS "leadName", p.title AS "propertyTitle"',
+            'FROM tenant_chatbot_event e JOIN tenant_chatbot_conversation c ON c.id = e.conversation_id',
+            'LEFT JOIN tenant_lead l ON l.id = c.lead_id LEFT JOIN tenant_property p ON p.id = c.property_id',
+            'WHERE e.created_at >= now() - interval \'7 days\' ORDER BY "createdAt" DESC LIMIT 500',
+          ].join(' '),
+        );
+        return result.rows;
+      },
+    );
   }
 
   async cleanupExpiredActivity(tenant: TenantReference) {
-    return this.databases.withTenantClient(this.databaseName(tenant), async (client) => {
-      const messages = await client.query("DELETE FROM tenant_chatbot_message WHERE created_at < now() - interval '7 days'");
-      const events = await client.query("DELETE FROM tenant_chatbot_event WHERE created_at < now() - interval '7 days'");
-      return { messagesDeleted: messages.rowCount ?? 0, eventsDeleted: events.rowCount ?? 0 };
-    });
+    return this.databases.withTenantClient(
+      this.databaseName(tenant),
+      async (client) => {
+        const messages = await client.query(
+          "DELETE FROM tenant_chatbot_message WHERE created_at < now() - interval '7 days'",
+        );
+        const events = await client.query(
+          "DELETE FROM tenant_chatbot_event WHERE created_at < now() - interval '7 days'",
+        );
+        return {
+          messagesDeleted: messages.rowCount ?? 0,
+          eventsDeleted: events.rowCount ?? 0,
+        };
+      },
+    );
   }
 
   async listLeadActivity(tenant: TenantReference, leadIdValue: number) {
@@ -1436,7 +1654,10 @@ export class TenantChatbotService {
   private async prepareLiveWorkflow(
     tenant: TenantReference,
     input: HandleChatbotMessageInput,
-  ): Promise<{ input: HandleChatbotMessageInput; result: ChatbotTestResult | null }> {
+  ): Promise<{
+    input: HandleChatbotMessageInput;
+    result: ChatbotTestResult | null;
+  }> {
     return this.databases.withTenantClient(
       this.databaseName(tenant),
       async (client) => {
@@ -1450,9 +1671,10 @@ export class TenantChatbotService {
           )
         ).rows[0];
         const lead = (
-          await client.query('SELECT id, payload FROM tenant_lead WHERE id = $1 LIMIT 1', [
-            input.leadId,
-          ])
+          await client.query(
+            'SELECT id, payload FROM tenant_lead WHERE id = $1 LIMIT 1',
+            [input.leadId],
+          )
         ).rows[0];
         const property = input.propertyId
           ? (
@@ -1489,8 +1711,78 @@ export class TenantChatbotService {
           };
         }
 
+        const conversationReply = chatbotConversationReply(input.body);
+        if (conversationReply) {
+          if (state === 'ASK_ROLE') {
+            return {
+              input: {
+                ...input,
+                audience,
+                realtorVerified: false,
+                workflowStateUpdate: 'ASK_ROLE',
+                showingEligible: false,
+              },
+              result: verifiedWorkflowResult(
+                `${conversationReply}\n\n${roleFollowUpPrompt()}`,
+                'ASK_ROLE',
+                'ROLE_REQUIRED',
+              ),
+            };
+          }
+          if (audience === 'LEAD' && state === 'ASK_CREDIT') {
+            return {
+              input: {
+                ...input,
+                audience,
+                realtorVerified: false,
+                workflowStateUpdate: 'ASK_CREDIT',
+                showingEligible: false,
+              },
+              result: verifiedWorkflowResult(
+                `${conversationReply}\n\n${creditFollowUpPrompt()}`,
+                'ASK_CREDIT',
+                'CREDIT_REQUIRED',
+              ),
+            };
+          }
+          if (audience === 'LEAD' && state === 'ASK_INCOME') {
+            return {
+              input: {
+                ...input,
+                audience,
+                realtorVerified: false,
+                workflowStateUpdate: 'ASK_INCOME',
+                showingEligible: false,
+              },
+              result: verifiedWorkflowResult(
+                `${conversationReply}\n\n${incomeFollowUpPrompt()}`,
+                'ASK_INCOME',
+                'INCOME_REQUIRED',
+              ),
+            };
+          }
+          return {
+            input: {
+              ...input,
+              audience,
+              realtorVerified,
+              showingEligible: state === 'QUALIFIED',
+            },
+            result: verifiedWorkflowResult(
+              `${conversationReply}\n\nWhat would you like to know about the property?`,
+              'ANSWER',
+              'CONVERSATION_REPLY',
+            ),
+          };
+        }
+
         if (state === 'ASK_ROLE') {
-          const role = await this.resolveRoleReply(tenant, input, property, audience);
+          const role = await this.resolveRoleReply(
+            tenant,
+            input,
+            property,
+            audience,
+          );
           if (!role) {
             if (wantsShowing) {
               return {
@@ -1555,7 +1847,9 @@ export class TenantChatbotService {
                 audienceUpdate: audience,
                 realtorVerified: false,
                 workflowStateUpdate: 'ASK_CREDIT',
-                ...(propertyQuestion ? { followUpPrompt: creditFollowUpPrompt() } : {}),
+                ...(propertyQuestion
+                  ? { followUpPrompt: creditFollowUpPrompt() }
+                  : {}),
               },
               result: propertyQuestion ? null : creditPromptResult(),
             };
@@ -1568,22 +1862,30 @@ export class TenantChatbotService {
                 audienceUpdate: audience,
                 realtorVerified: false,
                 workflowStateUpdate: 'ASK_INCOME',
-                ...(propertyQuestion ? { followUpPrompt: incomeFollowUpPrompt() } : {}),
+                ...(propertyQuestion
+                  ? { followUpPrompt: incomeFollowUpPrompt() }
+                  : {}),
               },
               result: propertyQuestion ? null : incomePromptResult(),
             };
           }
-          return this.finishLeadQualification(client, {
-            ...input,
-            audience,
-            audienceUpdate: audience,
-            realtorVerified: false,
-          }, property, values);
+          return this.finishLeadQualification(
+            client,
+            {
+              ...input,
+              audience,
+              audienceUpdate: audience,
+              realtorVerified: false,
+            },
+            property,
+            values,
+          );
         }
 
         if (audience === 'REALTOR') {
           realtorVerified =
-            realtorVerified || (await this.isVerifiedRealtor(client, input.leadId));
+            realtorVerified ||
+            (await this.isVerifiedRealtor(client, input.leadId));
           return {
             input: { ...input, audience, realtorVerified },
             result: null,
@@ -1591,12 +1893,17 @@ export class TenantChatbotService {
         }
 
         const values = {
-            ...qualificationValuesFromPayload(leadPayload),
-            ...(input.qualificationUpdates ?? {}),
-          };
+          ...qualificationValuesFromPayload(leadPayload),
+          ...(input.qualificationUpdates ?? {}),
+        };
         if (wantsShowing && state === 'QUALIFIED') {
           return {
-            input: { ...input, audience, realtorVerified: false, showingEligible: true },
+            input: {
+              ...input,
+              audience,
+              realtorVerified: false,
+              showingEligible: true,
+            },
             result: verifiedWorkflowResult(
               `You're already qualified on the two basic checks. The showing form is ready below — choose a date and time, then confirm it.`,
               'ANSWER',
@@ -1607,7 +1914,13 @@ export class TenantChatbotService {
         if (wantsShowing && state === 'ANSWERING') {
           if (!validStoredCredit(values.creditScore)) {
             return {
-              input: { ...input, audience, realtorVerified: false, workflowStateUpdate: 'ASK_CREDIT', showingEligible: false },
+              input: {
+                ...input,
+                audience,
+                realtorVerified: false,
+                workflowStateUpdate: 'ASK_CREDIT',
+                showingEligible: false,
+              },
               result: verifiedWorkflowResult(
                 `Absolutely — I can help with a showing. Before I unlock the form, what's your approximate credit score?`,
                 'ASK_CREDIT',
@@ -1617,7 +1930,13 @@ export class TenantChatbotService {
           }
           if (!validStoredIncome(values.monthlyEarning)) {
             return {
-              input: { ...input, audience, realtorVerified: false, workflowStateUpdate: 'ASK_INCOME', showingEligible: false },
+              input: {
+                ...input,
+                audience,
+                realtorVerified: false,
+                workflowStateUpdate: 'ASK_INCOME',
+                showingEligible: false,
+              },
               result: verifiedWorkflowResult(
                 `Thanks. One last basic check before I unlock the showing form: about how much is your monthly income before taxes?`,
                 'ASK_INCOME',
@@ -1625,13 +1944,23 @@ export class TenantChatbotService {
               ),
             };
           }
-          return this.finishLeadQualification(client, { ...input, audience, realtorVerified: false }, property, values);
+          return this.finishLeadQualification(
+            client,
+            { ...input, audience, realtorVerified: false },
+            property,
+            values,
+          );
         }
         if (state === 'ASK_CREDIT') {
           let parsed = parseQualificationReply(input.body, 'creditScore');
-          const creditClarification = qualificationClarificationPrompt(input.body, 'creditScore');
+          const creditClarification = qualificationClarificationPrompt(
+            input.body,
+            'creditScore',
+          );
           const propertyQuestionWhileWaitingForCredit =
-            !validStoredCredit(parsed.creditScore) && !creditClarification && detectPropertyIntents(input.body).length > 0;
+            !validStoredCredit(parsed.creditScore) &&
+            !creditClarification &&
+            detectPropertyIntents(input.body).length > 0;
           if (propertyQuestionWhileWaitingForCredit) {
             return {
               input: {
@@ -1654,16 +1983,35 @@ export class TenantChatbotService {
             );
           }
           if (!validStoredCredit(parsed.creditScore)) {
-            const clarification = qualificationClarificationPrompt(input.body, 'creditScore');
+            const clarification = qualificationClarificationPrompt(
+              input.body,
+              'creditScore',
+            );
             if (clarification) {
               return {
-                input: { ...input, audience, realtorVerified: false, workflowStateUpdate: 'ASK_CREDIT', showingEligible: false },
-                result: verifiedWorkflowResult(clarification, 'ASK_CREDIT', 'CREDIT_REQUIRED'),
+                input: {
+                  ...input,
+                  audience,
+                  realtorVerified: false,
+                  workflowStateUpdate: 'ASK_CREDIT',
+                  showingEligible: false,
+                },
+                result: verifiedWorkflowResult(
+                  clarification,
+                  'ASK_CREDIT',
+                  'CREDIT_REQUIRED',
+                ),
               };
             }
             if (wantsShowing) {
               return {
-                input: { ...input, audience, realtorVerified: false, workflowStateUpdate: 'ASK_CREDIT', showingEligible: false },
+                input: {
+                  ...input,
+                  audience,
+                  realtorVerified: false,
+                  workflowStateUpdate: 'ASK_CREDIT',
+                  showingEligible: false,
+                },
                 result: verifiedWorkflowResult(
                   `I can help with that. I just need your approximate credit score first so I can make sure this property is a fit before opening the showing form.`,
                   'ASK_CREDIT',
@@ -1701,7 +2049,12 @@ export class TenantChatbotService {
           }
           return this.finishLeadQualification(
             client,
-            { ...input, audience, realtorVerified: false, qualificationUpdates },
+            {
+              ...input,
+              audience,
+              realtorVerified: false,
+              qualificationUpdates,
+            },
             property,
             values,
           );
@@ -1709,9 +2062,14 @@ export class TenantChatbotService {
 
         if (state === 'ASK_INCOME') {
           let parsed = parseQualificationReply(input.body, 'monthlyEarning');
-          const incomeClarification = qualificationClarificationPrompt(input.body, 'monthlyEarning');
+          const incomeClarification = qualificationClarificationPrompt(
+            input.body,
+            'monthlyEarning',
+          );
           const propertyQuestionWhileWaitingForIncome =
-            !validStoredIncome(parsed.monthlyEarning) && !incomeClarification && detectPropertyIntents(input.body).length > 0;
+            !validStoredIncome(parsed.monthlyEarning) &&
+            !incomeClarification &&
+            detectPropertyIntents(input.body).length > 0;
           if (propertyQuestionWhileWaitingForIncome) {
             return {
               input: {
@@ -1734,16 +2092,35 @@ export class TenantChatbotService {
             );
           }
           if (!validStoredIncome(parsed.monthlyEarning)) {
-            const clarification = qualificationClarificationPrompt(input.body, 'monthlyEarning');
+            const clarification = qualificationClarificationPrompt(
+              input.body,
+              'monthlyEarning',
+            );
             if (clarification) {
               return {
-                input: { ...input, audience, realtorVerified: false, workflowStateUpdate: 'ASK_INCOME', showingEligible: false },
-                result: verifiedWorkflowResult(clarification, 'ASK_INCOME', 'INCOME_REQUIRED'),
+                input: {
+                  ...input,
+                  audience,
+                  realtorVerified: false,
+                  workflowStateUpdate: 'ASK_INCOME',
+                  showingEligible: false,
+                },
+                result: verifiedWorkflowResult(
+                  clarification,
+                  'ASK_INCOME',
+                  'INCOME_REQUIRED',
+                ),
               };
             }
             if (wantsShowing) {
               return {
-                input: { ...input, audience, realtorVerified: false, workflowStateUpdate: 'ASK_INCOME', showingEligible: false },
+                input: {
+                  ...input,
+                  audience,
+                  realtorVerified: false,
+                  workflowStateUpdate: 'ASK_INCOME',
+                  showingEligible: false,
+                },
                 result: verifiedWorkflowResult(
                   `Almost there — I still need your approximate monthly income before taxes. Once that basic check passes, I'll unlock the showing form.`,
                   'ASK_INCOME',
@@ -1819,21 +2196,23 @@ export class TenantChatbotService {
       message: input.body,
     });
     if (!interpreted?.role) return null;
-    await this.learning?.recordQualification({
-      tenantId: tenant.id,
-      tenantName: tenant.businessName,
-      propertyId: positiveInteger(property?.id),
-      propertyTitle: String(property?.title ?? ''),
-      audience,
-      channel: input.channel,
-      question: input.body,
-      answer: `Detected role: ${interpreted.role}`,
-      structuredPayload: { expected: 'role', role: interpreted.role },
-      evidenceKnowledgeIds: [],
-      provider: interpreted.provider,
-      model: interpreted.model,
-      confidence: interpreted.confidence,
-    }).catch(() => undefined);
+    await this.learning
+      ?.recordQualification({
+        tenantId: tenant.id,
+        tenantName: tenant.businessName,
+        propertyId: positiveInteger(property?.id),
+        propertyTitle: String(property?.title ?? ''),
+        audience,
+        channel: input.channel,
+        question: input.body,
+        answer: `Detected role: ${interpreted.role}`,
+        structuredPayload: { expected: 'role', role: interpreted.role },
+        evidenceKnowledgeIds: [],
+        provider: interpreted.provider,
+        model: interpreted.model,
+        confidence: interpreted.confidence,
+      })
+      .catch(() => undefined);
     return interpreted.role;
   }
 
@@ -1853,16 +2232,25 @@ export class TenantChatbotService {
       message: input.body,
     });
     if (learned) {
-      if (learned.exact && expected === 'creditScore' && validStoredCredit(learned.creditScore)) {
+      if (
+        learned.exact &&
+        expected === 'creditScore' &&
+        validStoredCredit(learned.creditScore)
+      ) {
         return { creditScore: Math.round(Number(learned.creditScore)) };
       }
-      if (learned.exact && expected === 'monthlyEarning' && validStoredIncome(learned.monthlyEarning)) {
+      if (
+        learned.exact &&
+        expected === 'monthlyEarning' &&
+        validStoredIncome(learned.monthlyEarning)
+      ) {
         return { monthlyEarning: Math.round(Number(learned.monthlyEarning)) };
       }
       const hinted = parseQualificationWithApprovedHint(input.body, expected);
       if (
         (expected === 'creditScore' && validStoredCredit(hinted.creditScore)) ||
-        (expected === 'monthlyEarning' && validStoredIncome(hinted.monthlyEarning))
+        (expected === 'monthlyEarning' &&
+          validStoredIncome(hinted.monthlyEarning))
       ) {
         return hinted;
       }
@@ -1878,10 +2266,16 @@ export class TenantChatbotService {
     });
     if (!interpreted) return {};
     const parsed: QualificationValues = {};
-    if (expected === 'creditScore' && validStoredCredit(interpreted.creditScore)) {
+    if (
+      expected === 'creditScore' &&
+      validStoredCredit(interpreted.creditScore)
+    ) {
       parsed.creditScore = Math.round(Number(interpreted.creditScore));
     }
-    if (expected === 'monthlyEarning' && validStoredIncome(interpreted.monthlyEarning)) {
+    if (
+      expected === 'monthlyEarning' &&
+      validStoredIncome(interpreted.monthlyEarning)
+    ) {
       parsed.monthlyEarning = Math.round(Number(interpreted.monthlyEarning));
     }
     if (
@@ -1890,28 +2284,31 @@ export class TenantChatbotService {
     ) {
       return {};
     }
-    await this.learning?.recordQualification({
-      tenantId: tenant.id,
-      tenantName: tenant.businessName,
-      propertyId: positiveInteger(property?.id),
-      propertyTitle: String(property?.title ?? ''),
-      audience,
-      channel: input.channel,
-      question: input.body,
-      answer: expected === 'creditScore'
-        ? `Credit score: ${parsed.creditScore}`
-        : `Monthly income: ${parsed.monthlyEarning}`,
-      structuredPayload: {
-        expected,
-        creditScore: parsed.creditScore ?? null,
-        monthlyEarning: parsed.monthlyEarning ?? null,
-        period: interpreted.period,
-      },
-      evidenceKnowledgeIds: [],
-      provider: interpreted.provider,
-      model: interpreted.model,
-      confidence: interpreted.confidence,
-    }).catch(() => undefined);
+    await this.learning
+      ?.recordQualification({
+        tenantId: tenant.id,
+        tenantName: tenant.businessName,
+        propertyId: positiveInteger(property?.id),
+        propertyTitle: String(property?.title ?? ''),
+        audience,
+        channel: input.channel,
+        question: input.body,
+        answer:
+          expected === 'creditScore'
+            ? `Credit score: ${parsed.creditScore}`
+            : `Monthly income: ${parsed.monthlyEarning}`,
+        structuredPayload: {
+          expected,
+          creditScore: parsed.creditScore ?? null,
+          monthlyEarning: parsed.monthlyEarning ?? null,
+          period: interpreted.period,
+        },
+        evidenceKnowledgeIds: [],
+        provider: interpreted.provider,
+        model: interpreted.model,
+        confidence: interpreted.confidence,
+      })
+      .catch(() => undefined);
     return parsed;
   }
 
@@ -1927,13 +2324,21 @@ export class TenantChatbotService {
     const outcome = qualificationResult(values, requirements);
     if (outcome.missing === 'creditScore') {
       return {
-        input: { ...input, workflowStateUpdate: 'ASK_CREDIT', showingEligible: false },
+        input: {
+          ...input,
+          workflowStateUpdate: 'ASK_CREDIT',
+          showingEligible: false,
+        },
         result: creditPromptResult(),
       };
     }
     if (outcome.missing === 'monthlyEarning') {
       return {
-        input: { ...input, workflowStateUpdate: 'ASK_INCOME', showingEligible: false },
+        input: {
+          ...input,
+          workflowStateUpdate: 'ASK_INCOME',
+          showingEligible: false,
+        },
         result: incomePromptResult(),
       };
     }
@@ -1994,11 +2399,14 @@ export class TenantChatbotService {
       )
     ).rows;
     return rows
-      .filter((row: any) =>
-        qualificationResult(
-          values,
-          readPropertyQualification(isRecordValue(row.payload) ? row.payload : {}),
-        ).qualified,
+      .filter(
+        (row: any) =>
+          qualificationResult(
+            values,
+            readPropertyQualification(
+              isRecordValue(row.payload) ? row.payload : {},
+            ),
+          ).qualified,
       )
       .slice(0, 3)
       .map((row: any) => alternativePropertyLabel(row));
@@ -2118,9 +2526,14 @@ export class TenantChatbotService {
           }
           if (input.audienceUpdate || input.workflowStateUpdate) {
             const nextAudience =
-              input.audienceUpdate ?? input.audience ?? conversation.audience ?? 'LEAD';
+              input.audienceUpdate ??
+              input.audience ??
+              conversation.audience ??
+              'LEAD';
             const nextWorkflow =
-              input.workflowStateUpdate ?? conversation.workflowState ?? 'ANSWERING';
+              input.workflowStateUpdate ??
+              conversation.workflowState ??
+              'ANSWERING';
             await client.query(
               [
                 'UPDATE tenant_chatbot_conversation',
@@ -2157,7 +2570,9 @@ export class TenantChatbotService {
             );
             lead.payload = {
               ...(isRecordValue(lead.payload) ? lead.payload : {}),
-              monthlyEarning: String(input.qualificationUpdates?.monthlyEarning),
+              monthlyEarning: String(
+                input.qualificationUpdates?.monthlyEarning,
+              ),
             };
           }
           if (isWorkflowResultReason(result.reason)) {
@@ -2750,7 +3165,9 @@ function isRecordValue(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
-function qualificationValuesFromPayload(payload: Record<string, unknown>): QualificationValues {
+function qualificationValuesFromPayload(
+  payload: Record<string, unknown>,
+): QualificationValues {
   return {
     creditScore: numericValue(payload.creditScore),
     monthlyEarning: numericValue(payload.monthlyEarning),
@@ -2785,7 +3202,7 @@ function roleFollowUpPrompt() {
 }
 
 function creditFollowUpPrompt() {
-  return "If you want, I can quickly check the two basic requirements. Could you share your approximate credit score? A rough number is completely fine.";
+  return 'If you want, I can quickly check the two basic requirements. Could you share your approximate credit score? A rough number is completely fine.';
 }
 
 function incomeFollowUpPrompt() {
@@ -2820,14 +3237,21 @@ function incomePromptResult() {
 
 function isWorkflowResultReason(reason: ChatbotPolicyDecision['reason']) {
   return [
-    'ROLE_REQUIRED', 'ROLE_CAPTURED', 'CREDIT_REQUIRED', 'INCOME_REQUIRED',
-    'CREDIT_BELOW_MINIMUM', 'INCOME_BELOW_MINIMUM', 'QUALIFIED',
+    'ROLE_REQUIRED',
+    'ROLE_CAPTURED',
+    'CREDIT_REQUIRED',
+    'INCOME_REQUIRED',
+    'CREDIT_BELOW_MINIMUM',
+    'INCOME_BELOW_MINIMUM',
+    'QUALIFIED',
   ].includes(reason);
 }
 
 function alternativePropertyLabel(row: any) {
   const payload = isRecordValue(row?.payload) ? row.payload : {};
-  const location = String(payload.exactLocation ?? payload.location ?? payload.address ?? '').trim();
+  const location = String(
+    payload.exactLocation ?? payload.location ?? payload.address ?? '',
+  ).trim();
   const rent = String(payload.monthlyRent ?? payload.price ?? '').trim();
   return [String(row?.title ?? 'Available property').trim(), location, rent]
     .filter(Boolean)
@@ -2952,7 +3376,9 @@ function relevanceConfidence(question: string, hydrated: HydratedMatch) {
     `${hydrated.record.title} ${hydrated.record.answer}`,
   );
   const matched = queryTokens.filter((queryToken) =>
-    evidenceTokens.some((evidenceToken) => fuzzyTokenMatch(queryToken, evidenceToken)),
+    evidenceTokens.some((evidenceToken) =>
+      fuzzyTokenMatch(queryToken, evidenceToken),
+    ),
   ).length;
   const coverage = matched / queryTokens.length;
   if (coverage >= 0.75) return Math.max(semantic, 0.95);
@@ -2961,10 +3387,46 @@ function relevanceConfidence(question: string, hydrated: HydratedMatch) {
 }
 
 const QUESTION_STOP_WORDS = new Set([
-  'a', 'about', 'allow', 'allowed', 'any', 'are', 'be', 'can', 'do', 'does',
-  'for', 'get', 'has', 'have', 'here', 'how', 'i', 'in', 'is', 'it', 'many', 'me', 'my',
-  'need', 'of', 'please', 'property', 'tell', 'the', 'there', 'this', 'to',
-  'what', 'when', 'where', 'who', 'why', 'will', 'would', 'your',
+  'a',
+  'about',
+  'allow',
+  'allowed',
+  'any',
+  'are',
+  'be',
+  'can',
+  'do',
+  'does',
+  'for',
+  'get',
+  'has',
+  'have',
+  'here',
+  'how',
+  'i',
+  'in',
+  'is',
+  'it',
+  'many',
+  'me',
+  'my',
+  'need',
+  'of',
+  'please',
+  'property',
+  'tell',
+  'the',
+  'there',
+  'this',
+  'to',
+  'what',
+  'when',
+  'where',
+  'who',
+  'why',
+  'will',
+  'would',
+  'your',
 ]);
 
 function meaningfulTokens(value: string) {
@@ -3024,68 +3486,119 @@ function fuzzyTokenMatch(left: string, right: string) {
       rightIndex += 1;
     }
   }
-  return edits + Number(leftIndex < left.length || rightIndex < right.length) <= 1;
+  return (
+    edits + Number(leftIndex < left.length || rightIndex < right.length) <= 1
+  );
 }
 
 function humanizeVerifiedAnswer(record: KnowledgeRecord) {
-  const raw = String(record.answer ?? '').trim().replace(/\bpaking\b/gi, 'parking');
+  const raw = String(record.answer ?? '')
+    .trim()
+    .replace(/\bpaking\b/gi, 'parking');
   const colon = raw.indexOf(':');
   if (colon <= 0) return sentence(raw);
   const label = raw.slice(0, colon).trim().toLowerCase();
   const value = raw.slice(colon + 1).trim();
   const lowerValue = value.toLowerCase().replace(/[.!]+$/, '');
 
-  if (label === 'pet policy' && lowerValue === 'no') return "No, pets aren't allowed at this property.";
+  if (label === 'pet policy' && lowerValue === 'no')
+    return "No, pets aren't allowed at this property.";
   if (label === 'parking') {
     if (
       /spot\s*1\s+and\s+1\s+guest\s+parking/i.test(value) ||
-      /1\s+assigned\s+(?:parking\s+)?spot\s+and\s+1\s+guest\s+parking\s+spot/i.test(value)
+      /1\s+assigned\s+(?:parking\s+)?spot\s+and\s+1\s+guest\s+parking\s+spot/i.test(
+        value,
+      )
     ) {
       return 'Yes. This property includes 1 assigned parking spot and 1 guest parking spot.';
     }
     return `Parking is available: ${sentence(value)}`;
   }
-  if (label === 'guest parking') return `There is ${sentence(value).replace(/^There is\s+/i, '')}`;
+  if (label === 'guest parking')
+    return `There is ${sentence(value).replace(/^There is\s+/i, '')}`;
   if (label === 'monthly rent') return `The monthly rent is ${sentence(value)}`;
-  if (label === 'available from') return `The property is available from ${sentence(value)}`;
+  if (label === 'available from')
+    return `The property is available from ${sentence(value)}`;
   if (label === 'bedrooms') return `The property has ${value} bedrooms.`;
   if (label === 'bathrooms') return `The property has ${value} bathrooms.`;
-  if (label === 'address') return `The property is located at ${sentence(value)}`;
+  if (label === 'address')
+    return `The property is located at ${sentence(value)}`;
   if (label === 'community') return `The property is in the ${sentence(value)}`;
-  if (label === 'age requirement') return `This property is in a ${sentence(value)}`;
+  if (label === 'age requirement')
+    return `This property is in a ${sentence(value)}`;
   if (label === 'floor') return `The unit is on the ${sentence(value)}`;
-  if (label.startsWith('nearby ')) return `Nearby options include ${sentence(value)}`;
+  if (label.startsWith('nearby '))
+    return `Nearby options include ${sentence(value)}`;
   if (label === 'highway access') return `The property has ${sentence(value)}`;
-  if (label === 'nearby cities') return `Nearby cities include ${sentence(value)}`;
+  if (label === 'nearby cities')
+    return `Nearby cities include ${sentence(value)}`;
   if (label === 'move-in costs') return `Move-in costs are ${sentence(value)}`;
-  if (label === 'first month' || label === 'last month') return `The ${label} is ${sentence(value.toLowerCase())}`;
-  if (label === 'security deposit') return `The security deposit is ${sentence(value)}`;
+  if (label === 'first month' || label === 'last month')
+    return `The ${label} is ${sentence(value.toLowerCase())}`;
+  if (label === 'security deposit')
+    return `The security deposit is ${sentence(value)}`;
   if (label === 'utilities') return sentence(value);
-  if (label === 'application instructions') return sentence(value.replace(/^apply online at\s+/i, 'You can apply online at '));
-  if (label === 'minimum credit score') return `The minimum credit score is ${sentence(value)}`;
-  if (label === 'income requirement') return `The income requirement is ${sentence(value)}`;
-  if (label === 'minimum monthly income') return `The minimum monthly income is ${sentence(value)}`;
-  if (label === 'applicant history') return `Applicants must have ${sentence(value.toLowerCase())}`;
-  if (label === 'co-signers') return /no co-signers/i.test(value) ? "No, co-signers aren't allowed." : sentence(value);
+  if (label === 'application instructions')
+    return sentence(
+      value.replace(/^apply online at\s+/i, 'You can apply online at '),
+    );
+  if (label === 'minimum credit score')
+    return `The minimum credit score is ${sentence(value)}`;
+  if (label === 'income requirement')
+    return `The income requirement is ${sentence(value)}`;
+  if (label === 'minimum monthly income')
+    return `The minimum monthly income is ${sentence(value)}`;
+  if (label === 'applicant history')
+    return `Applicants must have ${sentence(value.toLowerCase())}`;
+  if (label === 'co-signers')
+    return /no co-signers/i.test(value)
+      ? "No, co-signers aren't allowed."
+      : sentence(value);
   if (label === 'tenant insurance') return sentence(value);
-  if (label === 'insurance additional interest' || label === 'additional interest') return `Add ${value} as the additional interest on the insurance policy.`;
-  if (label === 'insurance mailing address') return `Use ${value} as the insurance mailing address.`;
-  if (label === 'application fee') return `The application fee is ${sentence(value)}`;
-  if (label === 'application turnaround') return `Application processing takes ${sentence(value)}`;
-  if (label === 'association') return lowerValue === 'yes' ? 'Yes, this property has an HOA/association.' : sentence(value);
-  if (label === 'debt to income ratio') return `The debt-to-income ratio ${sentence(value)}`;
-  if (label === 'hoa income criteria') return `The HOA income requirement is ${sentence(value)}`;
-  if (label === 'proof of income') return lowerValue === 'required' ? 'Yes, proof of income is required.' : sentence(value);
+  if (
+    label === 'insurance additional interest' ||
+    label === 'additional interest'
+  )
+    return `Add ${value} as the additional interest on the insurance policy.`;
+  if (label === 'insurance mailing address')
+    return `Use ${value} as the insurance mailing address.`;
+  if (label === 'application fee')
+    return `The application fee is ${sentence(value)}`;
+  if (label === 'application turnaround')
+    return `Application processing takes ${sentence(value)}`;
+  if (label === 'association')
+    return lowerValue === 'yes'
+      ? 'Yes, this property has an HOA/association.'
+      : sentence(value);
+  if (label === 'debt to income ratio')
+    return `The debt-to-income ratio ${sentence(value)}`;
+  if (label === 'hoa income criteria')
+    return `The HOA income requirement is ${sentence(value)}`;
+  if (label === 'proof of income')
+    return lowerValue === 'required'
+      ? 'Yes, proof of income is required.'
+      : sentence(value);
   if (label === 'income documents') return `You will need ${sentence(value)}`;
-  if (label === 'hoa approval time') return `HOA approval takes ${sentence(value)}`;
-  if (label === 'hoa application fee') return `The HOA application fee is ${sentence(value)}`;
-  if (label === 'married hoa fee') return `For married applicants, the HOA application fee is ${sentence(value)}`;
-  if (label === 'marriage certificate') return `Married applicants need a marriage certificate; it is ${sentence(value)}`;
-  if (label === 'hoa payment method') return `The HOA application must be paid by ${sentence(value)}`;
-  if (label === 'hoa security deposit') return `The HOA security deposit is ${sentence(value)}`;
-  if (label === 'minimum lease duration') return `The minimum lease term is ${sentence(value)}`;
-  if (label === 'smoking') return /no smoking/i.test(value) ? "No, smoking isn't allowed inside the property." : sentence(value);
-  if (label === 'listing contact') return `You can contact the listing at ${sentence(value)}`;
+  if (label === 'hoa approval time')
+    return `HOA approval takes ${sentence(value)}`;
+  if (label === 'hoa application fee')
+    return `The HOA application fee is ${sentence(value)}`;
+  if (label === 'married hoa fee')
+    return `For married applicants, the HOA application fee is ${sentence(value)}`;
+  if (label === 'marriage certificate')
+    return `Married applicants need a marriage certificate; it is ${sentence(value)}`;
+  if (label === 'hoa payment method')
+    return `The HOA application must be paid by ${sentence(value)}`;
+  if (label === 'hoa security deposit')
+    return `The HOA security deposit is ${sentence(value)}`;
+  if (label === 'minimum lease duration')
+    return `The minimum lease term is ${sentence(value)}`;
+  if (label === 'smoking')
+    return /no smoking/i.test(value)
+      ? "No, smoking isn't allowed inside the property."
+      : sentence(value);
+  if (label === 'listing contact')
+    return `You can contact the listing at ${sentence(value)}`;
   if (label === 'application documentation') return sentence(value);
   if (label === 'description detail') return sentence(value);
   return `The ${label} is ${sentence(value)}`;
@@ -3167,11 +3680,28 @@ function renderShowingTemplate(
 function looksLikeRoleReplyCandidate(value: unknown) {
   const text = normalizeChatbotHumanText(value);
   if (!text || text.length > 320) return false;
-  if (/^(?:what|when|where|how|why|is|are|does|do|can|could)\b/i.test(text) && !/\b(i am|we are|for me|for us|myself|ourselves|my client|our client|my buyer|our buyer)\b/i.test(text)) return false;
-  const directRoleLanguage = /\b(i|we|me|my|mine|us|our|ours|myself|ourselves|client|customer|buyer|purchaser|tenant|renter|realtor|broker|agent|representative)\b/i.test(text) &&
-    /\b(rent|lease|move|live|buy|purchase|represent|representative|client|customer|buyer|purchaser|tenant|renter|realtor|broker|agent|myself|ourselves|family|household|spouse|wife|husband|partner|own)\b/i.test(text);
-  const naturalInterestReply = /\b(i|we|me|us)\b.{0,45}\b(look(?:ing)?|interested|want|wanna|trying|try|need|hope|plan|planning)\b.{0,55}\b(get|rent|lease|buy|move|live|take|have|property|place|home|house|apartment|apt|unit|this|it)\b/i.test(text);
-  const possessionReply = /\b(i|we)\b.{0,35}\b(want|wanna|need|trying|looking)\b.{0,35}\b(this|it|the property|the place|the home|the unit)\b/i.test(text);
+  if (
+    /^(?:what|when|where|how|why|is|are|does|do|can|could)\b/i.test(text) &&
+    !/\b(i am|we are|for me|for us|myself|ourselves|my client|our client|my buyer|our buyer)\b/i.test(
+      text,
+    )
+  )
+    return false;
+  const directRoleLanguage =
+    /\b(i|we|me|my|mine|us|our|ours|myself|ourselves|client|customer|buyer|purchaser|tenant|renter|realtor|broker|agent|representative)\b/i.test(
+      text,
+    ) &&
+    /\b(rent|lease|move|live|buy|purchase|represent|representative|client|customer|buyer|purchaser|tenant|renter|realtor|broker|agent|myself|ourselves|family|household|spouse|wife|husband|partner|own)\b/i.test(
+      text,
+    );
+  const naturalInterestReply =
+    /\b(i|we|me|us)\b.{0,45}\b(look(?:ing)?|interested|want|wanna|trying|try|need|hope|plan|planning)\b.{0,55}\b(get|rent|lease|buy|move|live|take|have|property|place|home|house|apartment|apt|unit|this|it)\b/i.test(
+      text,
+    );
+  const possessionReply =
+    /\b(i|we)\b.{0,35}\b(want|wanna|need|trying|looking)\b.{0,35}\b(this|it|the property|the place|the home|the unit)\b/i.test(
+      text,
+    );
   return directRoleLanguage || naturalInterestReply || possessionReply;
 }
 
@@ -3182,17 +3712,47 @@ function looksLikeQualificationReplyCandidate(
   const text = normalizeChatbotHumanText(value).replace(/,/g, '');
   if (!text || text.length > 320) return false;
   if (expected === 'creditScore') {
-    const selfCredit = /\b(my|our|mine|ours|i|we)\b.{0,24}\b(credit|fico|score|rating)\b|\b(credit|fico|score|rating)\b.{0,24}\b(is|was|around|about|at|sitting|roughly|mine|ours)\b/i.test(text);
-    const humanNumber = /\b\d{3,5}\b|\b(?:six|seven|eight)\s+(?:hundred|oh|zero|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)\b/i.test(text);
-    const requirementQuestion = /\b(minimum|required|requirement|need|needed|must have|what score|how much credit|qualify)\b/i.test(text) && !selfCredit;
+    const selfCredit =
+      /\b(my|our|mine|ours|i|we)\b.{0,24}\b(credit|fico|score|rating)\b|\b(credit|fico|score|rating)\b.{0,24}\b(is|was|around|about|at|sitting|roughly|mine|ours)\b/i.test(
+        text,
+      );
+    const humanNumber =
+      /\b\d{3,5}\b|\b(?:six|seven|eight)\s+(?:hundred|oh|zero|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)\b/i.test(
+        text,
+      );
+    const requirementQuestion =
+      /\b(minimum|required|requirement|need|needed|must have|what score|how much credit|qualify)\b/i.test(
+        text,
+      ) && !selfCredit;
     if (requirementQuestion) return false;
-    return selfCredit || (humanNumber && /\b(about|around|roughly|maybe|probably|like|ish|think|guess|low|mid|middle|high|checked|score|fico|credit|not great|not good|decent)\b/i.test(text));
+    return (
+      selfCredit ||
+      (humanNumber &&
+        /\b(about|around|roughly|maybe|probably|like|ish|think|guess|low|mid|middle|high|checked|score|fico|credit|not great|not good|decent)\b/i.test(
+          text,
+        ))
+    );
   }
-  const selfIncome = /\b(my|our|mine|ours|i|we)\b.{0,30}\b(income|salary|pay|earn|earnings|make|get|receive|bring|gross|net|clear|take home)\b|\b(income|salary|earnings|pay)\b.{0,24}\b(is|was|around|about|at|roughly|mine|ours)\b/i.test(text);
-  const humanAmount = /(?:\$\s*)?\d+(?:\.\d+)?\s*(?:k|grand|thousand)?\b|\b(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)(?:\s+and\s+a\s+half)?\s+(?:grand|thousand)\b/i.test(text);
-  const requirementQuestion = /\b(minimum|required|requirement|need to make|must make|what income|how much income|qualify)\b/i.test(text) && !selfIncome;
+  const selfIncome =
+    /\b(my|our|mine|ours|i|we)\b.{0,30}\b(income|salary|pay|earn|earnings|make|get|receive|bring|gross|net|clear|take home)\b|\b(income|salary|earnings|pay)\b.{0,24}\b(is|was|around|about|at|roughly|mine|ours)\b/i.test(
+      text,
+    );
+  const humanAmount =
+    /(?:\$\s*)?\d+(?:\.\d+)?\s*(?:k|grand|thousand)?\b|\b(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)(?:\s+and\s+a\s+half)?\s+(?:grand|thousand)\b/i.test(
+      text,
+    );
+  const requirementQuestion =
+    /\b(minimum|required|requirement|need to make|must make|what income|how much income|qualify)\b/i.test(
+      text,
+    ) && !selfIncome;
   if (requirementQuestion) return false;
-  return selfIncome || (humanAmount && /\b(about|around|roughly|maybe|probably|like|ish|month|monthly|week|weekly|year|annual|grand|thousand|not much|not a lot|somewhere)\b/i.test(text));
+  return (
+    selfIncome ||
+    (humanAmount &&
+      /\b(about|around|roughly|maybe|probably|like|ish|month|monthly|week|weekly|year|annual|grand|thousand|not much|not a lot|somewhere)\b/i.test(
+        text,
+      ))
+  );
 }
 
 function errorMessage(error: unknown) {
