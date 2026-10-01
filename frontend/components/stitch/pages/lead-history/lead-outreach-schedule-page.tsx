@@ -174,6 +174,7 @@ export function LeadOutreachSchedulePage() {
   const [selectedDetail, setSelectedDetail] =
     useState<LeadOutreachScheduleItem | null>(null)
   const [stageFilter, setStageFilter] = useState<"" | LeadStage>("")
+  const [propertyFilter, setPropertyFilter] = useState("")
   const [statusFilter, setStatusFilter] = useState<"" | LeadHistoryStatus>("")
   const [page, setPage] = useState(1)
   const pageSize = 20
@@ -289,6 +290,23 @@ export function LeadOutreachSchedulePage() {
   void leadStagePreviewItems
   void dealStagePreview
   const isSaving = dispatchMutation.isPending || bulkDispatchMutation.isPending
+  const propertyOptions = useMemo(() => {
+    const rows = Array.isArray(scheduleQuery.data) ? scheduleQuery.data : []
+    const options = new Map<string, string>()
+
+    rows.forEach((entry) => {
+      const propertyName = entry.leadProperty?.trim()
+      if (!propertyName) return
+      const key = entry.leadPropertyId
+        ? `id:${entry.leadPropertyId}`
+        : `name:${propertyName.toLowerCase()}`
+      if (!options.has(key)) options.set(key, propertyName)
+    })
+
+    return Array.from(options, ([value, label]) => ({ value, label })).sort(
+      (left, right) => left.label.localeCompare(right.label)
+    )
+  }, [scheduleQuery.data])
   const filteredSchedule = useMemo(() => {
     const term = searchTerm.trim().toLowerCase()
     const rows = Array.isArray(scheduleQuery.data) ? scheduleQuery.data : []
@@ -300,6 +318,15 @@ export function LeadOutreachSchedulePage() {
         if (Number.isFinite(selectedScheduleId) && entry.id !== selectedScheduleId) return false
         if (followUpFilter && followUpFilter !== activityType) return false
         if (stageFilter && entry.leadStage !== stageFilter) return false
+        if (propertyFilter) {
+          const propertyName = entry.leadProperty?.trim() ?? ""
+          const propertyKey = entry.leadPropertyId
+            ? `id:${entry.leadPropertyId}`
+            : propertyName
+              ? `name:${propertyName.toLowerCase()}`
+              : "no-property"
+          if (propertyKey !== propertyFilter) return false
+        }
         if (!term) return true
 
         return [
@@ -312,6 +339,7 @@ export function LeadOutreachSchedulePage() {
           entry.body,
           entry.status,
           entry.kind,
+          entry.lastError,
         ].some((value) => `${value ?? ""}`.toLowerCase().includes(term))
       })
       .sort((left, right) => {
@@ -319,7 +347,7 @@ export function LeadOutreachSchedulePage() {
         const rightUpdated = new Date(right.updatedAt ?? right.createdAt).getTime()
         return rightUpdated - leftUpdated || right.id - left.id
       })
-  }, [followUpFilter, scheduleQuery.data, searchTerm, selectedLeadId, selectedScheduleId, stageFilter])
+  }, [followUpFilter, propertyFilter, scheduleQuery.data, searchTerm, selectedLeadId, selectedScheduleId, stageFilter])
   const totalPages = Math.max(1, Math.ceil(filteredSchedule.length / pageSize))
   const paginatedSchedule = useMemo(
     () => filteredSchedule.slice((page - 1) * pageSize, page * pageSize),
@@ -638,6 +666,36 @@ export function LeadOutreachSchedulePage() {
             <Select
               modal={false}
               onValueChange={(value) =>
+                setPropertyFilter(value === "all" ? "" : value)
+              }
+              value={propertyFilter || "all"}
+            >
+              <SelectTrigger className="h-12 w-full rounded-xl border-[var(--ether-outline-variant)] bg-white px-4 xl:w-52">
+                <span>
+                  {propertyFilter
+                    ? propertyFilter === "no-property"
+                      ? "No property linked"
+                      : propertyOptions.find(
+                          (option) => option.value === propertyFilter
+                        )?.label || "Property"
+                    : "Property"}
+                </span>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  <SelectItem value="all">All properties</SelectItem>
+                  <SelectItem value="no-property">No property linked</SelectItem>
+                  {propertyOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+            <Select
+              modal={false}
+              onValueChange={(value) =>
                 setKindFilter(value === "all" ? "" : (value as OutreachKind))
               }
               value={kindFilter || "all"}
@@ -830,6 +888,20 @@ export function LeadOutreachSchedulePage() {
                           >
                             {entry.status}
                           </Badge>
+                          {entry.status === "Failed" ? (
+                            <p
+                              className="mt-2 max-w-56 text-xs font-medium leading-4 text-[var(--ether-error)]"
+                              title={
+                                entry.lastError ||
+                                entry.summary ||
+                                "Delivery failed"
+                              }
+                            >
+                              {entry.lastError ||
+                                entry.summary ||
+                                "Delivery failed"}
+                            </p>
+                          ) : null}
                         </TableCell>
                         <TableCell className="text-sm text-[var(--ether-on-surface-variant)] italic">
                           {activityTypeLabel(activityType)}
