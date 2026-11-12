@@ -66,13 +66,12 @@ export class TenantOutreachDeliveryService implements OnModuleDestroy {
       config = await this.ensureTenantGmailAccessToken(tenant, config);
     }
 
-    const transport = this.mailTransport(databaseName, config);
     const fromEmail = this.text(config.fromEmail, config.username ?? config.gmailEmail);
     if (!fromEmail) {
       throw new PermanentTenantDeliveryError('Tenant sender email is missing.');
     }
 
-    const info = await transport.sendMail({
+    const message = {
       from: config.fromName
         ? `"${this.text(config.fromName).replace(/"/g, '')}" <${fromEmail}>`
         : fromEmail,
@@ -86,13 +85,77 @@ export class TenantOutreachDeliveryService implements OnModuleDestroy {
         'X-Tenant-Idempotency-Key': job.idempotency_key,
       },
       attachments: this.attachments(job.media_urls ?? job.payload?.mediaUrls),
-    });
+    };
 
+    // Gmail OAuth already grants gmail.send. Use HTTPS rather than SMTP so
+    // a closed SMTP/TLS socket cannot prevent delivery from connected Gmail.
+    if (this.text(config.authType).toLowerCase() === 'gmail-oauth') {
+      return this.sendViaGmailApi(config, message, job.recipient_email);
+    }
+
+    const transport = this.mailTransport(databaseName, config);
+    const info = await transport.sendMail(message);
     return {
       providerMessageId: this.text(info?.messageId, job.idempotency_key),
       provider: 'SMTP',
       accepted: Array.isArray(info?.accepted) ? info.accepted : [],
       rejected: Array.isArray(info?.rejected) ? info.rejected : [],
+    };
+  }
+
+  private async sendViaGmailApi(config: any, message: any, recipient: string) {
+    const accessToken = this.text(config.gmailAccessToken);
+    if (!accessToken) {
+      throw new PermanentTenantDeliveryError(
+        'Gmail access token is missing. Reconnect Gmail in Agency Settings.',
+      );
+    }
+
+    // Nodemailer composes a standards-compliant MIME message, including UTF-8,
+    // plain-text/HTML alternatives and any supported attachments, without
+    // opening an SMTP network connection.
+    const nodemailer = require('nodemailer');
+    const composer = nodemailer.createTransport({
+      streamTransport: true,
+      buffer: true,
+      newline: 'unix',
+    });
+    const compiled = await composer.sendMail(message);
+    if (!Buffer.isBuffer(compiled.message)) {
+      throw new Error('Failed to prepare Gmail message.');
+    }
+
+    const response = await fetch(
+      'https://gmail.googleapis.com/gmail/v1/users/me/messages/send',
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ raw: compiled.message.toString('base64url') }),
+      },
+    );
+    const result: any = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const detail = this.text(
+        result?.error?.message ?? result?.message,
+        'Google rejected the message.',
+      ).slice(0, 240);
+      const reason = `Gmail API send failed (HTTP ${response.status}): ${detail}`;
+      if ([400, 401, 403, 404].includes(response.status)) {
+        throw new PermanentTenantDeliveryError(reason);
+      }
+      throw new Error(reason);
+    }
+    if (!this.text(result?.id)) {
+      throw new Error('Gmail API did not return a message ID.');
+    }
+    return {
+      providerMessageId: result.id,
+      provider: 'Gmail API',
+      accepted: [recipient],
+      rejected: [],
     };
   }
 
@@ -145,9 +208,6 @@ export class TenantOutreachDeliveryService implements OnModuleDestroy {
           secure: config.useSsl,
           username: config.username,
           password: config.password,
-          gmailEmail: config.gmailEmail,
-          gmailAccessToken: config.gmailAccessToken,
-          gmailRefreshToken: config.gmailRefreshToken,
         }),
       )
       .digest('hex');
@@ -155,76 +215,41 @@ export class TenantOutreachDeliveryService implements OnModuleDestroy {
     if (cached?.signature === signature) return cached.transport;
     if (cached && typeof cached.transport?.close === 'function') cached.transport.close();
 
+    // Only password-based SMTP reaches this method. Gmail OAuth uses the
+    // Gmail API above, even if the previous SMTP configuration is still cached.
     const nodemailer = require('nodemailer');
     const user = this.text(config.username, config.gmailEmail);
-    const authType = this.text(config.authType).toLowerCase();
-    let transportOptions: any;
-
-    if (authType === 'gmail-oauth' || config.gmailRefreshToken) {
-      const clientId = this.text(config.gmailClientId, process.env.GOOGLE_CLIENT_ID);
-      const clientSecret = this.text(
-        config.gmailClientSecret,
-        process.env.GOOGLE_CLIENT_SECRET,
+    const host = this.text(config.host);
+    const password = this.text(config.password);
+    if (!host || !user || !password) {
+      throw new PermanentTenantDeliveryError(
+        'Tenant SMTP host, username, and password are required.',
       );
-      if (!user || !clientId || !clientSecret || !config.gmailRefreshToken) {
-        throw new PermanentTenantDeliveryError(
-          'Tenant Gmail OAuth configuration is incomplete.',
-        );
-      }
-      transportOptions = {
-        service: 'gmail',
-        pool: true,
-        maxConnections: this.clamp(
-          process.env.TENANT_SMTP_MAX_CONNECTIONS,
-          2,
-          1,
-          5,
-        ),
-        maxMessages: this.clamp(process.env.TENANT_SMTP_MAX_MESSAGES, 100, 1, 1000),
-        auth: {
-          type: 'OAuth2',
-          user,
-          clientId,
-          clientSecret,
-          refreshToken: config.gmailRefreshToken,
-          accessToken: config.gmailAccessToken || undefined,
-          expires: config.gmailTokenExpiresAt
-            ? new Date(config.gmailTokenExpiresAt).getTime()
-            : undefined,
-        },
-      };
-    } else {
-      const host = this.text(config.host);
-      const password = this.text(config.password);
-      if (!host || !user || !password) {
-        throw new PermanentTenantDeliveryError(
-          'Tenant SMTP host, username, and password are required.',
-        );
-      }
-      const port = this.clamp(config.port, 587, 1, 65_535);
-      transportOptions = {
-        host,
-        port,
-        secure: config.useSsl === true && port === 465,
-        pool: true,
-        maxConnections: this.clamp(
-          process.env.TENANT_SMTP_MAX_CONNECTIONS,
-          2,
-          1,
-          5,
-        ),
-        maxMessages: this.clamp(process.env.TENANT_SMTP_MAX_MESSAGES, 100, 1, 1000),
-        connectionTimeout: this.clamp(
-          process.env.TENANT_SMTP_CONNECTION_TIMEOUT_MS,
-          10_000,
-          1000,
-          120_000,
-        ),
-        greetingTimeout: 10_000,
-        socketTimeout: 60_000,
-        auth: { user, pass: password },
-      };
     }
+    const port = this.clamp(config.port, 587, 1, 65_535);
+    const transportOptions = {
+      host,
+      port,
+      secure: config.useSsl === true && port === 465,
+      requireTLS: config.useSsl === true && port !== 465,
+      pool: true,
+      maxConnections: this.clamp(
+        process.env.TENANT_SMTP_MAX_CONNECTIONS,
+        2,
+        1,
+        5,
+      ),
+      maxMessages: this.clamp(process.env.TENANT_SMTP_MAX_MESSAGES, 100, 1, 1000),
+      connectionTimeout: this.clamp(
+        process.env.TENANT_SMTP_CONNECTION_TIMEOUT_MS,
+        10_000,
+        1000,
+        120_000,
+      ),
+      greetingTimeout: 10_000,
+      socketTimeout: 60_000,
+      auth: { user, pass: password },
+    };
 
     const transport = nodemailer.createTransport(transportOptions);
     this.mailTransports.set(databaseName, { signature, transport });

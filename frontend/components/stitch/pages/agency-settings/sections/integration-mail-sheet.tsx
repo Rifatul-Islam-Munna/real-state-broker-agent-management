@@ -151,12 +151,23 @@ export function IntegrationMailSheet({
   }
 
   function changeProvider(providerName: Values["providerName"]) {
+    if (providerName === values.providerName) return
+    // Choosing an SMTP provider must not silently reuse Gmail OAuth credentials.
+    const manual = {
+      providerName,
+      authType: "password" as const,
+      password: "",
+      imapPassword: "",
+      hasPassword: false,
+      hasImapPassword: false,
+      enableInboxSync: false,
+    }
     if (providerName === "Gmail") {
-      patch({ providerName, host: "smtp.gmail.com", port: "587", imapHost: "imap.gmail.com", imapPort: "993" })
+      patch({ ...manual, host: "smtp.gmail.com", port: "587", imapHost: "imap.gmail.com", imapPort: "993" })
     } else if (providerName === "Outlook") {
-      patch({ providerName, host: "smtp.office365.com", port: "587", imapHost: "outlook.office365.com", imapPort: "993" })
+      patch({ ...manual, host: "smtp.office365.com", port: "587", imapHost: "outlook.office365.com", imapPort: "993" })
     } else {
-      patch({ providerName })
+      patch(manual)
     }
   }
 
@@ -310,6 +321,34 @@ export function IntegrationMailSheet({
               </SelectContent>
             </Select>
           </Field>
+          <div className="rounded-xl border bg-muted/30 px-4 py-3 text-sm">
+            <p className="font-semibold text-foreground">
+              Sending via {values.authType === "gmail-oauth" ? "Gmail API (Google OAuth)" : "SMTP (username and password)"}
+            </p>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+              {values.authType === "gmail-oauth"
+                ? "Connected Gmail sends over the Gmail API. The SMTP fields below do not affect sending until you switch to manual SMTP."
+                : "Emails are sent through the SMTP server below. Connect Gmail above to use the Gmail API instead."}
+            </p>
+            {values.authType === "gmail-oauth" ? (
+              <Button
+                className="mt-3"
+                onClick={() => patch({
+                  authType: "password",
+                  password: "",
+                  hasPassword: false,
+                  imapPassword: "",
+                  hasImapPassword: false,
+                  enableInboxSync: false,
+                })}
+                size="sm"
+                type="button"
+                variant="outline"
+              >
+                Switch to manual SMTP
+              </Button>
+            ) : null}
+          </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="SMTP host"><Input onChange={(event) => patch({ host: event.target.value })} value={values.host} /></Field>
             <Field label="SMTP port"><Input onChange={(event) => patch({ port: event.target.value })} type="number" value={values.port} /></Field>

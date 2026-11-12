@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { ArrowLeft, Building2, CalendarClock, Mail, MessageSquareText, UserRound } from "lucide-react"
 
+import { OwnerReportDeleteButton } from "@/components/owner-report-delete-button"
 import { requireDashboardAccess } from "@/lib/dashboard-auth"
 import { getTenantOwnerReport } from "@/lib/tenant-dashboard-actions"
 
@@ -15,12 +16,19 @@ export default async function OwnerReportDetailPage({ params }: OwnerReportDetai
 
   return (
     <main className="mx-auto max-w-5xl space-y-7 p-5 sm:p-8 lg:p-10">
-      <Link className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 transition hover:text-[#0d766e]" href="/dashboard/owner-reports"><ArrowLeft className="size-4" /> Back to owner reports</Link>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Link className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 transition hover:text-[#0d766e]" href="/dashboard/owner-reports"><ArrowLeft className="size-4" /> Back to owner reports</Link>
+        <OwnerReportDeleteButton
+          reportId={report.id}
+          reportSubject={report.subject}
+          returnToHistory
+        />
+      </div>
 
       <header className="rounded-[28px] bg-[#102a2d] px-6 py-8 text-white shadow-[0_24px_70px_rgba(15,43,45,0.18)] sm:px-9">
         <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#d7f171]">Report #{report.id}</p>
         <h1 className="mt-3 text-3xl font-bold tracking-[-0.045em]">{report.subject}</h1>
-        <p className="mt-3 text-sm text-white/65">Sent by {report.sentByName || "Tenant user"} on {new Date(report.sentAt).toLocaleString()}</p>
+        <p className="mt-3 text-sm text-white/65">Created by {report.sentByName || "Tenant user"} on {new Date(report.sentAt).toLocaleString()}</p>
       </header>
 
       <section className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
@@ -67,6 +75,11 @@ export default async function OwnerReportDetailPage({ params }: OwnerReportDetai
                 <p className="mt-1 text-xs text-slate-500">
                   {result.channel === "Email" ? result.recipientEmail : result.recipientPhone}
                 </p>
+                {result.status === "sent" && result.provider ? (
+                  <p className="mt-1 text-xs font-semibold text-teal-800">
+                    Recorded provider: {result.provider}
+                  </p>
+                ) : null}
                 <p className="mt-1 text-sm text-slate-600">{result.message}</p>
               </div>
               <span className={`w-fit rounded-full px-3 py-1 text-xs font-bold capitalize ${

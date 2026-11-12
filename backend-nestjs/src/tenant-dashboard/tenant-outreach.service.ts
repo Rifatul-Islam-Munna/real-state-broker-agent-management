@@ -1041,6 +1041,7 @@ export class TenantOutreachService {
         normalized,
         attemptId,
         result.providerMessageId,
+        this.text(result.provider, normalized.provider),
       );
       return { id: normalized.id, status: 'sent' as const };
     } catch (error) {
@@ -1572,24 +1573,25 @@ export class TenantOutreachService {
     job: TenantOutreachJob,
     attemptId: number,
     providerMessageId: string,
+    provider: string,
   ) {
     await this.databases.withTenantClient(databaseName, async (client) => {
       await client.query('BEGIN');
       try {
         await client.query(
           `UPDATE tenant_outreach_job
-           SET status = 'sent', provider_message_id = $2,
+           SET status = 'sent', provider_message_id = $2, provider = $3,
                last_error = '', occurred_at = now(), completed_at = now(),
                locked_at = NULL, locked_by = NULL, updated_at = now()
            WHERE id = $1 AND status = 'processing'`,
-          [job.id, providerMessageId],
+          [job.id, providerMessageId, provider],
         );
         await client.query(
           `UPDATE tenant_outreach_attempt
            SET status = 'sent', provider = $2, provider_message_id = $3,
                completed_at = now(), error_message = ''
            WHERE id = $1`,
-          [attemptId, job.provider, providerMessageId],
+          [attemptId, provider, providerMessageId],
         );
         if (Number(job.lead_id) > 0) {
           const payload = this.object(job.payload) ?? {};

@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { PoolClient } from 'pg';
 import { Repository } from 'typeorm';
@@ -202,13 +202,20 @@ export class TenantOwnerReportService {
   }
 
   private async withLiveDeliveryResults(client: PoolClient, reports: SavedReport[]) {
-    if (!reports.length) return reports;
+    // pg returns BIGSERIAL report IDs as strings unless explicitly parsed.
+    // Return numeric IDs to Next.js so client actions receive the correct type.
+    const normalizedReports = reports.map((report) => ({
+      ...report,
+      id: Number(report.id),
+    }));
+    if (!normalizedReports.length) return normalizedReports;
     const result = await client.query(
       `SELECT id, source_id AS "sourceId", channel, status,
               recipient_name AS "ownerName",
               recipient_email AS "recipientEmail",
               recipient_phone AS "recipientPhone",
-              last_error AS "lastError", provider_message_id AS "providerMessageId"
+              last_error AS "lastError", provider_message_id AS "providerMessageId",
+              provider
        FROM tenant_outreach_job
        WHERE source_type = 'owner-report' AND source_id = ANY($1::text[])
        ORDER BY id`,
@@ -222,14 +229,11 @@ export class TenantOwnerReportService {
       byReport.set(key, list);
     }
 
-    return reports.map((report) => {
+    return normalizedReports.map((report) => {
       const jobs = byReport.get(String(report.id)) ?? [];
       if (!jobs.length) return report;
       const allSent = jobs.every((job) => job.status === 'sent');
       const hasSent = jobs.some((job) => job.status === 'sent');
-      const hasFailed = jobs.some((job) =>
-        ['failed', 'dead_letter', 'cancelled'].includes(job.status),
-      );
       const allFailed = jobs.every((job) =>
         ['failed', 'dead_letter', 'cancelled'].includes(job.status),
       );
@@ -237,7 +241,7 @@ export class TenantOwnerReportService {
         ...report,
         deliveryStatus: allSent
           ? 'sent'
-          : allFailed ? 'failed' : hasFailed && hasSent ? 'partial' : 'scheduled',
+          : allFailed ? 'failed' : hasSent ? 'partial' : 'scheduled',
         deliveryResults: jobs.map((job) => ({
           jobId: job.id,
           channel: job.channel,
@@ -246,13 +250,77 @@ export class TenantOwnerReportService {
           recipientEmail: job.recipientEmail,
           recipientPhone: job.recipientPhone,
           providerMessageId: job.providerMessageId,
+          provider: job.provider,
           message: job.lastError ||
-            (job.status === 'sent' ? 'Delivered.' :
+            (job.status === 'sent' ? 'Accepted by provider.' :
               job.status === 'retrying' ? 'Retry queued.' :
               job.status === 'processing' ? 'Processing delivery.' :
               'Queued in the tenant delivery database.'),
         })),
       };
+    });
+  }
+
+  async deleteOwnerReport(tenant: SaasTenant, reportId: number, user: any) {
+    if (!Number.isSafeInteger(reportId) || reportId <= 0) {
+      throw new NotFoundException('Owner report not found.');
+    }
+
+    return this.databases.withTenantClient(this.databaseName(tenant), async (client) => {
+      await client.query('BEGIN');
+      try {
+        const report = await client.query<{ property_title: string }>(
+          'SELECT property_title FROM tenant_owner_report WHERE id = $1 FOR UPDATE',
+          [reportId],
+        );
+        if (!report.rows[0]) {
+          throw new NotFoundException('Owner report not found.');
+        }
+
+        // Lock the jobs as well as the report: a worker cannot claim one
+        // between our processing-status check and cancellation.
+        const jobs = await client.query<{ status: string }>(
+          `SELECT status FROM tenant_outreach_job
+           WHERE source_type = 'owner-report' AND source_id = $1
+           ORDER BY id FOR UPDATE`,
+          [String(reportId)],
+        );
+        if (jobs.rows.some((job) => job.status === 'processing')) {
+          throw new ConflictException(
+            'A report message is being delivered. Try deleting again when delivery finishes.',
+          );
+        }
+
+        const cancelled = await client.query(
+          `UPDATE tenant_outreach_job
+           SET status = 'cancelled',
+               last_error = 'Cancelled because the owner report was deleted.',
+               completed_at = now(), locked_at = NULL, locked_by = NULL,
+               updated_at = now()
+           WHERE source_type = 'owner-report' AND source_id = $1
+             AND status IN ('scheduled', 'retrying', 'paused')`,
+          [String(reportId)],
+        );
+        await client.query('DELETE FROM tenant_owner_report WHERE id = $1', [reportId]);
+        await client.query(
+          `INSERT INTO tenant_audit_log(action, actor_master_user_id, summary, metadata)
+           VALUES ('owner-report.deleted', $1, $2, $3::jsonb)`,
+          [
+            Number(user?.id ?? user?.sub) || null,
+            `Owner report #${reportId} deleted`,
+            JSON.stringify({
+              reportId,
+              propertyTitle: report.rows[0].property_title,
+              cancelledMessages: cancelled.rowCount ?? 0,
+            }),
+          ],
+        );
+        await client.query('COMMIT');
+        return { deleted: true, id: reportId, cancelledMessages: cancelled.rowCount ?? 0 };
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      }
     });
   }
 

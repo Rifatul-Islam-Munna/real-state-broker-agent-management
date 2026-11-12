@@ -8,6 +8,7 @@ import {
 } from "lucide-react"
 
 import type { TenantOwnerReport } from "@/lib/tenant-dashboard-actions"
+import { OwnerReportDeleteButton } from "@/components/owner-report-delete-button"
 
 function deliveryClass(status: string) {
   if (status === "sent")
@@ -58,7 +59,7 @@ export function TenantOwnerReportsWorkspace({
         <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-6 py-5 sm:px-7">
           <div>
             <h2 className="text-xl font-bold tracking-[-0.025em]">
-              Sent report history
+              Report history
             </h2>
             <p className="mt-1 text-sm text-slate-600">
               Manual and CSV-imported reports appear together here. Open any row
@@ -78,10 +79,8 @@ export function TenantOwnerReportsWorkspace({
                 <th className="px-6 py-4">Property</th>
                 <th className="px-6 py-4">Channels</th>
                 <th className="px-6 py-4">Result</th>
-                <th className="px-6 py-4">Sent</th>
-                <th className="px-6 py-4">
-                  <span className="sr-only">Open</span>
-                </th>
+                <th className="px-6 py-4">Created</th>
+                <th className="px-6 py-4 text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -140,16 +139,22 @@ export function TenantOwnerReportsWorkspace({
                       {new Date(report.sentAt).toLocaleString()}
                     </td>
                     <td className="px-6 py-5">
-                      <Link
-                        aria-label={
-                          "Open report for " +
-                          (report.ownerName || report.propertyTitle)
-                        }
-                        className="inline-flex size-9 items-center justify-center rounded-xl border border-slate-200 text-slate-600 transition hover:border-[#0d766e] hover:text-[#0d766e]"
-                        href={"/dashboard/owner-reports/" + report.id}
-                      >
-                        <ArrowUpRight className="size-4" />
-                      </Link>
+                      <div className="flex items-center justify-end gap-2">
+                        <Link
+                          aria-label={
+                            "Open report for " +
+                            (report.ownerName || report.propertyTitle)
+                          }
+                          className="inline-flex size-9 items-center justify-center rounded-xl border border-slate-200 text-slate-600 transition hover:border-[#0d766e] hover:text-[#0d766e]"
+                          href={"/dashboard/owner-reports/" + report.id}
+                        >
+                          <ArrowUpRight className="size-4" />
+                        </Link>
+                        <OwnerReportDeleteButton
+                          reportId={report.id}
+                          reportSubject={report.subject}
+                        />
+                      </div>
                     </td>
                   </tr>
                 ))

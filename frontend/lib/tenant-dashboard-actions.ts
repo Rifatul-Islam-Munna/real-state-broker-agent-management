@@ -111,7 +111,7 @@ export type TenantOwnerReport = {
   subject: string
   body?: string
   channels: string[]
-  deliveryResults: Array<{ channel: string; status: string; message: string; jobId?: number; ownerName?: string; recipientEmail?: string; recipientPhone?: string }>
+  deliveryResults: Array<{ channel: string; status: string; message: string; provider?: string; jobId?: number; ownerName?: string; recipientEmail?: string; recipientPhone?: string }>
   deliveryStatus: "sent" | "partial" | "failed" | string
   sentByName: string
   sentAt: string
@@ -317,6 +317,25 @@ export async function getTenantOwnerReport(id: number) {
   return request<TenantOwnerReport>(`/tenant-dashboard/owner-reports/${id}`)
 }
 
+export async function deleteTenantOwnerReport(id: number | string) {
+  // PostgreSQL BIGSERIAL IDs are serialized as strings by the pg driver.
+  // Validate the normalized value instead of rejecting a valid ID like "1".
+  const reportId = typeof id === "string" && !/^\d+$/.test(id.trim())
+    ? NaN
+    : Number(id)
+  if (!Number.isSafeInteger(reportId) || reportId <= 0) {
+    throw new Error("Choose a valid owner report")
+  }
+  const result = await request<{ deleted: boolean; id: number; cancelledMessages: number }>(
+    `/tenant-dashboard/owner-reports/${reportId}`,
+    { method: "DELETE" },
+  )
+  revalidatePath("/dashboard/owner-reports")
+  revalidatePath(`/dashboard/owner-reports/${reportId}`)
+  revalidatePath("/dashboard")
+  return result
+}
+
 export async function sendTenantOwnerReportAction(
   _previous: TenantActionState,
   formData: FormData,
@@ -333,7 +352,7 @@ export async function sendTenantOwnerReportAction(
       body: stringValue(formData.get("body")),
       channels: formData.getAll("channels").map(String),
     })
-    return { ok: true, message: "Owner report recorded and delivery attempted." }
+    return { ok: true, message: "Owner report queued. Track delivery in Report history." }
   } catch (error) {
     return { ok: false, message: errorMessage(error) }
   }

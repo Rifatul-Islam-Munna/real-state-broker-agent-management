@@ -26,7 +26,7 @@ export default async function CreateOwnerReportPage() {
           className="inline-flex items-center gap-1.5 text-sm font-semibold text-teal-800 hover:underline"
           href="/dashboard/owner-reports"
         >
-          Sent report history <ArrowUpRight className="size-3.5" />
+          Report history <ArrowUpRight className="size-3.5" />
         </Link>
       </nav>
 

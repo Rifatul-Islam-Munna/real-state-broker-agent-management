@@ -158,6 +158,12 @@ export class TenantDashboardController {
     return this.ownerReportService.sendOwnerReport(req.tenant, body, req.user);
   }
 
+  @Delete('owner-reports/:id')
+  @TenantPlanPermissions('normal-dashboard', 'property-management-dashboard')
+  deleteOwnerReport(@Req() req: any, @Param('id') id: string) {
+    return this.ownerReportService.deleteOwnerReport(req.tenant, Number(id), req.user);
+  }
+
   @Get('showing-form-templates')
   @TenantPlanPermissions('normal-dashboard', 'property-management-dashboard')
   showingTemplates(@Req() req: any) {

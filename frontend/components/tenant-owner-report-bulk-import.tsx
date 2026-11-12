@@ -171,6 +171,33 @@ export function TenantOwnerReportBulkImport({
     [properties]
   )
   const selectedTemplate = ownerTemplates.find((item) => item.id === templateId)
+  const previewRow = rows.find((row) => row.selected) ?? rows[0]
+  const previewValues = previewRow
+    ? { ...templateValues(previewRow, week), fromDate, toDate }
+    : {
+        propertyName: "Example property",
+        inquiries: "5",
+        appointments: "3",
+        showings: "2",
+        applications: "1",
+        feedback: "Example buyer feedback for this property.",
+        week: String(week),
+        reportPeriod: `Week ${week}`,
+        ownerName: "Example owner",
+        ownerEmail: "owner@example.com",
+        ownerPhone: "Example phone number",
+        fromDate: fromDate || "Start date",
+        toDate: toDate || "End date",
+        totalActivity: "11",
+        feedbackCount: "1",
+        empty: "",
+      }
+  const previewSubject = selectedTemplate
+    ? renderTemplateWithMapping(selectedTemplate.subject, mapping, previewValues)
+    : ""
+  const previewBody = selectedTemplate
+    ? renderTemplateWithMapping(selectedTemplate.body, mapping, previewValues)
+    : ""
   const templateTokens = useMemo(
     () =>
       selectedTemplate
@@ -566,6 +593,42 @@ export function TenantOwnerReportBulkImport({
             </p>
           </fieldset>
         </div>
+
+        {selectedTemplate ? (
+          <section aria-label="Email template preview" className="mt-6 overflow-hidden rounded-2xl border border-teal-200 bg-slate-50">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-teal-100 bg-teal-50 px-5 py-3">
+              <div className="flex items-center gap-2 text-sm font-bold text-teal-900">
+                <Mail className="size-4" /> Email preview
+              </div>
+              <span className="text-xs font-medium text-teal-800">
+                {previewRow ? `Showing ${previewRow.propertyName}` : "Sample data until CSV is imported"}
+              </span>
+            </div>
+            <div className="space-y-3 px-5 py-5">
+              <p className="text-xs text-slate-500">
+                Preview only — no email will be sent. Subject and message update with your template,
+                week, CSV data, and variable mapping.
+              </p>
+              <div className="rounded-xl border border-slate-200 bg-white p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Subject</p>
+                <p className="mt-1 break-words font-semibold text-slate-900">
+                  {previewSubject || "No subject"}
+                </p>
+                <div className="mt-4 border-t border-slate-100 pt-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Message</p>
+                  <p className="mt-3 max-h-80 overflow-y-auto whitespace-pre-wrap break-words text-sm leading-7 text-slate-700">
+                    {previewBody || "No message body"}
+                  </p>
+                </div>
+              </div>
+              {unresolvedTokens.length > 0 ? (
+                <p className="text-xs font-semibold text-amber-800">
+                  Unmapped variables: {unresolvedTokens.join(", ")}. Match them before sending.
+                </p>
+              ) : null}
+            </div>
+          </section>
+        ) : null}
 
         <label
           className={`mt-6 flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed px-5 py-7 text-center transition-colors focus-within:ring-2 focus-within:ring-teal-700/20 sm:py-9 ${

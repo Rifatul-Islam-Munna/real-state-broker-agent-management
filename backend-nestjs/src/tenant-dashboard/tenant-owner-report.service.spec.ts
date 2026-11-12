@@ -34,7 +34,7 @@ function setup(contacts?: Array<{ name: string; email: string; phone: string }>)
       if (sql.includes('FROM tenant_owner_report r') && sql.includes('WHERE r.id = $1')) {
         return {
           rows: [{
-            id: savedReportId,
+            id: String(savedReportId),
             propertyId: 12,
             managedPropertyId: null,
             propertyTitle: '12 Garden Road',
@@ -155,6 +155,8 @@ describe('TenantOwnerReportService multi-owner delivery', () => {
       'alex@example.com',
       'taylor@example.com',
     ]);
+    expect(result.id).toBe(701);
+    expect(typeof result.id).toBe('number');
     expect(result.owners).toHaveLength(2);
     expect(result.deliveryResults).toHaveLength(2);
     expect(state.client.query).toHaveBeenCalledWith('BEGIN');
@@ -219,5 +221,74 @@ describe('TenantOwnerReportService multi-owner delivery', () => {
     )).rejects.toThrow('Owner 2');
     expect(state.getReportCount()).toBe(0);
     expect(state.outreach.enqueueWithClient).not.toHaveBeenCalled();
+  });
+});
+
+describe('TenantOwnerReportService deletion', () => {
+  function deletionState(jobStatuses: string[] = [], reportExists = true) {
+    const client = {
+      query: jest.fn(async (sql: string) => {
+        if (sql.includes('SELECT property_title FROM tenant_owner_report')) {
+          return { rows: reportExists ? [{ property_title: '12 Garden Road' }] : [], rowCount: reportExists ? 1 : 0 };
+        }
+        if (sql.includes('SELECT status FROM tenant_outreach_job')) {
+          return { rows: jobStatuses.map((status) => ({ status })), rowCount: jobStatuses.length };
+        }
+        if (sql.includes('UPDATE tenant_outreach_job')) {
+          return { rows: [], rowCount: jobStatuses.filter((status) => ['scheduled', 'retrying', 'paused'].includes(status)).length };
+        }
+        return { rows: [], rowCount: 1 };
+      }),
+    };
+    const database = {
+      withTenantClient: jest.fn(async (_db: string, callback: (client: any) => unknown) => callback(client)),
+    };
+    const service = new TenantOwnerReportService(database as any, {} as any, {} as any);
+    return { service, database, client };
+  }
+
+  it('cancels pending messages before removing a report and records the deletion', async () => {
+    const { service, database, client } = deletionState(['scheduled', 'retrying', 'sent']);
+    const result = await service.deleteOwnerReport(tenant, 701, { id: 3 });
+    expect(result).toEqual({ deleted: true, id: 701, cancelledMessages: 2 });
+    expect(database.withTenantClient).toHaveBeenCalledWith('tenant_7', expect.any(Function));
+    expect(client.query).toHaveBeenCalledWith('BEGIN');
+    expect(client.query).toHaveBeenCalledWith('SELECT property_title FROM tenant_owner_report WHERE id = $1 FOR UPDATE', [701]);
+    expect(client.query).toHaveBeenCalledWith(expect.stringContaining('ORDER BY id FOR UPDATE'), ['701']);
+    expect(client.query).toHaveBeenCalledWith(expect.stringContaining("status IN ('scheduled', 'retrying', 'paused')"), ['701']);
+    expect(client.query).toHaveBeenCalledWith('DELETE FROM tenant_owner_report WHERE id = $1', [701]);
+    expect(client.query).toHaveBeenCalledWith(
+      expect.stringContaining("'owner-report.deleted'"),
+      [3, 'Owner report #701 deleted', expect.stringContaining('"cancelledMessages":2')],
+    );
+    expect(client.query).toHaveBeenCalledWith('COMMIT');
+    const queries = client.query.mock.calls.map(([sql]) => sql);
+    expect(queries.findIndex((sql) => sql.startsWith('UPDATE tenant_outreach_job'))).toBeLessThan(
+      queries.findIndex((sql) => sql.startsWith('DELETE FROM tenant_owner_report')),
+    );
+  });
+
+  it('blocks deletion while a delivery is processing, without touching the report', async () => {
+    const { service, client } = deletionState(['processing', 'scheduled']);
+    await expect(service.deleteOwnerReport(tenant, 701, { id: 3 }))
+      .rejects.toThrow('being delivered');
+    expect(client.query).toHaveBeenCalledWith('ROLLBACK');
+    expect(client.query.mock.calls.some(([sql]) => sql.startsWith('DELETE FROM tenant_owner_report'))).toBe(false);
+    expect(client.query.mock.calls.some(([sql]) => sql.startsWith('UPDATE tenant_outreach_job'))).toBe(false);
+  });
+
+  it('does not delete a missing report', async () => {
+    const { service, client } = deletionState([], false);
+    await expect(service.deleteOwnerReport(tenant, 999, { id: 3 }))
+      .rejects.toThrow('Owner report not found');
+    expect(client.query).toHaveBeenCalledWith('ROLLBACK');
+    expect(client.query.mock.calls.some(([sql]) => sql.startsWith('DELETE FROM tenant_owner_report'))).toBe(false);
+  });
+
+  it('rejects an invalid report ID before beginning a transaction', async () => {
+    const { service, database } = deletionState();
+    await expect(service.deleteOwnerReport(tenant, -1, { id: 3 }))
+      .rejects.toThrow('Owner report not found');
+    expect(database.withTenantClient).not.toHaveBeenCalled();
   });
 });
