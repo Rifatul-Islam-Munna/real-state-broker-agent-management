@@ -680,9 +680,11 @@ export function defaultTemplateSource(token: string): TemplateValueKey | "" {
   if (normalized.includes("appoint")) return "appointments"
   if (normalized.includes("showing") || normalized.includes("viewing")) return "showings"
   if (normalized.includes("applic")) return "applications"
-  if (normalized.includes("ownername")) return "ownerName"
-  if (normalized.includes("owneremail")) return "ownerEmail"
-  if (normalized.includes("ownerphone")) return "ownerPhone"
+  // Owner reports may call the recipient a client, seller, or landlord.
+  // Treat these as owner fields so common templates need no manual mapping.
+  if (/^(owner|client|seller|landlord|recipient)(full)?name$/.test(normalized)) return "ownerName"
+  if (/^(owner|client|seller|landlord|recipient)email$/.test(normalized)) return "ownerEmail"
+  if (/^(owner|client|seller|landlord|recipient)phone$/.test(normalized)) return "ownerPhone"
   if (normalized.includes("totalactivity")) return "totalActivity"
   if (normalized.includes("feedbackcount")) return "feedbackCount"
   if (normalized === "fromdate" || normalized === "periodstart") return "fromDate"

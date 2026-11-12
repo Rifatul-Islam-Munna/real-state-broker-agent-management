@@ -102,6 +102,20 @@ test("both downloadable templates import without special options", () => {
   }
 })
 
+test("blank and demo CSV downloads use the supported four-week format", () => {
+  const blank = readFileSync(new URL("./public/owner-report-blank.csv", import.meta.url), "utf8")
+  const demo = readFileSync(new URL("./public/owner-report-demo.csv", import.meta.url), "utf8")
+  assert.equal(blank.trim().split(/\r?\n/).length, 1)
+  assert.match(blank, /^Address,Inquiries Week 1,/)
+  assert.match(blank, /Feedback Week 4/)
+  for (const week of [1, 2, 3, 4]) {
+    const parsed = parseWeeklyOwnerReportCsv(demo, week)
+    assert.equal(parsed.rows.length, 2, "demo week " + week)
+    assert.equal(parsed.rows[0].propertyName, "123 Example Lane")
+    assert.ok(parsed.rows[0].feedback, "demo has feedback for week " + week)
+  }
+})
+
 test("property matching avoids ambiguous matches and wrong unit numbers", () => {
   const sameUnits = [
     { id: 1, title: "2686 NW 60th Way Unit 169" },
@@ -154,6 +168,11 @@ test("new template variables map to the selected week data", () => {
   assert.equal(defaultTemplateSource("fromdate"), "fromDate")
   assert.equal(defaultTemplateSource("todate"), "toDate")
   assert.equal(defaultTemplateSource("report_period"), "reportPeriod")
+  assert.equal(defaultTemplateSource("property_address"), "propertyName")
+  assert.equal(defaultTemplateSource("client_name"), "ownerName")
+  assert.equal(defaultTemplateSource("seller_name"), "ownerName")
+  assert.equal(defaultTemplateSource("landlord_name"), "ownerName")
+  assert.equal(defaultTemplateSource("recipient_email"), "ownerEmail")
   const rendered = renderTemplateWithMapping(
     "Week {{week}}: {{inquiries}} inquiries, {{feedback}}",
     { week: "week", inquiries: "inquiries", feedback: "feedback" },

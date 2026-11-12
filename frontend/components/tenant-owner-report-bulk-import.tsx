@@ -13,7 +13,6 @@ import {
   ArrowRight,
   Check,
   ChevronDown,
-  ChevronUp,
   CircleCheck,
   ClipboardCheck,
   Download,
@@ -24,12 +23,12 @@ import {
   RotateCcw,
   Search,
   Send,
-  Settings2,
   UploadCloud,
 } from "lucide-react"
 
 import type { AgencyCommunicationTemplateItem } from "@/@types/real-estate-api"
 import { OwnerReportCsvReviewRow } from "@/components/owner-report-csv-review-row"
+import { OwnerReportTemplateMapping } from "@/components/owner-report-template-mapping"
 import {
   serializeOwnerDrafts,
   type ReportOwnerDraft,
@@ -47,7 +46,6 @@ import {
   extractTemplateTokens,
   parseWeeklyOwnerReportCsv,
   renderTemplateWithMapping,
-  templateValueOptions,
   type OwnerReportWeek,
   type TemplateValueKey,
 } from "@/lib/owner-report-csv"
@@ -523,7 +521,7 @@ export function TenantOwnerReportBulkImport({
         ))}
       </div>
 
-      <section aria-labelledby="csv-setup-title" className="rounded-3xl border border-slate-200 bg-white p-5 shadow-[0_12px_40px_rgba(15,23,42,0.035)] sm:p-7">
+      <section aria-labelledby="csv-setup-title" className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
         <div id="csv-setup-title">
           <StepHeading
             description="Choose the message, select the week, and drop in your spreadsheet export."
@@ -532,13 +530,39 @@ export function TenantOwnerReportBulkImport({
           />
         </div>
 
-        <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+        <div className="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2.5">
+          <span className="mr-1 text-xs font-semibold text-slate-600">CSV templates</span>
+          <a
+            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 transition-colors hover:border-teal-300 hover:bg-teal-50 hover:text-teal-800"
+            download="owner-report-blank.csv"
+            href="/owner-report-blank.csv"
+          >
+            <Download className="size-3.5" /> Blank
+          </a>
+          <a
+            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 transition-colors hover:border-teal-300 hover:bg-teal-50 hover:text-teal-800"
+            download="owner-report-demo.csv"
+            href="/owner-report-demo.csv"
+          >
+            <Download className="size-3.5" /> Example
+          </a>
+          <a
+            className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-slate-500 transition-colors hover:bg-white hover:text-teal-700"
+            download="owner-report-grouped.csv"
+            href="/owner-report-grouped.csv"
+          >
+            Grouped format
+          </a>
+          <span className="ml-auto text-[11px] text-slate-400">Weeks 1–4</span>
+        </div>
+
+        <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
           <div>
             <label className="block text-sm font-semibold text-slate-800" htmlFor="owner-csv-template">
               Owner feedback template
             </label>
             <select
-              className="mt-2 h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-sm font-medium outline-none focus:border-teal-700 focus:ring-2 focus:ring-teal-700/10 disabled:bg-slate-100"
+              className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium outline-none focus:border-teal-700 focus:ring-2 focus:ring-teal-700/10 disabled:bg-slate-100"
               disabled={isSending || templatesQuery.isLoading}
               id="owner-csv-template"
               onChange={(event) => {
@@ -556,9 +580,6 @@ export function TenantOwnerReportBulkImport({
                 </option>
               ))}
             </select>
-            <p className="mt-2 text-xs leading-5 text-slate-500">
-              Your active Owner Feedback templates are available here automatically.
-            </p>
             {!templatesQuery.isLoading && ownerTemplates.length === 0 ? (
               <p className="mt-2 text-xs font-semibold text-amber-800">
                 No active Owner Feedback template found. Create one in Agency Settings.
@@ -570,11 +591,11 @@ export function TenantOwnerReportBulkImport({
             <legend className="text-sm font-semibold text-slate-800">
               Which week should be sent?
             </legend>
-            <div className="mt-2 grid grid-cols-4 gap-2">
+            <div className="mt-1.5 grid grid-cols-4 gap-1.5">
               {([1, 2, 3, 4] as OwnerReportWeek[]).map((value) => (
                 <button
                   aria-pressed={week === value}
-                  className={`h-12 rounded-xl border text-sm font-bold transition-colors focus-visible:outline-2 focus-visible:outline-teal-700 ${
+                  className={`h-10 rounded-lg border text-xs font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-teal-700 ${
                     week === value
                       ? "border-teal-700 bg-teal-700 text-white"
                       : "border-slate-200 bg-slate-50 text-slate-600 hover:border-teal-400"
@@ -588,226 +609,22 @@ export function TenantOwnerReportBulkImport({
                 </button>
               ))}
             </div>
-            <p className="mt-2 text-xs leading-5 text-slate-500">
-              Only this week&apos;s numbers and feedback will be used.
-            </p>
           </fieldset>
         </div>
 
         {selectedTemplate ? (
-          <section aria-label="Email template preview" className="mt-6 overflow-hidden rounded-2xl border border-teal-200 bg-slate-50">
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-teal-100 bg-teal-50 px-5 py-3">
-              <div className="flex items-center gap-2 text-sm font-bold text-teal-900">
-                <Mail className="size-4" /> Email preview
-              </div>
-              <span className="text-xs font-medium text-teal-800">
-                {previewRow ? `Showing ${previewRow.propertyName}` : "Sample data until CSV is imported"}
-              </span>
-            </div>
-            <div className="space-y-3 px-5 py-5">
-              <p className="text-xs text-slate-500">
-                Preview only — no email will be sent. Subject and message update with your template,
-                week, CSV data, and variable mapping.
-              </p>
-              <div className="rounded-xl border border-slate-200 bg-white p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Subject</p>
-                <p className="mt-1 break-words font-semibold text-slate-900">
-                  {previewSubject || "No subject"}
-                </p>
-                <div className="mt-4 border-t border-slate-100 pt-4">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Message</p>
-                  <p className="mt-3 max-h-80 overflow-y-auto whitespace-pre-wrap break-words text-sm leading-7 text-slate-700">
-                    {previewBody || "No message body"}
-                  </p>
-                </div>
-              </div>
-              {unresolvedTokens.length > 0 ? (
-                <p className="text-xs font-semibold text-amber-800">
-                  Unmapped variables: {unresolvedTokens.join(", ")}. Match them before sending.
-                </p>
-              ) : null}
-            </div>
-          </section>
-        ) : null}
-
-        <label
-          className={`mt-6 flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed px-5 py-7 text-center transition-colors focus-within:ring-2 focus-within:ring-teal-700/20 sm:py-9 ${
-            isDragging
-              ? "border-teal-600 bg-teal-50"
-              : fileName
-                ? "border-teal-200 bg-teal-50/60"
-                : "border-slate-300 bg-slate-50 hover:border-teal-500 hover:bg-teal-50/50"
-          }`}
-          onDragEnter={(event) => {
-            event.preventDefault()
-            setIsDragging(true)
-          }}
-          onDragLeave={(event) => {
-            event.preventDefault()
-            setIsDragging(false)
-          }}
-          onDragOver={(event) => event.preventDefault()}
-          onDrop={handleDrop}
-        >
-          <span className="flex size-12 items-center justify-center rounded-2xl bg-white text-teal-700 shadow-sm">
-            {fileName ? <FileSpreadsheet className="size-6" /> : <UploadCloud className="size-6" />}
-          </span>
-          <span className="mt-3 max-w-full break-all text-sm font-bold text-slate-900">
-            {fileName || "Drop your CSV here, or click to choose a file"}
-          </span>
-          <span className="mt-1 text-xs leading-5 text-slate-500">
-            {fileName
-              ? `${rows.length} property rows imported · Choose another file to replace it`
-              : "Works with regular CSV files and Excel / Google Sheets CSV exports · Max 10 MB"}
-          </span>
-          <input
-            accept=".csv,text/csv,text/plain"
-            className="sr-only"
-            disabled={isSending}
-            onChange={(event) => {
-              void handleFile(event.target.files?.[0])
-              event.target.value = ""
-            }}
-            type="file"
+          <OwnerReportTemplateMapping
+            tokens={templateTokens}
+            mapping={mapping}
+            exampleValues={previewValues}
+            isSending={isSending}
+            expanded={showMapping}
+            onToggle={() => setShowMapping((current) => !current)}
+            onChange={(token, source) =>
+              setMapping((current) => ({ ...current, [token]: source }))
+            }
+            onResetSuggestions={() => setMapping(automaticMapping(selectedTemplate))}
           />
-          <span className="mt-4 inline-flex items-center gap-2 rounded-xl border border-teal-200 bg-white px-4 py-2 text-xs font-bold text-teal-800">
-            <FileUp className="size-4" />
-            {fileName ? "Replace CSV" : "Choose CSV"}
-          </span>
-        </label>
-
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-3 text-xs">
-            <span className="font-semibold text-slate-500">Need a sample?</span>
-            <a className="inline-flex items-center gap-1.5 font-bold text-teal-800 hover:underline" download href="/owner-report-standard.csv">
-              <Download className="size-3.5" /> Download simple CSV
-            </a>
-            <a className="inline-flex items-center gap-1.5 font-semibold text-slate-600 hover:text-teal-800 hover:underline" download href="/owner-report-grouped.csv">
-              Grouped-heading example
-            </a>
-          </div>
-          {fileName ? (
-            <button
-              className="text-xs font-semibold text-slate-500 hover:text-rose-700"
-              disabled={isSending}
-              onClick={resetImport}
-              type="button"
-            >
-              Remove file
-            </button>
-          ) : null}
-        </div>
-
-        <div className="mt-6 border-t border-slate-100 pt-5">
-          <p className="text-sm font-semibold text-slate-800">Send via</p>
-          <div className="mt-3 flex flex-wrap gap-3">
-            <label className={`inline-flex cursor-pointer items-center gap-2 rounded-xl border px-4 py-3 text-sm font-semibold ${
-              emailEnabled
-                ? "border-teal-200 bg-teal-50 text-teal-900"
-                : "border-slate-200 bg-white text-slate-600"
-            }`}>
-              <input
-                checked={emailEnabled}
-                className="accent-teal-700"
-                disabled={isSending}
-                onChange={(event) => setEmailEnabled(event.target.checked)}
-                type="checkbox"
-              />
-              <Mail className="size-4" /> Email
-            </label>
-            <label className={`inline-flex cursor-pointer items-center gap-2 rounded-xl border px-4 py-3 text-sm font-semibold ${
-              smsEnabled
-                ? "border-teal-200 bg-teal-50 text-teal-900"
-                : "border-slate-200 bg-white text-slate-600"
-            }`}>
-              <input
-                checked={smsEnabled}
-                className="accent-teal-700"
-                disabled={isSending}
-                onChange={(event) => setSmsEnabled(event.target.checked)}
-                type="checkbox"
-              />
-              <MessageSquareText className="size-4" /> SMS
-            </label>
-          </div>
-          <p className="mt-2 text-xs text-slate-500">
-            Each property counts as one report, even if multiple owners receive it.
-          </p>
-          {!emailEnabled && !smsEnabled ? (
-            <p className="mt-2 text-xs font-semibold text-amber-800">
-              Select at least one delivery channel to continue.
-            </p>
-          ) : null}
-        </div>
-
-        {selectedTemplate ? (
-          <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-start gap-2.5">
-                <span className="mt-0.5 text-teal-700">
-                  {unresolvedTokens.length ? <AlertCircle className="size-4 text-amber-700" /> : <CircleCheck className="size-4" />}
-                </span>
-                <div>
-                  <p className="text-sm font-bold text-slate-800">
-                    {unresolvedTokens.length
-                      ? `${unresolvedTokens.length} variable${unresolvedTokens.length === 1 ? "" : "s"} need matching`
-                      : "Template variables matched automatically"}
-                  </p>
-                  <p className="mt-1 text-xs leading-5 text-slate-500">
-                    {templateTokens.length} variable{templateTokens.length === 1 ? "" : "s"} found · You can change any match.
-                  </p>
-                </div>
-              </div>
-              <button
-                aria-expanded={showMapping}
-                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:border-teal-300"
-                onClick={() => setShowMapping((current) => !current)}
-                type="button"
-              >
-                <Settings2 className="size-3.5" />
-                Edit variable mapping
-                {showMapping ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
-              </button>
-            </div>
-
-            {showMapping ? (
-              <div className="mt-4 grid gap-3 border-t border-slate-200 pt-4 sm:grid-cols-2 lg:grid-cols-3">
-                {templateTokens.map((token) => (
-                  <label className="grid gap-1.5 text-xs font-bold text-slate-700" key={token}>
-                    <span className="break-all font-mono">{"{{" + token + "}}"}</span>
-                    <select
-                      className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-normal text-slate-900 outline-none focus:border-teal-700"
-                      disabled={isSending}
-                      onChange={(event) =>
-                        setMapping((current) => ({
-                          ...current,
-                          [token]: event.target.value as TemplateValueKey | "",
-                        }))
-                      }
-                      value={mapping[token] ?? ""}
-                    >
-                      <option value="">Choose CSV value</option>
-                      {templateValueOptions.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                ))}
-                {!templateTokens.length ? (
-                  <p className="text-xs text-slate-500">
-                    This template has no variables. It will send the saved message as written.
-                  </p>
-                ) : null}
-              </div>
-            ) : null}
-            {unresolvedTokens.length && !showMapping ? (
-              <p className="mt-3 text-xs font-semibold text-amber-800">
-                Open variable mapping and choose the corresponding CSV values before sending.
-              </p>
-            ) : null}
-          </div>
         ) : null}
 
         {(needsFromDate || needsToDate) ? (
@@ -845,6 +662,138 @@ export function TenantOwnerReportBulkImport({
             Complete the reporting dates used by your template before sending.
           </p>
         ) : null}
+
+        {selectedTemplate ? (
+          <details className="group mt-4 overflow-hidden rounded-xl border border-slate-200 bg-white">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-xs transition-colors hover:bg-slate-50 [&::-webkit-details-marker]:hidden">
+              <span className="flex min-w-0 items-center gap-2">
+                <Mail className="size-4 shrink-0 text-teal-700" />
+                <span className="shrink-0 font-semibold text-slate-900">Email preview</span>
+                <span className="hidden truncate text-slate-500 sm:inline">{previewSubject || "No subject"}</span>
+              </span>
+              <span className="flex shrink-0 items-center gap-1.5 text-slate-500">
+                {previewRow ? "CSV data" : "Sample data"}
+                <ChevronDown className="size-3.5 transition-transform group-open:rotate-180" />
+              </span>
+            </summary>
+            <div className="border-t border-slate-100 px-4 py-3">
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                <span className="font-semibold text-slate-500">Subject:</span>
+                <span className="break-words font-medium text-slate-900">{previewSubject || "No subject"}</span>
+              </div>
+              <div className="mt-3 max-h-64 overflow-y-auto whitespace-pre-wrap break-words rounded-lg bg-slate-50 px-3 py-3 text-xs leading-6 text-slate-700">
+                {previewBody || "No message body"}
+              </div>
+              {unresolvedTokens.length > 0 ? (
+                <p className="mt-2 text-xs font-medium text-amber-700">
+                  Match the remaining variables before sending: {unresolvedTokens.join(", ")}.
+                </p>
+              ) : null}
+              <p className="mt-2 text-[11px] text-slate-400">Preview only — nothing is sent until you confirm.</p>
+            </div>
+          </details>
+        ) : null}
+
+        <label
+          className={`mt-4 flex cursor-pointer flex-wrap items-center gap-3 rounded-xl border border-dashed px-3 py-3 text-left transition-colors focus-within:ring-2 focus-within:ring-teal-700/20 sm:px-4 ${
+            isDragging
+              ? "border-teal-600 bg-teal-50"
+              : fileName
+                ? "border-teal-200 bg-teal-50/60"
+                : "border-slate-300 bg-slate-50 hover:border-teal-500 hover:bg-teal-50/50"
+          }`}
+          onDragEnter={(event) => {
+            event.preventDefault()
+            setIsDragging(true)
+          }}
+          onDragLeave={(event) => {
+            event.preventDefault()
+            setIsDragging(false)
+          }}
+          onDragOver={(event) => event.preventDefault()}
+          onDrop={handleDrop}
+        >
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-white text-teal-700">
+            {fileName ? <FileSpreadsheet className="size-4.5" /> : <UploadCloud className="size-4.5" />}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block break-all text-sm font-semibold text-slate-900">
+              {fileName || "Upload your weekly CSV"}
+            </span>
+            <span className="mt-0.5 block text-xs text-slate-500">
+              {fileName ? `${rows.length} properties imported` : "Drag and drop, or choose a CSV · Max 10 MB"}
+            </span>
+          </span>
+          <input
+            accept=".csv,text/csv,text/plain"
+            className="sr-only"
+            disabled={isSending}
+            onChange={(event) => {
+              void handleFile(event.target.files?.[0])
+              event.target.value = ""
+            }}
+            type="file"
+          />
+          <span className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-teal-200 bg-white px-3 text-xs font-semibold text-teal-800">
+            <FileUp className="size-3.5" />
+            {fileName ? "Replace" : "Choose file"}
+          </span>
+        </label>
+
+        {fileName ? (
+          <div className="mt-3 flex justify-end">
+            <button
+              className="text-xs font-semibold text-slate-500 transition-colors hover:text-rose-700"
+              disabled={isSending}
+              onClick={resetImport}
+              type="button"
+            >
+              Remove uploaded file
+            </button>
+          </div>
+        ) : null}
+
+        <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-slate-100 pt-4">
+          <p className="text-xs font-semibold text-slate-700">Send via</p>
+          <div className="flex flex-wrap gap-2">
+            <label className={`inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold ${
+              emailEnabled
+                ? "border-teal-200 bg-teal-50 text-teal-900"
+                : "border-slate-200 bg-white text-slate-600"
+            }`}>
+              <input
+                checked={emailEnabled}
+                className="accent-teal-700"
+                disabled={isSending}
+                onChange={(event) => setEmailEnabled(event.target.checked)}
+                type="checkbox"
+              />
+              <Mail className="size-4" /> Email
+            </label>
+            <label className={`inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold ${
+              smsEnabled
+                ? "border-teal-200 bg-teal-50 text-teal-900"
+                : "border-slate-200 bg-white text-slate-600"
+            }`}>
+              <input
+                checked={smsEnabled}
+                className="accent-teal-700"
+                disabled={isSending}
+                onChange={(event) => setSmsEnabled(event.target.checked)}
+                type="checkbox"
+              />
+              <MessageSquareText className="size-4" /> SMS
+            </label>
+          </div>
+          <p className="w-full text-[11px] text-slate-400">
+            One report per property, even with multiple owners.
+          </p>
+          {!emailEnabled && !smsEnabled ? (
+            <p className="mt-2 text-xs font-semibold text-amber-800">
+              Select at least one delivery channel to continue.
+            </p>
+          ) : null}
+        </div>
 
         {templatesQuery.error ? (
           <p className="mt-4 rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-800" role="alert">
