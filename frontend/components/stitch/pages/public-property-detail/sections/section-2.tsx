@@ -61,6 +61,9 @@ function amenityIcon(value: string) {
 
 export function Section2Section({ property, relatedProperties }: Section2SectionProps) {
   const gallery = imageGallery(property)
+  const publicDocuments = (property.propertyDocuments ?? []).filter(
+    (document) => document.accessLevel === "Public" && Boolean(document.fileUrl)
+  )
   const parts = locationParts(property)
   const city = parts[0] || "Featured Area"
   const agentName = property.agent?.fullName || "Listing Advisor"
@@ -143,6 +146,42 @@ export function Section2Section({ property, relatedProperties }: Section2Section
                   ))}
                 </div>
               </section>
+
+              {publicDocuments.length > 0 ? (
+                <section aria-labelledby="public-property-documents-title">
+                  <div className="mb-5 flex items-center gap-3">
+                    <h2 className="text-sm font-bold uppercase tracking-[0.14em]" id="public-property-documents-title">
+                      Property Documents
+                    </h2>
+                    <span className="h-px flex-1 bg-slate-200" />
+                  </div>
+                  <p className="mb-3 text-sm leading-6 text-slate-600">
+                    Public documents provided for this listing.
+                  </p>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {publicDocuments.map((document, index) => (
+                      <a
+                        className="flex min-w-0 items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 transition-colors hover:border-[#4343d5] hover:bg-[#f4f4ff] focus-visible:outline-2 focus-visible:outline-[#4343d5]"
+                        href={document.fileUrl}
+                        key={document.fileObjectName || `${document.fileUrl}-${index}`}
+                        rel="noopener noreferrer"
+                        target="_blank"
+                      >
+                        <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-[#f0f0ff] text-[#4343d5]">
+                          <AppIcon className="text-xl" name="description" />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-semibold text-[#0b1c30]">
+                            {document.name || document.fileName}
+                          </span>
+                          <span className="mt-1 block text-xs text-slate-500">View document</span>
+                        </span>
+                        <AppIcon className="text-slate-400" name="open_in_new" />
+                      </a>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
             </div>
 
             <aside className="space-y-5 lg:col-span-4">

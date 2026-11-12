@@ -7,6 +7,8 @@ import { TenantDashboardController } from './tenant-dashboard.controller';
 import { TenantDashboardService } from './tenant-dashboard.service';
 import { TenantPlanPermissionGuard } from './tenant-plan-permission.guard';
 import { TenantRealtorWorkflowService } from './tenant-realtor-workflow.service';
+import { TenantOwnerReportService } from './tenant-owner-report.service';
+import { Property } from '../properties/entities/property.entity';
 import { TenantShowingRequestPublicController } from './tenant-showing-request-public.controller';
 import { TenantPropertyOperationsController } from './tenant-property-operations.controller';
 import { TenantPropertyOperationsService } from './tenant-property-operations.service';
@@ -30,7 +32,7 @@ import { TenantStaffController } from './tenant-staff.controller';
 import { TenantChatbotModule } from '../tenant-chatbot/tenant-chatbot.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([SaasTenant]), UsersModule, TenantChatbotModule],
+  imports: [TypeOrmModule.forFeature([SaasTenant, Property]), UsersModule, TenantChatbotModule],
   controllers: [
     TenantDashboardController,
     TenantShowingRequestPublicController,
@@ -46,6 +48,7 @@ import { TenantChatbotModule } from '../tenant-chatbot/tenant-chatbot.module';
   providers: [
     TenantDashboardService,
     TenantRealtorWorkflowService,
+    TenantOwnerReportService,
     TenantPropertyOperationsService,
     TenantWorkspaceSettingsService,
     TenantLegacyCompatibilityService,

@@ -210,6 +210,9 @@ export function DocumentEditorDialog({
                     onValueChange={(value) => {
                       const documentType = value as DocumentType
                       updateField("documentType", documentType)
+                      if (documentType === "Property" && formValues.documentType !== "Property") {
+                        updateField("accessLevel", "Public")
+                      }
                       if (documentType !== "Property") {
                         updateField("propertyId", null)
                         updateField("propertyTitle", "")

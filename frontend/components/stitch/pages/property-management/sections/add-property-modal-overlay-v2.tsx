@@ -265,8 +265,32 @@ export function AddPropertyModalOverlaySection({
             ? crypto.randomUUID()
             : `${file.name}-${Date.now()}-${Math.random().toString(16).slice(2)}`,
         name: file.name.replace(/\.[^.]+$/, ""),
+        accessLevel: "Public" as const,
       })),
     ])
+  }
+
+  function setPendingDocumentAccessLevel(
+    id: string,
+    accessLevel: "Public" | "AdminOnly",
+  ) {
+    setPendingDocuments((current) =>
+      current.map((document) =>
+        document.id === id ? { ...document, accessLevel } : document,
+      ),
+    )
+  }
+
+  function setExistingDocumentAccessLevel(
+    index: number,
+    accessLevel: "Public" | "AdminOnly",
+  ) {
+    updateField(
+      "propertyDocuments",
+      (formValues.propertyDocuments ?? []).map((document, itemIndex) =>
+        itemIndex === index ? { ...document, accessLevel } : document,
+      ),
+    )
   }
 
   function renamePendingDocument(id: string, name: string) {
@@ -410,6 +434,7 @@ export function AddPropertyModalOverlaySection({
               mimeType:
                 uploaded.mimeType || document.file.type || "application/octet-stream",
               name: document.name.trim(),
+              accessLevel: document.accessLevel,
               sizeBytes: uploaded.sizeBytes || document.file.size,
             })),
           ],
@@ -512,6 +537,8 @@ export function AddPropertyModalOverlaySection({
               }
               onRenameExisting={renameExistingDocument}
               onRenamePending={renamePendingDocument}
+              onSetExistingAccessLevel={setExistingDocumentAccessLevel}
+              onSetPendingAccessLevel={setPendingDocumentAccessLevel}
               pendingDocuments={pendingDocuments}
             />
             <FieldError error={errors.propertyDocuments} />

@@ -76,6 +76,33 @@ export function PropertyFormFieldsSection({
     return Array.from(mergedAmenities)
   }, [formValues.keyAmenities])
 
+  function addOwner() {
+    if (formValues.additionalOwners.length >= 4) return
+    updateField("additionalOwners", [
+      ...formValues.additionalOwners,
+      { id: crypto.randomUUID(), name: "", email: "", phone: "" },
+    ])
+  }
+
+  function updateAdditionalOwner(
+    id: string,
+    patch: Partial<{ name: string; email: string; phone: string }>
+  ) {
+    updateField(
+      "additionalOwners",
+      formValues.additionalOwners.map((owner) =>
+        owner.id === id ? { ...owner, ...patch } : owner
+      )
+    )
+  }
+
+  function removeAdditionalOwner(id: string) {
+    updateField(
+      "additionalOwners",
+      formValues.additionalOwners.filter((owner) => owner.id !== id)
+    )
+  }
+
   function toggleAmenity(amenity: string, checked: boolean) {
     const currentAmenities = formValues.keyAmenities ?? []
 
@@ -665,6 +692,72 @@ export function PropertyFormFieldsSection({
                 value={formValues.ownerEmail}
               />
             </div>
+          </div>
+          <div className="md:col-span-2 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-[var(--ether-on-surface)]">
+                  Additional property owners ({formValues.additionalOwners.length + 1}/5)
+                </p>
+                <p className="mt-1 text-xs text-[var(--ether-on-surface-variant)]">
+                  Each owner can receive the same owner report by email, SMS, or both.
+                  It still counts as one property report in history.
+                </p>
+              </div>
+              <button
+                className="inline-flex items-center gap-2 rounded-xl border border-[var(--ether-primary)] px-4 py-2 text-sm font-bold text-[var(--ether-primary)] disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={formValues.additionalOwners.length >= 4}
+                onClick={addOwner}
+                type="button"
+              >
+                <AppIcon name="add" /> Add another owner
+              </button>
+            </div>
+            {formValues.additionalOwners.map((owner, index) => (
+              <div
+                className="rounded-2xl border border-[var(--ether-outline-variant)] bg-white p-4"
+                key={owner.id}
+              >
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <p className="text-sm font-semibold">Owner {index + 2}</p>
+                  <button
+                    className="text-sm font-semibold text-rose-600 hover:underline"
+                    onClick={() => removeAdditionalOwner(owner.id)}
+                    type="button"
+                  >
+                    Remove owner
+                  </button>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="flex flex-col gap-1.5 text-xs font-semibold">
+                    Full name
+                    <Input
+                      onChange={(event) => updateAdditionalOwner(owner.id, { name: event.target.value })}
+                      placeholder="Owner full name"
+                      value={owner.name}
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1.5 text-xs font-semibold">
+                    Phone number
+                    <Input
+                      onChange={(event) => updateAdditionalOwner(owner.id, { phone: event.target.value })}
+                      placeholder="+1 555 000 0000"
+                      type="tel"
+                      value={owner.phone}
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1.5 text-xs font-semibold sm:col-span-2">
+                    Email address
+                    <Input
+                      onChange={(event) => updateAdditionalOwner(owner.id, { email: event.target.value })}
+                      placeholder="owner@example.com"
+                      type="email"
+                      value={owner.email}
+                    />
+                  </label>
+                </div>
+              </div>
+            ))}
           </div>
           <div className="flex flex-col gap-2 md:col-span-2">
             <label className="ether-label-caps text-[var(--ether-on-surface-variant)]">

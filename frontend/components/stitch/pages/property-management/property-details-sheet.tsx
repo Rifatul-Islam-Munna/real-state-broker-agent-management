@@ -520,6 +520,26 @@ function Overview({ property }: { property: PropertyItem }) {
             <Detail label="Phone" value={property.ownerPhone} />
           </div>
         </div>
+        {(property.owners ?? []).slice(1).length > 0 ? (
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            {(property.owners ?? []).slice(1).map((owner, index) => (
+              <div
+                className="rounded-2xl border border-[var(--ether-outline-variant)] bg-[var(--ether-surface-container-low)] p-4"
+                key={`${owner.email || owner.phone || owner.name}-${index}`}
+              >
+                <p className="text-sm font-bold">
+                  Owner {index + 2}: {owner.name || "Unnamed owner"}
+                </p>
+                <p className="mt-2 break-all text-xs text-[var(--ether-on-surface-variant)]">
+                  {owner.email || "No email"}
+                </p>
+                <p className="mt-1 text-xs text-[var(--ether-on-surface-variant)]">
+                  {owner.phone || "No phone"}
+                </p>
+              </div>
+            ))}
+          </div>
+        ) : null}
         {property.ownerExtraInfo ? (
           <div className="mt-5">
             <p className="ether-label-caps text-[10px] text-[var(--ether-outline)]">

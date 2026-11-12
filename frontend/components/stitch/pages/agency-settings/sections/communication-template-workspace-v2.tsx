@@ -59,7 +59,7 @@ const leadTokens = [
   "{{showing_time}}",
   "{{closing_date}}",
 ]
-const ownerTokens = [
+const ownerFeedbackTokens = [
   "{{property_address}}",
   "{{fromdate}}",
   "{{todate}}",
@@ -68,6 +68,23 @@ const ownerTokens = [
   "{{feedback2}}",
   "{{feedback3}}",
 ]
+
+const ownerCsvTokens = [
+  "{{inquiries}}",
+  "{{appointments}}",
+  "{{showings}}",
+  "{{applications}}",
+  "{{feedback}}",
+  "{{feedback_count}}",
+  "{{total_activity}}",
+  "{{week}}",
+  "{{report_period}}",
+  "{{owner_name}}",
+  "{{owner_email}}",
+  "{{owner_phone}}",
+]
+
+const ownerTokens = [...ownerFeedbackTokens, ...ownerCsvTokens]
 
 function newTemplate(audience: TemplateAudience): AgencyCommunicationTemplateItem {
   const owner = audience === "OwnerFeedback"
@@ -556,8 +573,20 @@ function TemplateSheet({
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 {"Available variables"}
               </p>
+              {draft.audience === "OwnerFeedback" ? (
+                <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                  Weekly CSV tokens are filled when you import a CSV from Create Owner
+                  Report. Automated showing-feedback messages have their own variables.
+                  Copy the variables you need into the subject or message body.
+                </p>
+              ) : null}
               <div className="mt-3 flex flex-wrap gap-2">
-                {(draft.variableTokens ?? []).map((token) => (
+                {Array.from(
+                  new Set([
+                    ...(draft.variableTokens ?? []),
+                    ...(draft.audience === "OwnerFeedback" ? ownerTokens : []),
+                  ])
+                ).map((token) => (
                   <Badge key={token} variant="outline">{token}</Badge>
                 ))}
               </div>

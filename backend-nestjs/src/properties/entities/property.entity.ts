@@ -42,6 +42,9 @@ export class Property {
   @PrimaryGeneratedColumn()
   id: number;
 
+  @Column({ type: 'int', nullable: true })
+  tenantId: number | null;
+
   @Column({ default: '' })
   slug: string;
 
@@ -93,6 +96,10 @@ export class Property {
   @Column({ type: 'text', default: '' })
   ownerExtraInfo: string;
 
+  // Private additional contacts; legacy owner fields remain the primary owner.
+  @Column({ type: 'jsonb', default: () => "'[]'::jsonb" })
+  owners: Array<{ name: string; email: string; phone: string }> = [];
+
   @Column({ type: 'int', nullable: true })
   minimumCreditScore: number | null;
 
@@ -119,6 +126,7 @@ export class Property {
 
   @Column({ type: 'jsonb', default: [] })
   propertyDocuments: Array<{
+    accessLevel?: 'Public' | 'AdminOnly';
     name: string;
     fileName: string;
     fileUrl: string;

@@ -572,4 +572,15 @@ export const TENANT_DATABASE_MIGRATIONS: TenantDatabaseMigration[] = [
         ADD COLUMN IF NOT EXISTS workflow_state varchar(40) NOT NULL DEFAULT 'ANSWERING'`,
     ],
   },
+  {
+    version: 15,
+    name: 'owner_report_multiple_recipients',
+    statements: [
+      `ALTER TABLE tenant_owner_report ADD COLUMN IF NOT EXISTS managed_property_id integer`,
+      `ALTER TABLE tenant_owner_report ADD COLUMN IF NOT EXISTS owners jsonb NOT NULL DEFAULT '[]'::jsonb`,
+      `ALTER TABLE tenant_owner_report ALTER COLUMN property_id DROP NOT NULL`,
+      `CREATE INDEX IF NOT EXISTS idx_tenant_owner_report_managed
+        ON tenant_owner_report(managed_property_id, sent_at DESC)`,
+    ],
+  },
 ];

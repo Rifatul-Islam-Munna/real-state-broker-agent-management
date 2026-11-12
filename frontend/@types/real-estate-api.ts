@@ -698,6 +698,8 @@ export type PropertySellPrediction = {
 }
 
 export type PropertyDocumentItem = {
+  /** New property uploads are Public. Older documents without this field stay private. */
+  accessLevel?: "Public" | "AdminOnly"
   name: string
   fileName: string
   fileUrl: string
@@ -738,6 +740,7 @@ export type PropertyItem = {
   ownerEmail?: string
   ownerPhone?: string
   ownerExtraInfo?: string
+  owners?: PropertyOwnerContact[]
   propertyDocuments?: PropertyDocumentItem[]
   thumbnailUrl?: string | null
   thumbnailObjectName?: string | null
@@ -767,6 +770,12 @@ export type PropertyStatus =
   | "Sold"
   | "Rented"
   | "Unpublished"
+
+export type PropertyOwnerContact = {
+  name: string
+  email: string
+  phone: string
+}
 
 export type PropertySaveInput = {
   title: string
@@ -798,6 +807,7 @@ export type PropertySaveInput = {
   ownerEmail: string
   ownerPhone: string
   ownerExtraInfo: string
+  owners?: PropertyOwnerContact[]
   propertyDocuments: PropertyDocumentItem[]
   thumbnailUrl?: string | null
   thumbnailObjectName?: string | null

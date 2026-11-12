@@ -67,21 +67,35 @@ export class PropertiesController {
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Create property' })
   async create(@Body() createDto: any, @Req() req: any) {
-    return this.propertiesService.create(createDto, req.user?.email ?? 'CRM', req.user?.role === 'Admin');
+    return this.propertiesService.create(
+      { ...createDto, tenantId: req.user?.tenantId ?? null },
+      req.user?.email ?? 'CRM',
+      req.user?.role === 'Admin',
+    );
   }
 
   @Put()
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Update property' })
   async update(@Body() updateDto: any, @Req() req: any) {
-    return this.propertiesService.update(updateDto.id, updateDto, req.user?.email ?? 'CRM', req.user?.role === 'Admin');
+    return this.propertiesService.update(
+      updateDto.id,
+      { ...updateDto, tenantId: req.user?.tenantId ?? undefined },
+      req.user?.email ?? 'CRM',
+      req.user?.role === 'Admin',
+    );
   }
 
   @Patch()
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Patch property' })
   async patch(@Body() updateDto: any, @Req() req: any) {
-    return this.propertiesService.update(updateDto.id, updateDto, req.user?.email ?? 'CRM', req.user?.role === 'Admin');
+    return this.propertiesService.update(
+      updateDto.id,
+      { ...updateDto, tenantId: req.user?.tenantId ?? undefined },
+      req.user?.email ?? 'CRM',
+      req.user?.role === 'Admin',
+    );
   }
 
   @Delete()

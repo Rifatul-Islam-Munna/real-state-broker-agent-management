@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { DocumentRepositoryItem, DocumentType, documentAccessDb, documentTypeDb } from './entities/document.entity';
+import { DocumentAccessLevel, DocumentRepositoryItem, DocumentType, documentAccessDb, documentTypeDb } from './entities/document.entity';
 import { paginated, toInt } from '../common/api-contract';
 
 @Injectable()
@@ -31,7 +31,8 @@ export class DocumentsService {
   async update(id: number, dto: any) {
     const doc = await this.documentRepo.findOne({ where: { id } });
     if (!doc) throw new NotFoundException('Document not found');
-    Object.assign(doc, this.normalize(dto));
+    // Preserve the saved visibility on edits that do not explicitly change it.
+    Object.assign(doc, this.normalize({ ...doc, ...dto, accessLevel: dto.accessLevel ?? doc.accessLevel }));
     return this.documentRepo.save(doc);
   }
 
@@ -69,6 +70,6 @@ export class DocumentsService {
     if (!mimeType) throw new BadRequestException('Document MIME type is required.');
     if (Number(dto.sizeBytes) <= 0) throw new BadRequestException('Document size must be greater than zero.');
     const documentType = Object.values(DocumentType).includes(dto.documentType) ? dto.documentType : DocumentType.Other;
-    return { ...dto, title, fileName, fileUrl, fileObjectName: `${dto.fileObjectName ?? ''}`.trim() || null, mimeType, sizeBytes: Number(dto.sizeBytes), category: `${dto.category ?? ''}`.trim() || 'General', documentType, propertyId: documentType === 'Property' && dto.propertyId ? Number(dto.propertyId) : null, propertyTitle: documentType === 'Property' ? `${dto.propertyTitle ?? ''}`.trim() : '', folder: `${dto.folder ?? ''}`.trim() || 'Repository', description: `${dto.description ?? ''}`.trim(), versionLabel: `${dto.versionLabel ?? ''}`.trim() || 'v1.0', tags: [...new Set((dto.tags ?? []).map((item: any) => `${item ?? ''}`.trim()).filter(Boolean))], accessLevel: dto.accessLevel ?? 'AdminOnly', isTemplate: !!dto.isTemplate, requiresSignature: !!dto.requiresSignature };
+    return { ...dto, title, fileName, fileUrl, fileObjectName: `${dto.fileObjectName ?? ''}`.trim() || null, mimeType, sizeBytes: Number(dto.sizeBytes), category: `${dto.category ?? ''}`.trim() || 'General', documentType, propertyId: documentType === 'Property' && dto.propertyId ? Number(dto.propertyId) : null, propertyTitle: documentType === 'Property' ? `${dto.propertyTitle ?? ''}`.trim() : '', folder: `${dto.folder ?? ''}`.trim() || 'Repository', description: `${dto.description ?? ''}`.trim(), versionLabel: `${dto.versionLabel ?? ''}`.trim() || 'v1.0', tags: [...new Set((dto.tags ?? []).map((item: any) => `${item ?? ''}`.trim()).filter(Boolean))], accessLevel: dto.accessLevel ?? (documentType === DocumentType.Property ? DocumentAccessLevel.Public : DocumentAccessLevel.AdminOnly), isTemplate: !!dto.isTemplate, requiresSignature: !!dto.requiresSignature };
   }
 }

@@ -43,6 +43,11 @@ describe('TenantStaffPermissionGuard', () => {
     expect(() => guard.canActivate(execution('/api/tenant-chatbot/test', ['settings']))).toThrow('staff permissions');
   });
 
+  it('requires lead permission for the owner report property recipient lookup', () => {
+    expect(guard.canActivate(execution('/api/tenant-dashboard/owner-report-properties', ['lead']))).toBe(true);
+    expect(() => guard.canActivate(execution('/api/tenant-dashboard/owner-report-properties', ['properties']))).toThrow('staff permissions');
+  });
+
   it('allows the minimal tenant context needed to render permitted navigation', () => {
     expect(guard.canActivate(execution('/api/tenant-dashboard/context', []))).toBe(true);
   });

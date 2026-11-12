@@ -61,6 +61,7 @@ function createEmptyPropertyForm(): PropertyFormValues {
     ownerEmail: "",
     ownerPhone: "",
     ownerExtraInfo: "",
+    additionalOwners: [],
     propertyDocuments: [],
     keyAmenities: [],
     documentRepositoryItemIds: [],
@@ -116,6 +117,14 @@ function mapPropertyToFormValues(property: PropertyItem): PropertyFormValues {
     ownerEmail: property.ownerEmail ?? "",
     ownerPhone: property.ownerPhone ?? "",
     ownerExtraInfo: property.ownerExtraInfo ?? "",
+    additionalOwners: (property.owners ?? [])
+      .slice(1)
+      .map((owner) => ({
+        id: crypto.randomUUID(),
+        name: owner.name ?? "",
+        email: owner.email ?? "",
+        phone: owner.phone ?? "",
+      })),
     propertyDocuments: property.propertyDocuments ?? [],
     thumbnailUrl: property.thumbnailUrl ?? "",
     thumbnailObjectName: property.thumbnailObjectName ?? "",
@@ -179,6 +188,18 @@ function buildPropertyPayload(
     ownerEmail: values.ownerEmail?.trim().toLowerCase() ?? "",
     ownerPhone: values.ownerPhone?.trim() ?? "",
     ownerExtraInfo: values.ownerExtraInfo?.trim() ?? "",
+    owners: [
+      {
+        name: values.ownerName.trim(),
+        email: values.ownerEmail.trim().toLowerCase(),
+        phone: values.ownerPhone.trim(),
+      },
+      ...values.additionalOwners.map((owner) => ({
+        name: owner.name.trim(),
+        email: owner.email.trim().toLowerCase(),
+        phone: owner.phone.trim(),
+      })),
+    ],
     propertyDocuments: values.propertyDocuments ?? [],
     exactLocation: values.exactLocation?.trim() ?? "",
     imageObjectNames: values.imageObjectNames ?? [],

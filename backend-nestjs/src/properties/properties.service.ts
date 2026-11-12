@@ -1,6 +1,6 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DeepPartial, Repository } from 'typeorm';
+import { DataSource, DeepPartial, Repository } from 'typeorm';
 import { Property, PropertyStatus, NeighborhoodInsight, PropertyPreQuestion, propertyCategories, propertyListingTypes, propertyStatuses } from './entities/property.entity';
 import { numericEnumValue } from '../common/numeric-enum';
 import { PredictionService } from '../prediction/prediction.service';
@@ -10,9 +10,10 @@ import { ApprovalType } from '../brokerage/entities/brokerage.entity';
 import { AuditAction, AuditEntityType } from '../brokerage/entities/audit-log.entity';
 import { SettingsService } from '../settings/settings.service';
 import { normalizePhoneNumber } from '../common/phone-normalizer';
+import { propertyDocumentAccessLevel, publicPropertyDocuments } from './property-document-access';
 
 @Injectable()
-export class PropertiesService {
+export class PropertiesService implements OnModuleInit {
   constructor(
     @InjectRepository(Property)
     private propertyRepository: Repository<Property>,
@@ -23,7 +24,18 @@ export class PropertiesService {
     private predictionService: PredictionService,
     private brokerageService: BrokerageService,
     private settingsService: SettingsService,
+    private readonly dataSource: DataSource,
   ) {}
+
+  async onModuleInit() {
+    // Additive migration for deployments with TypeORM synchronize disabled.
+    await this.dataSource.query(
+      "ALTER TABLE IF EXISTS property ADD COLUMN IF NOT EXISTS owners jsonb NOT NULL DEFAULT '[]'::jsonb",
+    );
+    await this.dataSource.query(
+      'ALTER TABLE IF EXISTS property ADD COLUMN IF NOT EXISTS tenant_id integer',
+    );
+  }
 
   async findAll(page = 1, pageSize = 10, search?: string, propertyType?: string, listingType?: string, status?: string, agent?: string, includePrivate = false): Promise<any> {
     page = toInt(page, 1);
@@ -131,6 +143,16 @@ export class PropertiesService {
     });
     if (!property) throw new NotFoundException('Property not found');
 
+    const requestedTenant = Number(updateDto?.tenantId);
+    if (Number.isInteger(requestedTenant) && requestedTenant > 0) {
+      const currentTenant = Number(property.tenantId);
+      const assignedTenant = Number(property.agent?.tenantId);
+      if ((currentTenant > 0 && currentTenant !== requestedTenant) ||
+          (assignedTenant > 0 && assignedTenant !== requestedTenant)) {
+        throw new ForbiddenException('This property belongs to another tenant.');
+      }
+    }
+
     const normalized = await this.normalizeDto(updateDto);
     const oldPrice = property.price;
     const oldStatus = property.status;
@@ -216,8 +238,21 @@ export class PropertiesService {
         ownerEmail: property.ownerEmail,
         ownerPhone: property.ownerPhone,
         ownerExtraInfo: property.ownerExtraInfo,
-        propertyDocuments: property.propertyDocuments ?? [],
+        owners: [
+          {
+            name: property.ownerName ?? '',
+            email: property.ownerEmail ?? '',
+            phone: property.ownerPhone ?? '',
+          },
+          ...(Array.isArray(property.owners) ? property.owners.slice(1) : []),
+        ],
       } : {}),
+      propertyDocuments: includePrivate
+        ? (property.propertyDocuments ?? []).map((document) => ({
+            ...document,
+            accessLevel: propertyDocumentAccessLevel(document.accessLevel),
+          }))
+        : publicPropertyDocuments(property.propertyDocuments),
       thumbnailUrl: property.thumbnailUrl,
       thumbnailObjectName: property.thumbnailObjectName,
       imageUrls: property.imageUrls ?? [],
@@ -284,8 +319,12 @@ export class PropertiesService {
       ownerEmail: text(dto.ownerEmail).trim().toLowerCase(),
       ownerPhone: normalizePhoneNumber(text(dto.ownerPhone).trim(), settings.profile?.defaultPhoneCountry),
       ownerExtraInfo: text(dto.ownerExtraInfo).trim(),
+      ...(Array.isArray(dto.owners)
+        ? { owners: this.normalizeOwners(dto.owners, dto, settings.profile?.defaultPhoneCountry) }
+        : {}),
       propertyDocuments: (dto.propertyDocuments ?? [])
         .map((item: any) => ({
+          accessLevel: propertyDocumentAccessLevel(item.accessLevel),
           name: text(item.name).trim(),
           fileName: text(item.fileName).trim(),
           fileUrl: text(item.fileUrl).trim(),
@@ -318,6 +357,38 @@ export class PropertiesService {
         } as DeepPartial<PropertyPreQuestion>))
         .sort((a, b) => a.sortOrder - b.sortOrder),
     };
+  }
+
+  private normalizeOwners(
+    input: unknown[],
+    dto: any,
+    defaultCountry?: string,
+  ): Array<{ name: string; email: string; phone: string }> {
+    if (input.length > 5) {
+      throw new BadRequestException('A property can have at most five owners.');
+    }
+
+    return input.map((entry, index) => {
+      const item = entry && typeof entry === 'object' ? entry as Record<string, unknown> : {};
+      const name = text(index === 0 ? dto.ownerName : item.name).trim().slice(0, 200);
+      const email = text(index === 0 ? dto.ownerEmail : item.email).trim().toLowerCase().slice(0, 240);
+      const phone = normalizePhoneNumber(
+        text(index === 0 ? dto.ownerPhone : item.phone).trim(),
+        defaultCountry,
+      ).slice(0, 80);
+
+      if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        throw new BadRequestException(`Owner ${index + 1} has an invalid email.`);
+      }
+      const digits = phone.replace(/\D/g, '');
+      if (phone && (digits.length < 7 || digits.length > 15)) {
+        throw new BadRequestException(`Owner ${index + 1} has an invalid phone.`);
+      }
+      if (index > 0 && !email && !phone) {
+        throw new BadRequestException(`Owner ${index + 1} needs an email or phone number.`);
+      }
+      return { name, email, phone };
+    });
   }
 
   private slug(title: string) {

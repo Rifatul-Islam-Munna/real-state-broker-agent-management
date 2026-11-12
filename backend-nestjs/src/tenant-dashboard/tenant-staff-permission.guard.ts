@@ -53,6 +53,7 @@ export class TenantStaffPermissionGuard implements CanActivate {
       return null;
     }
     if (path.startsWith('/tenant-dashboard')) {
+      if (path.includes('/owner-report-properties')) return 'lead';
       if (path.includes('/properties')) return 'properties';
       if (path.includes('/leads') || path.includes('/showing') || path.includes('/owner-reports')) return 'lead';
       if (path.includes('/settings')) return 'settings';

@@ -16,6 +16,8 @@ type PropertyDocumentsSectionProps = {
   onRemovePending: (id: string) => void
   onRenameExisting: (index: number, name: string) => void
   onRenamePending: (id: string, name: string) => void
+  onSetExistingAccessLevel: (index: number, value: "Public" | "AdminOnly") => void
+  onSetPendingAccessLevel: (id: string, value: "Public" | "AdminOnly") => void
   pendingDocuments: PendingPropertyDocument[]
 }
 
@@ -27,6 +29,8 @@ export function PropertyDocumentsSection({
   onRemovePending,
   onRenameExisting,
   onRenamePending,
+  onSetExistingAccessLevel,
+  onSetPendingAccessLevel,
   pendingDocuments,
 }: PropertyDocumentsSectionProps) {
   return (
@@ -38,7 +42,10 @@ export function PropertyDocumentsSection({
             {"Important Property Documents"}
           </h4>
           <p className="mt-1 text-sm text-muted-foreground">
-            {"Upload contracts, disclosures, plans, or certificates here. Each file is automatically linked to this property and added to Document repository."}
+            {"New property documents are Public by default and appear on the public property page. Choose Private to hide one from the listing."}
+          </p>
+          <p className="mt-1 text-xs text-amber-700">
+            {"Private hides the listing link, but does not revoke a direct file URL. Avoid uploading confidential files to public storage."}
           </p>
         </div>
         <Button onClick={() => fileInputRef.current?.click()} type="button" variant="outline">
@@ -70,6 +77,18 @@ export function PropertyDocumentsSection({
                   placeholder="Document display name"
                   value={document.name}
                 />
+                <label className="grid gap-1.5 text-xs font-semibold text-slate-700">
+                  Visibility
+                  <select
+                    aria-label={`Visibility for ${document.name || document.fileName}`}
+                    className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"
+                    onChange={(event) => onSetExistingAccessLevel(index, event.target.value as "Public" | "AdminOnly")}
+                    value={document.accessLevel === "Public" ? "Public" : "AdminOnly"}
+                  >
+                    <option value="Public">Public - show on property page</option>
+                    <option value="AdminOnly">Private - hide from property page</option>
+                  </select>
+                </label>
                 <div className="flex min-w-0 items-center justify-between gap-3">
                   <p className="truncate text-sm text-muted-foreground">{document.fileName}</p>
                   <Button onClick={() => onRemoveExisting(index)} size="sm" type="button" variant="destructive">
@@ -87,6 +106,18 @@ export function PropertyDocumentsSection({
                   placeholder="Document display name"
                   value={document.name}
                 />
+                <label className="grid gap-1.5 text-xs font-semibold text-slate-700">
+                  Visibility
+                  <select
+                    aria-label={`Visibility for ${document.name || document.file.name}`}
+                    className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"
+                    onChange={(event) => onSetPendingAccessLevel(document.id, event.target.value as "Public" | "AdminOnly")}
+                    value={document.accessLevel}
+                  >
+                    <option value="Public">Public - show on property page (default)</option>
+                    <option value="AdminOnly">Private - hide from property page</option>
+                  </select>
+                </label>
                 <div className="flex min-w-0 items-center justify-between gap-3">
                   <p className="truncate text-sm text-muted-foreground">{document.file.name}</p>
                   <Button onClick={() => onRemovePending(document.id)} size="sm" type="button" variant="destructive">

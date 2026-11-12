@@ -49,6 +49,7 @@ export type PropertyFormValues = {
   ownerEmail: string
   ownerPhone: string
   ownerExtraInfo: string
+  additionalOwners: Array<{ id: string; name: string; email: string; phone: string }>
   propertyDocuments: PropertyDocumentItem[]
   keyAmenities: string[]
   documentRepositoryItemIds: number[]
@@ -73,6 +74,7 @@ export type PendingUploadFile = {
 export type PendingPropertyDocument = {
   id: string
   name: string
+  accessLevel: "Public" | "AdminOnly"
   file: File
 }
 

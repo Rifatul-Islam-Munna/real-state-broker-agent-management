@@ -67,6 +67,7 @@ export type TenantDashboardContext = {
 
 export type TenantProperty = {
   id: number
+  managedPropertyId?: number
   title: string
   status: "draft" | "published" | "archived" | string
   payload: Record<string, unknown>
@@ -92,9 +93,17 @@ export type TenantLead = {
   updated_at?: string
 }
 
+export type TenantOwnerContact = {
+  name: string
+  email: string
+  phone: string
+}
+
 export type TenantOwnerReport = {
   id: number
-  propertyId: number
+  propertyId: number | null
+  managedPropertyId?: number | null
+  owners?: TenantOwnerContact[]
   propertyTitle: string
   ownerName: string
   ownerEmail: string
@@ -102,7 +111,7 @@ export type TenantOwnerReport = {
   subject: string
   body?: string
   channels: string[]
-  deliveryResults: Array<{ channel: string; status: string; message: string }>
+  deliveryResults: Array<{ channel: string; status: string; message: string; jobId?: number; ownerName?: string; recipientEmail?: string; recipientPhone?: string }>
   deliveryStatus: "sent" | "partial" | "failed" | string
   sentByName: string
   sentAt: string
@@ -296,6 +305,10 @@ export async function updateTenantLeadPropertiesAction(formData: FormData) {
   revalidatePath("/dashboard/showing-requests")
 }
 
+export async function getOwnerReportProperties() {
+  return request<TenantProperty[]>("/tenant-dashboard/owner-report-properties")
+}
+
 export async function getTenantOwnerReports() {
   return request<TenantOwnerReport[]>("/tenant-dashboard/owner-reports")
 }
@@ -309,24 +322,44 @@ export async function sendTenantOwnerReportAction(
   formData: FormData,
 ): Promise<TenantActionState> {
   try {
-    await request("/tenant-dashboard/owner-reports", {
-      method: "POST",
-      body: JSON.stringify({
-        propertyId: numberValue(formData.get("propertyId")),
-        ownerName: stringValue(formData.get("ownerName")),
-        ownerEmail: stringValue(formData.get("ownerEmail")),
-        ownerPhone: stringValue(formData.get("ownerPhone")),
-        subject: stringValue(formData.get("subject")),
-        body: stringValue(formData.get("body")),
-        channels: formData.getAll("channels").map(String),
-      }),
+    await sendTenantOwnerReport({
+      propertyId: numberValue(formData.get("propertyId")),
+      managedPropertyId: numberValue(formData.get("managedPropertyId")),
+      owners: JSON.parse(stringValue(formData.get("owners")) || "null") ?? undefined,
+      ownerName: stringValue(formData.get("ownerName")),
+      ownerEmail: stringValue(formData.get("ownerEmail")),
+      ownerPhone: stringValue(formData.get("ownerPhone")),
+      subject: stringValue(formData.get("subject")),
+      body: stringValue(formData.get("body")),
+      channels: formData.getAll("channels").map(String),
     })
-    revalidatePath("/dashboard/owner-reports")
-    revalidatePath("/dashboard")
     return { ok: true, message: "Owner report recorded and delivery attempted." }
   } catch (error) {
     return { ok: false, message: errorMessage(error) }
   }
+}
+
+export type TenantOwnerReportSendInput = {
+  propertyId: number | null
+  managedPropertyId?: number | null
+  owners?: TenantOwnerContact[]
+  ownerName: string
+  ownerEmail: string
+  ownerPhone: string
+  subject: string
+  body: string
+  channels: string[]
+}
+
+export async function sendTenantOwnerReport(input: TenantOwnerReportSendInput) {
+  const report = await request<TenantOwnerReport>("/tenant-dashboard/owner-reports", {
+    method: "POST",
+    body: JSON.stringify(input),
+  })
+  revalidatePath("/dashboard/owner-reports")
+  revalidatePath("/dashboard/owner-reports/create")
+  revalidatePath("/dashboard")
+  return report
 }
 
 export async function getTenantShowingTemplates() {

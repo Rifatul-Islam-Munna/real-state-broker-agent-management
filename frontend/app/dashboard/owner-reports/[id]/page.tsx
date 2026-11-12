@@ -31,6 +31,28 @@ export default async function OwnerReportDetailPage({ params }: OwnerReportDetai
       </section>
 
       <section className="rounded-[24px] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+        <h2 className="text-xl font-bold">
+          Report recipients ({report.owners?.length || 1})
+        </h2>
+        <p className="mt-1 text-sm text-slate-600">
+          One property report, independently delivered to the selected owners.
+        </p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          {(report.owners?.length ? report.owners : [{
+            name: report.ownerName,
+            email: report.ownerEmail,
+            phone: report.ownerPhone,
+          }]).map((owner, index) => (
+            <div className="rounded-xl bg-slate-50 p-4 text-sm" key={index}>
+              <p className="font-bold">Owner {index + 1}: {owner.name || "Unnamed owner"}</p>
+              <p className="mt-1 break-all text-slate-600">{owner.email || "No email"}</p>
+              <p className="mt-1 text-slate-600">{owner.phone || "No phone"}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="rounded-[24px] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
         <div className="flex items-center gap-3"><CalendarClock className="size-5 text-[#0d766e]" /><h2 className="text-xl font-bold">Report message</h2></div>
         <div className="mt-5 whitespace-pre-wrap rounded-2xl bg-slate-50 p-5 text-sm leading-7 text-slate-700">{report.body}</div>
       </section>
@@ -40,8 +62,20 @@ export default async function OwnerReportDetailPage({ params }: OwnerReportDetai
         <div className="mt-5 grid gap-3">
           {report.deliveryResults.map((result, index) => (
             <article className="flex flex-col justify-between gap-3 rounded-2xl border border-slate-200 p-4 sm:flex-row sm:items-center" key={`${result.channel}-${index}`}>
-              <div><p className="font-bold">{result.channel}</p><p className="mt-1 text-sm text-slate-600">{result.message}</p></div>
-              <span className={`w-fit rounded-full px-3 py-1 text-xs font-bold capitalize ${result.status === "sent" ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}>{result.status}</span>
+              <div>
+                <p className="font-bold">{result.ownerName || "Owner"} · {result.channel}</p>
+                <p className="mt-1 text-xs text-slate-500">
+                  {result.channel === "Email" ? result.recipientEmail : result.recipientPhone}
+                </p>
+                <p className="mt-1 text-sm text-slate-600">{result.message}</p>
+              </div>
+              <span className={`w-fit rounded-full px-3 py-1 text-xs font-bold capitalize ${
+                result.status === "sent"
+                  ? "bg-emerald-50 text-emerald-700"
+                  : ["scheduled", "processing", "retrying"].includes(result.status)
+                    ? "bg-sky-50 text-sky-700"
+                    : "bg-rose-50 text-rose-700"
+              }`}>{result.status}</span>
             </article>
           ))}
         </div>

@@ -20,6 +20,7 @@ import { TenantStaffPermissionGuard } from './tenant-staff-permission.guard';
 import { TenantPlanPermissionGuard } from './tenant-plan-permission.guard';
 import { TenantPlanPermissions } from './tenant-plan-permissions.decorator';
 import { TenantRealtorWorkflowService } from './tenant-realtor-workflow.service';
+import { TenantOwnerReportService } from './tenant-owner-report.service';
 
 @Controller('tenant-dashboard')
 @UseGuards(JwtAuthGuard, AuthenticatedTenantGuard, TenantStaffPermissionGuard, TenantPlanPermissionGuard, TenantRoleGuard)
@@ -27,6 +28,7 @@ export class TenantDashboardController {
   constructor(
     private readonly dashboard: TenantDashboardService,
     private readonly workflows: TenantRealtorWorkflowService,
+    private readonly ownerReportService: TenantOwnerReportService,
   ) {}
 
   @Get('context')
@@ -132,22 +134,28 @@ export class TenantDashboardController {
     return this.dashboard.propertyChats(req.tenant, query);
   }
 
+  @Get('owner-report-properties')
+  @TenantPlanPermissions('normal-dashboard', 'property-management-dashboard')
+  ownerReportProperties(@Req() req: any) {
+    return this.ownerReportService.listReportProperties(req.tenant);
+  }
+
   @Get('owner-reports')
   @TenantPlanPermissions('normal-dashboard', 'property-management-dashboard')
   ownerReports(@Req() req: any) {
-    return this.workflows.listOwnerReports(req.tenant);
+    return this.ownerReportService.listOwnerReports(req.tenant);
   }
 
   @Get('owner-reports/:id')
   @TenantPlanPermissions('normal-dashboard', 'property-management-dashboard')
   ownerReport(@Req() req: any, @Param('id') id: string) {
-    return this.workflows.ownerReport(req.tenant, Number(id));
+    return this.ownerReportService.ownerReport(req.tenant, Number(id));
   }
 
   @Post('owner-reports')
   @TenantPlanPermissions('normal-dashboard', 'property-management-dashboard')
   sendOwnerReport(@Req() req: any, @Body() body: any) {
-    return this.workflows.sendOwnerReport(req.tenant, body, req.user);
+    return this.ownerReportService.sendOwnerReport(req.tenant, body, req.user);
   }
 
   @Get('showing-form-templates')
