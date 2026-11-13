@@ -359,6 +359,7 @@ function TemplateSheet({
 }) {
   const [draft, setDraft] = useState<AgencyCommunicationTemplateItem | null>(template)
   const [pdfSearch, setPdfSearch] = useState("")
+  const [conditionalField, setConditionalField] = useState("feedback")
   const pdfTemplatesQuery = usePdfTemplates({ page: 1, pageSize: 200, isActive: true })
   const pdfTemplates = useMemo(() => {
     const search = pdfSearch.trim().toLowerCase()
@@ -376,6 +377,14 @@ function TemplateSheet({
     value: AgencyCommunicationTemplateItem[K],
   ) {
     setDraft((current) => (current ? { ...current, [key]: value } : current))
+  }
+
+  function insertConditionalLine() {
+    if (!draft) return
+    const label = conditionalField.replaceAll("_", " ").replace(/^./, (letter) => letter.toUpperCase())
+    const sentence = `{{#if ${conditionalField}}}${label}: {{${conditionalField}}}{{/if}}`
+    const before = draft.body.trimEnd()
+    update("body", `${before}${before ? "\n" : ""}${sentence}`)
   }
 
   function toggleChannel(channel: AgencyCommunicationChannel, checked: boolean) {
@@ -569,6 +578,32 @@ function TemplateSheet({
                 value={draft.body}
               />
             </div>
+            {draft.audience === "OwnerFeedback" ? (
+              <div className="space-y-2 rounded-xl border border-dashed p-3">
+                <Label>{"Optional sentence for CSV reports"}</Label>
+                <p className="text-xs leading-5 text-muted-foreground">
+                  Insert a conditional line. It appears only when the mapped CSV field has a value;
+                  when empty, the entire sentence is removed. Edit the sentence in the message above.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <Select onValueChange={setConditionalField} value={conditionalField}>
+                    <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {ownerCsvTokens.map((token) => {
+                        const field = token.slice(2, -2)
+                        return <SelectItem key={token} value={field}>{field.replaceAll("_", " ")}</SelectItem>
+                      })}
+                    </SelectContent>
+                  </Select>
+                  <Button onClick={insertConditionalLine} size="sm" type="button" variant="outline">
+                    {"Insert conditional line"}
+                  </Button>
+                </div>
+                <code className="block break-all text-[11px] text-muted-foreground">
+                  {"{{#if feedback}}Feedback: {{feedback}}{{/if}}"}
+                </code>
+              </div>
+            ) : null}
             <div className="rounded-xl border bg-muted/20 p-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 {"Available variables"}

@@ -139,3 +139,34 @@ describe('TenantShowingFeedbackAutomationService', () => {
     expect(body).not.toContain('Great showing');
   });
 });
+
+
+describe('Owner Feedback template conditional lines', () => {
+  const service = new TenantShowingFeedbackAutomationService({} as any, {} as any, {} as any);
+  const render = (body: string, records: any[]) =>
+    (service as any).renderReport(
+      { subject: 'Feedback for {{property_address}}', body },
+      records,
+      { title: '12 Garden Road', ownerName: 'Alex' },
+      { profile: { agencyName: 'Example Agency' } },
+    ) as { title: string; body: string };
+
+  it('shows populated feedback and removes an empty sentiment section', () => {
+    const result = render(
+      'Hello\n\n{{#if positive_feedback}}Positive: {{positive_feedback}}{{/if}}\n\n{{#if negative_feedback}}Negative: {{negative_feedback}}{{/if}}\n\nRegards',
+      [{ payload: { sentiment: 'positive', feedbackText: 'Liked the garden.' } }],
+    );
+    expect(result.body).toBe('Hello\n\nPositive: Liked the garden.\n\nRegards');
+  });
+
+  it('omits the entire CSV-friendly feedback line if no feedback exists', () => {
+    expect(render('Hello\n{{#if feedback}}Feedback: {{feedback}}{{/if}}\nRegards', []).body)
+      .toBe('Hello\nRegards');
+  });
+
+  it('supports a populated CSV-friendly feedback variable in automation', () => {
+    expect(render('{{#if feedback}}Feedback: {{feedback}}{{/if}}', [
+      { payload: { sentiment: 'neutral', feedbackText: 'Asked about repairs.' } },
+    ]).body).toBe('Feedback: Asked about repairs.');
+  });
+});

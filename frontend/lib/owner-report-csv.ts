@@ -655,7 +655,8 @@ export function findConfidentPropertyMatch<T extends MatchableProperty>(
 export function extractTemplateTokens(...values: string[]) {
   const tokens: string[] = []
   const seen = new Set<string>()
-  const pattern = /\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g
+  // Conditional guards are variables too, even when only used in {{#if field}}.
+  const pattern = /\{\{\s*(?:#if\s+)?([a-zA-Z0-9_]+)\s*\}\}/g
   for (const value of values) {
     for (const match of value.matchAll(pattern)) {
       const token = match[1]
@@ -703,7 +704,35 @@ export function renderTemplateWithMapping(
   mapping: Record<string, TemplateValueKey | "">,
   values: Record<TemplateValueKey, string>
 ) {
-  return template.replace(
+  // A conditional wraps the entire optional sentence, not just its placeholder.
+  // Example: {{#if feedback}}Feedback: {{feedback}}{{/if}}
+  const hasValue = (token: string) => {
+    const source = mapping[token]
+    return Boolean(source && values[source]?.trim())
+  }
+  let removedBlock = false
+  // Consume the line ending when a conditional occupies a complete line.
+  const wholeLines = template.replace(
+    /^[ \t]*\{\{\s*#if\s+([a-zA-Z0-9_]+)\s*\}\}([\s\S]*?)\{\{\s*\/if\s*\}\}[ \t]*(\r?\n|$)/gm,
+    (_match, token: string, content: string, newline: string) => {
+      if (hasValue(token)) return content + newline
+      removedBlock = true
+      return ""
+    }
+  )
+  const conditional = wholeLines.replace(
+    /\{\{\s*#if\s+([a-zA-Z0-9_]+)\s*\}\}([\s\S]*?)\{\{\s*\/if\s*\}\}/g,
+    (_match, token: string, content: string) => {
+      if (hasValue(token)) return content
+      removedBlock = true
+      return ""
+    }
+  )
+  const withoutEmptyParagraphs = removedBlock
+    ? conditional.replace(/(?:\r?\n[ \t]*){3,}/g, "\n\n")
+    : conditional
+
+  return withoutEmptyParagraphs.replace(
     /\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g,
     (fullMatch, token: string) => {
       const source = mapping[token]

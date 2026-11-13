@@ -281,7 +281,18 @@ export class TenantShowingFeedbackAutomationService {
       .map((record) => this.text(record.payload?.feedbackText))
       .filter(Boolean)
       .join('\n');
+    // Owner Feedback templates are shared by CSV reports and showing automation.
+    // Conditions must use actual feedback, not the fallback display text.
+    const conditionValues: Record<string, string> = {
+      feedback: summary,
+      feedback_summary: summary,
+      positive_feedback: positiveText,
+      negative_feedback: negativeText,
+      positive_summary: positiveText,
+      negative_summary: negativeText,
+    };
     const replacements: Record<string, string> = {
+      '{{feedback}}': summary || 'No feedback recorded.',
       '{{positive_feedback}}': positiveText || 'No positive feedback recorded.',
       '{{negative_feedback}}': negativeText || 'No negative feedback recorded.',
       '{{feedback_summary}}': summary || 'No feedback recorded.',
@@ -295,11 +306,34 @@ export class TenantShowingFeedbackAutomationService {
       '{{client_name}}': this.text(property.ownerName, 'Owner'),
       '{{agency_name}}': this.text(agency?.profile?.agencyName, 'our agency'),
     };
-    const render = (value: string) =>
-      Object.entries(replacements).reduce(
-        (current, [token, text]) => current.replaceAll(token, text),
-        this.text(value),
+    const hasValue = (token: string) =>
+      Boolean(this.text(conditionValues[token] ?? replacements[`{{${token}}}`]));
+    const render = (value: string) => {
+      let removedBlock = false;
+      const wholeLines = this.text(value).replace(
+        /^[ \t]*\{\{\s*#if\s+([a-zA-Z0-9_]+)\s*\}\}([\s\S]*?)\{\{\s*\/if\s*\}\}[ \t]*(\r?\n|$)/gm,
+        (_match, token: string, content: string, newline: string) => {
+          if (hasValue(token)) return content + newline;
+          removedBlock = true;
+          return '';
+        },
       );
+      const conditional = wholeLines.replace(
+        /\{\{\s*#if\s+([a-zA-Z0-9_]+)\s*\}\}([\s\S]*?)\{\{\s*\/if\s*\}\}/g,
+        (_match, token: string, content: string) => {
+          if (hasValue(token)) return content;
+          removedBlock = true;
+          return '';
+        },
+      );
+      const message = removedBlock
+        ? conditional.replace(/(?:\r?\n[ \t]*){3,}/g, '\n\n')
+        : conditional;
+      return Object.entries(replacements).reduce(
+        (current, [token, text]) => current.replaceAll(token, text),
+        message,
+      );
+    };
     return {
       title: render(this.text(template.subject, 'Showing feedback report')),
       body: render(this.text(template.body, '')),

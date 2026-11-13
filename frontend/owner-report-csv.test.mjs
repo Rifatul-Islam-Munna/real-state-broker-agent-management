@@ -4,6 +4,7 @@ import { test } from "node:test"
 
 import {
   defaultTemplateSource,
+  extractTemplateTokens,
   findConfidentPropertyMatch,
   parseWeeklyOwnerReportCsv,
   renderTemplateWithMapping,
@@ -179,4 +180,38 @@ test("new template variables map to the selected week data", () => {
     { week: "2", inquiries: "4", feedback: "Nice house" }
   )
   assert.equal(rendered, "Week 2: 4 inquiries, Nice house")
+})
+
+test("conditional feedback removes the entire sentence and extra blank line when empty", () => {
+  const body = "Hello {{owner_name}},\n\n{{#if feedback}}Feedback: {{feedback}}{{/if}}\n\nRegards"
+  const mapping = { owner_name: "ownerName", feedback: "feedback" }
+  assert.equal(
+    renderTemplateWithMapping(body, mapping, { ownerName: "Alex", feedback: "Nice garden." }),
+    "Hello Alex,\n\nFeedback: Nice garden.\n\nRegards"
+  )
+  assert.equal(
+    renderTemplateWithMapping(body, mapping, { ownerName: "Alex", feedback: "   " }),
+    "Hello Alex,\n\nRegards"
+  )
+})
+
+test("conditional guards are extracted for mapping even without a matching value placeholder", () => {
+  const body = "Stats:\n{{#if inquiries}}Inquiries: {{inquiries}}{{/if}}\n{{#if feedback}}Feedback received.{{/if}}\nEnd"
+  assert.deepEqual(extractTemplateTokens(body), ["inquiries", "feedback"])
+  assert.equal(
+    renderTemplateWithMapping(body, { inquiries: "inquiries", feedback: "feedback" }, {
+      inquiries: "0", feedback: ""
+    }),
+    "Stats:\nInquiries: 0\nEnd"
+  )
+})
+
+test("conditional sentences also support inline content and multiline CSV feedback", () => {
+  const body = "Summary: {{#if feedback}}Tenant said: {{feedback}}{{/if}}"
+  const mapping = { feedback: "feedback" }
+  assert.equal(
+    renderTemplateWithMapping(body, mapping, { feedback: "Liked the view.\nAsked about repairs." }),
+    "Summary: Tenant said: Liked the view.\nAsked about repairs."
+  )
+  assert.equal(renderTemplateWithMapping(body, mapping, { feedback: "" }), "Summary: ")
 })

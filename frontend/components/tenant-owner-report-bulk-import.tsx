@@ -61,18 +61,20 @@ type TemplateMapping = Record<string, TemplateValueKey | "">
 const MAX_CSV_BYTES = 10 * 1024 * 1024
 
 function automaticMapping(template: AgencyCommunicationTemplateItem): TemplateMapping {
-  let feedbackAssigned = false
+  const tokens = extractTemplateTokens(template.subject, template.body)
+  // A new {{feedback}} condition must take priority over legacy feedback1/2/3
+  // placeholders; otherwise the guard would always be mapped to an empty value.
+  const primaryFeedbackToken = tokens.includes("feedback")
+    ? "feedback"
+    : tokens.find((token) => defaultTemplateSource(token) === "feedback")
 
   return Object.fromEntries(
-    extractTemplateTokens(template.subject, template.body).map((token) => {
+    tokens.map((token) => {
       const source = defaultTemplateSource(token)
-
       // Several feedback placeholders must not copy the same feedback repeatedly.
-      if (source === "feedback") {
-        if (feedbackAssigned) return [token, "empty"]
-        feedbackAssigned = true
+      if (source === "feedback" && token !== primaryFeedbackToken) {
+        return [token, "empty"]
       }
-
       return [token, source]
     })
   ) as TemplateMapping
