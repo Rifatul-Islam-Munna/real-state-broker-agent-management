@@ -159,6 +159,7 @@ export class TenantShowingFeedbackAutomationService {
             payload: {
               templateId: this.text(template.id),
               propertyId,
+              propertyTitle: property.title,
               sentimentFilter: this.text(automation.sentimentFilter),
               automatic: true,
             },

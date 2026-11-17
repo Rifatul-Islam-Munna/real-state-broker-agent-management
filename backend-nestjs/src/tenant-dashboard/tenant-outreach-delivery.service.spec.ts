@@ -83,6 +83,39 @@ describe('TenantOutreachDeliveryService Gmail OAuth', () => {
     );
   });
 
+  it.each([
+    { propertyTitle: '2500 Parkview Dr Unit#1216' },
+    {},
+  ])('suppresses Maps auto-link detection without changing the visible address or plain-text MIME: %j', async (payload) => {
+    const settings = {
+      getRawSmtp: jest.fn().mockResolvedValue({
+        authType: 'gmail-oauth', fromEmail: 'agent@example.com',
+        gmailAccessToken: 'valid-token',
+        gmailTokenExpiresAt: new Date(Date.now() + 3600_000).toISOString(),
+        emailSignatureEnabled: true,
+        emailSignatureHtml: '<a href="mailto:agent@example.com">Agent</a>',
+      }),
+    };
+    global.fetch = jest.fn().mockResolvedValue(new Response(JSON.stringify({ id: 'plain-address-report' }), { status: 200 })) as any;
+    const service = new TenantOutreachDeliveryService({} as any, settings as any);
+    const body = 'Hello owner,\n\n2500 Parkview Dr Unit#1216\n\n  [ 3 ] Inquiries\nContact agent@example.com or https://example.com.\n';
+    await (service as any).sendEmail('tenant_example', {
+      recipient_email: 'owner@example.com', title: 'Report: 2500 Parkview Dr Unit#1216', body,
+      idempotency_key: 'plain-address-report', media_urls: [], payload,
+    }, { id: 7 });
+
+    const options = (global.fetch as jest.Mock).mock.calls[0][1];
+    const parsed = await simpleParser(Buffer.from(JSON.parse(options.body).raw, 'base64url'));
+    expect(parsed.subject).toBe('Report: 2500 Parkview Dr Unit#1216');
+    expect(parsed.text?.replace(/\r\n/g, '\n')).toBe(body + '\n\nAgent [agent@example.com]');
+    const html = String(parsed.html);
+    expect(html).toContain('2&#8204;5&#8204;0&#8204;0 P&#8204;a&#8204;r&#8204;k&#8204;v&#8204;i&#8204;e&#8204;w D&#8204;r');
+    expect(html.replace(/&#8204;/g, '')).toContain('2500 Parkview Dr Unit#1216<br><br>  [ 3 ] Inquiries');
+    expect(html).not.toMatch(/google\.com\/maps|maps\.google/);
+    expect(html).toContain('agent@example.com or https://example.com.');
+    expect(html).toContain('<a href="mailto:agent@example.com">Agent</a>');
+  });
+
   it('reports Gmail API authorization failures without attempting SMTP delivery', async () => {
     global.fetch = jest.fn().mockResolvedValue(
       new Response(JSON.stringify({ error: { message: 'Insufficient permissions' } }), { status: 403 }),

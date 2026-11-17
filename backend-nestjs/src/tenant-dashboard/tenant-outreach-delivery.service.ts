@@ -73,7 +73,7 @@ export class TenantOutreachDeliveryService implements OnModuleDestroy {
     }
 
     const signature = emailSignatureContent(config);
-    const bodyHtml = `<div style="white-space:pre-wrap;font-family:Arial,sans-serif">${this.escapeHtml(job.body).replace(/\r\n|\r|\n/g, '<br>')}</div>`;
+    const bodyHtml = this.emailBodyHtml(job);
     const message = {
       from: config.fromName
         ? `"${this.text(config.fromName).replace(/"/g, '')}" <${fromEmail}>`
@@ -525,6 +525,35 @@ export class TenantOutreachDeliveryService implements OnModuleDestroy {
       .map((url) => url.match(/^\[.*?\]\((https?:\/\/[^)]+)\)$/)?.[1] ?? url)
       .map((url) => url.trim())
       .filter((url) => /^https:\/\//i.test(url)))].slice(0, 10);
+  }
+
+  private emailBodyHtml(job: TenantOutreachJob) {
+    const body = String(job.body ?? '');
+    const addresses = new Set<string>();
+    for (const value of [job.payload?.propertyTitle, job.payload?.propertyAddress]) {
+      if (typeof value === 'string' && value.trim() && value.length <= 500) addresses.add(value.trim());
+    }
+    // Also cover imported address spellings that differ from the property record,
+    // and queued reports created before address metadata was recorded.
+    const streetAddress = /\b\d{1,6}[ \t]+(?:[a-z0-9.,'&#/-]+[ \t]+){0,10}(?:street|st|drive|dr|road|rd|avenue|ave|way|lane|ln|boulevard|blvd|court|ct|circle|cir|place|pl|terrace|ter|trail|trl|parkway|pkwy)\b\.?/gi;
+    for (const match of body.matchAll(streetAddress)) addresses.add(match[0]);
+    let html = '';
+    let offset = 0;
+    if (addresses.size) {
+      const pattern = [...addresses].sort((a, b) => b.length - a.length)
+        .map((address) => address.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+      for (const match of body.matchAll(new RegExp(pattern, 'gi'))) {
+        html += this.escapeHtml(body.slice(offset, match.index));
+        // Invisible non-joiners break Gmail's address detector in the HTML
+        // alternative only. Stored text, plain-text MIME, SMS, and subject stay exact.
+        const characters = Array.from(match[0]);
+        html += characters.map((character, index) => this.escapeHtml(character) +
+          (/[a-z0-9]/i.test(character) && /[a-z0-9]/i.test(characters[index + 1] ?? '') ? '&#8204;' : '')).join('');
+        offset = match.index + match[0].length;
+      }
+    }
+    html += this.escapeHtml(body.slice(offset));
+    return `<div style="white-space:pre-wrap;font-family:Arial,sans-serif">${html.replace(/\r\n|\r|\n/g, '<br>')}</div>`;
   }
 
   private escapeHtml(value: string) {
