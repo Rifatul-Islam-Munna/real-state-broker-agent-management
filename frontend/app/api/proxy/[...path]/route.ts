@@ -20,6 +20,8 @@ function tenantPath(path: string[]) {
     return "tenant-workspace/integrations/health"
   if (joined === "settings/integrations/gmail/connect-url")
     return "tenant-workspace/integrations/gmail/connect-url"
+  if (joined === "settings/integrations/gmail/signature")
+    return "tenant-workspace/integrations/gmail/signature"
   if (joined === "pdfs/templates") return "tenant-workspace/pdf-templates"
 
   if (joined === "dashboard/summary") return "tenant-legacy/dashboard/summary"

@@ -9,6 +9,8 @@ import {
   timingSafeEqual,
 } from 'crypto';
 import { Repository } from 'typeorm';
+import { isGmailReconnectRequired, refreshGmailAccessToken } from '../common/gmail-oauth';
+import { normalizeEmailSignature, sanitizeEmailSignatureHtml, signatureHtmlToText } from '../common/email-signature';
 import { SaasTenant } from '../saas-admin/entities/saas-tenant.entity';
 import { TenantDatabaseService } from '../tenant-database/tenant-database.service';
 
@@ -179,6 +181,7 @@ export class TenantWorkspaceSettingsService {
       value.localInboxRetentionDays = this.retentionDays(value.localInboxRetentionDays);
       value.leadTemplateTags = this.stringList(value.leadTemplateTags).slice(0, 25);
       value.mailboxTag = this.text(value.mailboxTag).slice(0, 500);
+      Object.assign(value, normalizeEmailSignature(value));
       if (!this.smtpValid(value))
         throw new BadRequestException(
           'SMTP host, username, password, and from email are required.',
@@ -247,6 +250,65 @@ export class TenantWorkspaceSettingsService {
       smtpUpdatedAt: new Date().toISOString(),
     };
     await this.setSetting(tenant, INTEGRATIONS_KEY, next);
+  }
+
+  async getGmailSignature(tenant: SaasTenant, input: { fromEmail?: string } = {}) {
+    const config: any = await this.getRawSmtp(tenant);
+    if (config.authType !== 'gmail-oauth') {
+      throw new BadRequestException('Connect Gmail before importing a signature.');
+    }
+    const expiresAt = new Date(config.gmailTokenExpiresAt ?? 0).getTime();
+    if (!config.gmailAccessToken || !Number.isFinite(expiresAt) || expiresAt <= Date.now() + 60_000) {
+      try {
+        const refreshed = await refreshGmailAccessToken({
+          clientId: this.text(config.gmailClientId) || this.text(process.env.GOOGLE_CLIENT_ID),
+          clientSecret: this.text(config.gmailClientSecret) || this.text(process.env.GOOGLE_CLIENT_SECRET),
+          refreshToken: this.text(config.gmailRefreshToken),
+        });
+        config.gmailAccessToken = refreshed.accessToken;
+        config.gmailTokenExpiresAt = refreshed.accessTokenExpiresAt;
+        config.gmailLastTokenRefreshAt = new Date().toISOString();
+        config.gmailReconnectRequired = false;
+        config.gmailLastAuthError = '';
+        config.gmailAuthFailedAt = null;
+        if (refreshed.refreshTokenExpiresAt) config.gmailRefreshTokenExpiresAt = refreshed.refreshTokenExpiresAt;
+        await this.saveRawSmtp(tenant, config);
+      } catch (error) {
+        if (isGmailReconnectRequired(error)) {
+          config.gmailAccessToken = '';
+          config.gmailTokenExpiresAt = null;
+          config.gmailReconnectRequired = true;
+          config.gmailLastAuthError = (error as Error).message;
+          config.gmailAuthFailedAt = new Date().toISOString();
+          config.enableInboxSync = false;
+          await this.saveRawSmtp(tenant, config);
+        }
+        throw new BadRequestException(error instanceof Error ? error.message : 'Could not refresh Gmail authorization.');
+      }
+    }
+    const response = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/settings/sendAs', {
+      headers: { Authorization: `Bearer ${config.gmailAccessToken}` },
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!response.ok) {
+      throw new BadRequestException([401, 403].includes(response.status)
+        ? 'Gmail signature access was denied. Reconnect Gmail, then try again.'
+        : 'Could not import the Gmail signature. Try again.');
+    }
+    const result = await response.json() as {
+      sendAs?: Array<{ sendAsEmail?: string; signature?: string; isDefault?: boolean; isPrimary?: boolean }>;
+    };
+    const aliases = Array.isArray(result.sendAs) ? result.sendAs : [];
+    const fromEmail = this.text(input.fromEmail || config.fromEmail || config.gmailEmail).toLowerCase();
+    const sender = fromEmail
+      ? aliases.find((alias) => alias.sendAsEmail?.toLowerCase() === fromEmail)
+      : aliases.find((alias) => alias.isDefault) ?? aliases.find((alias) => alias.isPrimary);
+    if (!sender) throw new BadRequestException('No Gmail send-as address matches the sender email.');
+    const html = sanitizeEmailSignatureHtml(sender.signature);
+    if (!html.trim()) {
+      throw new BadRequestException('No Gmail signature found for this sender. Set a default signature in Gmail, or add one here.');
+    }
+    return { html, text: signatureHtmlToText(html), email: sender.sendAsEmail };
   }
 
   async getGmailConnectUrl(tenant: SaasTenant, input: any = {}) {

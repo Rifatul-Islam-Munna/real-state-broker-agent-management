@@ -23,8 +23,9 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet"
 import { useGmailConnectUrl, useUpdateAgencyIntegrationSettings } from "@/hooks/use-real-estate-api"
+import { EmailSignatureField, type EmailSignatureValues } from "./email-signature-field"
 
-type Values = {
+type Values = EmailSignatureValues & {
   providerName: "Gmail" | "Outlook" | "Custom"
   authType: "password" | "gmail-oauth"
   host: string
@@ -69,6 +70,10 @@ const emptyValues = (): Values => ({
   password: "",
   fromEmail: "",
   fromName: "",
+  emailSignatureEnabled: false,
+  emailSignatureHtml: "",
+  emailSignatureText: "",
+  emailSignatureImageUrl: "",
   useSsl: true,
   enableInboxSync: false,
   imapHost: "imap.gmail.com",
@@ -109,6 +114,7 @@ export function IntegrationMailSheet({
   const gmailConnect = useGmailConnectUrl()
   const [values, setValues] = useState<Values>(() => emptyValues())
   const [error, setError] = useState<string | null>(null)
+  const [signatureBusy, setSignatureBusy] = useState(false)
 
   useEffect(() => {
     if (!open) return
@@ -211,6 +217,10 @@ export function IntegrationMailSheet({
         password: values.password,
         fromEmail: safeText(values.fromEmail),
         fromName: safeText(values.fromName) || null,
+        emailSignatureEnabled: values.emailSignatureEnabled,
+        emailSignatureHtml: values.emailSignatureHtml,
+        emailSignatureText: values.emailSignatureText,
+        emailSignatureImageUrl: values.emailSignatureImageUrl,
         useSsl: values.useSsl,
         enableInboxSync: values.enableInboxSync,
         imapHost: safeText(values.imapHost) || null,
@@ -358,6 +368,14 @@ export function IntegrationMailSheet({
             <Field label="From name"><Input onChange={(event) => patch({ fromName: event.target.value })} value={values.fromName} /></Field>
           </div>
           <Toggle checked={values.useSsl} label="Secure SMTP" onChange={(checked) => patch({ useSsl: checked })} />
+          <EmailSignatureField
+            values={values}
+            onChange={patch}
+            fromEmail={values.fromEmail}
+            gmailConnected={values.authType === "gmail-oauth" && !values.gmailReconnectRequired}
+            onError={setError}
+            onBusyChange={setSignatureBusy}
+          />
           <Toggle checked={values.enableInboxSync} label="Inbox sync" onChange={(checked) => patch({ enableInboxSync: checked })} />
           {values.enableInboxSync ? (
             <div className="space-y-4 rounded-xl border p-4">
@@ -417,8 +435,8 @@ export function IntegrationMailSheet({
           ) : null}
         </div>
         <SheetFooter>
-          <Button disabled={mutation.isPending} onClick={() => void disconnect()} type="button" variant="destructive">{"Disconnect"}</Button>
-          <Button disabled={mutation.isPending} onClick={() => void save()} type="button">{mutation.isPending ? "Saving..." : "Save connection"}</Button>
+          <Button disabled={mutation.isPending || signatureBusy} onClick={() => void disconnect()} type="button" variant="destructive">{"Disconnect"}</Button>
+          <Button disabled={mutation.isPending || signatureBusy} onClick={() => void save()} type="button">{mutation.isPending ? "Saving..." : "Save connection"}</Button>
         </SheetFooter>
       </SheetContent>
     </Sheet>

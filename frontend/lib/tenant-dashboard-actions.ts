@@ -349,7 +349,7 @@ export async function sendTenantOwnerReportAction(
       ownerEmail: stringValue(formData.get("ownerEmail")),
       ownerPhone: stringValue(formData.get("ownerPhone")),
       subject: stringValue(formData.get("subject")),
-      body: stringValue(formData.get("body")),
+      body: String(formData.get("body") ?? ""),
       channels: formData.getAll("channels").map(String),
     })
     return { ok: true, message: "Owner report queued. Track delivery in Report history." }

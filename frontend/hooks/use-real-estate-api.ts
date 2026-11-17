@@ -1154,6 +1154,14 @@ export function useGmailConnectUrl() {
   })
 }
 
+export function useGmailSignatureImport() {
+  return useCommonMutationApi<{ html: string; text: string; email: string }, { fromEmail?: string }>({
+    method: "POST",
+    successMessage: "Gmail signature imported. Save connection to use it.",
+    url: "/settings/integrations/gmail/signature",
+  })
+}
+
 export function useMailInboxItem(id?: number) {
   return useQueryWrapper<MailInboxItem>(
     ["mail-inbox-item", id],

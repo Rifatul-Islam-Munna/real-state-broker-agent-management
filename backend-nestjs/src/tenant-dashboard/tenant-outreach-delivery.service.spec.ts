@@ -1,4 +1,5 @@
 import { TenantOutreachDeliveryService } from './tenant-outreach-delivery.service';
+import { simpleParser } from 'mailparser';
 
 describe('TenantOutreachDeliveryService Gmail OAuth', () => {
   const originalClientId = process.env.GOOGLE_CLIENT_ID;
@@ -59,7 +60,7 @@ describe('TenantOutreachDeliveryService Gmail OAuth', () => {
     const result = await (service as any).sendEmail('tenant_example', {
       recipient_email: 'owner@example.com',
       title: 'Weekly owner report',
-      body: 'Hello owner\\nYour report is ready.',
+      body: '\n  Hello owner,\n\nYour report is ready.  [ 3 ] Inquiries\n\tRepairs & maintenance <pending>\n\nBest regards,\n\nStaff  \n',
       idempotency_key: 'owner-report-test',
       media_urls: [],
       payload: {},
@@ -73,6 +74,13 @@ describe('TenantOutreachDeliveryService Gmail OAuth', () => {
     expect(mime).toContain('owner@example.com');
     expect(mime).toContain('Weekly owner report');
     expect(mime).toContain('Your report is ready.');
+    const parsed = await simpleParser(Buffer.from(JSON.parse(options.body).raw, 'base64url'));
+    expect(parsed.text?.replace(/\r\n/g, '\n')).toBe(
+      '\n  Hello owner,\n\nYour report is ready.  [ 3 ] Inquiries\n\tRepairs & maintenance <pending>\n\nBest regards,\n\nStaff  \n',
+    );
+    expect(parsed.html).toBe(
+      '<div style="white-space:pre-wrap;font-family:Arial,sans-serif"><br>  Hello owner,<br><br>Your report is ready.  [ 3 ] Inquiries<br>\tRepairs &amp; maintenance &lt;pending&gt;<br><br>Best regards,<br><br>Staff  <br></div>',
+    );
   });
 
   it('reports Gmail API authorization failures without attempting SMTP delivery', async () => {
@@ -88,6 +96,39 @@ describe('TenantOutreachDeliveryService Gmail OAuth', () => {
       subject: 'Test',
       text: 'Hello',
     }, 'owner@example.com')).rejects.toThrow('Gmail API send failed (HTTP 403)');
+  });
+
+  it('embeds an uploaded signature logo inline in Gmail MIME and keeps the report body intact', async () => {
+    const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aHZkAAAAASUVORK5CYII=', 'base64');
+    const settings = {
+      getRawSmtp: jest.fn().mockResolvedValue({
+        authType: 'gmail-oauth',
+        fromEmail: 'agent@example.com',
+        gmailAccessToken: 'valid-token',
+        gmailTokenExpiresAt: new Date(Date.now() + 3600_000).toISOString(),
+        emailSignatureEnabled: true,
+        emailSignatureHtml: '<b>Agent Name</b><br><i>Licensed Real Estate Agent</i>',
+        emailSignatureImageUrl: `data:image/png;base64,${png.toString('base64')}`,
+      }),
+    };
+    global.fetch = jest.fn().mockResolvedValue(new Response(JSON.stringify({ id: 'signed-email' }), { status: 200 })) as any;
+    const service = new TenantOutreachDeliveryService({} as any, settings as any);
+    const body = 'Hello owner,\n\n  [ 3 ] Inquiries\n\n';
+    await (service as any).sendEmail('tenant_example', {
+      recipient_email: 'owner@example.com', title: 'Report', body,
+      idempotency_key: 'signed-report', media_urls: [], payload: {},
+    }, { id: 7 });
+
+    const options = (global.fetch as jest.Mock).mock.calls[0][1];
+    const parsed = await simpleParser(Buffer.from(JSON.parse(options.body).raw, 'base64url'), { skipImageLinks: true });
+    expect(parsed.text?.replace(/\r\n/g, '\n')).toBe(`${body}\n\nAgent Name\nLicensed Real Estate Agent`);
+    expect(parsed.html).toContain('<b>Agent Name</b><br /><i>Licensed Real Estate Agent</i>');
+    expect(parsed.html).toContain('  [ 3 ] Inquiries<br><br>');
+    expect(parsed.html).toContain('src="cid:');
+    expect(parsed.attachments).toHaveLength(1);
+    expect(parsed.attachments[0].contentDisposition).toBe('inline');
+    expect(parsed.attachments[0].contentType).toBe('image/png');
+    expect(parsed.attachments[0].content).toEqual(png);
   });
 
   it('uses password-based SMTP even when old Gmail tokens remain in settings', async () => {
@@ -113,6 +154,8 @@ describe('TenantOutreachDeliveryService Gmail OAuth', () => {
         password: 'test-password',
         fromEmail: 'agent@example.com',
         gmailRefreshToken: 'old-gmail-token',
+        emailSignatureEnabled: true,
+        emailSignatureText: 'Agent & Team\nLicensed Agent',
       }),
     };
     global.fetch = jest.fn() as any;
@@ -120,7 +163,7 @@ describe('TenantOutreachDeliveryService Gmail OAuth', () => {
     const result = await (service as any).sendEmail('tenant_example', {
       recipient_email: 'owner@example.com',
       title: 'Owner report',
-      body: 'Report text',
+      body: '  Report text\r\n\r\n[ 3 ] Inquiries  \rNext line\n\tStaff\n',
       idempotency_key: 'smtp-test',
       media_urls: [],
       payload: {},
@@ -138,6 +181,8 @@ describe('TenantOutreachDeliveryService Gmail OAuth', () => {
     expect(transport.sendMail).toHaveBeenCalledWith(expect.objectContaining({
       to: 'owner@example.com',
       subject: 'Owner report',
+      text: '  Report text\r\n\r\n[ 3 ] Inquiries  \rNext line\n\tStaff\n\n\nAgent & Team\nLicensed Agent',
+      html: '<div style="white-space:pre-wrap;font-family:Arial,sans-serif">  Report text<br><br>[ 3 ] Inquiries  <br>Next line<br>\tStaff<br></div><br><br><div data-email-signature="true"><div style="white-space:pre-wrap">Agent &amp; Team<br>Licensed Agent</div></div>',
     }));
     expect(global.fetch).not.toHaveBeenCalled();
   });

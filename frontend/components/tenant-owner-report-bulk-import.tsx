@@ -443,7 +443,7 @@ export function TenantOwnerReportBulkImport({
         selectedTemplate.body,
         mapping,
         values
-      ).trim()
+      )
 
       try {
         const report = await sendTenantOwnerReport({

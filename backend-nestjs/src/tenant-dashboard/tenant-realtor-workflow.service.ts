@@ -130,9 +130,11 @@ export class TenantRealtorWorkflowService {
       80,
     );
     const subject = this.clean(dto.subject, 300);
-    const body = this.clean(dto.body, 20_000);
+    const body = sanitizePlainText(dto.body, 'Owner report', 20_000, {
+      collapseWhitespace: false,
+    });
     const channels = this.channels(dto.channels);
-    if (!subject || !body) {
+    if (!subject || !body.trim()) {
       throw new BadRequestException('Report subject and message are required');
     }
     if (!channels.length) {

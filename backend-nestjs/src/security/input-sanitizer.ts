@@ -2,10 +2,15 @@ import { BadRequestException } from '@nestjs/common';
 
 export function sanitizePlainText(value: unknown, field: string, maxLength: number, options: { required?: boolean; collapseWhitespace?: boolean } = {}) {
   const raw = `${value ?? ''}`;
-  const withoutControls = raw.replace(/[\u0000-\u001F\u007F]/g, '');
+  const withoutControls = raw.replace(
+    options.collapseWhitespace === false
+      ? /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g
+      : /[\u0000-\u001F\u007F]/g,
+    '',
+  );
   const withoutMarkup = withoutControls.replace(/[<>]/g, '');
-  const normalized = options.collapseWhitespace === false ? withoutMarkup.trim() : withoutMarkup.trim().replace(/\s+/g, ' ');
-  if (options.required && !normalized) throw new BadRequestException(`${field} is required`);
+  const normalized = options.collapseWhitespace === false ? withoutMarkup : withoutMarkup.trim().replace(/\s+/g, ' ');
+  if (options.required && !normalized.trim()) throw new BadRequestException(`${field} is required`);
   if (normalized.length > maxLength) throw new BadRequestException(`${field} must be ${maxLength} characters or fewer`);
   return normalized;
 }

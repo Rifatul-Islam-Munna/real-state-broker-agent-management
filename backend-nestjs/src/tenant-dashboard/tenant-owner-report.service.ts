@@ -389,8 +389,10 @@ export class TenantOwnerReportService {
         : [legacyOwner];
     const owners = normalizeOwnerRecipients(originalOwners, channels);
     const subject = clean(dto?.subject, 300);
-    const body = clean(dto?.body, 20_000);
-    if (!subject || !body) {
+    const body = sanitizePlainText(dto?.body, 'Owner report', 20_000, {
+      collapseWhitespace: false,
+    });
+    if (!subject || !body.trim()) {
       throw new BadRequestException('Report subject and body are required.');
     }
     const sentByName = clean(user?.fullName ?? user?.email ?? 'Tenant user', 200);

@@ -65,6 +65,11 @@ export class TenantWorkspaceSettingsController {
     });
   }
 
+  @Post('integrations/gmail/signature')
+  gmailSignature(@Req() req: any, @Body() body: { fromEmail?: string }) {
+    return this.settings.getGmailSignature(req.tenant, body);
+  }
+
   @Get('pdf-templates')
   pdfTemplates(@Query('page') page = '1', @Query('pageSize') pageSize = '200') {
     const safePage = Math.max(1, Number(page) || 1);

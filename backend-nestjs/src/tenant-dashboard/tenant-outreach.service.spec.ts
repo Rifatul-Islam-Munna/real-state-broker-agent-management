@@ -55,13 +55,14 @@ describe('TenantOutreachService reliability', () => {
   });
 
   it('deduplicates queue writes by tenant-local idempotency key', async () => {
+    const body = '\n  Hello owner,\r\n\r\n[ 3 ] Inquiries  \r\n\tBest regards,\n\n';
     const existing = {
       id: 41,
       idempotency_key: 'request-1',
       channel: 'Email',
       status: 'scheduled',
     };
-    const query = jest.fn(async (sql: string) => {
+    const query = jest.fn(async (sql: string, _params?: unknown[]) => {
       if (sql.includes('INSERT INTO tenant_outreach_job')) {
         return { rowCount: 0, rows: [] };
       }
@@ -76,11 +77,13 @@ describe('TenantOutreachService reliability', () => {
       channels: ['Email'],
       recipientEmail: 'buyer@example.com',
       title: 'Hello',
-      body: 'Message',
+      body,
       idempotencyKey: 'request-1',
     });
 
     expect(result).toEqual([existing]);
+    const insert = query.mock.calls.find(([sql]) => sql.includes('INSERT INTO tenant_outreach_job'));
+    expect(insert?.[1]?.[10]).toBe(body);
     expect(query).toHaveBeenCalledWith(
       expect.stringContaining('ON CONFLICT (idempotency_key) DO NOTHING'),
       expect.arrayContaining(['request-1']),

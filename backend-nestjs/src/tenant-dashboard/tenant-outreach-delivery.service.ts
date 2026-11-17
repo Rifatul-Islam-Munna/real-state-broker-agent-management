@@ -1,5 +1,6 @@
 import { Injectable, OnModuleDestroy } from '@nestjs/common';
 import { createHash } from 'crypto';
+import { emailSignatureContent } from '../common/email-signature';
 import {
   isGmailReconnectRequired,
   refreshGmailAccessToken,
@@ -71,14 +72,17 @@ export class TenantOutreachDeliveryService implements OnModuleDestroy {
       throw new PermanentTenantDeliveryError('Tenant sender email is missing.');
     }
 
+    const signature = emailSignatureContent(config);
+    const bodyHtml = `<div style="white-space:pre-wrap;font-family:Arial,sans-serif">${this.escapeHtml(job.body).replace(/\r\n|\r|\n/g, '<br>')}</div>`;
     const message = {
       from: config.fromName
         ? `"${this.text(config.fromName).replace(/"/g, '')}" <${fromEmail}>`
         : fromEmail,
       to: job.recipient_email,
       subject: job.title,
-      text: job.body,
-      html: this.escapeHtml(job.body).replace(/\n/g, '<br>'),
+      text: job.body + (signature.text ? `\n\n${signature.text}` : ''),
+      html: bodyHtml + (signature.html ? `<br><br><div data-email-signature="true">${signature.html}</div>` : ''),
+      attachDataUrls: true,
       messageId: `<${job.idempotency_key}@${this.safeHost(databaseName)}.tenant>`,
       headers: {
         'X-Tenant-Database': databaseName,

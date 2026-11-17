@@ -182,6 +182,37 @@ describe('TenantOwnerReportService multi-owner delivery', () => {
     ]);
   });
 
+  it('stores and queues the report with every line break and space intact', async () => {
+    const state = setup();
+    const body = '\nHello Alex,\r\n\r\nHere is your weekly activity report.\r\n  [ 3 ] Inquiries\r\n\t[ 2 ] Showings\r\n\r\nBest regards,\r\n\r\nStaff  \n';
+    await state.service.sendOwnerReport(tenant, {
+      propertyId: 12,
+      subject: 'Owner update',
+      body,
+      channels: ['Email', 'SMS'],
+    }, { id: 3, fullName: 'Staff' });
+
+    const insert = state.client.query.mock.calls.find(([sql]) =>
+      sql.includes('INSERT INTO tenant_owner_report ('),
+    );
+    expect(insert?.[1]?.[7]).toBe(body);
+    expect(state.outreach.enqueueWithClient).toHaveBeenCalledTimes(4);
+    for (const [, input] of state.outreach.enqueueWithClient.mock.calls) {
+      expect(input.body).toBe(body);
+    }
+  });
+
+  it('rejects a report containing only whitespace', async () => {
+    const state = setup();
+    await expect(state.service.sendOwnerReport(tenant, {
+      propertyId: 12,
+      subject: 'Owner update',
+      body: ' \r\n\t ',
+      channels: ['Email'],
+    }, { id: 3 })).rejects.toThrow('Report subject and body are required.');
+    expect(state.getReportCount()).toBe(0);
+  });
+
   it('deduplicates duplicate contact addresses while keeping both owners', async () => {
     const contacts = [
       { name: 'Alex', email: 'shared@example.com', phone: '+15550001001' },

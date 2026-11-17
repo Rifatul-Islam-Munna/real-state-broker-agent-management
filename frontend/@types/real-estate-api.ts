@@ -310,6 +310,10 @@ export type SmtpIntegrationWriteInput = {
   password: string
   fromEmail: string
   fromName?: string | null
+  emailSignatureEnabled?: boolean
+  emailSignatureHtml?: string
+  emailSignatureText?: string
+  emailSignatureImageUrl?: string
   useSsl: boolean
   enableInboxSync?: boolean
   imapHost?: string | null

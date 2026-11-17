@@ -368,7 +368,7 @@ export class TenantOutreachService {
           this.text(input.recipientEmail).toLowerCase().slice(0, 240),
           this.text(input.recipientPhone).slice(0, 80),
           this.text(input.title).slice(0, 500),
-          this.text(input.body),
+          String(input.body ?? ''),
           JSON.stringify(this.stringList(input.mediaUrls).slice(0, 10)),
           provider.slice(0, 100),
           this.text(input.createdBy, 'Tenant workspace').slice(0, 200),
