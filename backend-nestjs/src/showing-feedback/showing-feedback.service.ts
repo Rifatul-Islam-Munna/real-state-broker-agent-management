@@ -9,6 +9,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { randomUUID } from 'crypto';
 import { Between, Repository } from 'typeorm';
 import { parseDateTimeInZone } from '../common/time-zone';
+import { ownerReportBodyHtml, ownerReportEmailDocument } from '../common/owner-report-email';
 import { SmsService } from '../sms/sms.service';
 import { SchedulingSettingsService } from '../settings/scheduling-settings.service';
 import { SettingsService } from '../settings/settings.service';
@@ -292,6 +293,7 @@ export class ShowingFeedbackService {
         context.property.ownerEmail,
         rendered.subject,
         rendered.body,
+        context.property.exactLocation || context.property.title,
       );
       sent.push('Email');
     }
@@ -641,7 +643,7 @@ export class ShowingFeedbackService {
     return Number.isFinite(parsed) ? Math.max(0, Math.min(1, parsed / 100)) : fallback / 100;
   }
 
-  private async sendEmail(to: string, subject: string, body: string) {
+  private async sendEmail(to: string, subject: string, body: string, propertyAddress?: string) {
     const config = await this.settingsService.getSmtpConfig();
     if (!config?.host || !config?.username || !config?.password) {
       throw new BadRequestException('SMTP mail is not configured.');
@@ -657,7 +659,7 @@ export class ShowingFeedbackService {
       from: config.fromName
         ? `"${config.fromName}" <${config.fromEmail || config.username}>`
         : config.fromEmail || config.username,
-      html: body.replace(/\n/g, '<br>'),
+      html: ownerReportEmailDocument(ownerReportBodyHtml(body, [propertyAddress])),
       subject,
       text: body,
       to,

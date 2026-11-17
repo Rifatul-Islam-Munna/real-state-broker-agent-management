@@ -8,6 +8,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, MoreThan, Repository } from 'typeorm';
 import { dateRangeInZone } from '../common/time-zone';
+import { ownerReportBodyHtml, ownerReportEmailDocument } from '../common/owner-report-email';
 import { Property } from '../properties/entities/property.entity';
 import { AiJsonClientService } from '../settings/ai-json-client.service';
 import { SchedulingSettingsService } from '../settings/scheduling-settings.service';
@@ -313,6 +314,7 @@ export class ShowingFeedbackQueryService {
         context.property.ownerEmail,
         rendered.subject,
         rendered.body,
+        context.property.exactLocation || context.property.title,
       );
       sent.push('Email');
     }
@@ -505,7 +507,7 @@ export class ShowingFeedbackQueryService {
     }
   }
 
-  private async sendEmail(to: string, subject: string, body: string) {
+  private async sendEmail(to: string, subject: string, body: string, propertyAddress?: string) {
     const config = await this.settingsService.getSmtpConfig();
     if (!config?.host || !config?.username || !config?.password) {
       throw new BadRequestException('SMTP mail is not configured.');
@@ -521,7 +523,7 @@ export class ShowingFeedbackQueryService {
       from: config.fromName
         ? `"${config.fromName}" <${config.fromEmail || config.username}>`
         : config.fromEmail || config.username,
-      html: body.replace(/\n/g, '<br>'),
+      html: ownerReportEmailDocument(ownerReportBodyHtml(body, [propertyAddress])),
       subject,
       text: body,
       to,

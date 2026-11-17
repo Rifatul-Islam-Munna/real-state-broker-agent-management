@@ -78,7 +78,7 @@ describe('TenantOutreachDeliveryService Gmail OAuth', () => {
     expect(parsed.text?.replace(/\r\n/g, '\n')).toBe(
       '\n  Hello owner,\n\nYour report is ready.  [ 3 ] Inquiries\n\tRepairs & maintenance <pending>\n\nBest regards,\n\nStaff  \n',
     );
-    expect(parsed.html).toBe(
+    expect(parsed.html).toContain(
       '<div style="white-space:pre-wrap;font-family:Arial,sans-serif"><br>  Hello owner,<br><br>Your report is ready.  [ 3 ] Inquiries<br>\tRepairs &amp; maintenance &lt;pending&gt;<br><br>Best regards,<br><br>Staff  <br></div>',
     );
   });
@@ -86,7 +86,7 @@ describe('TenantOutreachDeliveryService Gmail OAuth', () => {
   it.each([
     { propertyTitle: '2500 Parkview Dr Unit#1216' },
     {},
-  ])('suppresses Maps auto-link detection without changing the visible address or plain-text MIME: %j', async (payload) => {
+  ])('uses neutral address anchors and keeps plain-text MIME exact: %j', async (payload) => {
     const settings = {
       getRawSmtp: jest.fn().mockResolvedValue({
         authType: 'gmail-oauth', fromEmail: 'agent@example.com',
@@ -109,8 +109,12 @@ describe('TenantOutreachDeliveryService Gmail OAuth', () => {
     expect(parsed.subject).toBe('Report: 2500 Parkview Dr Unit#1216');
     expect(parsed.text?.replace(/\r\n/g, '\n')).toBe(body + '\n\nAgent [agent@example.com]');
     const html = String(parsed.html);
-    expect(html).toContain('2&#8204;5&#8204;0&#8204;0 P&#8204;a&#8204;r&#8204;k&#8204;v&#8204;i&#8204;e&#8204;w D&#8204;r');
-    expect(html.replace(/&#8204;/g, '')).toContain('2500 Parkview Dr Unit#1216<br><br>  [ 3 ] Inquiries');
+    expect(html).toContain('class="owner-report-address"><a href="#"');
+    expect(html).toContain('color:inherit !important;text-decoration:none !important;pointer-events:none !important');
+    expect(html.replace(/<[^>]+>/g, '')).toContain('2500 Parkview Dr Unit#1216');
+    expect(html).not.toMatch(/&#8204;|\u200c/);
+    expect(html).toContain('.owner-report-address a{color:inherit !important;');
+    expect(html).toContain('content="address=no"');
     expect(html).not.toMatch(/google\.com\/maps|maps\.google/);
     expect(html).toContain('agent@example.com or https://example.com.');
     expect(html).toContain('<a href="mailto:agent@example.com">Agent</a>');
@@ -215,7 +219,7 @@ describe('TenantOutreachDeliveryService Gmail OAuth', () => {
       to: 'owner@example.com',
       subject: 'Owner report',
       text: '  Report text\r\n\r\n[ 3 ] Inquiries  \rNext line\n\tStaff\n\n\nAgent & Team\nLicensed Agent',
-      html: '<div style="white-space:pre-wrap;font-family:Arial,sans-serif">  Report text<br><br>[ 3 ] Inquiries  <br>Next line<br>\tStaff<br></div><br><br><div data-email-signature="true"><div style="white-space:pre-wrap">Agent &amp; Team<br>Licensed Agent</div></div>',
+      html: expect.stringContaining('<div style="white-space:pre-wrap;font-family:Arial,sans-serif">  Report text<br><br>[ 3 ] Inquiries  <br>Next line<br>\tStaff<br></div><br><br><div data-email-signature="true"><div style="white-space:pre-wrap">Agent &amp; Team<br>Licensed Agent</div></div>'),
     }));
     expect(global.fetch).not.toHaveBeenCalled();
   });
