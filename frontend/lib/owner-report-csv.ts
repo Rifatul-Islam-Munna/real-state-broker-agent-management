@@ -106,7 +106,11 @@ function normalizeHeader(value: string): string {
 }
 
 function getMetric(value: string): OwnerReportMetric | null {
-  const normalized = normalizeHeader(value)
+  // Compact CSV headings such as "Feedback1" must still match a metric.
+  const normalized = normalizeHeader(value).replace(
+    /([a-z])(0?[1-4](?:st|nd|rd|th)?)$/,
+    "$1 $2"
+  )
   // A "showing feedback" column must be treated as feedback, not a count.
   if (metricAliases.feedback.test(normalized)) return "feedback"
   for (const metric of metricOrder) {
@@ -137,6 +141,28 @@ function getWeek(value: string): OwnerReportWeek | null {
   return bare[1]
     ? (Number(bare[1]) as OwnerReportWeek)
     : (wordWeeks[normalized] ?? null)
+}
+
+function getHeaderWeek(value: string): OwnerReportWeek | null {
+  // Header cells must be *only* a week label. A buyer's comment like
+  // "First week's feedback" must never be mistaken for a grouped header row.
+  const normalized = normalizeHeader(value)
+  const weekLabel = /^(?:(?:week|wk|w)\s*[-.# ]*\s*(?:0?[1-4](?:st|nd|rd|th)?|first|second|third|fourth)|(?:0?[1-4](?:st|nd|rd|th)?|first|second|third|fourth)\s*(?:week|wk)?)$/
+  return weekLabel.test(normalized) ? getWeek(normalized) : null
+}
+
+function getMetricWeek(value: string, metric: OwnerReportMetric): OwnerReportWeek | null {
+  const explicit = getWeek(value)
+  if (explicit !== null) return explicit
+
+  // "Feedback 1", "Feedback #2", "Feedback3", and "Feedback (4)" refer
+  // to different weeks, not shared feedback to repeat in every report.
+  const normalized = normalizeHeader(value)
+  const suffix = normalized.match(/0?([1-4])(?:st|nd|rd|th)?\s*\)?$/)
+  if (!suffix) return null
+  const prefix = normalized.slice(0, suffix.index).replace(/[\s#._:()\/-]+$/g, "")
+  if (!prefix || /\d/.test(prefix) || getMetric(prefix) !== metric) return null
+  return Number(suffix[1]) as OwnerReportWeek
 }
 
 function emptyGroups(): ColumnGroups {
@@ -229,18 +255,21 @@ function groupedHeaderLayout(rows: string[][]): Layout | null {
     let weekCount = 0
     for (let candidate = heading + 1; candidate <= Math.min(heading + 3, limit - 1); candidate += 1) {
       const candidateValues = rows[candidate] ?? []
-      const found = candidateValues.filter((value) => getWeek(value) !== null).length
+      const found = candidateValues.filter((value) => getHeaderWeek(value) !== null).length
       const clearlyLabeled = candidateValues.filter((value) =>
-        /\b(?:week|wk|w\s*[1-4]|[1-4](?:st|nd|rd|th)|first|second|third|fourth)\b/i.test(value)
+        getHeaderWeek(value) !== null && /[a-z]/i.test(value)
       ).length
       const propertyHeaderColumn = (rows[heading] ?? []).findIndex((value) =>
         propertyHeaderPattern.test(normalizeHeader(value))
       )
       const propertyCell =
         propertyHeaderColumn >= 0 ? clean(candidateValues[propertyHeaderColumn]) : ""
+      const propertyHeader = /^(address|property|property address|property name|listing address|unit address)$/
+      // A real property address is a data row even if the feedback says "Week 2".
+      if (propertyCell && !propertyHeader.test(normalizeHeader(propertyCell))) continue
       const plainNumericWeeks =
         candidateValues.filter((value) => /^[1-4]$/.test(clean(value))).length >= 8 &&
-        (!propertyCell || /^(address|property|property address|property name|listing address)$/.test(normalizeHeader(propertyCell)))
+        (!propertyCell || propertyHeader.test(normalizeHeader(propertyCell)))
       // Ordinary data counts 1, 2, 3, 4 must not become a header row.
       if (found > weekCount && (clearlyLabeled >= 2 || plainNumericWeeks)) {
         weekCount = found
@@ -253,7 +282,7 @@ function groupedHeaderLayout(rows: string[][]): Layout | null {
 
     const subheaders = rows[weekRow] ?? []
     const starts = subheaders.flatMap((value, column) =>
-      getWeek(value) === 1 ? [column] : []
+      getHeaderWeek(value) === 1 ? [column] : []
     )
     const groups = emptyGroups()
     const warnings: string[] = []
@@ -277,7 +306,7 @@ function groupedHeaderLayout(rows: string[][]): Layout | null {
         if (!group) continue
 
         for (let column = block.start; column < block.end; column += 1) {
-          const week = getWeek(subheaders[column] ?? "")
+          const week = getHeaderWeek(subheaders[column] ?? "")
           if (week) addWeekColumn(groups, group, week, column)
         }
       }
@@ -287,7 +316,7 @@ function groupedHeaderLayout(rows: string[][]): Layout | null {
       sortedLabels.forEach((label, index) => {
         const end = sortedLabels[index + 1]?.column ?? subheaders.length
         for (let column = label.column; column < end; column += 1) {
-          const week = getWeek(subheaders[column] ?? "")
+          const week = getHeaderWeek(subheaders[column] ?? "")
           if (week) addWeekColumn(groups, label.metric, week, column)
         }
       })
@@ -338,7 +367,7 @@ function flatHeaderLayout(rows: string[][]): Layout | null {
       propertyHeaderPattern.test(normalizeHeader(value))
     )
     const weekCount = labels.filter((label) =>
-      getWeek(headers[label.column] ?? "")
+      getMetricWeek(headers[label.column] ?? "", label.metric) !== null
     ).length
     const score = unique.size * 4 + weekCount * 2 + (propertyColumn >= 0 ? 5 : 0)
     if (!best || score > best.score) best = { rowIndex, score }
@@ -354,7 +383,7 @@ function flatHeaderLayout(rows: string[][]): Layout | null {
   let implicitWeeks = false
 
   labels.forEach((label, index) => {
-    const week = getWeek(headers[label.column] ?? "")
+    const week = getMetricWeek(headers[label.column] ?? "", label.metric)
     if (week) {
       addWeekColumn(groups, label.metric, week, label.column)
       return
@@ -367,7 +396,7 @@ function flatHeaderLayout(rows: string[][]): Layout | null {
       labels.some((other) =>
         other.column !== label.column &&
         other.column !== next &&
-        !getWeek(headers[other.column] ?? "")
+        getMetricWeek(headers[other.column] ?? "", other.metric) === null
       )
 
     if (isFourColumnGroup) {

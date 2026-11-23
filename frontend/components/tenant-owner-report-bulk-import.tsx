@@ -6,6 +6,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react"
 import {
@@ -146,6 +147,7 @@ export function TenantOwnerReportBulkImport({
 
   const [templateId, setTemplateId] = useState("")
   const [week, setWeek] = useState<OwnerReportWeek>(1)
+  const selectedWeekRef = useRef<OwnerReportWeek>(1)
   const [csvText, setCsvText] = useState("")
   const [fileName, setFileName] = useState("")
   const [rows, setRows] = useState<PreparedRow[]>([])
@@ -328,7 +330,9 @@ export function TenantOwnerReportBulkImport({
       const text = await file.text()
       setCsvText(text)
       setFileName(file.name)
-      importCsv(text, week)
+      // Reading a large CSV is asynchronous: use the latest chosen week,
+      // not the week captured when the file read started.
+      importCsv(text, selectedWeekRef.current)
     } catch {
       setParseError("Could not open this file. Export it as CSV and try again.")
     }
@@ -342,6 +346,7 @@ export function TenantOwnerReportBulkImport({
 
   function changeWeek(nextWeek: OwnerReportWeek) {
     if (isSending || nextWeek === week) return
+    selectedWeekRef.current = nextWeek
     setWeek(nextWeek)
     if (csvText) importCsv(csvText, nextWeek)
   }

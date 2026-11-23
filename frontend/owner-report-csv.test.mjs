@@ -65,6 +65,37 @@ test("flat headings allow arbitrary metric order, missing metric groups and quot
   assert.equal(result.rows[0].showings, "1")
 })
 
+test("numbered feedback columns follow the selected week instead of always including the first", () => {
+  const text = csv([
+    ["Address", "Inquiries Week 1", "Inquiries Week 2", "Inquiries Week 3", "Inquiries Week 4",
+      "Feedback 1", "Feedback #2", "Feedback3", "Feedback (4)"],
+    ["12 Example Road", "1", "2", "3", "4",
+      "First week's feedback", "Second week's feedback", "Third week's feedback", "Fourth week's feedback"],
+  ])
+
+  for (const week of [1, 2, 3, 4]) {
+    const result = parseWeeklyOwnerReportCsv(text, week)
+    assert.equal(result.rows[0].inquiries, String(week))
+    assert.equal(result.rows[0].feedback, [
+      "First week's feedback", "Second week's feedback",
+      "Third week's feedback", "Fourth week's feedback",
+    ][week - 1], `Week ${week} must use only its own feedback`)
+  }
+})
+
+test("compact numbered metric headers use the correct week and never fall back to Week 1", () => {
+  const text = csv([
+    ["Address", "Inquiries1", "Inquiries2", "Inquiries3", "Feedback1", "Feedback3"],
+    ["30 River Street", "6", "7", "8", "Week 1 comments", "Week 3 comments"],
+  ])
+  const second = parseWeeklyOwnerReportCsv(text, 2)
+  assert.equal(second.rows[0].inquiries, "7")
+  assert.equal(second.rows[0].feedback, "")
+  const third = parseWeeklyOwnerReportCsv(text, 3)
+  assert.equal(third.rows[0].inquiries, "8")
+  assert.equal(third.rows[0].feedback, "Week 3 comments")
+})
+
 test("semicolon CSV and spelled-out week headings import correctly", () => {
   const text = [
     "Address;Inquiries First Week;Appointments First Week;Feedback First Week",
